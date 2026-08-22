@@ -1,70 +1,31 @@
 # MosaicSync
 
-**Your shortcuts. Finally in sync across Firefox.**
+**Your browser start page, organized your way.**
 
-MosaicSync is a privacy-first Firefox start page that keeps your shortcuts, folders, Spaces and supported settings synchronized across your Firefox installations using Firefox Sync.
+MosaicSync is a privacy-first start page and shortcut manager with Spaces, folders, customizable layouts, wallpapers, automatic favicon handling, profile backup/transfer, and browser-native synchronization.
 
-It replaces Firefox New Tab and the new-window/homepage experience with a clean, customizable shortcut dashboard.
+The project currently targets **Firefox and Chromium-based browsers** with browser-specific sync integration while keeping the profile/data format as browser-neutral as possible.
 
-## Features
+## Repository status
 
-- **Firefox Sync** — synchronize supported shortcut layouts through Firefox's own `storage.sync` transport.
-- **Multiple Spaces** — keep two independent, renameable shortcut layouts and switch between them instantly.
-- **Cross-Space moves** — drag shortcuts between Spaces or move them from the shortcut editor.
-- **Folders** — group related shortcuts without cluttering the start page.
-- **Custom appearance** — wallpapers, custom backgrounds, shortcut sizing, grid controls and light/dark/system appearance.
-- **Firefox bookmarks** — optional, read-only bookmark browsing.
-- **Firefox shortcut import** — optionally import existing Firefox shortcuts.
-- **Automatic site icons** — optional website access can reconstruct shortcut favicons locally.
-- **New tabs + new windows** — MosaicSync can provide the start page for both.
-- **21 interface languages**.
+> **Source restoration in progress.**
+>
+> This GitHub repository was found to be incomplete on 22 August 2026. The `main` branch did not contain the extension source tree. A preserved `source-bootstrap` branch contains a staged recovery payload for the older MosaicSync 1.23.1 source, but it is **not** being promoted as the current source because development has moved beyond that version.
 
-## Privacy
+Until the current Firefox and Chrome source packages are imported and verified, **do not treat `main` as a complete source distribution**.
 
-MosaicSync is designed to work without a MosaicSync account or developer-operated sync service.
+## Current development line
 
-- No telemetry or analytics.
-- No advertising or tracking SDKs.
-- No MosaicSync-operated backend.
-- No remote executable code.
-- Optional permissions are requested only for the features that need them.
-- Firefox Sync is used only when the user explicitly enables synchronization.
+The current development line is **MosaicSync 1.24.x**, with Firefox and Chrome builds maintained together.
 
-See [PRIVACY.md](PRIVACY.md) for details.
+## Core principles
 
-## Source and development
-
-MosaicSync is a Firefox Manifest V3 extension written as readable, unminified ES modules. There is no compilation, bundling, transpilation or minification step for the extension runtime.
-
-The repository includes the runtime source, automated tests, engineering audits and original artwork sources.
-
-Run the automated test suite with:
-
-```bash
-npm test
-```
-
-Before submitting a release to Mozilla Add-ons, also run Mozilla's extension linter from the extension root:
-
-```bash
-npx web-ext lint
-```
-
-## Current release
-
-**MosaicSync 1.23.1**
-
-This release includes Multiple Spaces, cross-Space shortcut movement, new-window integration, synchronization hardening and recovery for interrupted cross-Space Sync operations, extensive localization improvements, and the Aether Flow wallpaper.
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
-
-## Security
-
-Please see [SECURITY.md](SECURITY.md) for security information and reporting guidance.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+- Privacy first: no MosaicSync-operated tracking or analytics backend.
+- Browser-native synchronization where supported.
+- Readable extension source; no remote executable code.
+- Browser-neutral profile export/import for transfers between supported MosaicSync installations.
+- New user-facing text goes through MosaicSync's localization system.
+- Firefox and Chrome builds should keep feature parity unless a browser API requires a deliberate difference.
 
 ## License
 
@@ -73,3 +34,7 @@ MosaicSync is released under the **Mozilla Public License 2.0 (MPL-2.0)**. See [
 ## Website
 
 https://xipinformatica.cat/mosaicsync/
+
+## Recovery tracking
+
+The repository recovery audit is recorded in GitHub issue #1. Once the current source tree is restored, this README will be replaced with the normal installation, development, testing, security and release documentation.
