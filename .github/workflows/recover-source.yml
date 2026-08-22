@@ -1,0 +1,58 @@
+name: Inspect staged MosaicSync source
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    if: github.event.issue.title == 'MosaicSync source recovery trigger'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          path: main
+      - name: Checkout source-bootstrap
+        uses: actions/checkout@v4
+        with:
+          ref: source-bootstrap
+          path: bootstrap
+      - name: Reconstruct and inventory archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat bootstrap/.import/part-*.txt > /tmp/payload.b64
+          base64 -d /tmp/payload.b64 > /tmp/payload.xz
+          xz -dc /tmp/payload.xz > /tmp/payload
+          {
+            echo "MosaicSync staged source inspection"
+            echo "generated_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "compressed_bytes=$(wc -c < /tmp/payload.xz)"
+            echo "decoded_bytes=$(wc -c < /tmp/payload)"
+            echo "file_type=$(file -b /tmp/payload)"
+            echo "sha256=$(sha256sum /tmp/payload | awk '{print $1}')"
+            echo
+            echo "--- archive listing ---"
+            if tar -tf /tmp/payload >/tmp/listing 2>/tmp/tar-error; then
+              cat /tmp/listing
+            elif unzip -l /tmp/payload >/tmp/listing 2>/tmp/zip-error; then
+              cat /tmp/listing
+            else
+              echo "Could not list payload as tar or zip."
+              cat /tmp/tar-error || true
+              cat /tmp/zip-error || true
+              exit 1
+            fi
+          } > main/IMPORT-INSPECT.txt
+      - name: Commit report
+        working-directory: main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add IMPORT-INSPECT.txt
+          git commit -m "[skip ci] Inspect staged MosaicSync source payload" || exit 0
+          git push
