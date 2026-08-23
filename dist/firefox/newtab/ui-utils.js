@@ -16,6 +16,33 @@ export function canonicalSiteHost(value) {
   return host;
 }
 
+
+export function shortcutHostsAcrossSpaces(state) {
+  const hosts = new Set();
+  const visit = item => {
+    if (item?.type === "folder") {
+      for (const child of item.items || []) visit(child);
+      return;
+    }
+    if (item?.type !== "shortcut") return;
+    const host = canonicalSiteHost(item.url);
+    if (host) hosts.add(host);
+  };
+
+  const spaces = state?.spaces && typeof state.spaces === "object"
+    ? Object.values(state.spaces)
+    : [];
+  if (spaces.length) {
+    for (const workspace of spaces) {
+      for (const item of workspace?.shortcuts || []) visit(item);
+    }
+  } else {
+    // Backward-compatible fallback for pre-Spaces/partial state shapes.
+    for (const item of state?.shortcuts || []) visit(item);
+  }
+  return hosts;
+}
+
 export function normalizeShortcutUrl(raw) {
   let value = String(raw || "").trim();
   if (!value) throw new Error("Enter a URL.");

@@ -74,7 +74,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, formatBytes, normalizeShortcutUrl } from "./ui-utils.js";
+import { canonicalSiteHost, formatBytes, normalizeShortcutUrl, shortcutHostsAcrossSpaces } from "./ui-utils.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
@@ -721,18 +721,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return frequentCandidateCache;
   }
 
-  function activeShortcutHosts() {
-    const hosts = new Set();
-    const visit = item => {
-      if (item?.type === "folder") { for (const child of item.items || []) visit(child); return; }
-      if (item?.type !== "shortcut") return;
-      const host = canonicalSiteHost(item.url);
-      if (host) hosts.add(host);
-    };
-    for (const item of state.shortcuts || []) visit(item);
-    return hosts;
-  }
-
   function frequentHostLabel(url) {
     return canonicalSiteHost(url) || hostLabel(url);
   }
@@ -937,7 +925,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Ask Firefox for a broad candidate pool first, then filter. Requesting only
       // a handful before removing explicit shortcuts could leave fewer than five
       // suggestions even when Firefox had more valid candidates available.
-      const explicitHosts = activeShortcutHosts();
+      const explicitHosts = shortcutHostsAcrossSpaces(state);
       const sites = await frequentCandidates();
       if (generation !== frequentRefreshGeneration) return;
       const seenHosts = new Set();

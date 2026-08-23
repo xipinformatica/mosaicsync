@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -84,6 +84,10 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
 
+## 1.26.17.1 Frequently Visited global-exclusion policy
+
+Frequently Visited is a device-local discovery aid, not a per-Space duplicate list. Before a candidate is shown, MosaicSync builds one canonical host set from every shortcut in every stored Space, including shortcuts nested inside folders, and excludes any candidate whose canonical host is already present anywhere in MosaicSync. The helper iterates the `spaces` object rather than only the active compatibility aliases, so the behavior naturally covers future stored Spaces as well as Personal and Work. Matching semantics remain host-based and unchanged; this release only broadens the shortcut scope from active Space to all Spaces.
+
 ## 1.26.17 favicon, Sync self-heal and release-identity policy
 
 1.26.17 treats automatic favicon retrieval as one coherent capability/recovery pipeline. The browser's live `permissions.contains()` result is authoritative for remote Website Access. New iconless shortcuts are targeted immediately; network work stays outside the serialized state queue; commit-time ownership is resolved again across Personal/Work; permission failures do not consume website retry budget; and Chromium may use its permission-free native favicon database even when remote Website Access is absent. A browser-native provisional icon is useful fallback artwork but must not pin a quality-only queue forever while Website Access is unavailable. Revoking Website Access drops quality-only recovery work that can no longer run while preserving genuinely missing-icon work for any source the platform can still use; a later explicit grant re-seeds upgrade candidates.
@@ -114,7 +118,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

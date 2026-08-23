@@ -1,4 +1,4 @@
-## 1.26.17
+## 1.26.17.1
 
 Changes since the last published 1.26.12 source:
 
@@ -10,12 +10,13 @@ Changes since the last published 1.26.12 source:
 - Improved favicon compatibility by preferring known PNG/JPEG/GIF/WebP/ICO byte signatures over inaccurate HTTP MIME labels and by accepting bounded website-declared inline `data:image/...` favicons through the same image-safety pipeline.
 - Strengthened SVG pre-decode safety: root geometry discovery ignores XML prolog comments/processing instructions so a decoy `<svg>` cannot hide the real root dimensions. Intrinsic raster/SVG geometry remains checked before browser decoding; bounded bitmap resize is an additional output constraint rather than the primary pre-allocation guarantee.
 - Improved **Frequently Visited** with stable first-frame rendering, direct drag-to-grid shortcut creation and device-local registrable-domain hiding. If the persisted hidden-domain list exists but is corrupt/unreadable, the synchronous cached first frame now fails closed instead of flashing suggestions that may have been hidden.
+- Fixed **Frequently Visited cross-Space duplication**: candidates are now filtered against normal shortcuts from every MosaicSync Space, including shortcuts nested inside folders. A site already saved in Personal is therefore not suggested while viewing Work, and vice versa; the existing canonical-host matching semantics are otherwise unchanged.
 - Fixed Firefox Frequently Visited native Top Sites adapter binding and kept Public Suffix List handling lazy/device-local.
 - Strengthened Firefox/Chrome Sync self-healing. Equal commit markers are no longer sufficient to skip reconciliation when usable remote semantic content differs from the current workspace, and the periodic Sync watchdog verifies actual remote semantic content so missed/delayed extension-storage events can recover without restarting Firefox once the data is locally visible.
 - Reduced partial-delivery Sync write amplification: when an atomic device snapshot is usable but the compatibility shared ledger is visibly incomplete, MosaicSync applies the usable core locally but waits for the ledger to become coherent instead of immediately republishing/repairing the partial view.
 - Clarified the backup boundary: automatically learned/browser-native favicon pixels stay out of browser `storage.sync` but are intentionally included in an explicit complete `.mosaicsync` profile export; retry diagnostics, permission UI memory, render snapshots and Frequently Visited hidden-domain data remain excluded from profile exports.
 - Added stronger production-module regression coverage for Chrome placeholder failure/retry behavior, native retry scheduling, corrupt Frequently Visited first-frame storage, cross-Space recovery/concurrency, favicon safety and same-marker semantic Sync reconciliation.
-- No new required permissions, Sync/profile schema, profile format, remote code, telemetry or CSP relaxation. Version identity is exactly `1.26.17` everywhere; there is no separate internal/display/technical version.
+- No new required permissions, Sync/profile schema, profile format, remote code, telemetry or CSP relaxation. Version identity is exactly `1.26.17.1` everywhere; there is no separate internal/display/technical version.
 
 ## 1.26.12
 
