@@ -2,6 +2,7 @@
  * Shared, allocation-conscious New Tab helpers.
  * Kept independent of DOM state so they can be regression-tested directly.
  */
+import "../core/http-url-safety.js";
 const canonicalHostCache = new Map();
 const CANONICAL_HOST_CACHE_MAX = 256;
 
@@ -45,13 +46,7 @@ export function shortcutHostsAcrossSpaces(state) {
 
 
 export function safeShortcutNavigationUrl(value) {
-  if (typeof value !== "string" || !value || value.length > 2048) return "";
-  try {
-    const parsed = new URL(value);
-    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
-  } catch {
-    return "";
-  }
+  return globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
 }
 
 export function normalizeShortcutUrl(raw) {
@@ -61,9 +56,9 @@ export function normalizeShortcutUrl(raw) {
     const looksLocal = /^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/|$)/i.test(value);
     value = `${looksLocal ? "http" : "https"}://${value}`;
   }
-  const parsed = new URL(value);
-  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("MosaicSync supports http:// and https:// shortcuts.");
-  return parsed.href;
+  const safeUrl = safeShortcutNavigationUrl(value);
+  if (!safeUrl) throw new Error("MosaicSync supports http:// and https:// shortcuts.");
+  return safeUrl;
 }
 
 export function formatBytes(bytes) {

@@ -11,6 +11,8 @@
  * not parse or retain the PSL. The resulting registrable domain is then stored
  * locally, so later filtering is a cheap hostname suffix comparison.
  */
+import "./http-url-safety.js";
+
 let rulesPromise = null;
 
 function normalizeHostname(value) {
@@ -101,10 +103,10 @@ export async function registrableDomainFromHostname(value) {
 }
 
 export async function registrableDomainFromUrl(value) {
+  const safeUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
+  if (!safeUrl) return "";
   try {
-    const parsed = new URL(String(value || ""));
-    if (!/^https?:$/.test(parsed.protocol)) return "";
-    return registrableDomainFromHostname(parsed.hostname);
+    return registrableDomainFromHostname(new URL(safeUrl).hostname);
   } catch {
     return "";
   }

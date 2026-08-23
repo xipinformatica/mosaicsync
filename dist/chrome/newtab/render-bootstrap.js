@@ -25,7 +25,11 @@
   const brand = document.querySelector(".brand");
   if (!grid || !emptyState) return;
 
-  function validUrl(value) { return typeof value === "string" && /^https?:\/\//i.test(value); }
+  // This helper is loaded as a tiny classic script immediately before this
+  // bootstrap. If packaging/order ever regresses, first-paint navigation fails
+  // closed instead of falling back to a local permissive copy.
+  const safeShortcutNavigationUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl;
+  if (typeof safeShortcutNavigationUrl !== "function") return;
   function validPreview(value) {
     return typeof value === "string" && value.length <= MAX_PREVIEW_CHARS &&
       /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
@@ -75,12 +79,14 @@
     const slot = document.createElement("div");
     slot.className = "shortcut-slot";
     slot.dataset.id = item.id;
+    const safeUrl = safeShortcutNavigationUrl(item?.url);
+    if (!safeUrl) return null;
     const card = document.createElement("a");
     card.className = "shortcut-card";
-    card.href = item.url;
+    card.href = safeUrl;
     card.rel = "noreferrer";
-    card.title = `${item.title}\n${item.url}`;
-    card.setAttribute("aria-label", `${item.title}, ${item.url}`);
+    card.title = `${item.title}\n${safeUrl}`;
+    card.setAttribute("aria-label", `${item.title}, ${safeUrl}`);
     const tile = document.createElement("span");
     tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
     appendPreviewOrFallback(tile, item);
@@ -118,12 +124,14 @@
   }
 
   function frequentCard(site) {
+    const safeUrl = safeShortcutNavigationUrl(site?.url);
+    if (!safeUrl) return null;
     const card = document.createElement("a");
     card.className = "frequent-site-card";
-    card.href = site.url;
+    card.href = safeUrl;
     card.rel = "noreferrer";
     card.title = `${site.title || site.host}
-${site.url}`;
+${safeUrl}`;
     if (validPreview(site.favicon)) {
       const icon = document.createElement("img");
       icon.className = "frequent-site-icon";
@@ -160,15 +168,17 @@ ${site.url}`;
     let shown = 0;
     for (const rawSite of snapshot.sites) {
       if (shown >= count) break;
-      if (!rawSite || typeof rawSite !== "object" || !validUrl(rawSite.url) || frequentUrlHidden(rawSite.url, hidden)) continue;
+      if (!rawSite || typeof rawSite !== "object" || !safeShortcutNavigationUrl(rawSite.url) || frequentUrlHidden(rawSite.url, hidden)) continue;
       const site = {
         title: String(rawSite.title || "").trim().slice(0, 120),
         host: String(rawSite.host || "").trim().slice(0, 253),
-        url: rawSite.url,
+        url: safeShortcutNavigationUrl(rawSite.url),
         favicon: validPreview(rawSite.favicon) ? rawSite.favicon : ""
       };
       if (!site.title || !site.host) continue;
-      fragment.append(frequentCard(site));
+      const card = frequentCard(site);
+      if (!card) continue;
+      fragment.append(card);
       shown += 1;
     }
     if (!shown) return;
@@ -203,10 +213,10 @@ ${site.url}`;
       const item = { ...source };
       if (item.preview && !validPreview(item.preview)) item.preview = "";
       if (item.type === "shortcut") {
-        if (!validUrl(item.url)) continue;
+        if (!safeShortcutNavigationUrl(item.url)) continue;
       } else if (item.type === "folder") {
         if (!Array.isArray(item.items)) continue;
-        item.items = item.items.filter(child => child && typeof child.title === "string" && validUrl(child.url)).map(child => ({
+        item.items = item.items.filter(child => child && typeof child.title === "string" && safeShortcutNavigationUrl(child.url)).map(child => ({
           ...child,
           preview: validPreview(child.preview) ? child.preview : ""
         }));
@@ -218,8 +228,10 @@ ${site.url}`;
     const fragment = document.createDocumentFragment();
     for (let position = 0; position < capacity; position += 1) {
       const item = byPosition.get(position);
-      if (item) fragment.append(item.type === "folder" ? folderSlot(item) : shortcutSlot(item));
-      else {
+      const slot = item ? (item.type === "folder" ? folderSlot(item) : shortcutSlot(item)) : null;
+      if (slot) {
+        fragment.append(slot);
+      } else {
         const empty = document.createElement("div");
         empty.className = "shortcut-slot empty-slot";
         empty.dataset.position = String(position);

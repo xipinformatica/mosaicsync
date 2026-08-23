@@ -1,3 +1,12 @@
+## 1.26.17.5
+
+- Unified HTTP(S)-only shortcut URL validation behind one tiny classic/module-compatible safety primitive shared by the state model, session-render validation, Firefox native import, registrable-domain URL handling, render-manifest generation and the authoritative New Tab UI. This removes duplicated protocol/scheme logic without changing the accepted shortcut URL policy.
+- Extended the same fail-closed validator to the synchronous first-paint renderer. `render-bootstrap.js` now validates again at both shortcut and Frequently Visited `href` sinks; if the shared helper is unexpectedly unavailable, the disposable first frame fails closed and the authoritative module renderer takes over normally.
+- Kept the first-paint performance boundary explicit: the shared URL-safety script is under 1.8 KB, has no async/network/timer work, and is loaded at the bottom of New Tab immediately before the disposable render bootstrap instead of joining the head/startup-I/O path.
+- Broadened checksum-valid profile prototype-pollution regression coverage across the package root, profile object, state, settings, Space/workspace records, top-level shortcuts, nested folder children and assets. Hostile `__proto__`, `constructor` and `prototype` keys must either be normalized away or rejected while `Object.prototype` remains untouched.
+- Added regression checks that the URL-safety implementation remains centralized and that the first-paint renderer cannot regress to raw `item.url`/`site.url` assignments.
+- No new permissions, Sync/profile format change, persisted schema change, remote code, telemetry or CSP relaxation. Version identity is exactly `1.26.17.5` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.26.17.4
 
 - Hardened `.mosaicsync` profile import against local resource exhaustion: both Settings and first-run Welcome now reject files above the existing 256 MiB abuse ceiling **before** calling `File.text()`, while the parser keeps its independent post-read character limit. The new too-large error is localized in every supported MosaicSync UI language.

@@ -8,6 +8,7 @@
  * Import is replacement-only to avoid mixing stale MosaicSync and native shortcut sets.
  */
 import { DEFAULT_SETTINGS } from "./constants.js";
+import "./http-url-safety.js";
 import { hostLabel, now, uid } from "./model.js";
 import { optimizeImageDataUrl } from "./image-optimizer.js";
 import { getNativeTopSites, readNativeFaviconDataUrl } from "./platform.js";
@@ -23,13 +24,14 @@ export async function fetchFirefoxShortcuts(limit = FIREFOX_NATIVE_MAX_SHORTCUTS
   if (!Array.isArray(sites)) return [];
   const timestamp = now();
   return sites
-    .filter(site => site?.url && /^https?:/i.test(site.url))
+    .map(site => ({ site, safeUrl: globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(site?.url) || "" }))
+    .filter(entry => entry.safeUrl)
     .slice(0, requested)
-    .map((site, index) => ({
+    .map(({ site, safeUrl }, index) => ({
       type: "shortcut",
       id: uid("shortcut"),
-      title: (site.title || hostLabel(site.url)).trim(),
-      url: site.url,
+      title: (site.title || hostLabel(safeUrl)).trim(),
+      url: safeUrl,
       // Firefox already owns this favicon cache. Preserve the exact bytes it
       // returns instead of recompressing them and degrading small logos. These
       // pixels are device-local and never enter MosaicSync's Sync asset budget.

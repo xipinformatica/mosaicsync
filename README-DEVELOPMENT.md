@@ -1,8 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.26.17.5 shared HTTP(S) validation / import hardening policy
+
+Shortcut URL acceptance is centralized in `src/shared/core/http-url-safety.js`, a deliberately tiny script with no import/export syntax so the exact same validator can be used by synchronous classic first-paint code and ES-module code. It accepts only syntactically valid `http:`/`https:` URLs up to 2048 characters and otherwise returns an empty string. Do not reintroduce independent shortcut-scheme regexes in model/storage/import/render code unless a different URL semantic is genuinely required.
+
+`render-bootstrap.js` remains a disposable synchronous first-frame optimization. The shared URL helper is loaded immediately before it at the bottom of New Tab; it must not be moved into the head/startup-I/O path or expanded with networking, timers, storage reads or other work. If the helper is unavailable, the bootstrap must fail closed and leave rendering to the authoritative module path.
+
+Profile normalization must continue to reconstruct fresh allow-listed objects. Regression coverage deliberately injects checksum-valid `__proto__`, `constructor` and `prototype` keys at multiple profile/package levels, including nested folder children and the asset envelope. Accepted inputs must normalize those keys away; rejected inputs must leave existing state and `Object.prototype` untouched.
 
 - `npm run build` — generates `dist/firefox` and `dist/chrome` from the shared source plus browser overlays.
 - `npm test` — builds and runs the permanent regression suite.
@@ -136,7 +144,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

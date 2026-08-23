@@ -19,6 +19,7 @@ import {
   SYNC_SCHEMA_VERSION
 } from "./constants.js";
 import { canonicalizeImageDataUrl, imageDataUrlByteLength, MAX_IMAGE_DATA_URL_CHARS, parseImageDataUrl } from "./image-data.js";
+import "./http-url-safety.js";
 
 // Generic validation / identifiers ------------------------------------------------
 export function uid(prefix = "ms") {
@@ -63,13 +64,7 @@ export function hostLabel(url) {
 
 
 function normalizeHttpUrl(value) {
-  if (typeof value !== "string" || !value || value.length > 2048) return "";
-  try {
-    const parsed = new URL(value);
-    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
-  } catch {
-    return "";
-  }
+  return globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
 }
 
 function cleanTitle(value, maxLength) {

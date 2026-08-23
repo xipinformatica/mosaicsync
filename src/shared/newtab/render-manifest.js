@@ -9,6 +9,7 @@
  * module graph. Preview images are tiny visual derivatives, never authoritative
  * profile assets.
  */
+import "../core/http-url-safety.js";
 import { optimizeImageDataUrl } from "../core/image-optimizer.js";
 import {
   RENDER_MANIFEST_KEY,
@@ -73,16 +74,16 @@ function sanitizeFrequentSnapshot(snapshot) {
   if (enabled && Array.isArray(snapshot.sites)) {
     for (const site of snapshot.sites.slice(0, 10)) {
       if (!site || typeof site !== "object") continue;
-      let parsed;
-      try { parsed = new URL(String(site.url || "")); } catch { continue; }
-      if (!/^https?:$/.test(parsed.protocol) || parsed.href.length > 2048) continue;
+      const safeUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(site.url) || "";
+      if (!safeUrl) continue;
+      const parsed = new URL(safeUrl);
       const title = String(site.title || parsed.hostname).trim().slice(0, 120);
       const host = String(site.host || parsed.hostname).trim().slice(0, 253);
       const favicon = typeof site.favicon === "string" && site.favicon.length <= RENDER_PREVIEW_MAX_CHARS &&
         /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(site.favicon)
         ? site.favicon
         : "";
-      sites.push({ title, url: parsed.href, host, favicon });
+      sites.push({ title, url: safeUrl, host, favicon });
     }
   }
   return { enabled, count, sites };

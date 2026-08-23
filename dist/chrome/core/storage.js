@@ -48,6 +48,7 @@ import {
   LOCAL_ASSET_COLLISION_ERROR_CODE
 } from "./local-assets.js";
 import { ERROR_CODES, codedError } from "./errors.js";
+import "./http-url-safety.js";
 
 let lastSessionRenderCacheStatus = "unknown";
 // Exact bytes already read from storage.local in this extension context. Keeping
@@ -245,7 +246,7 @@ export function createRenderSnapshot(state = DEFAULT_STATE) {
 }
 
 function validHttpUrl(value) {
-  return typeof value === "string" && /^https?:\/\//i.test(value);
+  return Boolean(globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value));
 }
 
 function isRenderShortcutValid(item, depth = 0) {
