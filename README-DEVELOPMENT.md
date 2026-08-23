@@ -1,0 +1,195 @@
+# MosaicSync development
+
+Requires Node.js 22+.
+
+- `npm run build` — generates `dist/firefox` and `dist/chrome` from the shared source plus browser overlays.
+- `npm test` — builds and runs the permanent regression suite.
+- `npm run bench` — runs the reproducible 200-shortcut worst-case microbenchmark.
+- `python tools/package.py` — creates deterministic Firefox/Chrome runtime ZIPs from `dist/`.
+
+The runtime ZIPs should be created from `dist/firefox` and `dist/chrome`; tests, fixtures and documentation are development-only and are not shipped inside the extension packages.
+
+## 1.24.11 engineering policy
+
+1.24.11 treats 1.24.10 runtime behavior as frozen. Persistent/session key names and runtime tuning limits live in `core/constants.js`; non-module first-paint bootstrap scripts may duplicate only the two session-render key literals they must access before modules load. Runtime caches must be explicitly bounded. Build output is generated from shared source plus browser overlays, and `build-manifest.json` records the SHA-256 hash of every generated runtime file.
+
+The regression suite intentionally tests failure paths as well as happy paths: legacy inline-profile migration, corrupt local assets, invalid session snapshots, localization completeness, accessible dialog naming, bounded URL/cache behavior, favicon recovery, Sync semantics, asset/profile integrity, and Firefox/Chrome parity.
+
+## 1.24.12 security/correctness policy
+
+1.24.12 keeps the 1.24.11 runtime/profile architecture frozen while hardening trust boundaries and concurrent local writes. New Tab mutations retain a compact write baseline; `storage.js` re-reads the latest compact state inside the asset-write lock and three-way rebases only the caller's delta when another tab committed first. Disjoint settings fields are merged independently, while same-field/same-record conflicts retain the existing deterministic MosaicSync ordering.
+
+Profile v2 import requires the asset envelope to contain exactly the content-addressed assets referenced by the compact profile state. Remote SVGs are admitted only if self-contained and free of active/embed/external-resource constructs. CSP/XSS, asset/input bounds, same-extension runtime messaging, and long-lived cache limits are permanent automated contracts.
+
+## 1.24.13 storage-failure policy
+
+1.24.13 keeps the 1.24.12 architecture and behavior frozen. A failed atomic `storage.local` state/asset commit must leave the complete previous transaction intact: MosaicSync must never retry by publishing compact state without the referenced local assets. Background silent-write suppression is transactional as well; if the local write fails, both the in-memory and `storage.session` suppression markers are removed so a later legitimate change cannot be accidentally ignored.
+
+The Firefox text-platform passthrough intentionally declares the same `(value, locale, key)` call shape as the Chrome overlay while remaining a no-op.
+
+## 1.24.14 optimization policy
+
+1.24.14 keeps correctness reads and conflict semantics unchanged. Detailed Sync usage accounting is demand-driven by Settings rather than recomputed after every mutation. The source package includes the deterministic 200-shortcut benchmark fixture so future micro-optimizations can be measured before they are accepted. Image-heavy writes use a per-operation asset-ID memo only to avoid recomputing the same pure hash within one transaction; it is cleared immediately after persistence and is not a long-lived image cache.
+
+## 1.24.14b favicon-quality policy
+
+1.24.14b is intentionally narrow. The normal favicon-first path is unchanged. Only an existing low-resolution icon undergoing an explicit quality retry may probe additional same-origin conventional static icon paths, with `/icon.ico` first. A high-quality result can satisfy the retry before HTML/manifest discovery, which keeps authenticated or WAF-protected page shells out of the critical path. No domain-specific favicon mapping is used.
+## 1.24.14c authenticated-deep-link favicon policy
+
+1.24.14c keeps the fast favicon-first resolver and the 1.24.14b conventional-path quality probes. If a credential-free quality fetch of a deep shortcut redirects to a different origin (for example, an account/login provider), MosaicSync now inspects the original site's public root for declared application icons before considering redirect-destination artwork. The recovery probe accepts root metadata only when the root itself remains on the original origin. No host-specific mapping or third-party favicon service is used; image fetches retain the existing bounds, MIME/SVG validation, no-referrer policy, and `credentials: "omit"`.
+
+
+
+## 1.24.14d Chrome native-favicon quality policy
+
+Chrome's `_favicon` endpoint is a browser-local fast fallback, but the requested output size is not treated as intrinsic source quality: Chrome may upscale a small cached favicon. Native pixels therefore carry unknown quality metadata and remain eligible for the same generic quality-recovery pipeline as other automatically learned favicons. The upgrade path also treats the historical `firefox` source-kind label as browser-native/reconstructable artwork on Chrome. Firefox manifests intentionally omit Chrome-only `version_name`; the human-facing release label remains available through MosaicSync's internal `VERSION` constant and UI.
+## 1.24.14e favicon resolver policy
+
+The resolver is deliberately two-stage. The first pass favors latency: browser-local artwork and `/favicon.ico` may be displayed immediately as provisional device-local pixels. The first quality follow-up is not a failure and becomes due immediately, with the existing alarm remaining the MV3 durability fallback.
+
+The quality pass favors authority: HTML/manifest-declared artwork is inspected before guessed filenames, including cross-host CDN artwork permitted by the all-sites Website Access grant. Authenticated deep-link redirects still trigger recovery from the original site's public root. Only after declared discovery has failed to reach high quality may `/favicon.ico` and the conventional quality guesses run, and those guesses share a 1.5-second post-discovery fallback budget so they cannot consume the main 8-second discovery deadline.
+
+Chrome's private `_favicon` cache is read before the optional host-permission gate because it is browser-local. It is a provisional fallback only and carries unknown intrinsic quality. Brand-new Chrome sites do not need to be visited first: when MosaicSync Website Access has already been granted, the same declared-site network resolver runs even with an empty Chrome favicon cache. Without that optional host permission, MosaicSync cannot independently fetch a never-visited website and correctly falls back to browser-local data only. No third-party favicon service or hostname-specific mapping is used.
+
+
+## 1.24.14f UI-polish policy
+
+Donation is live at `https://ko-fi.com/mosaicsync`; both Welcome and Settings route through the shared `DONATE_URL` constant and no “coming soon / being prepared” UI state remains. User-facing donation copy continues through the reviewed localization catalogs.
+
+Anchored help tooltips must not rely on escaping a scrolling dialog's `overflow` rules. While visible, the existing localized tooltip DOM node is moved to `document.body`, positioned with `position: fixed`, clamped to a safe viewport margin, flipped below the anchor when there is insufficient room above, and restored to its original parent when hidden. This keeps one source of localized content and avoids clipping in every supported language.
+
+## 1.24.14g adversarial-hardening policy
+
+1.24.14g keeps Sync conflict semantics and favicon resolver ordering unchanged. Read-only Sync status requests stay on the serialized background queue but cannot persist a durable Sync error when the inspection itself fails. Firefox data-collection permission revocation clears pending cross-Space journals before disabling Sync, matching the explicit disable path. Viewport-portaled tooltips must remove themselves if their original UI host has already been disconnected.
+
+Profile import remains independent of browser Sync quota. Its pre-parse length check is a deliberately extreme 256 Mi-character abuse/OOM ceiling, not a normal profile-size product limit, and profile format v2 is unchanged. Content-addressed local projection fails closed if a single transaction ever presents two different payloads for one asset ID. Permanent tests cover same-shortcut concurrent conflicts, destination-first cross-Space interruption/replay, the collision guard, profile-size boundaries, tooltip teardown, and read-only background-error isolation. The favicon-learning network/queue architecture is deliberately deferred to 1.24.14h.
+
+## 1.24.14h favicon-queue policy
+
+Click-triggered favicon learning is split into three phases: a short serialized eligibility/preflight read, browser/native plus remote quality resolution outside MosaicSync's state/Sync mutation queue, and a short serialized commit. The commit always reloads current local state and re-finds eligible shortcut targets before applying pixels through the existing optimistic-rebase write path. This prevents a slow favicon host from delaying Sync reconciliation while preserving deletion and concurrent-edit safety.
+
+The separate tab-favicon work queue is bounded to three simultaneous jobs and to the existing pending-navigation entry cap; repeated `tabs.onUpdated` events for one tab replace queued stale work with the newest snapshot. The favicon resolver itself, permissions, profile/storage/Sync schemas and localization remain unchanged.
+## 1.24.14i proactive favicon hardening
+
+The 1.24.14h network/state-queue split remains intact. 1.24.14i makes proactive recovery Space-aware: pending work is validated against the shortcut's current Space and that Space's `autoSiteIcons` setting at prune/commit time, and an idempotent rediscovery is an unchanged success rather than a stale failure. Behavioral tests cover the real batch engine and scheduler instead of relying only on source-text canaries. No persisted schema, profile format, Sync namespace, permission, or localization changes were introduced.
+
+## 1.24.14j favicon commit-failure policy
+
+The proactive favicon architecture from 1.24.14h/i remains unchanged: network discovery runs outside the serialized state/Sync queue and commits re-read current state. 1.24.14j hardens the seam with the generic background `enqueue()` contract. `enqueue()` intentionally resolves failed tasks as `{ ok: false, error }`; the batch engine must treat that shape as a transient commit failure and retain the durable recovery item through normal backoff rather than deleting it as stale. Permanent tests compose the real queue wrapper with a throwing commit on Firefox and Chrome. Equal-clock Sync settings records are also pinned against the existing deviceId tie-break, including a missing-deviceId case. No conflict algorithm, persisted schema, permission, UI string or favicon discovery rule changes.
+
+
+## 1.24.14k duplicate-record-ID policy
+
+Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
+## 1.26.11 appearance lifecycle regression policy
+
+1.26.11 keeps the 1.26.9 runtime appearance/wallpaper isolation architecture unchanged and closes its highest-value automated test gap. Permanent Firefox/Chrome behavioral tests execute the production preview/commit functions rather than only matching source text. They must prove that a live theme switch while Settings is open updates the isolated preview immediately, leaves the real `.page` background untouched, commits the authoritative background exactly once after the real Settings `close` event plus one animation frame, clears the preview state, and suppresses that commit if Settings is reopened before the frame runs.
+
+The preview surface is a fixed first child of `#page`, not a DOM sibling. Native `<dialog>` top-layer painting remains above it. Do not move runtime DOM solely for terminology; keep the paint-isolation behavior stable.
+
+The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
+
+The current version string must be `1.26.11` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+
+## 1.26.9 live appearance / wallpaper paint-isolation policy
+
+1.26.9 completes the 1.26.5/1.26.8 Firefox paint workaround without reopening the original disappearing-Settings failure path. While Settings is open, Light/Dark/System theme skin changes remain immediate through `applyThemeSkinVisual()`, and the matching effective wallpaper now changes immediately as well.
+
+The important invariant is that the real full-viewport `.page` background still **must not** be mutated while the modal Settings surface is painted. `applyPageBackgroundVisual()` therefore mirrors the effective color/wallpaper onto the paint-contained `#appearancePreviewLayer` while Settings is open and marks one deferred authoritative commit. The preview layer is a simple fixed child surface containing a plain `object-fit: cover` `<img>` with no CSS `background-image`, filters, or backdrop effects. After Settings closes, the existing next-frame `commitDeferredAppearanceVisual()` updates the real `.page` background through normal `applySettings()` and hides/resets the preview layer. This also protects any unrelated Settings control that calls `applySettings()` while the dialog is open: the background portion is automatically routed to the safe preview layer.
+
+Do not remove the preview layer by restoring direct `page.style.backgroundImage` / `page.style.backgroundColor` writes under an open Settings dialog, and do not duplicate persistence logic for wallpaper settings. State continues through the ordinary audited writer.
+
+The 1.26.8 release remains the historical intermediate step that restored live theme skin but intentionally deferred the wallpaper itself.
+
+The current version string must be `1.26.9` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+
+## 1.26.7 folder drag-out stability policy
+
+1.26.7 is a narrow functional fix on top of the 1.26.5 stable architecture. A shortcut nested in a folder may be dragged onto an empty top-level grid slot. The operation is implemented in shared `core/model.js` as `moveShortcutOutOfFolder()` so Firefox and Chrome use the same tested state transition. The UI continues to persist through the ordinary `saveState()` path; there is no drag-specific storage queue or message type.
+
+The transition must preserve the shortcut ID/content, update mutation clocks, renumber remaining folder children, collapse a two-child folder to the remaining top-level shortcut, reject occupied destinations without partial mutation, and persist exactly once through the normal state writer. No new user-facing strings are required.
+
+The current version string must be `1.26.7` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+
+## 1.26.5 Settings appearance-isolation policy
+
+1.26.5 is rebuilt from the clean 1.26.3 baseline after auditing and removing failed wallpaper-freeze workarounds. The current version string must be `1.26.5` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical release references remain historical.
+
+The Settings dialog is a paint-safety boundary. While `settingsDialog.open` is true, a change to the configured/effective appearance must **not** call `applySettings()` or otherwise mutate root `data-effective-theme`, `color-scheme`, page wallpaper/background styling or canvas-contrast styling. The appearance selector may update its own selected state immediately and state persistence continues normally. Active Light/Dark wallpaper changes follow the same rule. One deferred final appearance is committed from the Settings `close` event on the following animation frame, after the dialog has left its painted state.
+
+Theme-wallpaper persistence uses the ordinary audited `saveState()` / `writeLocalState()` pipeline and its existing optimistic rebase, local-asset transaction and Sync-journal guarantees. Do not reintroduce the 1.26.2 compact `writeThemeWallpaperSettings()` writer, the 1.26.3 `mosaicsync:set-theme-wallpapers` background message, own-write echo signatures, separate theme-wallpaper persistence queues, or async visual-decode scheduling. Those mechanisms did not solve the paint failure and duplicated established persistence logic.
+
+The 1.26.4 inline wallpaper-gallery experiment is rolled back. The 1.26.3 visual Light/Dark cards remain and continue to use the existing gallery. Bookmark folder colors, GitHub project links and unrelated 1.26.3 behavior remain intact. No new permissions, remote services, state/Sync/profile schema or custom-wallpaper binary behavior is introduced.
+
+## 1.26.3 UI isolation policy
+
+1.26.3 is the stabilization follow-up to 1.26.2. The current version string must be `1.26.3` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical release references remain historical.
+
+The Separate light/dark wallpapers controls must not persist directly from the New Tab document. The UI may update its three primitive in-memory fields and visible preview immediately, but the canonical compact write is owned by the background context through `mosaicsync:set-theme-wallpapers`. The UI path must not call `writeThemeWallpaperSettings()`, `saveState()`, `warmSessionRenderCache()`, render-manifest persistence, profile hydration/normalization or full `render()` as part of this preference transaction.
+
+A New Tab pre-registers a lightweight echo signature derived from the compact Sync-relevant state plus local artwork references before sending the background message. An exact matching local-storage event is adopted only as the new compact write baseline and returns without hydration or rerender. Any concurrent state that does not match that exact echo signature follows the ordinary reconciliation path.
+
+Light/Dark wallpaper selection uses visual buttons and the existing MosaicSync wallpaper gallery; do not reintroduce native `<select>` controls for these two selectors. Bookmark folder colors intentionally remain device-local, but when assigned they fill the full folder row/card with computed readable contrast rather than a subtle edge-only marker.
+
+The canonical GitHub project URL is `https://github.com/xipinformatica/mosaicsync`; Settings and Welcome place it immediately after MPL 2.0 and before Support. No new permission, remote wallpaper provider, state/Sync/profile schema or custom-wallpaper binary behavior is introduced.
+
+## 1.26.2 UI/persistence stabilization policy
+
+1.26.2 is a focused correction to the 1.26 workflow features. The current version string must be `1.26.2` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical changelog/QA references remain historical.
+
+The Bookmarks dialog is modal. Its transient folder-color palette must be appended to the active `bookmarksDialog` *before* entering the Popover top layer, so it remains inside the modal's non-inert DOM subtree and can receive pointer/keyboard input in both Firefox and Chromium. The selected color must remain a bounded device-local preference and be visibly applied without changing bookmark data.
+
+Light/dark wallpaper toggles/selectors must never call the generic image-aware `saveState()` path. They use `writeThemeWallpaperSettings()`, a compact settings-only transaction that patches only `themeWallpapersEnabled`, `lightBackgroundPreset` and `darkBackgroundPreset`, serializes with ordinary local writes, rebases concurrent-tab settings through the established field-level rules, and records the same durable Sync mutation journal when Sync is active. Heavy artwork hashing/projection is forbidden on this UI path. A concurrent rebase is the only case where the active Space is rehydrated.
+
+No permissions, state/Sync/profile schema versions, localization keys, remote providers, bookmark data, or custom-wallpaper binary storage rules change in this release.
+
+## 1.26.0 workflow feature release
+
+1.26.0 adds narrowly scoped New Tab workflow improvements without introducing a third-party wallpaper service or new permissions. The current version string must be `1.26.0` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames.
+
+Light/dark wallpaper selection synchronizes only fixed built-in preset identifiers (`themeWallpapersEnabled`, `lightBackgroundPreset`, `darkBackgroundPreset`) through the existing settings record. Custom wallpaper bytes remain in the established device-local asset path; the existing current background is the fallback whenever a per-appearance preset is not selected. This changes local state schema 16→17 and Sync schema 8→9, while profile format stays v2.
+
+The default-Space preference, bookmark-folder color map and Frequently Visited enable/count preferences are device-side UI preferences, not Sync state. The default Space and bookmark colors intentionally remain device-local because their semantics are device-specific and bookmark folder IDs are not a safe cross-profile identity. Frequently Visited count is profile-exported because it is portable UI preference, but it still does not enter browser Sync.
+
+Shortcut right-click opens a background tab; middle-click remains native anchor behavior. Editing stays on the three-dot action. `Alt+Shift+1` and `Alt+Shift+2` switch Personal/Work only while MosaicSync itself has focus and do nothing while a dialog or form control is active. Frequently Visited right-click actions are localized; bookmark creation accepts only HTTP(S) URLs and invokes the existing optional bookmarks permission from the explicit menu click.
+
+Bookmark folder colors use a bounded seven-color palette in localStorage and are pruned when corresponding local bookmark-folder IDs disappear. No Unsplash or other remote wallpaper provider is part of this release. All newly exposed copy is present in every one of the 32 UI catalogs.
+
+## 1.25.16.1 version-consistency hotfix
+
+1.25.16.1 is a tiny packaging/UI consistency follow-up to the submitted 1.25.16 build. Firefox and Chrome must use the exact same current version string everywhere: manifest `version`, Chrome `version_name`, shared internal `VERSION`, user-visible Settings version label, build manifest, package filenames, QA metadata and current-version regression expectations. The runtime behavior, localization loader fix, permissions, Sync/storage/profile schemas, favicon architecture and UI strings are otherwise unchanged. Permanent tests require the Settings label and manifests to match the shared runtime version so a stale displayed version cannot ship again.
+
+## 1.25.16 validator-clean locale loading
+
+1.25.16 removes the AMO static-validator warning caused by `import(modulePath)` in the shared UI locale loader. The lazy-loading architecture remains, but every non-English catalog is now behind a fixed loader function whose `import()` argument is a literal bundled `./i18n-locales/*.js` path. Do not reintroduce variable/computed runtime import targets. Both Firefox and Chrome use public/internal version `1.25.16`; Chrome also exposes `version_name: 1.25.16`. No new UI strings, permissions, persisted schemas, Sync behavior, or profile-format changes are part of this release.
+
+## 1.24.14m3 unified legal-link migration
+
+1.24.14m3 is intentionally a link-only patch on top of 1.24.14m2. All in-extension Privacy and MPL links must target the unified single-file website anchors `#privacy` and `#license`; the retired `/privacy/` and `/license/` paths must not appear in runtime source. Technical browser version: `1.24.14.15`; Chrome `version_name`: `1.24.14m3`.
+
+## 1.24.14m2 mascot pill rasterization fix
+
+1.24.14m2 is intentionally a visual-only patch on top of 1.24.14m1. Welcome and Settings must render the Donate mascot “Thank you!” pill with an inset 1 px ring rather than a physical rounded border, avoiding the two bright edge pixels seen from border anti-aliasing. Keep its geometry, localized text, animation and interaction unchanged. Technical browser version: `1.24.14.14`; Chrome `version_name`: `1.24.14m2`.
+
+## 1.24.14m1 EU localization and tooltip policy
+
+1.24.14m1 is intentionally localization/UI-only on top of the 1.24.14m runtime. Every supported UI catalog must have exact key and placeholder parity with English, and the browser selector/autodetection layer must recognize every published locale. The eleven added EU locales are Bulgarian, Croatian, Estonian, Greek, Hungarian, Latvian, Lithuanian, Maltese, Romanian, Slovak and Slovenian; together with the existing catalogs MosaicSync covers all 24 official EU languages. Chrome platform adaptation is regression-tested so browser-brand inflection cannot leave Firefox/Mozilla wording in the new Chrome catalogs.
+
+Localized mascot greetings must be content-sized rather than assuming English string width. Viewport-portaled help tooltips must become non-renderable before their active fixed-position class is removed or the node is restored to its clipped wrapper; this prevents Firefox from painting a transient legacy-position frame during CSS teardown. These UI rules do not alter Sync/storage semantics.
+
+## 1.24.14m convergence, retry and localization hardening
+
+1.24.14m is the corrective release from the comprehensive 1.24.14l self-audit. Live Sync records compare the cross-Space namespace-generation marker (`spaceMoveAt`) before ordinary modification time; this removes a three-device winner cycle while keeping tombstones stronger than stale ordinary edits. Property tests permanently require the merge primitive to be commutative, associative and idempotent.
+
+Sync-relevant New Tab writes also persist `mosaicsync.pending-sync-mutation.v1` atomically with the compact local state. The journal keeps the oldest unsent before-state and newest local after-state, so multiple edits coalesce without losing deletions. Publication failure leaves the journal intact; startup and the five-minute Sync watch retry it before any remote-revision short-circuit, and journal IDs prevent an older completion from clearing newer work. Cross-Space moves continue to use their existing independent destination-first transaction journals.
+
+Mutation clocks use `nextMutationTime()` to advance beyond observed record/workspace clocks, including imported future clocks. User-facing dynamic Sync and automatic-icon status is rendered through localization keys instead of background-generated English; warning metadata is structured (`syncSkippedAssets` / `syncFastSnapshotFallback`) and the local meta schema advances to 11. All 21 catalogs retain identical keys/placeholders, browser timing copy is cadence-neutral, and Polish/Swedish/Korean Space terminology is consistent. The favicon engine, local asset GC architecture, device-snapshot commit ordering and profile format are deliberately unchanged.
+
+## 1.24.14l fault-injection hardening
+
+1.24.14l keeps the 1.24.14k/j model and favicon behavior intact and focuses on persistence failure boundaries. Local content-addressed assets now carry an optional `pendingGcIds` retry list inside the existing local asset-index object. The list is written atomically with the compact state and current asset index whenever old pixels become stale. If post-commit deletion fails or the browser stops before cleanup completes, a later startup re-reads current compact references under the asset write lock and only deletes IDs that are still unreferenced. This is an additive field inside the existing asset-index schema, not a schema-version change.
+
+Per-device Sync snapshots retain root-last double buffering. Before a chunked publish, only the inactive target slot may be cleared; after the new root commits, chunks not named by the new root are best-effort reclaimed. This prevents stale historical chunk tails/opposite slots from consuming Sync quota indefinitely while preserving the previous authoritative generation if the new root write fails. Snapshot gzip decoding also enforces the decompressed-byte ceiling incrementally while streaming.
+
+The live-state ID invariant is pinned explicitly: record IDs are unique within each Space, but the same logical ID may temporarily exist in both Personal and Work during destination-first cross-Space convergence. Hostile profile import remains the boundary that repairs ambiguous cross-Space duplicate IDs.
+

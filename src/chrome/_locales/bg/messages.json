@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Ориентиран към поверителността нов раздел за Chrome с папки, персонализирана визия и по избор Chrome Sync. Нулева телеметрия от MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Отвори MosaicSync"
+  }
+}

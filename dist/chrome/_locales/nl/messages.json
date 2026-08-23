@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Privacygerichte Chrome-nieuwe-tab met mappen, aanpassingen en optionele Chrome Sync. Geen MosaicSync-telemetrie."
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync openen"
+  }
+}

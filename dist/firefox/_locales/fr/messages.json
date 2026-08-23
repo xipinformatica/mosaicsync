@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Nouvel onglet Firefox axé sur la confidentialité, avec dossiers, personnalisation et Firefox Sync facultatif. Zéro télémétrie MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Ouvrir MosaicSync"
+  }
+}

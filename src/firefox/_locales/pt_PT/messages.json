@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Novo separador do Firefox focado na privacidade, com pastas, personalização e Firefox Sync opcional. Zero telemetria MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Abrir MosaicSync"
+  }
+}

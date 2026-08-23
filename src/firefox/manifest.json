@@ -1,0 +1,70 @@
+{
+  "manifest_version": 3,
+  "name": "MosaicSync",
+  "short_name": "MosaicSync",
+  "version": "1.26.11",
+  "description": "__MSG_extensionDescription__",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "background": {
+    "scripts": [
+      "background/background.js"
+    ],
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab/newtab.html"
+  },
+  "icons": {
+    "16": "assets/favicon.svg",
+    "32": "assets/favicon.svg",
+    "48": "assets/icon.svg",
+    "96": "assets/icon.svg"
+  },
+  "action": {
+    "default_title": "__MSG_actionOpenHome__",
+    "default_icon": {
+      "16": "assets/favicon.svg",
+      "32": "assets/favicon.svg",
+      "48": "assets/icon.svg",
+      "96": "assets/icon.svg"
+    }
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "mosaicsync@xipinformatica.cat",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ],
+        "optional": [
+          "browsingActivity",
+          "technicalAndInteraction"
+        ]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  },
+  "optional_permissions": [
+    "topSites",
+    "bookmarks"
+  ],
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; connect-src http: https:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'"
+  },
+  "author": "XIP Informàtica",
+  "homepage_url": "https://xipinformatica.cat/mosaicsync/",
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "default_locale": "en",
+  "chrome_settings_overrides": {
+    "homepage": "newtab/newtab.html"
+  }
+}

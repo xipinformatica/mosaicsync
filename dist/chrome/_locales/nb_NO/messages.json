@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Personvernfokusert ny fane i Chrome med mapper, tilpasning og valgfri Chrome Sync. Ingen MosaicSync-telemetri."
+  },
+  "actionOpenHome": {
+    "message": "Åpne MosaicSync"
+  }
+}

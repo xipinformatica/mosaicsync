@@ -1,0 +1,27 @@
+import { performance } from "node:perf_hooks";
+import { webcrypto } from "node:crypto";
+import { makeWorstCaseProfile } from "../fixtures/worst-case-profile.mjs";
+globalThis.crypto ||= webcrypto;
+const model=await import("../dist/firefox/core/model.js");
+const assets=await import("../dist/firefox/core/local-assets.js");
+const storage=await import("../dist/firefox/core/storage.js");
+const raw=makeWorstCaseProfile({count:200});
+function bench(name,fn,iterations=30){for(let i=0;i<5;i++)fn();const start=performance.now();for(let i=0;i<iterations;i++)fn();const ms=(performance.now()-start)/iterations;console.log(`${name}: ${ms.toFixed(3)} ms avg (${iterations} iterations)`);return ms;}
+const normalized=model.normalizeState(raw);
+bench("normalizeState(200)",()=>model.normalizeState(raw),20);
+bench("stableStringify(200)",()=>model.stableStringify(normalized),20);
+bench("projectStateToLocalAssets(200)",()=>assets.projectStateToLocalAssets(normalized),20);
+bench("createWriteBaseline(200)",()=>storage.createWriteBaseline(normalized),20);
+const projected=assets.projectStateToLocalAssets(normalized);
+bench("hydrate active Space",()=>assets.hydrateStateLocalAssets(projected.state,projected.assets,{spaceIds:["personal"]}),30);
+console.log(`core JSON bytes: ${Buffer.byteLength(JSON.stringify(projected.state))}`);
+console.log(`deduplicated assets: ${projected.assets.size}`);
+const personal=model.workspaceStateNormalized(normalized,'personal');
+bench('flattenState trust-boundary',()=>model.flattenState(personal,'bench-device'),30);
+bench('flattenState normalized fast path',()=>model.flattenStateNormalized(personal,'bench-device'),30);
+bench('settings record trust-boundary',()=>model.makeSettingsRecord(personal,'bench-device'),50);
+bench('settings record normalized fast path',()=>model.makeSettingsRecordNormalized(personal,'bench-device'),50);
+const records=[...model.flattenStateNormalized(personal,'bench-device').values()];
+const recordA=records[0], recordB={...recordA,deviceId:'other-device'};
+bench('syncRecordEqual allocation-light',()=>model.syncRecordEqual(recordA,recordB),10000);
+bench('syncRecordEqual legacy stringify equivalent',()=>model.stableStringify((({deviceId,...rest})=>rest)(recordA))===model.stableStringify((({deviceId,...rest})=>rest)(recordB)),1000);

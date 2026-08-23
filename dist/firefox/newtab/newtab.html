@@ -1,0 +1,653 @@
+<!doctype html>
+<!--
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at https://mozilla.org/MPL/2.0/.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MosaicSync</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="newtab.css">
+  <script src="session-bootstrap.js"></script>
+  <script src="appearance-bootstrap.js"></script>
+  <script type="module" src="newtab.js"></script>
+</head>
+<body>
+  <main id="page" class="page" aria-label="New Tab shortcuts">
+    <div id="appearancePreviewLayer" class="appearance-preview-layer" hidden aria-hidden="true"><img id="appearancePreviewImage" class="appearance-preview-image" alt="" aria-hidden="true" hidden></div>
+    <header class="brand" aria-label="MosaicSync brand">
+      <span id="brandHelloButton" class="brand-button">
+        <span class="brand-logo-wrap">
+          <img class="brand-mark" src="../assets/icon.svg" alt="" aria-hidden="true">
+          <span id="brandHelloEasterEgg" class="brand-easter-egg" aria-hidden="true">
+            <span class="brand-easter-mascot">
+              <svg viewBox="0 0 40 30" focusable="false" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="13" cy="6" r="4.2" stroke="none"/>
+                <path d="M8.8 16.4c0-3.3 1.7-5.7 4.2-5.7s4.2 2.4 4.2 5.7V20H8.8v-3.6Z" stroke="none"/>
+                <path d="M9.3 15.2 5.1 18.9" fill="none" stroke-width="2.2"/>
+                <path class="brand-easter-wave" d="M16.2 14.6 24.1 7.4" fill="none" stroke-width="2.15"/>
+                <path d="M10.9 20.2h4.8l2.9 2.7" fill="none" stroke-width="2.45"/>
+                <path d="M14.5 20.2h5.4l4.1 5.1" fill="none" stroke-width="2.55"/>
+              </svg>
+            </span>
+            <span class="brand-easter-bubble"><svg class="brand-easter-bubble-bg" viewBox="0 0 52 25" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect x="1.5" y="1.5" width="49" height="22" rx="11" ry="11"/></svg><span class="brand-easter-bubble-text">Hello!</span></span>
+          </span>
+        </span>
+        <span class="brand-name">MosaicSync</span>
+      </span>
+    </header>
+
+    <nav id="spaceSwitcher" class="space-switcher" aria-label="Spaces">
+      <button class="space-button" type="button" data-space-id="personal" aria-pressed="true" data-i18n-skip>Personal</button>
+      <button class="space-button" type="button" data-space-id="work" aria-pressed="false" data-i18n-skip>Work</button>
+    </nav>
+
+    <section class="shortcuts-wrap" aria-label="Shortcuts">
+      <section id="frequentSitesSection" class="frequent-sites" aria-label="Frequently visited" hidden>
+        <div class="frequent-sites-heading">
+          <span>Frequently visited</span>
+          <small>From this Firefox · device only</small>
+        </div>
+        <div id="frequentSitesList" class="frequent-sites-list"></div>
+      </section>
+      <div id="syncPendingState" class="sync-pending-state" hidden aria-live="polite">
+        <span class="sync-pending-spinner" aria-hidden="true"></span>
+        <div class="sync-pending-copy">
+          <strong>Synchronizing your MosaicSync layout…</strong>
+          <p id="syncPendingMessage">Waiting for your Firefox account to deliver the MosaicSync layout. This can take a few minutes; your shortcuts will appear automatically when it arrives.</p>
+        </div>
+        <span class="sync-help-wrap">
+          <button class="sync-help-button" type="button" aria-label="Why MosaicSync uses Firefox Sync">?</button>
+          <span class="sync-help-tooltip" role="tooltip">MosaicSync uses Firefox's own Sync service instead of a MosaicSync server. That keeps sync inside your Mozilla account and lets MosaicSync stay serverless: no MosaicSync account, analytics, or telemetry. Firefox decides when extension data moves between computers.</span>
+        </span>
+        <button id="syncPendingChooseSource" class="secondary-button" type="button">Choose another source</button>
+      </div>
+      <div id="shortcutGrid" class="shortcut-grid"></div>
+      <div id="emptyState" class="empty-state" hidden>
+        <div class="empty-guide">
+          <button id="addFirstButton" class="empty-ghost-tile" type="button" aria-label="Add your first shortcut">
+            <span aria-hidden="true">+</span>
+          </button>
+          <svg class="empty-guide-arrow" viewBox="0 0 64 38" aria-hidden="true" focusable="false">
+            <path class="empty-guide-arrow-line" d="M60 8 C48 8 45 25 29 25 H9"/>
+            <path class="empty-guide-arrow-head" d="M16 18 L9 25 L16 32"/>
+          </svg>
+          <div class="empty-callout">Add your first shortcut</div>
+        </div>
+        <div class="empty-actions">
+          <button id="importNativeButton" class="text-button" type="button">Load current Firefox shortcuts</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Paint the cached grid before parsing hundreds of hidden dialog controls. -->
+    <script src="render-bootstrap.js"></script>
+
+    <button id="bookmarksButton" class="bookmarks-button" type="button" aria-label="Bookmarks" title="Bookmarks" aria-haspopup="dialog" aria-controls="bookmarksDialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 4.5h11a1.5 1.5 0 0 1 1.5 1.5v13l-7-3.6L5 19V6a1.5 1.5 0 0 1 1.5-1.5Z"/></svg>
+      <span>Bookmarks</span>
+    </button>
+
+    <button id="settingsButton" class="settings-button" type="button" aria-label="MosaicSync settings" title="MosaicSync settings" aria-haspopup="dialog" aria-controls="settingsDialog">
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
+        <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.1 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 8.5 4.1a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 8.5c.15.37.38.7.7 1 .3.25.7.4 1.1.4h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.8 1.1Z"/>
+      </svg>
+    </button>
+  </main>
+
+  <dialog id="bookmarksDialog" class="dialog bookmarks-dialog" aria-labelledby="bookmarksDialogTitle">
+    <section class="dialog-card bookmarks-card">
+      <div class="dialog-heading bookmarks-heading">
+        <div>
+          <p class="eyebrow">Firefox</p>
+          <h2 id="bookmarksDialogTitle">Bookmarks</h2>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="bookmarksDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+
+      <div id="bookmarksPermissionState" class="bookmarks-permission-state" hidden>
+        <div class="bookmarks-permission-icon" aria-hidden="true">☆</div>
+        <h3>Show your Firefox bookmarks</h3>
+        <p>MosaicSync can display your bookmark folders without copying them into MosaicSync or Firefox Sync.</p>
+        <button id="bookmarksPermissionButton" class="primary-button" type="button">Allow bookmark access</button>
+      </div>
+
+      <div id="bookmarksBrowser" class="bookmarks-browser" hidden>
+        <div class="bookmarks-toolbar">
+          <label class="bookmarks-search-field">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+            <input id="bookmarksSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search bookmarks" aria-label="Search bookmarks">
+          </label>
+          <span id="bookmarksCount" class="bookmarks-count"></span>
+        </div>
+        <div class="bookmarks-layout">
+          <aside class="bookmarks-sidebar" aria-label="Bookmark folders">
+            <div id="bookmarkFolderTree" class="bookmark-folder-tree"></div>
+          </aside>
+          <section class="bookmarks-main" aria-live="polite">
+            <div id="bookmarkBreadcrumbs" class="bookmark-breadcrumbs"></div>
+            <div id="bookmarkFolderCards" class="bookmark-folder-cards"></div>
+            <div id="bookmarkItems" class="bookmark-items"></div>
+            <div id="bookmarksEmpty" class="bookmarks-empty" hidden>
+              <strong>No bookmarks here</strong>
+              <span>Choose another folder or search your bookmarks.</span>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div id="bookmarksStatus" class="bookmarks-status" role="status" aria-live="polite"></div>
+    </section>
+  </dialog>
+
+  <dialog id="shortcutDialog" class="dialog" aria-labelledby="shortcutDialogTitle">
+    <form id="shortcutForm" class="dialog-card">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Shortcut</p>
+          <h2 id="shortcutDialogTitle">Add shortcut</h2>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="shortcutDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+
+      <input id="shortcutId" type="hidden">
+
+      <label class="field">
+        <span>Name</span>
+        <input id="shortcutTitle" type="text" maxlength="80" autocomplete="off" required placeholder="Example: MacRumors">
+      </label>
+
+      <label class="field">
+        <span>URL</span>
+        <input id="shortcutUrl" type="text" inputmode="url" maxlength="2048" autocomplete="off" required placeholder="https://example.com">
+      </label>
+
+      <div id="shortcutSpaceField" class="field shortcut-space-field">
+        <span>Space</span>
+        <div id="shortcutSpaceChoice" class="shortcut-space-choice" role="radiogroup" aria-label="Space">
+          <button type="button" data-shortcut-space="personal" aria-pressed="true" data-i18n-skip>Personal</button>
+          <button type="button" data-shortcut-space="work" aria-pressed="false" data-i18n-skip>Work</button>
+        </div>
+      </div>
+
+      <fieldset class="image-fieldset">
+        <legend>Icon or image</legend>
+        <div class="image-editor">
+          <div id="imagePreview" class="image-preview" aria-label="Image preview"><span>A</span></div>
+          <div class="image-controls">
+            <div class="row-actions">
+              <label class="file-button" for="shortcutImageFile">Choose local image</label>
+              <input id="shortcutImageFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon">
+              <button id="clearShortcutImage" class="text-button" type="button">Clear image</button>
+            </div>
+            <div class="web-image-row">
+              <input id="shortcutImageUrl" type="url" inputmode="url" maxlength="2048" autocomplete="off" placeholder="https://example.com/icon.png" aria-label="Online image address">
+              <button id="useShortcutImageUrl" class="secondary-button" type="button">Use web image</button>
+            </div>
+            <label id="shortcutSyncImageRow" class="artwork-sync-row">
+              <input id="shortcutSyncImage" type="checkbox">
+              <span><strong>Sync this image</strong><small id="shortcutSyncImageHint">Off by default. MosaicSync keeps your higher-quality local image and creates a separate compact copy only if you enable Sync.</small></span>
+            </label>
+            <p id="shortcutImageHint" class="hint">Local images stay on this Firefox unless you choose to sync them. Web images keep a lightweight source address so another Firefox can reconstruct them.</p>
+          </div>
+        </div>
+      </fieldset>
+
+      <label class="field">
+        <span>Image style</span>
+        <select id="shortcutImageStyle">
+          <option value="contain">Icon — fit inside tile</option>
+          <option value="cover">Image — fill tile</option>
+        </select>
+      </label>
+
+      <div class="dialog-actions split-actions">
+        <button id="deleteShortcutButton" class="danger-button" type="button" hidden>Delete</button>
+        <span class="action-spacer"></span>
+        <button class="secondary-button" type="button" data-close-dialog="shortcutDialog">Cancel</button>
+        <button class="primary-button" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDialog" class="dialog settings-dialog" aria-labelledby="settingsDialogTitle">
+    <form id="settingsForm" class="dialog-card settings-card">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">MosaicSync · 1.26.11</p>
+          <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+
+
+      <div class="settings-section compact-controls-section">
+        <div class="compact-settings-bar">
+          <div id="themeToggle" class="compact-theme-toggle" role="group" aria-label="Appearance">
+            <button class="theme-icon-choice" type="button" data-theme-choice="dark" aria-label="Dark appearance" title="Dark">☾</button>
+            <button class="theme-icon-choice" type="button" data-theme-choice="system" aria-label="Follow system appearance" title="System">▣</button>
+            <button class="theme-icon-choice" type="button" data-theme-choice="light" aria-label="Light appearance" title="Light">☀</button>
+          </div>
+
+          <div class="compact-layout-controls" aria-label="Grid layout">
+            <label class="compact-select-field">
+              <span>Columns</span>
+              <select id="settingsColumns">
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </label>
+            <label class="compact-select-field">
+              <span>Rows</span>
+              <select id="settingsRows">
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+                <option value="6">6</option>
+                <option value="7">7</option>
+                <option value="8">8</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <label class="compact-size-row">
+          <span>Shortcut size</span>
+          <input id="settingsTileSize" type="range" min="60" max="96" step="1" value="76">
+          <output id="settingsTileSizeValue">76px</output>
+        </label>
+        <label class="language-setting-row" for="settingsLanguage">
+          <span>Language</span>
+          <select id="settingsLanguage" aria-label="Language"></select>
+        </label>
+      </div>
+
+      <div class="settings-section spaces-settings-section">
+        <div class="section-heading-row spaces-heading-row">
+          <div>
+            <h3>Spaces</h3>
+            <p class="section-subtitle">Use two separate shortcut layouts.</p>
+          </div>
+          <label class="switch-control" for="settingsMultipleSpaces">
+            <input id="settingsMultipleSpaces" type="checkbox">
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            <span class="switch-label">Multiple spaces</span>
+          </label>
+        </div>
+        <div id="settingsSpaceNames" class="space-name-settings">
+          <label class="space-name-row" for="settingsPersonalSpaceName">
+            <span>Primary space</span>
+            <input id="settingsPersonalSpaceName" type="text" maxlength="32" autocomplete="off">
+          </label>
+          <label id="settingsWorkSpaceNameRow" class="space-name-row" for="settingsWorkSpaceName">
+            <span>Secondary space</span>
+            <input id="settingsWorkSpaceName" type="text" maxlength="32" autocomplete="off">
+          </label>
+        </div>
+        <div class="device-space-default">
+          <label class="space-name-row" for="settingsDefaultSpace">
+            <span id="settingsDefaultSpaceLabel"></span>
+            <select id="settingsDefaultSpace"></select>
+          </label>
+          <p id="settingsSpaceKeyboardHint" class="feature-permission-status"></p>
+        </div>
+      </div>
+
+      <div class="settings-section frequent-settings-section">
+        <div class="section-heading-row">
+          <div>
+            <h3>Frequently visited</h3>
+            <p id="settingsFrequentlyVisitedDescription" class="section-subtitle"></p>
+          </div>
+          <label class="switch-control" for="settingsFrequentlyVisited">
+            <input id="settingsFrequentlyVisited" type="checkbox">
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            <span class="switch-label">Show</span>
+          </label>
+        </div>
+        <div id="frequentOptions" class="frequent-options" hidden>
+          <label id="frequentCountRow" class="frequent-count-row" for="settingsFrequentlyVisitedCount">
+            <span id="settingsFrequentlyVisitedCountLabel"></span>
+            <select id="settingsFrequentlyVisitedCount">
+              <option value="3">3</option>
+              <option value="5">5</option>
+              <option value="8">8</option>
+              <option value="10">10</option>
+            </select>
+          </label>
+          <p id="frequentlyVisitedStatus" class="feature-permission-status"></p>
+        </div>
+      </div>
+
+      <div class="settings-section backup-transfer-section">
+        <div class="section-heading-row">
+          <div>
+            <h3>Backup &amp; transfer</h3>
+            <p class="section-subtitle">Save your complete MosaicSync setup or move it to another browser or computer.</p>
+          </div>
+        </div>
+        <div class="advanced-tool-row">
+          <span><strong>Export MosaicSync profile</strong><small>Save a complete local backup with both Spaces, folders, settings, custom artwork, learned favicons and wallpapers. The file is independent of browser Sync limits.</small></span>
+          <button id="exportProfileButton" class="secondary-button" type="button">Export profile</button>
+        </div>
+        <div class="advanced-tool-row">
+          <span><strong>Import MosaicSync profile</strong><small>Restore a .mosaicsync backup. The format is browser-neutral so it can move your setup between MosaicSync browser editions.</small></span>
+          <button id="importProfileButton" class="secondary-button" type="button">Import profile</button>
+          <input id="importProfileFile" class="visually-hidden" type="file" accept=".mosaicsync,application/json">
+        </div>
+      </div>
+
+      <div class="settings-section compact-background-section">
+        <div class="section-heading-row">
+          <h3>Background</h3>
+          <div class="background-heading-actions">
+            <div class="background-color-control">
+              <button id="settingsBackgroundColorButton" class="background-color-chip" type="button" title="Background color" aria-label="Choose background color" aria-haspopup="dialog" aria-expanded="false">
+                <span id="settingsBackgroundColorSwatch" class="background-color-swatch" aria-hidden="true"></span>
+              </button>
+              <div id="backgroundColorPopover" class="color-picker-popover" role="dialog" aria-label="Choose background color" hidden>
+                <div id="backgroundColorPlane" class="color-picker-plane" tabindex="0" aria-label="Saturation and brightness">
+                  <span id="backgroundColorThumb" class="color-picker-thumb" aria-hidden="true"></span>
+                </div>
+                <label class="color-picker-slider">
+                  <span>Hue</span>
+                  <input id="backgroundColorHue" type="range" min="0" max="360" step="1" value="275">
+                </label>
+                <div class="color-picker-hex-row">
+                  <label>
+                    <span>Hex</span>
+                    <input id="backgroundColorHex" type="text" maxlength="7" inputmode="text" autocomplete="off" spellcheck="false" value="#2b0050">
+                  </label>
+                  <button id="backgroundColorApply" class="secondary-button color-picker-apply" type="button">Apply</button>
+                </div>
+                <div class="color-picker-swatches" aria-label="Suggested colors">
+                  <button type="button" data-color-swatch="#2b0050" aria-label="Deep violet"></button>
+                  <button type="button" data-color-swatch="#111827" aria-label="Midnight blue"></button>
+                  <button type="button" data-color-swatch="#1f2937" aria-label="Graphite"></button>
+                  <button type="button" data-color-swatch="#0f4c5c" aria-label="Deep teal"></button>
+                  <button type="button" data-color-swatch="#5b214e" aria-label="Plum"></button>
+                  <button type="button" data-color-swatch="#6b2d2d" aria-label="Burgundy"></button>
+                  <button type="button" data-color-swatch="#d8d3e8" aria-label="Soft lavender"></button>
+                  <button type="button" data-color-swatch="#f4f1f7" aria-label="Soft light"></button>
+                </div>
+              </div>
+            </div>
+            <button id="resetBackground" class="text-button compact-text-button" type="button">Reset</button>
+          </div>
+        </div>
+
+        <div id="backgroundPresetGrid" class="background-preset-grid compact-preset-grid" aria-label="Built-in backgrounds"></div>
+
+        <div class="theme-wallpaper-settings">
+          <div class="theme-wallpaper-heading">
+            <label class="switch-control" for="settingsThemeWallpapers">
+              <input id="settingsThemeWallpapers" type="checkbox">
+              <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+              <span id="settingsThemeWallpapersLabel" class="switch-label"></span>
+            </label>
+          </div>
+          <p id="settingsThemeWallpapersDescription" class="section-subtitle"></p>
+          <div id="themeWallpaperChoices" class="theme-wallpaper-choices" hidden>
+            <button id="settingsLightWallpaper" class="theme-wallpaper-choice" data-appearance="light" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
+              <span id="settingsLightWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
+              <span class="theme-wallpaper-choice-copy">
+                <strong id="settingsLightWallpaperLabel"></strong>
+                <small id="settingsLightWallpaperValue"></small>
+              </span>
+              <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
+            </button>
+            <button id="settingsDarkWallpaper" class="theme-wallpaper-choice" data-appearance="dark" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
+              <span id="settingsDarkWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
+              <span class="theme-wallpaper-choice-copy">
+                <strong id="settingsDarkWallpaperLabel"></strong>
+                <small id="settingsDarkWallpaperValue"></small>
+              </span>
+              <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="row-actions compact-background-actions">
+          <button id="moreWallpapersButton" class="secondary-button more-wallpapers-button" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">More wallpapers</button>
+          <label class="file-button" for="settingsBackgroundFile">Choose image</label>
+          <input id="settingsBackgroundFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon">
+          <button id="clearBackgroundImage" class="text-button" type="button">Clear</button>
+        </div>
+        <div class="compact-background-controls">
+          <label class="compact-dim-row" title="Darken the wallpaper so shortcut names remain easy to read">
+            <span class="dim-copy"><strong>Background darkness</strong><small>Darkens the wallpaper behind shortcuts.</small></span>
+            <input id="settingsBackgroundDim" type="range" min="0" max="100" step="1" value="0" aria-label="Background darkness">
+            <output id="settingsBackgroundDimValue">0%</output>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section sync-section">
+        <div class="section-heading-row sync-heading-row">
+          <div>
+            <h3>Sync across Firefox</h3>
+            <p class="section-subtitle">Sign in to Firefox with the same account on your other computers to bring your MosaicSync setup with you.</p>
+          </div>
+          <label class="switch-control" for="settingsSyncEnabled">
+            <input id="settingsSyncEnabled" type="checkbox">
+            <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+            <span class="switch-label">Sync</span>
+          </label>
+        </div>
+
+        <div id="syncStatusCard" class="sync-status-card" aria-live="polite">
+          <div class="sync-status-main">
+            <span id="syncStatusDot" class="sync-status-dot off" aria-hidden="true"></span>
+            <div>
+              <strong id="syncStatusText">Sync is off</strong>
+              <small id="syncStatusDetail">Stored only on this device.</small>
+            </div>
+          </div>
+          <div class="sync-status-metrics" aria-label="Sync details">
+            <div class="sync-metric" title="Latest complete synchronized copy received by this Firefox">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .7-7.94A6 6 0 0 0 6.2 8.7 4.5 4.5 0 0 0 7 18Z"/></svg>
+              <span><small id="syncRevisionLabel">Remote copy</small><strong id="syncRevisionText">—</strong></span>
+            </div>
+            <div class="sync-metric" title="Firefox Sync storage used by MosaicSync" hidden>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v6c0 1.66 3.13 3 7 3s7-1.34 7-3V5M5 11v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/></svg>
+              <span><small>Storage</small><strong id="syncQuotaText">0 KB / 100 KB</strong></span>
+            </div>
+          </div>
+          <details class="sync-storage-breakdown">
+            <summary>Technical Sync details</summary>
+            <div class="sync-storage-grid">
+              <span>Layout &amp; settings</span><strong id="syncUsageCore">0 KB</strong>
+              <span>Shortcut images</span><strong id="syncUsageShortcuts">0 KB</strong>
+              <span>Sync metadata / cleanup</span><strong id="syncUsageOverhead">0 KB</strong>
+              <span class="sync-storage-free">Free</span><strong id="syncUsageFree" class="sync-storage-free">100 KB</strong>
+            </div>
+            <p>Local-only artwork uses 0 KB of Firefox Sync storage.</p>
+          </details>
+        </div>
+
+        <div id="syncSetupCard" class="sync-setup-card" hidden>
+          <strong>Choose which copy to use</strong>
+          <p id="syncSetupDetail">Nothing is sent until you choose a source.</p>
+          <div class="sync-actions">
+            <button id="useThisDeviceButton" class="secondary-button" type="button">Use this device</button>
+            <button id="useSyncedCopyButton" class="secondary-button" type="button">Use received copy</button>
+          </div>
+        </div>
+
+        <div class="sync-direction-actions" aria-label="Firefox Sync actions">
+          <button id="sendToSyncButton" class="sync-direction-button" type="button" disabled title="Changes publish automatically. Use this to deliberately republish this device as the authoritative synchronized source.">
+            <span class="sync-direction-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
+            </span>
+            <strong>Send to Sync</strong>
+          </button>
+          <button id="restoreSyncButton" class="sync-direction-button" type="button" disabled title="Replace this device with the latest complete MosaicSync copy this Firefox has received.">
+            <span class="sync-direction-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 5v14m-5-5 5 5 5-5"/></svg>
+            </span>
+            <strong>Restore from Sync</strong>
+          </button>
+        </div>
+        <div id="syncActionStatus" class="sync-action-status" role="status" aria-live="polite" hidden></div>
+
+        <div class="sync-compact-footer">
+          <span class="sync-delay-compact" title="MosaicSync checks delivered changes automatically. Account Sync transfers extension data in the background, and delivery to another computer can take several minutes.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            Firefox handles changes in the background
+          </span>
+          <span class="sync-privacy-hover">
+            <span class="sync-help-wrap sync-settings-help">
+              <button class="sync-help-button" type="button" aria-label="Why MosaicSync uses Firefox Sync">?</button>
+              <span class="sync-help-tooltip" role="tooltip">MosaicSync uses Mozilla's Sync service instead of its own server: no MosaicSync account, cloud, analytics or telemetry. Firefox controls when changes move between computers.</span>
+            </span>
+            <span>Why Firefox Sync?</span>
+          </span>
+          <button id="clearSyncButton" class="text-button danger-text-button" type="button" disabled title="Delete MosaicSync's synchronized copy from Firefox Sync and turn Sync off on this device.">Clear Sync copy</button>
+        </div>
+      </div>
+      <div class="settings-section advanced-section">
+        <details class="advanced-settings">
+          <summary>Advanced</summary>
+          <div class="advanced-settings-body">
+            <section class="advanced-subsection" aria-labelledby="advancedSetupHeading">
+              <h4 id="advancedSetupHeading">Setup &amp; recovery</h4>
+              <div class="advanced-tool-row">
+                <span><strong>Import Firefox shortcuts</strong><small>Replace this MosaicSync layout with the shortcuts Firefox currently shows on New Tab.</small></span>
+                <button id="settingsImportNative" class="secondary-button" type="button">Import Firefox shortcuts</button>
+              </div>
+              <div class="advanced-tool-row">
+                <span><strong>Setup wizard</strong><small>Open the first-run setup again. Your current shortcuts stay unchanged until you choose a source.</small></span>
+                <button id="settingsRunSetup" class="secondary-button" type="button">Run setup wizard</button>
+              </div>
+            </section>
+
+            <section class="advanced-subsection" aria-labelledby="advancedWebsiteHeading">
+              <h4 id="advancedWebsiteHeading">Website access</h4>
+              <label class="settings-feature-toggle advanced-feature-toggle">
+                <input id="settingsAutoSiteIcons" type="checkbox" checked>
+                <span><strong>Learn site icons automatically</strong><small>On by default. When website access is allowed, MosaicSync fills missing favicons in the background and caches them only on this Firefox. Visiting a shortcut remains a fallback for sites that resolve their icon later.</small></span>
+              </label>
+              <div class="advanced-permission-row">
+                <span><strong>Website access</strong><small id="settingsWebAccessStatus">Not checked yet.</small></span>
+                <button id="settingsWebAccessButton" class="secondary-button" type="button">Allow all websites</button>
+              </div>
+            </section>
+          </div>
+        </details>
+      </div>
+
+      <div class="settings-section development-section">
+        <div class="section-heading-row">
+          <div>
+            <h3>Support MosaicSync</h3>
+            <p class="section-subtitle">MosaicSync is open source and completely free to use, copy, share, and modify. If it makes your Firefox better, consider donating to help keep the project alive, maintained, and improving.</p>
+          </div>
+        </div>
+        <div class="development-actions">
+          <button id="settingsDonateButton" class="secondary-button donate-button" type="button">
+            <span class="donate-mascot" aria-hidden="true">
+              <svg viewBox="0 0 48 30" focusable="false" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="13" cy="6" r="4.2" stroke="none"/>
+                <path d="M8.8 16.4c0-3.3 1.7-5.7 4.2-5.7s4.2 2.4 4.2 5.7V20H8.8v-3.6Z" stroke="none"/>
+                <path class="donate-mascot-wave-arm" d="M9.5 15.1 5.8 18.5" fill="none" stroke-width="2.2"/>
+                <path d="M17 19.7h5.7l6.8 4.4" fill="none" stroke-width="2.8"/>
+                <path d="M13.7 20h6.1l7.2 7" fill="none" stroke-width="2.8"/>
+              </svg>
+            </span>
+            <span class="donate-mascot-bubble" aria-hidden="true">Thank you!</span>
+            <span>Donate to development</span>
+          </button>
+          <a id="settingsTipsLink" class="secondary-button development-link-button" href="#">Send us tips!</a>
+        </div>
+      </div>
+
+      <div class="settings-section privacy-section">
+        <h3>Privacy</h3>
+        <p><strong>Zero telemetry.</strong> MosaicSync contains no analytics, tracking, advertising, developer-operated account system, or developer-operated cloud service.</p>
+        <nav class="project-links" aria-label="MosaicSync project links">
+          <a href="https://xipinformatica.cat/mosaicsync/" target="_blank" rel="noopener noreferrer">Website</a>
+          <a href="https://xipinformatica.cat/mosaicsync/#privacy" target="_blank" rel="noopener noreferrer">Privacy</a>
+          <a href="https://xipinformatica.cat/mosaicsync/#license" target="_blank" rel="noopener noreferrer">MPL 2.0</a>
+          <a href="https://github.com/xipinformatica/mosaicsync" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a id="settingsSupportLink" href="#">Support</a>
+        </nav>
+      </div>
+
+      <div class="settings-eu-origin" aria-label="Made in the EU">
+        <svg class="settings-eu-flag" viewBox="0 0 30 20" aria-hidden="true" focusable="false">
+          <rect width="30" height="20" rx="2.2" fill="#003399"/>
+          <defs>
+            <path id="euOriginStar" d="M0-1.15 .338-.372 1.094-.355 .5.142 .676.93 0 .52-.676.93-.5.142-1.094-.355-.338-.372Z" fill="#ffcc00"/>
+          </defs>
+          <use href="#euOriginStar" transform="translate(15 3.3)"/>
+          <use href="#euOriginStar" transform="translate(18.35 4.2)"/>
+          <use href="#euOriginStar" transform="translate(20.8 6.65)"/>
+          <use href="#euOriginStar" transform="translate(21.7 10)"/>
+          <use href="#euOriginStar" transform="translate(20.8 13.35)"/>
+          <use href="#euOriginStar" transform="translate(18.35 15.8)"/>
+          <use href="#euOriginStar" transform="translate(15 16.7)"/>
+          <use href="#euOriginStar" transform="translate(11.65 15.8)"/>
+          <use href="#euOriginStar" transform="translate(9.2 13.35)"/>
+          <use href="#euOriginStar" transform="translate(8.3 10)"/>
+          <use href="#euOriginStar" transform="translate(9.2 6.65)"/>
+          <use href="#euOriginStar" transform="translate(11.65 4.2)"/>
+        </svg>
+        <span>Made in the EU</span>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="wallpaperGalleryDialog" class="dialog wallpaper-gallery-dialog" aria-labelledby="wallpaperGalleryTitle">
+    <div class="dialog-card wallpaper-gallery-card">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Backgrounds</p>
+          <h2 id="wallpaperGalleryTitle">More wallpapers</h2>
+          <p class="wallpaper-gallery-intro">Choose from all MosaicSync backgrounds, including light and dark designs.</p>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="wallpaperGalleryDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+      <div id="wallpaperGalleryGrid" class="wallpaper-gallery-grid" aria-label="Wallpaper gallery"></div>
+    </div>
+  </dialog>
+
+
+
+  <div id="dropChoice" class="drop-choice" hidden role="dialog" aria-label="Choose what to do with the shortcut">
+    <button id="dropMoveButton" class="drop-choice-button" type="button">
+      <span class="drop-choice-icon" aria-hidden="true">↔</span>
+      <span><strong>Move here</strong><small>Switch their positions</small></span>
+    </button>
+    <button id="dropFolderButton" class="drop-choice-button" type="button">
+      <span class="drop-choice-icon" aria-hidden="true">▦</span>
+      <span><strong>Create folder</strong><small>Put both shortcuts together</small></span>
+    </button>
+  </div>
+
+  <div id="folderPopover" class="folder-popover" hidden role="dialog" aria-label="Shortcut folder">
+    <div class="folder-panel">
+      <div class="folder-header">
+        <input id="folderTitleInput" class="folder-title-input" type="text" maxlength="60" autocomplete="off" placeholder="Folder name" aria-label="Folder name">
+        <button id="closeFolderButton" class="folder-close-button" type="button" aria-label="Close folder">×</button>
+      </div>
+      <div id="folderItems" class="folder-items"></div>
+      <div class="folder-footer">
+        <span id="folderCount" class="folder-count"></span>
+        <button id="ungroupFolderButton" class="text-button compact-text-button" type="button">Ungroup</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+</body>
+</html>
