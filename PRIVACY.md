@@ -17,7 +17,7 @@ Depending on the features you use, MosaicSync can store:
 
 The canonical application state is stored using browser extension storage APIs.
 
-Large image assets are kept as content-addressed local assets rather than being placed in the small synchronized layout core. A user-created MosaicSync profile backup can include the assets required to reproduce that profile.
+Large image assets are kept as content-addressed local assets rather than being placed in the small synchronized layout core. A user-created MosaicSync profile backup can include the assets required to reproduce that profile. This includes automatically learned/browser-native favicons when they are part of the profile being exported; those favicon pixels remain excluded from ordinary browser Sync.
 
 ## Synchronization
 

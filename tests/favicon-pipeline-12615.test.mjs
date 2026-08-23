@@ -77,6 +77,7 @@ for (const browser of ["firefox", "chrome"]) {
     let storedQueue = null;
     let status = null;
     let alarmClears = 0;
+    let alarmSchedules = 0;
     const ctx = {
       console,
       Date,
@@ -87,13 +88,15 @@ for (const browser of ["firefox", "chrome"]) {
       ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
       ICON_RECOVERY_ALARM: "favicon",
       ICON_RECOVERY_QUEUE_VERSION: 1,
+      ICON_RECOVERY_EXHAUSTED_RETRY_MS: 24 * 60 * 60 * 1000,
       devMark: () => {},
       devMeasure: () => {},
       readIconRecoveryQueue: async () => queue,
       ensureLocalStorage: async () => ({ state: {} }),
       pruneIconRecoveryQueueAgainstState: async value => value,
-      scheduleIconRecoveryAlarm: async () => {},
+      scheduleIconRecoveryAlarm: async () => { alarmSchedules += 1; },
       hasWebAccess: async () => false,
+      platformHasPermissionFreeFaviconSource: () => browser === "chrome",
       resolveFaviconForUrl: async () => ({ image: "", reason: "permission", provisional: false }),
       enqueue: async fn => fn(),
       applyProactiveFaviconResults: async () => ({ appliedIds: new Set(), unchangedIds: new Set() }),
@@ -119,7 +122,13 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(storedQueue.items[0].lastReason, "permission");
     assert.ok(storedQueue.items[0].lastAttemptAt > 0);
     assert.equal(status.blockedByPermission, 1);
-    assert.ok(alarmClears >= 1);
+    if (browser === "chrome") {
+      assert.ok(storedQueue.items[0].nextAttemptAt > Date.now() + 60 * 60 * 1000, "Chrome native retry should be bounded rather than immediately due");
+      assert.ok(alarmSchedules >= 1);
+      assert.equal(alarmClears, 0);
+    } else {
+      assert.ok(alarmClears >= 1);
+    }
   });
 }
 

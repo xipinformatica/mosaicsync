@@ -32,7 +32,7 @@ function extract(src, name) {
   throw new Error(`unterminated ${name}`);
 }
 
-test("1.26.16 SVG geometry ignores a decoy root inside XML prolog comments", async () => {
+test("1.26.17 SVG geometry ignores a decoy root inside XML prolog comments", async () => {
   const url = pathToFileURL(resolve(root, "dist/firefox/core/svg-safety.js"));
   const mod = await import(`${url.href}?v=${Date.now()}`);
   const source = `<?xml version="1.0"?>\n<!-- <svg width="16" height="16"> -->\n<svg xmlns="http://www.w3.org/2000/svg" width="16000" height="16000"><rect width="1" height="1"/></svg>`;
@@ -43,7 +43,7 @@ test("1.26.16 SVG geometry ignores a decoy root inside XML prolog comments", asy
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.26.16 ${browser} remote SVG decode is always bounded`, () => {
+  test(`1.26.17 ${browser} remote SVG decode is always bounded`, () => {
     const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
     const fn = extract(src, "rasterizeSafeSvg");
     assert.doesNotMatch(fn, /createImageBitmap\(svgBlob\)\s*;/);
@@ -52,7 +52,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(fn, /FAVICON_LOCAL_MAX_SIDE/);
   });
 
-  test(`1.26.16 ${browser} same-marker semantic Sync divergence forces reconciliation`, async () => {
+  test(`1.26.17 ${browser} same-marker semantic Sync divergence forces reconciliation`, async () => {
     const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
     const code = extract(src, "reconcileIfNewCommit");
     let reconciles = 0;
@@ -89,7 +89,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(result.ok, true);
   });
 
-  test(`1.26.16 ${browser} periodic Sync watchdog runs the strong semantic verifier`, () => {
+  test(`1.26.17 ${browser} periodic Sync watchdog runs the strong semantic verifier`, () => {
     const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
     const alarmAt = src.indexOf("browser.alarms?.onAlarm?.addListener");
     const permissionAt = src.indexOf("browser.permissions?.onAdded", alarmAt);
@@ -99,7 +99,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-test("1.26.16 Chrome native favicon helper rejects the browser placeholder signature", async () => {
+test("1.26.17 Chrome native favicon helper rejects the browser placeholder signature", async () => {
   const previousBrowser = globalThis.browser;
   const previousChrome = globalThis.chrome;
   const previousFetch = globalThis.fetch;
@@ -141,9 +141,94 @@ test("1.26.16 Chrome native favicon helper rejects the browser placeholder signa
   }
 });
 
-test("1.26.16 synchronous Frequently Visited bootstrap filters hidden domains before paint", () => {
+test("1.26.17 synchronous Frequently Visited bootstrap filters hidden domains before paint", () => {
   const src = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
   assert.match(src, /HIDDEN_FREQUENT_KEY/);
   assert.match(src, /frequentUrlHidden\(rawSite\.url, hidden\)/);
   assert.match(src, /host\.endsWith\(`\.\$\{domain\}`\)/);
 });
+
+test("1.26.17 Chrome placeholder sentinel failures fail closed and are retryable", async () => {
+  const previousBrowser = globalThis.browser;
+  const previousChrome = globalThis.chrome;
+  const previousFetch = globalThis.fetch;
+  try {
+    const api = {
+      runtime: { id: "retry-extension", getURL: path => `chrome-extension://retry-extension/${path}` },
+      topSites: { get: async () => [] }
+    };
+    // browser-shim.js may already be module-cached by another test in this Node
+    // process, so bind both names explicitly instead of relying on the shim to
+    // re-run for this isolated platform-module import.
+    globalThis.browser = api;
+    globalThis.chrome = api;
+    const globe = new Uint8Array([9, 9, 9, 9]);
+    let sentinelAttempts = 0;
+    const optionsSeen = [];
+    globalThis.fetch = async (url, options = {}) => {
+      optionsSeen.push({ url: String(url), cache: options.cache });
+      if (String(url).includes("mosaicsync-placeholder-retry-extension.invalid")) {
+        sentinelAttempts += 1;
+        if (sentinelAttempts === 1) throw new Error("temporary private endpoint failure");
+      }
+      return {
+        ok: true,
+        blob: async () => ({
+          size: globe.length,
+          type: "image/png",
+          arrayBuffer: async () => globe.buffer.slice(globe.byteOffset, globe.byteOffset + globe.byteLength)
+        })
+      };
+    };
+    const url = pathToFileURL(resolve(root, "dist/chrome/core/platform.js"));
+    const mod = await import(`${url.href}?retry=${Date.now()}`);
+    const first = await mod.readNativeFaviconDataUrl("https://missing.test/", 128);
+    const second = await mod.readNativeFaviconDataUrl("https://missing.test/", 128);
+    assert.equal(first, "", "unknown placeholder identity must fail closed");
+    assert.equal(second, "", "learned generic globe must still be rejected");
+    assert.equal(sentinelAttempts, 2, "failed sentinel probe must not be cached for the worker lifetime");
+    assert.ok(optionsSeen.every(entry => entry.cache === "no-store"));
+    assert.ok(optionsSeen.every(entry => /scaleFactor=1x/.test(entry.url)));
+  } finally {
+    globalThis.browser = previousBrowser;
+    globalThis.chrome = previousChrome;
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test("1.26.17 synchronous Frequently Visited snapshot fails closed when hidden-domain storage is corrupt", () => {
+  const src = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
+  const hiddenCode = extract(src, "hiddenFrequentDomains");
+  const paintCode = extract(src, "paintFrequentSnapshot");
+  let replaceCalls = 0;
+  const ctx = {
+    console,
+    URL,
+    HIDDEN_FREQUENT_KEY: "hidden",
+    localStorage: { getItem: () => "{ definitely not json" },
+    frequentSection: {},
+    frequentList: { replaceChildren: () => { replaceCalls += 1; } },
+    document: { createDocumentFragment: () => ({ append() {} }) },
+    validUrl: value => /^https?:/.test(value),
+    frequentUrlHidden: () => false,
+    validPreview: () => false,
+    frequentCard: site => site,
+    root: { dataset: {} }
+  };
+  vm.createContext(ctx);
+  vm.runInContext(hiddenCode, ctx);
+  vm.runInContext(paintCode, ctx);
+  ctx.paintFrequentSnapshot({ enabled: true, count: 5, sites: [{ title: "Hidden", host: "hidden.test", url: "https://hidden.test/" }] });
+  assert.equal(replaceCalls, 0, "corrupt hide state must skip the disposable cached first frame");
+});
+
+for (const browser of ["firefox", "chrome"]) {
+  test(`1.26.17 ${browser} suppresses shared-ledger repair while that ledger is visibly partial`, () => {
+    const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
+    const fn = extract(src, "reconcilePersonal");
+    const guard = fn.indexOf("const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot)");
+    const firstRepair = fn.indexOf("const syncWrites = {}");
+    assert.ok(guard >= 0 && firstRepair > guard, "partial-ledger guard must run before any compatibility-ledger repair writes");
+    assert.match(fn.slice(guard, firstRepair), /return \{ ok: true, meta: refreshed, sharedLedgerPending: true \}/);
+  });
+}

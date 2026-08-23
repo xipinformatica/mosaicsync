@@ -590,12 +590,23 @@ browser.permissions?.onRemoved?.addListener(permissions => {
   if (webAccessChanged) {
     webAccessCacheValue = false;
     webAccessCacheAt = Date.now();
-    if (platformHasPermissionFreeFaviconSource()) {
-      // Chromium can still satisfy missing icons from its browser-local cache.
-      void requestMissingShortcutIconHydration({ force: true }).catch(() => {});
-    } else {
-      void Promise.resolve(browser.alarms?.clear?.(ICON_RECOVERY_ALARM)).catch(() => {});
-    }
+    // Quality-only work exists solely to improve already-useful site/browser
+    // artwork through remote discovery. Once Website Access is revoked, drop
+    // those jobs rather than leaving them indefinitely pending. A later grant
+    // explicitly re-seeds recovered favicons for quality upgrade. Missing-icon
+    // jobs remain eligible for any permission-free platform source.
+    void (async () => {
+      // Sequence pruning before any native-only re-seed. Running these as two
+      // detached promises would let the seeder re-persist a quality-only item
+      // from the old queue after the prune completed.
+      await dropIconRecoveryQualityJobs();
+      if (platformHasPermissionFreeFaviconSource()) {
+        // Chromium can still satisfy genuinely missing icons from its browser-local cache.
+        await requestMissingShortcutIconHydration({ force: true });
+      } else {
+        await browser.alarms?.clear?.(ICON_RECOVERY_ALARM);
+      }
+    })().catch(() => {});
   }
   if (!permissions?.data_collection?.length) return;
   enqueue(async () => {
@@ -1673,6 +1684,15 @@ function iconRecoveryItemStillRelevant(shortcut, item) {
   return shortcut.imageSourceKind === "favicon" && shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
 }
 
+async function dropIconRecoveryQualityJobs() {
+  const queue = await readIconRecoveryQueue();
+  if (!queue.items.some(item => item.qualityUpgrade)) return queue;
+  return writeIconRecoveryQueue({
+    ...queue,
+    items: queue.items.filter(item => !item.qualityUpgrade)
+  });
+}
+
 async function readIconRecoveryQueue() {
   try {
     const stored = await browser.storage.local.get(LOCAL_ICON_RECOVERY_QUEUE_KEY);
@@ -1835,11 +1855,12 @@ async function processIconRecoveryQueue() {
     // favicon database without host access, and the resolver itself is the
     // authoritative place to decide which sources are available.
     const webAccessGranted = await hasWebAccess();
+    const canAutonomouslyRetry = webAccessGranted || platformHasPermissionFreeFaviconSource();
 
     const now = Date.now();
     const due = queue.items.filter(item => Number(item.nextAttemptAt) <= now).slice(0, ICON_RECOVERY_CONCURRENCY);
     if (!due.length) {
-      if (webAccessGranted || platformHasPermissionFreeFaviconSource()) await scheduleIconRecoveryAlarm(queue);
+      if (canAutonomouslyRetry) await scheduleIconRecoveryAlarm(queue);
       else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
       const waiting = { ok: true, granted: webAccessGranted, attempted: 0, hydrated: 0, unchanged: 0, failed: 0, timedOut: 0, exhausted: 0, blockedByPermission: 0, pending: queue.items.length };
       await writeIconRecoveryStatus(waiting);
@@ -1912,8 +1933,17 @@ async function processIconRecoveryQueue() {
         // website. Keep the durable job immediately retryable without consuming
         // the retry budget; the next explicit permission grant forces a run.
         blockedByPermission += 1;
+        const retryAt = platformHasPermissionFreeFaviconSource()
+          ? Date.now() + ICON_RECOVERY_EXHAUSTED_RETRY_MS
+          : Number(current.nextAttemptAt) || 0;
         byId.set(outcome.item.id, {
           ...current,
+          // Chromium can re-check its browser-local favicon database later even
+          // without Website Access. Keep that capability retry bounded to once
+          // per day instead of spinning every 750 ms; opening a New Tab also
+          // performs the normal native-cache hydration path. Firefox has no
+          // permission-free native source, so it simply waits for a grant event.
+          nextAttemptAt: retryAt,
           lastReason: "permission",
           lastAttemptAt: Date.now()
         });
@@ -1939,7 +1969,7 @@ async function processIconRecoveryQueue() {
       version: ICON_RECOVERY_QUEUE_VERSION,
       items: [...byId.values()].filter(item => iconRecoveryItemStillRelevantInState(currentState, item))
     });
-    if (webAccessGranted) await scheduleIconRecoveryAlarm(queue);
+    if (canAutonomouslyRetry) await scheduleIconRecoveryAlarm(queue);
     else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
     const summary = {
       ok: true,
@@ -1958,7 +1988,7 @@ async function processIconRecoveryQueue() {
     // Continue rapidly while this background context is alive. The alarm above
     // remains the durable fallback, so this optimization is never required for
     // correctness on a non-persistent MV3 background context.
-    if (webAccessGranted && queue.items.some(item => Number(item.nextAttemptAt) <= Date.now())) scheduleImmediateIconRecoveryContinuation();
+    if (canAutonomouslyRetry && queue.items.some(item => Number(item.nextAttemptAt) <= Date.now())) scheduleImmediateIconRecoveryContinuation();
     return summary;
   })().finally(() => {
     devMark("background:favicon-recovery-end");
@@ -3825,6 +3855,28 @@ async function reconcilePersonal(strategy = "merge") {
   const desiredPersonalState = workspaceStateNormalized(mergedState, PERSONAL_SPACE_ID);
   const desiredRecords = flattenStateNormalized(desiredPersonalState, meta.deviceId);
   const desiredAssets = collectLocalAssetsNormalized(desiredPersonalState);
+
+  // Firefox/Chrome can expose a newer atomic device snapshot before every key of
+  // the compatibility shared ledger has arrived. The device snapshot is safe to
+  // apply locally, but repairing the visibly partial ledger at that moment would
+  // republish an older/incomplete view and amplify Sync writes. Wait for the
+  // ledger to become coherent; the periodic semantic watchdog will revisit it.
+  const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot);
+  if (sharedLedgerPartial) {
+    const appliedMeta = markAppliedRemoteCore(observedMeta, sources.device?.revision || "");
+    const refreshed = await refreshQuota({
+      ...appliedMeta,
+      syncStatus: "ready",
+      lastSyncAt: Date.now(),
+      lastSyncError: "",
+      lastSyncWarning: "",
+      syncWaitStartedAt: 0
+    });
+    await writeLocalMeta(refreshed);
+    await ensureSyncWatchAlarm(refreshed);
+    if (mergedStateChanged) await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
+    return { ok: true, meta: refreshed, sharedLedgerPending: true };
+  }
 
   // Repair/maintain the shared record ledger for compatibility and for binary
   // artwork references. It is no longer allowed to block the fast core path.

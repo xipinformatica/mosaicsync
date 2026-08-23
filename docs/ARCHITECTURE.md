@@ -1,4 +1,4 @@
-# MosaicSync architecture (1.24.9)
+# MosaicSync architecture
 
 MosaicSync is built from one canonical source tree. `src/shared` contains browser-neutral runtime code; `src/firefox` and `src/chrome` are deliberately small overlays for APIs, manifests, browser branding, and the few CSS/HTML differences that cannot be shared safely.
 
@@ -9,7 +9,9 @@ MosaicSync is built from one canonical source tree. `src/shared` contains browse
 - **Background worker** — Sync reconciliation, favicon discovery/recovery, alarms and event-driven maintenance.
 - **Browser overlay** — Firefox/Chrome API differences only.
 
-Heavy image bytes are local content-addressed assets and are not part of the small synchronized layout core. `.mosaicsync` format v2 includes the compact profile plus its deduplicated assets and remains browser-neutral.
+Heavy image bytes are local content-addressed assets and are not part of the small synchronized layout core. `.mosaicsync` format v2 includes the compact profile plus its deduplicated assets and remains browser-neutral. This intentionally includes automatically learned/browser-native favicons in an explicit user-created profile backup even though those pixels are excluded from browser `storage.sync`.
+
+Remote raster/SVG artwork is admitted to browser decoding only after the format-specific header/root geometry passes the bounded pre-decode limits. `createImageBitmap` resize options bound the requested output size but are not treated as a guarantee that a browser implementation avoids intrinsic decode allocation; the geometry gate is the security boundary.
 
 ## Development safety rules
 

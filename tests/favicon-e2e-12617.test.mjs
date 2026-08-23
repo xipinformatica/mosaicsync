@@ -24,7 +24,7 @@ function extract(src, name) {
 }
 
 for (const browserName of ["firefox", "chrome"]) {
-  test(`1.26.16 ${browserName} targeted iconless-shortcut recovery reaches commit without a site visit`, async () => {
+  test(`1.26.17 ${browserName} targeted iconless-shortcut recovery reaches commit without a site visit`, async () => {
     const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
     const state = {
       activeSpaceId: "personal",
@@ -102,7 +102,7 @@ for (const browserName of ["firefox", "chrome"]) {
   });
 }
 
-test("1.26.16 Chrome native fallback is attempted without Website Access and does not pin a quality job", async () => {
+test("1.26.17 Chrome native fallback is attempted without Website Access and does not pin a quality job", async () => {
   const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
   let queue = { version: 2, items: [{ id: "s", url: "https://known.test/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let resolverCalls = 0;

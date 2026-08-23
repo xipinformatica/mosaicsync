@@ -31,12 +31,19 @@
       /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
   }
   function hiddenFrequentDomains() {
+    let raw;
     try {
-      const parsed = JSON.parse(localStorage.getItem(HIDDEN_FREQUENT_KEY) || "[]");
-      if (!Array.isArray(parsed)) return [];
+      raw = localStorage.getItem(HIDDEN_FREQUENT_KEY);
+    } catch {
+      return null;
+    }
+    if (raw === null) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return null;
       return parsed.slice(-128).map(value => String(value || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "")).filter(Boolean);
     } catch {
-      return [];
+      return null;
     }
   }
   function frequentUrlHidden(value, hidden) {
@@ -147,6 +154,9 @@ ${site.url}`;
     const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
     const fragment = document.createDocumentFragment();
     const hidden = hiddenFrequentDomains();
+    // If the hide list exists but cannot be trusted, skip this disposable first
+    // frame rather than flashing a site the user may have explicitly hidden.
+    if (hidden === null) return;
     let shown = 0;
     for (const rawSite of snapshot.sites) {
       if (shown >= count) break;
