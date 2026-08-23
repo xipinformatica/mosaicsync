@@ -17,6 +17,8 @@
   const root = document.documentElement;
   const grid = document.getElementById("shortcutGrid");
   const emptyState = document.getElementById("emptyState");
+  const frequentSection = document.getElementById("frequentSitesSection");
+  const frequentList = document.getElementById("frequentSitesList");
   const brand = document.querySelector(".brand");
   if (!grid || !emptyState) return;
 
@@ -88,6 +90,62 @@
     return slot;
   }
 
+  function frequentCard(site) {
+    const card = document.createElement("a");
+    card.className = "frequent-site-card";
+    card.href = site.url;
+    card.rel = "noreferrer";
+    card.title = `${site.title || site.host}
+${site.url}`;
+    if (validPreview(site.favicon)) {
+      const icon = document.createElement("img");
+      icon.className = "frequent-site-icon";
+      icon.src = site.favicon;
+      icon.alt = "";
+      icon.setAttribute("aria-hidden", "true");
+      card.append(icon);
+    } else {
+      const fallbackIcon = document.createElement("span");
+      fallbackIcon.className = "frequent-site-fallback";
+      fallbackIcon.textContent = Array.from(String(site.title || site.host || "?").trim())[0]?.toUpperCase() || "?";
+      fallbackIcon.setAttribute("aria-hidden", "true");
+      card.append(fallbackIcon);
+    }
+    const copy = document.createElement("span");
+    copy.className = "frequent-site-copy";
+    const title = document.createElement("strong");
+    title.textContent = site.title || site.host;
+    const host = document.createElement("small");
+    host.textContent = site.host;
+    copy.append(title, host);
+    card.append(copy);
+    return card;
+  }
+
+  function paintFrequentSnapshot(snapshot) {
+    if (!frequentSection || !frequentList || !snapshot || snapshot.enabled !== true || !Array.isArray(snapshot.sites)) return;
+    const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
+    const fragment = document.createDocumentFragment();
+    let shown = 0;
+    for (const rawSite of snapshot.sites) {
+      if (shown >= count) break;
+      if (!rawSite || typeof rawSite !== "object" || !validUrl(rawSite.url)) continue;
+      const site = {
+        title: String(rawSite.title || "").trim().slice(0, 120),
+        host: String(rawSite.host || "").trim().slice(0, 253),
+        url: rawSite.url,
+        favicon: validPreview(rawSite.favicon) ? rawSite.favicon : ""
+      };
+      if (!site.title || !site.host) continue;
+      fragment.append(frequentCard(site));
+      shown += 1;
+    }
+    if (!shown) return;
+    frequentList.replaceChildren(fragment);
+    frequentSection.hidden = false;
+    root.dataset.bootFrequent = "true";
+  }
+
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
@@ -105,6 +163,7 @@
     root.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     root.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
     if (brand) brand.hidden = manifest.brandVisible === false;
+    paintFrequentSnapshot(manifest.frequent);
 
     const byPosition = new Map();
     for (const source of manifest.shortcuts) {

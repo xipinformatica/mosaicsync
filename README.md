@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.26.12**
+**Current source release: 1.26.13b**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -64,15 +64,9 @@ python tools/package.py
 
 ## Current release identity
 
-The active 1.26.12 release identifier is kept aligned across:
+The active public release label is **1.26.13b** across Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests.
 
-- Firefox `manifest.json`
-- Chrome `manifest.json` and `version_name`
-- the shared runtime `VERSION` constant
-- the Settings version label
-- generated browser trees
-- `build-manifest.json`
-- current release tests
+Firefox and Chrome use the numeric technical manifest version **1.26.13.1** because Chromium-compatible manifest versions cannot contain a letter suffix. `build-manifest.json` records that technical manifest version.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 

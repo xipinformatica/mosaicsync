@@ -13,9 +13,11 @@ import {
   NATIVE_FAVICON_CONCURRENCY,
   FREQUENTLY_VISITED_PREF_KEY,
   FREQUENTLY_VISITED_COUNT_PREF_KEY,
+  FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY,
   DEFAULT_SPACE_PREF_KEY,
   BOOKMARK_FOLDER_COLORS_PREF_KEY,
   FREQUENT_TOP_SITES_LIMIT,
+  FREQUENT_HIDDEN_DOMAINS_MAX,
   FREQUENT_CANDIDATE_CACHE_MS,
   BACKGROUND_PRELOAD_CACHE_MAX,
   SPACE_IDS,
@@ -93,6 +95,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let bookmarksModulePromise = null;
   let imageOptimizerModulePromise = null;
   let renderManifestModulePromise = null;
+  let registrableDomainModulePromise = null;
   let bookmarksApi = null;
   const loadImporterModule = () => importerModulePromise ||= import("../core/importer.js");
   const loadProfileModule = () => profileModulePromise ||= import("../core/profile.js");
@@ -103,6 +106,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     module.seedRenderManifest(globalThis.__mosaicsyncBootGrid?.manifest || null);
     return module;
   };
+  const loadRegistrableDomainModule = () => registrableDomainModulePromise ||= import("../core/registrable-domain.js");
   const optimizeImageDataUrl = async (...args) => (await loadImageOptimizerModule()).optimizeImageDataUrl(...args);
   const optimizeImageFile = async (...args) => (await loadImageOptimizerModule()).optimizeImageFile(...args);
   const imageBlobToDataUrl = async (...args) => (await loadImageOptimizerModule()).imageBlobToDataUrl(...args);
@@ -153,6 +157,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const addFirstButton = document.getElementById("addFirstButton");
   const frequentSitesSection = document.getElementById("frequentSitesSection");
   const frequentSitesList = document.getElementById("frequentSitesList");
+  const webAccessPrompt = document.getElementById("webAccessPrompt");
+  const webAccessPromptAllow = document.getElementById("webAccessPromptAllow");
+  const webAccessPromptDismiss = document.getElementById("webAccessPromptDismiss");
 
   const bookmarksDialog = document.getElementById("bookmarksDialog");
   const bookmarksPermissionState = document.getElementById("bookmarksPermissionState");
@@ -346,6 +353,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentRefreshGeneration = 0;
   let frequentCandidateCacheAt = 0;
   let frequentCandidateCache = [];
+  let hiddenFrequentDomains = new Set();
+  let frequentDragSite = null;
+  let frequentRenderSnapshot = globalThis.__mosaicsyncBootGrid?.manifest?.frequent || null;
   let spaceSwitchGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
   let deviceDefaultSpace = "last";
@@ -485,7 +495,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const stateSnapshot = currentState;
     const metaSnapshot = currentMeta;
     setTimeout(() => {
-      void loadRenderManifestModule().then(module => module.persistRenderManifest(stateSnapshot, metaSnapshot)).catch(() => {});
+      void loadRenderManifestModule().then(module => module.persistRenderManifest(stateSnapshot, metaSnapshot, null, frequentRenderSnapshot)).catch(() => {});
     }, 0);
   }
 
@@ -618,6 +628,58 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     try { localStorage.setItem(FREQUENTLY_VISITED_COUNT_PREF_KEY, String(normalized)); } catch {}
   }
 
+  function readHiddenFrequentDomains() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY) || "[]");
+      if (!Array.isArray(parsed)) return new Set();
+      const safe = [];
+      for (const value of parsed) {
+        const domain = String(value || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+        if (!domain || domain.length > 253 || safe.includes(domain)) continue;
+        safe.push(domain);
+        if (safe.length >= FREQUENT_HIDDEN_DOMAINS_MAX) break;
+      }
+      return new Set(safe);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function writeHiddenFrequentDomains() {
+    const bounded = [...hiddenFrequentDomains].slice(-FREQUENT_HIDDEN_DOMAINS_MAX);
+    hiddenFrequentDomains = new Set(bounded);
+    try { localStorage.setItem(FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY, JSON.stringify(bounded)); } catch {}
+  }
+
+  function isFrequentHostHidden(hostname) {
+    const host = String(hostname || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "");
+    if (!host) return false;
+    for (const domain of hiddenFrequentDomains) {
+      if (host === domain || host.endsWith(`.${domain}`)) return true;
+    }
+    return false;
+  }
+
+  function projectFrequentRenderSnapshot(sites = []) {
+    return {
+      enabled: frequentlyVisitedEnabled === true,
+      count: frequentlyVisitedCount,
+      sites: frequentlyVisitedEnabled
+        ? (Array.isArray(sites) ? sites.slice(0, frequentlyVisitedCount).map(site => ({
+            title: String(site?.title || frequentHostLabel(site?.url) || "").trim().slice(0, 120),
+            host: frequentHostLabel(site?.url),
+            url: String(site?.url || ""),
+            favicon: typeof site?.favicon === "string" ? site.favicon : ""
+          })) : [])
+        : []
+    };
+  }
+
+  function updateFrequentRenderSnapshot(sites = []) {
+    frequentRenderSnapshot = projectFrequentRenderSnapshot(sites);
+    scheduleRenderManifestRefresh(state, meta);
+  }
+
   function readDeviceDefaultSpacePreference() {
     try {
       const value = localStorage.getItem(DEFAULT_SPACE_PREF_KEY) || "last";
@@ -695,21 +757,45 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     });
   }
 
-  async function addFrequentSiteToMosaicSync(site) {
+  async function addFrequentSiteToMosaicSync(site, { position = null } = {}) {
     const url = normalizeShortcutUrl(site?.url);
     const title = String(site?.title || frequentHostLabel(url) || hostLabel(url)).trim().slice(0, 120);
+    const exactPosition = Number.isInteger(position) && position >= 0 ? position : null;
+    if (exactPosition !== null && state.shortcuts.some(item => item.position === exactPosition)) return false;
+    const targetPosition = exactPosition ?? firstEmptyTopLevelPosition();
     const timestamp = nextMutationTime(state.updatedAt, state.shortcuts.map(item => item.modifiedAt));
     const shortcut = {
       type: "shortcut", id: uid(), title, url, image: "", imageSyncData: "", imageSyncKind: "none",
       imageAssetId: "", imageSourceKind: "none", imageSourceUrl: "", imageIsFallback: false,
-      imageStyle: "contain", position: firstEmptyTopLevelPosition(), createdAt: timestamp, modifiedAt: timestamp, source: "manual"
+      imageStyle: "contain", position: targetPosition, createdAt: timestamp, modifiedAt: timestamp, source: "manual"
     };
     state.shortcuts.push(shortcut);
     await saveState();
     render();
+    const host = canonicalSiteHost(url);
+    const remaining = (frequentRenderSnapshot?.sites || []).filter(candidate => canonicalSiteHost(candidate?.url) !== host);
+    renderFrequentlyVisited(remaining);
+    updateFrequentRenderSnapshot(remaining);
     scheduleFrequentlyVisitedRefresh(0);
     requestMissingSiteIcons([shortcut.id]);
     showToast(t("shortcutAdded"));
+    return true;
+  }
+
+  async function hideFrequentSite(site) {
+    const host = canonicalSiteHost(site?.url);
+    if (!host) return;
+    const module = await loadRegistrableDomainModule();
+    const domain = await module.registrableDomainFromHostname(host);
+    if (!domain) throw new Error(t("operationFailed"));
+    hiddenFrequentDomains.delete(domain);
+    hiddenFrequentDomains.add(domain);
+    writeHiddenFrequentDomains();
+    const remaining = (frequentRenderSnapshot?.sites || []).filter(candidate => !isFrequentHostHidden(canonicalSiteHost(candidate?.url)));
+    renderFrequentlyVisited(remaining);
+    updateFrequentRenderSnapshot(remaining);
+    scheduleFrequentlyVisitedRefresh(0);
+    showToast(t("frequentHidden"));
   }
 
   async function addFrequentSiteToBookmarks(site) {
@@ -752,6 +838,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     addAction(t("openInNewTab"), () => browser.tabs.create({ url: site.url, active: false }));
     addAction(t("addShortcut"), () => addFrequentSiteToMosaicSync(site));
     addAction(t("addToBookmarks"), () => addFrequentSiteToBookmarks(site));
+    addAction(t("hideFrequentSite"), () => hideFrequentSite(site));
     document.body.append(menu);
     frequentContextMenu = menu;
     positionFloatingMenu(menu, clientX, clientY);
@@ -770,7 +857,23 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       card.className = "frequent-site-card";
       card.href = site.url;
       card.rel = "noreferrer";
+      card.draggable = true;
       card.title = `${site.title || frequentHostLabel(site.url)}\n${site.url}`;
+      card.addEventListener("dragstart", event => {
+        frequentDragSite = {
+          title: String(site?.title || frequentHostLabel(site?.url) || "").trim().slice(0, 120),
+          url: String(site?.url || "")
+        };
+        card.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "copy";
+        event.dataTransfer.setData("text/uri-list", frequentDragSite.url);
+        event.dataTransfer.setData("text/plain", frequentDragSite.url);
+      });
+      card.addEventListener("dragend", () => {
+        frequentDragSite = null;
+        card.classList.remove("dragging");
+        document.querySelectorAll(".shortcut-slot").forEach(el => el.classList.remove("drag-over-empty"));
+      });
       card.addEventListener("contextmenu", event => {
         event.preventDefault();
         event.stopPropagation();
@@ -818,6 +921,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const generation = ++frequentRefreshGeneration;
     if (!frequentlyVisitedEnabled) {
       renderFrequentlyVisited([]);
+      updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentHidden");
       return;
     }
@@ -826,6 +930,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (generation !== frequentRefreshGeneration) return;
     if (!permitted) {
       renderFrequentlyVisited([]);
+      updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentPermissionRequired");
       return;
     }
@@ -841,15 +946,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       for (const site of sites || []) {
         if (!site?.url || !/^https?:/i.test(site.url)) continue;
         const host = canonicalSiteHost(site.url);
-        if (!host || explicitHosts.has(host) || seenHosts.has(host)) continue;
+        if (!host || isFrequentHostHidden(host) || explicitHosts.has(host) || seenHosts.has(host)) continue;
         seenHosts.add(host);
         filtered.push(site);
         if (filtered.length >= frequentlyVisitedCount) break;
       }
       renderFrequentlyVisited(filtered);
+      updateFrequentRenderSnapshot(filtered);
       setFrequentlyVisitedStatus("frequentDeviceLocalStatus");
     } catch {
-      renderFrequentlyVisited([]);
+      const cached = frequentRenderSnapshot?.enabled === true ? (frequentRenderSnapshot.sites || []) : [];
+      renderFrequentlyVisited(cached);
       setFrequentlyVisitedStatus("frequentReadFailed");
     }
   }
@@ -934,11 +1041,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function schedulePostPaintMaintenance() {
     frequentlyVisitedEnabled = readFrequentlyVisitedPreference();
     frequentlyVisitedCount = readFrequentlyVisitedCountPreference();
+    hiddenFrequentDomains = readHiddenFrequentDomains();
     deviceDefaultSpace = readDeviceDefaultSpacePreference();
     bookmarkFolderColors = readBookmarkFolderColors();
     if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
     if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
+    if (frequentlyVisitedEnabled && frequentRenderSnapshot?.enabled === true) {
+      renderFrequentlyVisited(frequentRenderSnapshot.sites || []);
+    }
     scheduleFrequentlyVisitedRefresh(250);
+    scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 900);
     void preloadBackgroundForSettings(state.settings);
     preloadOtherSpaceBackgrounds();
     if (meta.syncEnabled && !meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
@@ -2063,15 +2175,22 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     add.addEventListener("click", () => openShortcutEditor(null, null, position));
 
     slot.addEventListener("dragover", event => {
-      if (!dragId) return;
+      if (!dragId && !frequentDragSite) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
+      event.dataTransfer.dropEffect = frequentDragSite ? "copy" : "move";
       slot.classList.add("drag-over-empty");
     });
     slot.addEventListener("dragleave", () => slot.classList.remove("drag-over-empty"));
     slot.addEventListener("drop", async event => {
       event.preventDefault();
       slot.classList.remove("drag-over-empty");
+      if (frequentDragSite) {
+        const site = frequentDragSite;
+        frequentDragSite = null;
+        try { await addFrequentSiteToMosaicSync(site, { position }); }
+        catch (error) { showToast(error?.message || t("operationFailed")); }
+        return;
+      }
       const sourceId = dragId || event.dataTransfer.getData("text/plain");
       if (!sourceId) return;
       if (crossSpaceDrag?.shortcutId === sourceId && crossSpaceDrag.sourceSpaceId !== state.activeSpaceId) {
@@ -3256,6 +3375,40 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return webAccessGranted;
   }
 
+  function hasShortcutNeedingWebAccess() {
+    const visit = item => {
+      if (item?.type === "folder") return (item.items || []).some(visit);
+      if (item?.type !== "shortcut") return false;
+      return !item.image && !item.localImageAssetId && !item.imageAssetId;
+    };
+    return (state.shortcuts || []).some(visit);
+  }
+
+  function hideWebAccessPrompt() {
+    if (webAccessPrompt) webAccessPrompt.hidden = true;
+  }
+
+  async function maybeShowWebAccessPrompt() {
+    if (!webAccessPrompt || state.settings.autoSiteIcons === false || state.settings.webAccessPrompted === true || !hasShortcutNeedingWebAccess()) {
+      hideWebAccessPrompt();
+      return;
+    }
+    try { webAccessGranted = await hasWebAccess(); } catch { return; }
+    if (webAccessGranted || state.settings.webAccessPrompted === true) {
+      hideWebAccessPrompt();
+      return;
+    }
+    webAccessPrompt.hidden = false;
+  }
+
+  async function persistWebAccessPromptDecision(granted) {
+    state.settings.webAccessPrompted = true;
+    webAccessGranted = granted === true;
+    await saveState({ localCacheOnly: true });
+    hideWebAccessPrompt();
+    await refreshWebAccessUi().catch(() => {});
+  }
+
   // ---------------------------------------------------------------------------
   // Read-only Firefox bookmarks browser
   // ---------------------------------------------------------------------------
@@ -3993,10 +4146,42 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // The preference is device-local. Do not advance core Sync clocks or create
       // an outbound Sync journal for a preference that never leaves this browser.
       await saveState({ localCacheOnly: true });
+      if (!enabled) hideWebAccessPrompt();
+      else scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 200);
       showToast(enabled
         ? (webAccessGranted ? t("autoSiteIconsEnabled") : t("autoSiteIconsEnabledPermissionLater"))
         : t("autoSiteIconsDisabled"));
     })().catch(error => showToast(error.message || t("operationFailed")));
+  });
+
+  webAccessPromptAllow?.addEventListener("click", () => {
+    const permissionPromise = requestWebAccessFromGesture();
+    void (async () => {
+      try {
+        const granted = await permissionPromise;
+        await persistWebAccessPromptDecision(granted);
+        if (granted) {
+          await cleanupLegacyWebOriginPermissions();
+          showToast(t("websiteAccessEnabled"));
+          scheduleIdleWork(async () => {
+            await hydrateRemoteImageSources();
+            await hydrateDeviceFavicons();
+            requestMissingSiteIcons();
+          }, 100);
+        } else {
+          showToast(t("websiteAccessDenied"));
+        }
+      } catch (error) {
+        try { await persistWebAccessPromptDecision(false); } catch {}
+        showToast(error?.message || t("operationFailed"));
+      }
+    })();
+  });
+
+  webAccessPromptDismiss?.addEventListener("click", () => {
+    state.settings.webAccessPrompted = true;
+    hideWebAccessPrompt();
+    void saveState({ localCacheOnly: true }).catch(() => {});
   });
 
   settingsWebAccessButton?.addEventListener("click", () => {
@@ -4009,6 +4194,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         state.settings.webAccessPrompted = true;
         webAccessGranted = granted === true;
         await saveState({ localCacheOnly: true });
+        hideWebAccessPrompt();
         await refreshWebAccessUi();
         if (webAccessGranted) {
           await cleanupLegacyWebOriginPermissions();
@@ -4692,6 +4878,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       frequentCandidateCache = [];
       frequentRefreshGeneration += 1;
       renderFrequentlyVisited([]);
+      updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentHidden");
       return;
     }
@@ -4703,6 +4890,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         settingsFrequentlyVisited.checked = false;
         writeFrequentlyVisitedPreference(false);
         setFrequentlyVisitedOptionsVisibility(false);
+        updateFrequentRenderSnapshot([]);
         setFrequentlyVisitedStatus("frequentPermissionDenied");
         return;
       }
@@ -4715,6 +4903,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       settingsFrequentlyVisited.checked = false;
       writeFrequentlyVisitedPreference(false);
       setFrequentlyVisitedOptionsVisibility(false);
+      updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentEnableFailed");
     }
   });

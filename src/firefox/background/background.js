@@ -858,9 +858,12 @@ function imageDimensionsFromBytes(bytes, type) {
 function imageDimensionsSafeForRemoteDecode(dimensions) {
   const width = Math.max(0, Number(dimensions?.width) || 0);
   const height = Math.max(0, Number(dimensions?.height) || 0);
-  if ((width && width > REMOTE_IMAGE_MAX_DECODE_DIMENSION) ||
-      (height && height > REMOTE_IMAGE_MAX_DECODE_DIMENSION)) return false;
-  if (width && height && width * height > REMOTE_IMAGE_MAX_DECODED_PIXELS) return false;
+  // Unknown dimensions are not permission to hand untrusted compressed bytes to
+  // the browser decoder. Every accepted remote raster format has a bounded
+  // header parser; failure to obtain both sides therefore fails closed.
+  if (!width || !height) return false;
+  if (width > REMOTE_IMAGE_MAX_DECODE_DIMENSION || height > REMOTE_IMAGE_MAX_DECODE_DIMENSION) return false;
+  if (width * height > REMOTE_IMAGE_MAX_DECODED_PIXELS) return false;
   return true;
 }
 

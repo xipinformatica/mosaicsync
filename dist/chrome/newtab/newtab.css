@@ -725,6 +725,52 @@ button { color: inherit; }
 }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); }
 
+
+.web-access-prompt {
+  position: fixed;
+  z-index: 22;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100vw - 48px));
+  padding: 11px 12px 11px 14px;
+  border: 1px solid rgba(139,92,246,.34);
+  border-radius: 12px;
+  background: rgba(28,20,39,.97);
+  box-shadow: 0 12px 34px rgba(0,0,0,.28);
+  color: var(--text);
+}
+.web-access-prompt[hidden] { display: none !important; }
+.web-access-prompt-copy { display: grid; gap: 2px; min-width: 0; }
+.web-access-prompt-copy strong { font-size: 12.5px; }
+.web-access-prompt-copy span { color: var(--muted); font-size: 11px; line-height: 1.35; }
+.web-access-prompt .secondary-button { white-space: nowrap; }
+.web-access-prompt-dismiss {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: 20px/1 system-ui, sans-serif;
+}
+.web-access-prompt-dismiss:hover { background: rgba(255,255,255,.07); color: var(--text); }
+:root[data-effective-theme="light"] .web-access-prompt {
+  border-color: rgba(100,72,160,.22);
+  background: rgba(255,255,255,.98);
+  box-shadow: 0 12px 30px rgba(47,30,72,.16);
+}
+:root[data-effective-theme="light"] .web-access-prompt-dismiss:hover { background: rgba(55,35,82,.07); }
+@media (max-width: 680px) {
+  .web-access-prompt { grid-template-columns: 1fr auto; right: 14px; bottom: 14px; width: calc(100vw - 28px); }
+  .web-access-prompt .secondary-button { grid-column: 1 / -1; justify-self: start; }
+  .web-access-prompt-dismiss { grid-column: 2; grid-row: 1; }
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px !important;
@@ -3481,6 +3527,7 @@ button { color: inherit; }
   box-shadow: 0 5px 16px rgba(0,0,0,.08);
 }
 .frequent-site-card:hover { transform: translateY(-1px); }
+.frequent-site-card.dragging { opacity: .55; transform: scale(.98); }
 .frequent-site-icon {
   flex: 0 0 auto;
   width: 24px;

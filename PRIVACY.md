@@ -31,7 +31,9 @@ Data sent through Firefox Sync or Chrome Sync is handled by Mozilla or Google re
 
 The Frequently Visited feature is optional and uses the browser's top-sites/history-derived API after the relevant permission is granted.
 
-Frequently Visited suggestions are used to display suggestions inside MosaicSync. MosaicSync does not send that browsing-derived list to a MosaicSync server because no such server exists.
+Frequently Visited suggestions are used to display suggestions inside MosaicSync. To keep New Tab startup visually stable, MosaicSync can keep a small bounded snapshot of the last displayed suggestions in the browser profile as disposable device-local render data. Sites explicitly hidden from this section are remembered as a bounded device-local domain list. Neither the render snapshot nor the hidden-domain list is included in MosaicSync Sync data or `.mosaicsync` profile backups.
+
+MosaicSync does not send the browsing-derived list to a MosaicSync server because no such server exists.
 
 ## Bookmarks
 

@@ -1,3 +1,19 @@
+## 1.26.13b
+
+- Fixed a Firefox-only Frequently Visited regression introduced in 1.26.13. Firefox now imports the shared `getNativeTopSites()` browser adapter before calling it, so enabling Frequently Visited correctly loads native Top Sites instead of silently falling back to an empty cached list.
+- Added permanent Firefox/Chrome regression coverage that verifies the Frequently Visited code imports the platform adapter it calls, plus an executable Firefox adapter test confirming the expected `browser.topSites.get()` options and result bound.
+- No UI, permissions, Sync/profile schema, first-frame snapshot, drag/drop, hidden-domain, wallpaper, folder or favicon-hardening behavior changed.
+- Public release label is `1.26.13b`; Chromium-compatible technical manifest version is `1.26.13.1`.
+
+## 1.26.13
+
+- Removed the **Frequently Visited** startup layout jump by caching a tiny bounded, device-local display snapshot in MosaicSync's existing first-frame render manifest. New Tabs can paint the last known suggestions with the shortcut grid immediately, then refresh them asynchronously without delaying first paint or synchronizing browser-history data.
+- Frequently Visited cards can now be dragged directly onto an empty grid slot to create a normal MosaicSync shortcut at that exact position; the existing context-menu action remains available.
+- Added **Hide this site** to Frequently Visited. Hiding is persistent and device-local, uses the bundled Mozilla/Public Suffix List to block the whole registrable site family (including subdomains), and does not enter Sync or profile backups.
+- Added a one-time, non-blocking Website access callout for existing users when automatic favicon learning is enabled, useful shortcuts still need icons, and HTTP/HTTPS host access has not been granted. Website access remains an optional permission requested only from a user gesture.
+- Completed the 1.26.12 remote-image hardening: SVG root geometry is now parsed with quote-aware opening-tag scanning so a literal `>` inside a quoted attribute cannot hide oversized dimensions, and unknown raster dimensions fail closed before remote browser decoding.
+- Added localized **Hide this site** text to all 32 UI catalogs and focused Firefox/Chrome regression coverage for the new Frequently Visited, permission and image-safety behavior. No Sync/profile schema or required-permission changes were introduced.
+
 ## 1.26.12
 
 - Hardened automatic favicon recovery against compressed image "pixel-flood" inputs: known oversized PNG, GIF, JPEG, ICO/DIB and WebP dimensions are rejected before browser decoding, with the same pre-decode guard applied to safe SVG favicon geometry.

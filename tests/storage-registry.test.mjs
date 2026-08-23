@@ -13,6 +13,7 @@ async function walk(root, dir=root, out=[]) {
 
 const persistedLiterals = [
   "mosaicsync.frequently-visited.v1",
+  "mosaicsync.frequently-visited-hidden-domains.v1",
   "mosaicsync.ui-locale.v1",
   "mosaicsync.session.local-ignore",
   "mosaicsync.session.sync-expectations",

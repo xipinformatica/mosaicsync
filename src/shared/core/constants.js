@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.26.12";
+export const VERSION = "1.26.13b";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -35,6 +35,7 @@ export const RENDER_MANIFEST_KEY = "mosaicsync.render-manifest.v1";
 // centralized so maintenance code and both browser builds cannot silently drift.
 export const FREQUENTLY_VISITED_PREF_KEY = "mosaicsync.frequently-visited.v1";
 export const FREQUENTLY_VISITED_COUNT_PREF_KEY = "mosaicsync.frequently-visited-count.v1";
+export const FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY = "mosaicsync.frequently-visited-hidden-domains.v1";
 export const DEFAULT_SPACE_PREF_KEY = "mosaicsync.default-space.v1";
 export const BOOKMARK_FOLDER_COLORS_PREF_KEY = "mosaicsync.bookmark-folder-colors.v1";
 export const UI_LOCALE_STORAGE_KEY = "mosaicsync.ui-locale.v1";
@@ -100,6 +101,7 @@ export const DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES = 512 * 1024;
 export const DEVICE_SNAPSHOT_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const FREQUENT_CANDIDATE_CACHE_MS = 30_000;
 export const FREQUENT_TOP_SITES_LIMIT = 100;
+export const FREQUENT_HIDDEN_DOMAINS_MAX = 128;
 export const BACKGROUND_PRELOAD_CACHE_MAX = 8;
 export const NATIVE_FAVICON_CONCURRENCY = 6;
 export const LOADED_LOCALE_CATALOG_MAX = 4;

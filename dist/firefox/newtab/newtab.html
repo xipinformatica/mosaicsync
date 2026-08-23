@@ -45,6 +45,15 @@
       <button class="space-button" type="button" data-space-id="work" aria-pressed="false" data-i18n-skip>Work</button>
     </nav>
 
+    <aside id="webAccessPrompt" class="web-access-prompt" hidden aria-live="polite">
+      <div class="web-access-prompt-copy">
+        <strong>Website access</strong>
+        <span>Not allowed yet. MosaicSync will ask once when needed, or you can allow it here.</span>
+      </div>
+      <button id="webAccessPromptAllow" class="secondary-button" type="button">Allow all websites</button>
+      <button id="webAccessPromptDismiss" class="web-access-prompt-dismiss" type="button" aria-label="Close" title="Close">×</button>
+    </aside>
+
     <section class="shortcuts-wrap" aria-label="Shortcuts">
       <section id="frequentSitesSection" class="frequent-sites" aria-label="Frequently visited" hidden>
         <div class="frequent-sites-heading">
@@ -217,7 +226,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.26.12</p>
+          <p class="eyebrow">MosaicSync · 1.26.13b</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

@@ -23,11 +23,17 @@ def package(browser: str, version: str) -> Path:
 
 if __name__ == "__main__":
     import json
-    versions = {}
-    for browser in ("firefox", "chrome"):
-        versions[browser] = json.loads((DIST / browser / "manifest.json").read_text())["version"]
+    manifests = {
+        browser: json.loads((DIST / browser / "manifest.json").read_text())
+        for browser in ("firefox", "chrome")
+    }
+    versions = {browser: manifest["version"] for browser, manifest in manifests.items()}
     if len(set(versions.values())) != 1:
-        raise SystemExit(f"Browser versions differ: {versions}")
-    version = versions["firefox"]
+        raise SystemExit(f"Browser technical versions differ: {versions}")
+    # Chromium requires numeric manifest versions. For letter-suffixed MosaicSync
+    # releases, Chrome version_name carries the public release label used by
+    # Settings, changelog and package filenames. Firefox intentionally has no
+    # version_name field.
+    release_label = manifests["chrome"].get("version_name") or versions["chrome"]
     for browser in ("firefox", "chrome"):
-        print(package(browser, version))
+        print(package(browser, release_label))

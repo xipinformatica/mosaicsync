@@ -102,6 +102,27 @@ function parseSvgViewBox(value) {
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
+function rootSvgOpenTag(source) {
+  const match = /<(?:[a-z0-9_-]+:)?svg\b/i.exec(source);
+  if (!match) return "";
+  let quote = "";
+  for (let index = match.index; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote) {
+      if (char === quote) quote = "";
+      continue;
+    }
+    if (char === '"' || char === "'") {
+      quote = char;
+      continue;
+    }
+    if (char === ">") return source.slice(match.index, index + 1);
+    // A second unquoted '<' cannot occur inside a well-formed opening tag.
+    if (char === "<" && index !== match.index) return "";
+  }
+  return "";
+}
+
 /**
  * Return a conservative intrinsic raster size for a remote SVG before any
  * browser decoder sees it. `valid:false` means the root advertises dimensions
@@ -109,7 +130,7 @@ function parseSvgViewBox(value) {
  */
 export function svgRasterDimensionsFromText(source) {
   if (typeof source !== "string") return { width: 0, height: 0, valid: false };
-  const openTag = /<(?:[a-z0-9_-]+:)?svg\b[^>]*>/i.exec(source)?.[0] || "";
+  const openTag = rootSvgOpenTag(source);
   if (!openTag) return { width: 0, height: 0, valid: false };
 
   // Inline style wins over the corresponding presentation attribute.

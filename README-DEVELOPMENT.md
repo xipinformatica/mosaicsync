@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.12.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.13b.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -84,6 +84,20 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
 
+## 1.26.13b Firefox Frequently Visited adapter binding policy
+
+The 1.26.13 Frequently Visited refactor routes native Top Sites through `getNativeTopSites()` in the browser platform adapter. Firefox New Tab must explicitly import that adapter symbol before `frequentCandidates()` calls it; a missing import is a runtime `ReferenceError` that is intentionally caught by the UI refresh path and can therefore present as a silent empty Frequently Visited list rather than a page crash. Permanent regression coverage must verify both the import binding and an executable Firefox adapter call with Firefox-specific `topSites.get()` options.
+
+Public release label is `1.26.13b`; technical manifest version is `1.26.13.1`. No permission, state, Sync/profile, render-manifest or Frequently Visited data-model behavior changes in this corrective build.
+
+## 1.26.13 Frequently Visited / permission / SVG hardening policy
+
+Frequently Visited remains browser-derived, device-local presentation data. Its tiny first-frame snapshot may live only in the existing disposable render manifest so New Tab geometry can be stable immediately; the authoritative browser Top Sites result is refreshed after first paint. The snapshot, hidden-domain list and Website-access prompt decision must never enter browser Sync or `.mosaicsync` profile data. Do not delay first paint waiting for Top Sites or permission APIs.
+
+Dragging a Frequently Visited card onto an empty top-level grid slot creates an ordinary MosaicSync shortcut at that exact position through the normal audited state writer. Hiding a Frequent site stores the registrable domain locally and applies to all of its subdomains. Registrable-domain calculation uses the bundled Mozilla/Public Suffix List, loaded lazily only on the explicit Hide gesture so routine New Tab startup does not parse the list.
+
+Website access remains optional host permission. Existing users may receive one non-blocking local callout when automatic icon learning is enabled and useful shortcuts still lack artwork, but Firefox/Chrome permission requests must originate from a user gesture. Remote SVG pre-decode geometry extraction must be quote-aware, and remote image geometry with unknown/zero dimensions must fail closed before `createImageBitmap`.
+
 ## 1.26.12 remote-image and local-asset integrity policy
 
 Remote favicon decoding must remain bounded *before* `createImageBitmap` whenever MosaicSync can determine intrinsic dimensions from the resource header. Raster candidates with known geometry above the shared 4096px / 8-million-pixel background limit are rejected before optimization or raw-data fallback; safe SVG favicons likewise have their root raster geometry checked before decoding. PNG, GIF, JPEG, ICO/DIB and all standard WebP container variants stay covered by the pre-decode metadata path.
@@ -98,7 +112,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current version string must be `1.26.12` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+The current public release label is `1.26.13b` across Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Browser manifest technical versions are `1.26.13.1` because Chromium-compatible manifest versions must be numeric. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

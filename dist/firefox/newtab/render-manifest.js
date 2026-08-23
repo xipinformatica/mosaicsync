@@ -65,6 +65,29 @@ function cachedPreviews() {
   return previews;
 }
 
+function sanitizeFrequentSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return null;
+  const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
+  const enabled = snapshot.enabled === true;
+  const sites = [];
+  if (enabled && Array.isArray(snapshot.sites)) {
+    for (const site of snapshot.sites.slice(0, 10)) {
+      if (!site || typeof site !== "object") continue;
+      let parsed;
+      try { parsed = new URL(String(site.url || "")); } catch { continue; }
+      if (!/^https?:$/.test(parsed.protocol) || parsed.href.length > 2048) continue;
+      const title = String(site.title || parsed.hostname).trim().slice(0, 120);
+      const host = String(site.host || parsed.hostname).trim().slice(0, 253);
+      const favicon = typeof site.favicon === "string" && site.favicon.length <= RENDER_PREVIEW_MAX_CHARS &&
+        /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(site.favicon)
+        ? site.favicon
+        : "";
+      sites.push({ title, url: parsed.href, host, favicon });
+    }
+  }
+  return { enabled, count, sites };
+}
+
 function projectItem(item, previews) {
   const imageKey = previewIdentity(item);
   if (item?.type === "folder") {
@@ -101,6 +124,16 @@ function projectItem(item, previews) {
 function serializeWithinBudget(manifest) {
   let serialized = JSON.stringify(manifest);
   if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) return serialized;
+
+  // Frequently Visited artwork is a convenience inside an already-disposable
+  // snapshot. Drop those previews before sacrificing shortcut/favicon previews.
+  for (const site of manifest.frequent?.sites || []) {
+    if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) break;
+    if (!site.favicon) continue;
+    site.favicon = "";
+    serialized = JSON.stringify(manifest);
+  }
+
   const previewItems = [];
   const visit = item => {
     if (item?.preview) previewItems.push(item);
@@ -111,10 +144,15 @@ function serializeWithinBudget(manifest) {
     previewItems[index].preview = "";
     serialized = JSON.stringify(manifest);
   }
+
+  while (manifest.frequent?.sites?.length && serialized.length > RENDER_MANIFEST_MAX_CHARS) {
+    manifest.frequent.sites.pop();
+    serialized = JSON.stringify(manifest);
+  }
   return serialized;
 }
 
-export function persistRenderManifest(currentState, currentMeta, extraPreviews = null) {
+export function persistRenderManifest(currentState, currentMeta, extraPreviews = null, frequentSnapshot = undefined) {
   if (!currentState?.settings || !currentMeta) return false;
   const previews = cachedPreviews();
   if (extraPreviews) for (const [key, value] of extraPreviews) previews.set(key, value);
@@ -128,6 +166,9 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
     rows: currentState.settings.rows,
     tileSize: currentState.settings.tileSize,
     brandVisible: currentState.settings.brandVisible !== false,
+    frequent: frequentSnapshot === undefined
+      ? sanitizeFrequentSnapshot(manifestCache?.frequent)
+      : sanitizeFrequentSnapshot(frequentSnapshot),
     shortcuts: (currentState.shortcuts || []).map(item => projectItem(item, previews))
   };
   const serialized = serializeWithinBudget(manifest);
