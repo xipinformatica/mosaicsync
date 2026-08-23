@@ -30,10 +30,15 @@ if __name__ == "__main__":
     versions = {browser: manifest["version"] for browser, manifest in manifests.items()}
     if len(set(versions.values())) != 1:
         raise SystemExit(f"Browser technical versions differ: {versions}")
-    # Chromium requires numeric manifest versions. For letter-suffixed MosaicSync
-    # releases, Chrome version_name carries the public release label used by
-    # Settings, changelog and package filenames. Firefox intentionally has no
-    # version_name field.
-    release_label = manifests["chrome"].get("version_name") or versions["chrome"]
+    # MosaicSync has one canonical release identity everywhere. Chrome
+    # version_name, when present, must exactly match the technical manifest
+    # version; we never publish a separate display/internal version.
+    chrome_version_name = manifests["chrome"].get("version_name", versions["chrome"])
+    if chrome_version_name != versions["chrome"]:
+        raise SystemExit(
+            f"Chrome version_name must equal canonical version: "
+            f"version={versions['chrome']!r}, version_name={chrome_version_name!r}"
+        )
+    release_label = versions["chrome"]
     for browser in ("firefox", "chrome"):
         print(package(browser, release_label))

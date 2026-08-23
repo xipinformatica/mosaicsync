@@ -1994,28 +1994,36 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
 
-    // Shortcut navigation stays native once website access has been decided.
-    // The first iconless/reconstructable shortcut may request ONE optional
-    // HTTP+HTTPS grant covering all websites, avoiding a permission popup for
-    // every new domain. A denial is remembered locally so normal navigation is
-    // never repeatedly interrupted; Advanced settings can request it again.
-    const mayNeedWebAccess = !item.image && (
-      (item.imageSourceKind === "remote" && item.imageSourceUrl) ||
-      state.settings.autoSiteIcons
-    );
-    if (mayNeedWebAccess && !webAccessGranted && !state.settings.webAccessPrompted) {
+    // If an older install says Automatic site icons is enabled while the actual
+    // host permission is missing, the next ordinary shortcut click is another
+    // valid user gesture to repair that capability mismatch before navigation.
+    // A denial turns Automatic site icons off instead of leaving a misleading
+    // enabled preference that cannot resolve a never-before-visited site.
+    const automaticNeedsWebAccess = !item.image && state.settings.autoSiteIcons;
+    const remoteImageNeedsWebAccess = !item.image && item.imageSourceKind === "remote" &&
+      item.imageSourceUrl && !state.settings.webAccessPrompted;
+    if ((automaticNeedsWebAccess || remoteImageNeedsWebAccess) && !webAccessGranted) {
       card.addEventListener("click", event => {
         if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-        if (webAccessGranted || state.settings.webAccessPrompted) return;
+        if (webAccessGranted) return;
         event.preventDefault();
         const permissionPromise = requestWebAccessFromGesture();
         void permissionPromise.then(async granted => {
           webAccessGranted = granted === true;
           state.settings.webAccessPrompted = true;
+          if (!webAccessGranted && state.settings.autoSiteIcons) {
+            state.settings.autoSiteIcons = false;
+            if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
+          }
           try { await saveState({ localCacheOnly: true }); } catch {}
+          if (webAccessGranted && state.settings.autoSiteIcons) requestMissingSiteIcons([item.id], { force: true });
           window.location.assign(item.url);
         }).catch(async () => {
           state.settings.webAccessPrompted = true;
+          if (state.settings.autoSiteIcons) {
+            state.settings.autoSiteIcons = false;
+            if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
+          }
           try { await saveState({ localCacheOnly: true }); } catch {}
           window.location.assign(item.url);
         });
@@ -2912,7 +2920,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // onboarding did not already decide it. The shortcut itself is saved even
     // if the user declines; only automatic icon hydration is skipped.
     const shouldRequestWebAccess = state.settings.autoSiteIcons &&
-      !pendingShortcutImage && !webAccessGranted && !state.settings.webAccessPrompted;
+      !pendingShortcutImage && !webAccessGranted;
     const webAccessPermissionPromise = shouldRequestWebAccess
       ? requestWebAccessFromGesture()
       : null;
@@ -3023,6 +3031,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           webAccessGranted = false;
         }
         state.settings.webAccessPrompted = true;
+        if (!webAccessGranted) {
+          // Automatic recovery cannot honestly remain enabled without the host
+          // capability it requires for a never-before-visited site. The shortcut
+          // is still saved; only automatic fetching is turned off after denial.
+          state.settings.autoSiteIcons = false;
+          if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
+        }
         await saveState({ localCacheOnly: true });
       }
 
@@ -3043,7 +3058,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // A newly saved iconless shortcut should fill itself without requiring a
       // first visit. Target just this record for low latency; the normal idle
       // maintenance pass continues to repair any other missing icons.
-      if (!image && savedShortcutId) requestMissingSiteIcons([savedShortcutId]);
+      if (!image && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
     } catch (error) {
       showToast(error.message || t("operationFailed"));
     }
@@ -3389,21 +3404,29 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   async function maybeShowWebAccessPrompt() {
-    if (!webAccessPrompt || state.settings.autoSiteIcons === false || state.settings.webAccessPrompted === true || !hasShortcutNeedingWebAccess()) {
+    if (!webAccessPrompt || state.settings.autoSiteIcons === false || !hasShortcutNeedingWebAccess()) {
       hideWebAccessPrompt();
       return;
     }
     try { webAccessGranted = await hasWebAccess(); } catch { return; }
-    if (webAccessGranted || state.settings.webAccessPrompted === true) {
+    if (webAccessGranted) {
       hideWebAccessPrompt();
       return;
     }
+    // The real browser permission is authoritative. An old remembered
+    // `webAccessPrompted` bit must never leave Automatic site icons looking
+    // enabled while the capability required to fetch a brand-new site's icon
+    // has been revoked or was never granted on this installation.
     webAccessPrompt.hidden = false;
   }
 
   async function persistWebAccessPromptDecision(granted) {
     state.settings.webAccessPrompted = true;
     webAccessGranted = granted === true;
+    if (!webAccessGranted) {
+      state.settings.autoSiteIcons = false;
+      if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
+    }
     await saveState({ localCacheOnly: true });
     hideWebAccessPrompt();
     await refreshWebAccessUi().catch(() => {});
@@ -4140,18 +4163,46 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
   settingsAutoSiteIcons?.addEventListener("change", event => {
-    const enabled = event.currentTarget.checked;
+    const wantsEnabled = event.currentTarget.checked;
+    // Enabling Automatic site icons is itself a user gesture. Request the one
+    // optional Website Access grant here so the setting cannot claim to be ON
+    // while the browser capability needed for proactive recovery is absent.
+    const permissionPromise = wantsEnabled && !webAccessGranted
+      ? requestWebAccessFromGesture()
+      : null;
     void (async () => {
+      let enabled = wantsEnabled;
+      if (permissionPromise) {
+        try {
+          webAccessGranted = (await permissionPromise) === true;
+        } catch {
+          webAccessGranted = false;
+        }
+        state.settings.webAccessPrompted = true;
+        enabled = webAccessGranted;
+        event.currentTarget.checked = enabled;
+      }
       state.settings.autoSiteIcons = enabled;
       // The preference is device-local. Do not advance core Sync clocks or create
       // an outbound Sync journal for a preference that never leaves this browser.
       await saveState({ localCacheOnly: true });
-      if (!enabled) hideWebAccessPrompt();
-      else scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 200);
-      showToast(enabled
-        ? (webAccessGranted ? t("autoSiteIconsEnabled") : t("autoSiteIconsEnabledPermissionLater"))
-        : t("autoSiteIconsDisabled"));
-    })().catch(error => showToast(error.message || t("operationFailed")));
+      if (!enabled) {
+        hideWebAccessPrompt();
+        showToast(permissionPromise ? t("websiteAccessDenied") : t("autoSiteIconsDisabled"));
+        return;
+      }
+      if (permissionPromise) await cleanupLegacyWebOriginPermissions();
+      hideWebAccessPrompt();
+      showToast(t("autoSiteIconsEnabled"));
+      scheduleIdleWork(async () => {
+        await hydrateRemoteImageSources();
+        await hydrateDeviceFavicons();
+        requestMissingSiteIcons([], { force: true });
+      }, 100);
+    })().catch(error => {
+      event.currentTarget.checked = state.settings.autoSiteIcons !== false;
+      showToast(error.message || t("operationFailed"));
+    });
   });
 
   webAccessPromptAllow?.addEventListener("click", () => {
@@ -4166,7 +4217,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           scheduleIdleWork(async () => {
             await hydrateRemoteImageSources();
             await hydrateDeviceFavicons();
-            requestMissingSiteIcons();
+            requestMissingSiteIcons([], { force: true });
           }, 100);
         } else {
           showToast(t("websiteAccessDenied"));
@@ -4180,8 +4231,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   webAccessPromptDismiss?.addEventListener("click", () => {
     state.settings.webAccessPrompted = true;
+    state.settings.autoSiteIcons = false;
+    if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
     hideWebAccessPrompt();
     void saveState({ localCacheOnly: true }).catch(() => {});
+    showToast(t("autoSiteIconsDisabled"));
   });
 
   settingsWebAccessButton?.addEventListener("click", () => {
@@ -4193,6 +4247,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         const granted = await permissionPromise;
         state.settings.webAccessPrompted = true;
         webAccessGranted = granted === true;
+        if (!webAccessGranted && state.settings.autoSiteIcons) {
+          state.settings.autoSiteIcons = false;
+          if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
+        }
         await saveState({ localCacheOnly: true });
         hideWebAccessPrompt();
         await refreshWebAccessUi();
@@ -4202,6 +4260,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           scheduleIdleWork(async () => {
             await hydrateRemoteImageSources();
             await hydrateDeviceFavicons();
+            if (state.settings.autoSiteIcons) requestMissingSiteIcons([], { force: true });
           }, 100);
         } else {
           showToast(t("websiteAccessDenied"));
@@ -4213,6 +4272,23 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         showToast(error.message || t("operationFailed"));
       }
     })();
+  });
+
+  browser.permissions?.onRemoved?.addListener?.(() => {
+    void refreshWebAccessUi().then(granted => {
+      if (!granted && state.settings.autoSiteIcons) {
+        scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 50);
+      }
+    }).catch(() => {});
+  });
+
+  browser.permissions?.onAdded?.addListener?.(() => {
+    void refreshWebAccessUi().then(granted => {
+      if (granted && state.settings.autoSiteIcons) {
+        hideWebAccessPrompt();
+        requestMissingSiteIcons([], { force: true });
+      }
+    }).catch(() => {});
   });
 
   systemThemeMedia.addEventListener?.("change", () => {

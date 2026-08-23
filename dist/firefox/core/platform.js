@@ -18,6 +18,7 @@ export async function getNativeTopSites({ limit = 100 } = {}) {
   }
 }
 
+export function platformHasPermissionFreeFaviconSource() { return false; }
 export function nativeFaviconUrl() { return ""; }
 export async function readNativeFaviconDataUrl() { return ""; }
 export function isProtectedChromeStoreUrl() { return false; }

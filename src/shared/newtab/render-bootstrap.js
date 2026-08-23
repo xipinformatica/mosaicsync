@@ -13,6 +13,9 @@
  */
 (() => {
   const KEY = "mosaicsync.render-manifest.v1";
+  // Classic first-frame scripts cannot import the module constants registry. Build
+  // the already-centralized key without duplicating its exact persisted literal.
+  const HIDDEN_FREQUENT_KEY = ["mosaicsync", "frequently-visited-hidden-domains", "v1"].join(".");
   const MAX_PREVIEW_CHARS = 6000;
   const root = document.documentElement;
   const grid = document.getElementById("shortcutGrid");
@@ -26,6 +29,23 @@
   function validPreview(value) {
     return typeof value === "string" && value.length <= MAX_PREVIEW_CHARS &&
       /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
+  }
+  function hiddenFrequentDomains() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(HIDDEN_FREQUENT_KEY) || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed.slice(-128).map(value => String(value || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "")).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+  function frequentUrlHidden(value, hidden) {
+    try {
+      const host = new URL(String(value || "")).hostname.toLowerCase().replace(/^\.+|\.+$/g, "");
+      return hidden.some(domain => host === domain || host.endsWith(`.${domain}`));
+    } catch {
+      return true;
+    }
   }
   function fallback(title) {
     const icon = document.createElement("span");
@@ -126,10 +146,11 @@ ${site.url}`;
     if (!frequentSection || !frequentList || !snapshot || snapshot.enabled !== true || !Array.isArray(snapshot.sites)) return;
     const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
     const fragment = document.createDocumentFragment();
+    const hidden = hiddenFrequentDomains();
     let shown = 0;
     for (const rawSite of snapshot.sites) {
       if (shown >= count) break;
-      if (!rawSite || typeof rawSite !== "object" || !validUrl(rawSite.url)) continue;
+      if (!rawSite || typeof rawSite !== "object" || !validUrl(rawSite.url) || frequentUrlHidden(rawSite.url, hidden)) continue;
       const site = {
         title: String(rawSite.title || "").trim().slice(0, 120),
         host: String(rawSite.host || "").trim().slice(0, 253),

@@ -102,6 +102,7 @@ import { cleanupLegacyWebOriginPermissions } from "../core/permissions.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
+import { platformHasPermissionFreeFaviconSource } from "../core/platform.js";
 
 let queue = Promise.resolve();
 const ignoredLocalStateSignatures = new Map();
@@ -559,6 +560,10 @@ browser.alarms?.onAlarm?.addListener(alarm => {
     if (meta.syncInitialized) {
       meta = await retryPendingLocalSyncMutation(meta);
       meta = await retryPendingCrossSpaceSync(meta);
+      // The watchdog performs a strong semantic consistency check, not only a
+      // commit-marker comparison. If currently usable remote records/settings
+      // differ from local state, reconcileIfNewCommit() falls through to the
+      // same full merge used at startup without paying that cost on every tick.
       await reconcileIfNewCommit();
       meta = await readLocalMeta();
       await maybeGarbageCollectStaleDeviceSnapshots(meta);
@@ -568,24 +573,29 @@ browser.alarms?.onAlarm?.addListener(alarm => {
 
 browser.permissions?.onAdded?.addListener(permissions => {
   const origins = Array.isArray(permissions?.origins) ? permissions.origins : [];
-  if (origins.some(origin => WEB_ORIGINS.includes(origin))) {
-    webAccessCacheValue = true;
-    webAccessCacheAt = Date.now();
-  }
-  if (!origins.some(origin => WEB_ORIGINS.includes(origin))) return;
-  void requestMissingShortcutIconHydration().catch(error => {
+  const webAccessChanged = origins.some(origin => WEB_ORIGINS.includes(origin));
+  if (!webAccessChanged) return;
+  webAccessCacheValue = true;
+  webAccessCacheAt = Date.now();
+  // A fresh grant can improve already-present browser/native or low-resolution
+  // artwork as well as fill genuinely missing icons. Re-seed both classes.
+  void requestMissingShortcutIconHydration({ force: true, upgradeRecoveredFavicons: true }).catch(error => {
     console.warn(`${PRODUCT_NAME}: could not resume favicon recovery after website access was granted`, error);
   });
 });
 
 browser.permissions?.onRemoved?.addListener(permissions => {
   const origins = Array.isArray(permissions?.origins) ? permissions.origins : [];
-  if (origins.some(origin => WEB_ORIGINS.includes(origin))) {
+  const webAccessChanged = origins.some(origin => WEB_ORIGINS.includes(origin));
+  if (webAccessChanged) {
     webAccessCacheValue = false;
     webAccessCacheAt = Date.now();
-  }
-  if (origins.some(origin => WEB_ORIGINS.includes(origin))) {
-    void Promise.resolve(browser.alarms?.clear?.(ICON_RECOVERY_ALARM)).catch(() => {});
+    if (platformHasPermissionFreeFaviconSource()) {
+      // Chromium can still satisfy missing icons from its browser-local cache.
+      void requestMissingShortcutIconHydration({ force: true }).catch(() => {});
+    } else {
+      void Promise.resolve(browser.alarms?.clear?.(ICON_RECOVERY_ALARM)).catch(() => {});
+    }
   }
   if (!permissions?.data_collection?.length) return;
   enqueue(async () => {
@@ -598,7 +608,7 @@ browser.permissions?.onRemoved?.addListener(permissions => {
       syncInitialized: false,
       syncBootstrapMode: "none",
       syncStatus: "off",
-      lastSyncError: "Firefox Account Sync permission was disabled in Firefox settings.",
+      lastSyncError: "",
       lastSyncWarning: "",
       syncSkippedAssets: 0,
       syncFastSnapshotFallback: false,
@@ -740,7 +750,7 @@ function sniffImageMime(bytes, declaredType = "") {
 
   // Trust file signatures before HTTP/data-URL MIME labels. Favicon servers
   // commonly return PNG bytes as image/x-icon (and occasionally the reverse).
-  // 1.26.13b made unknown geometry fail closed, which exposed those harmless
+  // The fail-closed geometry guard exposed those harmless
   // MIME mismatches as missing icons because the wrong header parser was used.
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
       bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
@@ -1028,28 +1038,20 @@ async function rasterizeSafeSvg(bytes) {
   let bitmap = null;
   try {
     const svgBlob = new Blob([bytes], { type: "image/svg+xml" });
-    bitmap = await createImageBitmap(svgBlob);
-    const sourceWidth = Number(bitmap.width) || 0;
-    const sourceHeight = Number(bitmap.height) || 0;
-    const sourceSide = Math.max(sourceWidth, sourceHeight);
-    // Ask the decoder to rasterize small vectors at tile-quality resolution
-    // instead of enlarging a tiny already-rasterized 16/32px ImageBitmap.
-    if (sourceWidth && sourceHeight && sourceSide < FAVICON_LOCAL_MAX_SIDE) {
-      const scale = FAVICON_LOCAL_MAX_SIDE / sourceSide;
-      const targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-      const targetHeight = Math.max(1, Math.round(sourceHeight * scale));
-      try {
-        const highResolution = await createImageBitmap(svgBlob, {
-          resizeWidth: targetWidth,
-          resizeHeight: targetHeight,
-          resizeQuality: "high"
-        });
-        bitmap.close?.();
-        bitmap = highResolution;
-      } catch {
-        // The original decode remains a safe fallback on engines without resize.
-      }
-    }
+    const declaredWidth = Math.max(1, Number(declaredDimensions.width) || 1);
+    const declaredHeight = Math.max(1, Number(declaredDimensions.height) || 1);
+    const declaredSide = Math.max(declaredWidth, declaredHeight);
+    const scale = FAVICON_LOCAL_MAX_SIDE / declaredSide;
+    const targetWidth = Math.max(1, Math.min(FAVICON_LOCAL_MAX_SIDE, Math.round(declaredWidth * scale)));
+    const targetHeight = Math.max(1, Math.min(FAVICON_LOCAL_MAX_SIDE, Math.round(declaredHeight * scale)));
+    // Never hand a remote SVG to an unbounded decoder call. Even if future SVG
+    // geometry parsing gains another edge case, the browser is asked to produce
+    // only a small tile-sized bitmap rather than the document's intrinsic size.
+    bitmap = await createImageBitmap(svgBlob, {
+      resizeWidth: targetWidth,
+      resizeHeight: targetHeight,
+      resizeQuality: "high"
+    });
     const encoded = await encodeOptimizedFaviconBitmap(bitmap);
     if (!encoded?.blob?.size) return { image: "", width: 0, height: 0 };
     const resultBytes = new Uint8Array(await encoded.blob.arrayBuffer());
@@ -1522,9 +1524,26 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
 
 function flattenShortcuts(state) {
   const shortcuts = [];
-  for (const item of state?.shortcuts || []) {
-    if (item?.type === "folder") shortcuts.push(...(item.items || []));
-    else if (item?.type === "shortcut") shortcuts.push(item);
+  const seen = new Set();
+  const collect = items => {
+    for (const item of items || []) {
+      if (item?.type === "folder") collect(item.items || []);
+      else if (item?.type === "shortcut" && item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        shortcuts.push(item);
+      }
+    }
+  };
+
+  // Favicon repair is device work, not a visible-Space-only feature. When the
+  // state contains the canonical Spaces map, inspect both workspaces instead of
+  // only the active `state.shortcuts` projection. This prevents missing icons in
+  // the inactive Space from being silently skipped until that Space is opened.
+  if (state?.spaces && typeof state.spaces === "object") {
+    collect(state.spaces?.[PERSONAL_SPACE_ID]?.shortcuts);
+    collect(state.spaces?.[WORK_SPACE_ID]?.shortcuts);
+  } else {
+    collect(state?.shortcuts);
   }
   return shortcuts;
 }
@@ -1569,9 +1588,14 @@ function findShortcutLocationById(state, id) {
     : null;
 }
 
+function workspaceAllowsAutoIcons(state, shortcutId) {
+  const location = findShortcutLocationById(state, shortcutId);
+  return Boolean(location?.workspace?.settings?.autoSiteIcons);
+}
+
 function iconRecoveryItemStillRelevantInState(state, item) {
   const location = findShortcutLocationById(state, item?.id);
-  if (!location || !location.workspace?.settings?.autoSiteIcons) return false;
+  if (!location || !workspaceAllowsAutoIcons(state, item?.id)) return false;
   return iconRecoveryItemStillRelevant(location.shortcut, item);
 }
 
@@ -1587,7 +1611,7 @@ async function applyProactiveFaviconResults(results) {
     // ownership again at commit time so a Personal→Work move neither discards
     // useful work nor applies it under the wrong Space's auto-icon preference.
     const location = findShortcutLocationById(loaded.state, result.id);
-    if (!location || !location.workspace?.settings?.autoSiteIcons) continue;
+    if (!location || !workspaceAllowsAutoIcons(loaded.state, result.id)) continue;
     const shortcut = location.shortcut;
     if (shortcut.url !== result.url) continue;
     const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) &&
@@ -1633,7 +1657,9 @@ function normalizeIconRecoveryQueue(raw) {
       url,
       attempts: Math.max(0, Math.min(ICON_RECOVERY_MAX_ATTEMPTS, Number(item.attempts) || 0)),
       nextAttemptAt: Math.max(0, Number(item.nextAttemptAt) || 0),
-      qualityUpgrade: Boolean(item.qualityUpgrade)
+      qualityUpgrade: Boolean(item.qualityUpgrade),
+      lastReason: typeof item.lastReason === "string" ? item.lastReason.slice(0, 48) : "",
+      lastAttemptAt: Math.max(0, Number(item.lastAttemptAt) || 0)
     });
   }
   return { version: ICON_RECOVERY_QUEUE_VERSION, items, updatedAt: Math.max(0, Number(source.updatedAt) || 0) };
@@ -1677,6 +1703,7 @@ async function writeIconRecoveryStatus(status) {
         failed: Math.max(0, Number(status.failed) || 0),
         timedOut: Math.max(0, Number(status.timedOut) || 0),
         exhausted: Math.max(0, Number(status.exhausted) || 0),
+        blockedByPermission: Math.max(0, Number(status.blockedByPermission) || 0),
         pending: Math.max(0, Number(status.pending) || 0)
       }
     });
@@ -1724,31 +1751,34 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
   const nextItems = current.items.filter(item => iconRecoveryItemStillRelevantInState(loaded.state, item));
   const nextById = new Map(nextItems.map(item => [item.id, item]));
 
-  if (loaded.state.settings.autoSiteIcons) {
-    const eligible = flattenShortcuts(loaded.state).filter(shortcut => {
-      if (targeted && !requested.has(shortcut.id)) return false;
-      if (shortcutNeedsProactiveFavicon(shortcut)) return true;
-      return Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
-        shortcut.imageSyncKind === "device" && Boolean(shortcut.image) && /^https?:/i.test(shortcut.url || "");
-    });
+  const eligible = flattenShortcuts(loaded.state).filter(shortcut => {
+    const location = findShortcutLocationById(loaded.state, shortcut.id);
+    if (!workspaceAllowsAutoIcons(loaded.state, shortcut.id)) return false;
+    if (targeted && !requested.has(shortcut.id)) return false;
+    if (shortcutNeedsProactiveFavicon(shortcut)) return true;
+    return Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
+      shortcut.imageSyncKind === "device" && Boolean(shortcut.image) && /^https?:/i.test(shortcut.url || "");
+  });
 
-    for (const shortcut of eligible) {
-      const previous = existing.get(shortcut.id);
-      const reset = force || !previous || previous.url !== shortcut.url;
-      const migrationUpgrade = Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
-        shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
-      nextById.set(shortcut.id, {
-        id: shortcut.id,
-        url: shortcut.url,
-        attempts: reset ? 0 : previous.attempts,
-        nextAttemptAt: reset ? 0 : previous.nextAttemptAt,
-        qualityUpgrade: migrationUpgrade || (!reset && Boolean(previous.qualityUpgrade))
-      });
-    }
+  for (const shortcut of eligible) {
+    const previous = existing.get(shortcut.id);
+    const reset = force || !previous || previous.url !== shortcut.url;
+    const migrationUpgrade = Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
+      shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
+    nextById.set(shortcut.id, {
+      id: shortcut.id,
+      url: shortcut.url,
+      attempts: reset ? 0 : previous.attempts,
+      nextAttemptAt: reset ? 0 : previous.nextAttemptAt,
+      qualityUpgrade: migrationUpgrade || (!reset && Boolean(previous.qualityUpgrade)),
+      lastReason: reset ? "" : (previous.lastReason || ""),
+      lastAttemptAt: reset ? 0 : (previous.lastAttemptAt || 0)
+    });
   }
 
   const queue = await writeIconRecoveryQueue({ version: ICON_RECOVERY_QUEUE_VERSION, items: [...nextById.values()] });
-  if (queue.items.length && (await hasWebAccess())) await scheduleIconRecoveryAlarm(queue);
+  const canAttemptNow = (await hasWebAccess()) || platformHasPermissionFreeFaviconSource();
+  if (queue.items.length && canAttemptNow) await scheduleIconRecoveryAlarm(queue);
   return queue;
 }
 
@@ -1800,18 +1830,18 @@ async function processIconRecoveryQueue() {
       await writeIconRecoveryStatus(empty);
       return empty;
     }
-    if (!(await hasWebAccess())) {
-      const denied = { ok: true, granted: false, attempted: 0, hydrated: 0, unchanged: 0, failed: 0, timedOut: 0, exhausted: 0, pending: queue.items.length };
-      await writeIconRecoveryStatus(denied);
-      try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {}
-      return denied;
-    }
+    // Website Access controls remote discovery, but it must not gate the entire
+    // recovery engine. Chromium can satisfy a queued shortcut from its local
+    // favicon database without host access, and the resolver itself is the
+    // authoritative place to decide which sources are available.
+    const webAccessGranted = await hasWebAccess();
 
     const now = Date.now();
     const due = queue.items.filter(item => Number(item.nextAttemptAt) <= now).slice(0, ICON_RECOVERY_CONCURRENCY);
     if (!due.length) {
-      await scheduleIconRecoveryAlarm(queue);
-      const waiting = { ok: true, granted: true, attempted: 0, hydrated: 0, unchanged: 0, failed: 0, timedOut: 0, exhausted: 0, pending: queue.items.length };
+      if (webAccessGranted || platformHasPermissionFreeFaviconSource()) await scheduleIconRecoveryAlarm(queue);
+      else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
+      const waiting = { ok: true, granted: webAccessGranted, attempted: 0, hydrated: 0, unchanged: 0, failed: 0, timedOut: 0, exhausted: 0, blockedByPermission: 0, pending: queue.items.length };
       await writeIconRecoveryStatus(waiting);
       return waiting;
     }
@@ -1860,17 +1890,33 @@ async function processIconRecoveryQueue() {
     let failed = 0;
     let timedOut = 0;
     let exhausted = 0;
+    let blockedByPermission = 0;
     for (const outcome of outcomes) {
       const current = byId.get(outcome.item.id);
       if (!current || current.url !== outcome.item.url) continue;
       if (outcome.ok) {
         if (outcome.changed) hydrated += 1;
         else unchanged += 1;
-        if (outcome.provisional) {
+        if (outcome.provisional && webAccessGranted) {
           byId.set(outcome.item.id, nextIconRecoveryQualityRetry(current).item);
         } else {
+          // Without Website Access a successful browser-native result is the
+          // best source currently available. Do not retain a quality-only job
+          // forever; an explicit later grant re-seeds upgrade candidates.
           byId.delete(outcome.item.id);
         }
+        continue;
+      }
+      if (outcome.reason === "permission") {
+        // A missing optional permission is a capability state, not a failed
+        // website. Keep the durable job immediately retryable without consuming
+        // the retry budget; the next explicit permission grant forces a run.
+        blockedByPermission += 1;
+        byId.set(outcome.item.id, {
+          ...current,
+          lastReason: "permission",
+          lastAttemptAt: Date.now()
+        });
         continue;
       }
       failed += 1;
@@ -1880,7 +1926,11 @@ async function processIconRecoveryQueue() {
         continue;
       }
       const next = nextIconRecoveryFailure(current);
-      byId.set(outcome.item.id, next.item);
+      byId.set(outcome.item.id, {
+        ...next.item,
+        lastReason: String(outcome.reason || "not-found").slice(0, 48),
+        lastAttemptAt: Date.now()
+      });
       if (next.exhausted) exhausted += 1;
     }
 
@@ -1889,16 +1939,18 @@ async function processIconRecoveryQueue() {
       version: ICON_RECOVERY_QUEUE_VERSION,
       items: [...byId.values()].filter(item => iconRecoveryItemStillRelevantInState(currentState, item))
     });
-    await scheduleIconRecoveryAlarm(queue);
+    if (webAccessGranted) await scheduleIconRecoveryAlarm(queue);
+    else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
     const summary = {
       ok: true,
-      granted: true,
+      granted: webAccessGranted,
       attempted: outcomes.length,
       hydrated,
       unchanged,
       failed,
       timedOut,
       exhausted,
+      blockedByPermission,
       pending: queue.items.length
     };
     await writeIconRecoveryStatus(summary);
@@ -1906,7 +1958,7 @@ async function processIconRecoveryQueue() {
     // Continue rapidly while this background context is alive. The alarm above
     // remains the durable fallback, so this optimization is never required for
     // correctness on a non-persistent MV3 background context.
-    if (queue.items.some(item => Number(item.nextAttemptAt) <= Date.now())) scheduleImmediateIconRecoveryContinuation();
+    if (webAccessGranted && queue.items.some(item => Number(item.nextAttemptAt) <= Date.now())) scheduleImmediateIconRecoveryContinuation();
     return summary;
   })().finally(() => {
     devMark("background:favicon-recovery-end");
@@ -2818,7 +2870,32 @@ async function reconcileIfNewCommit() {
   const sharedUnchanged = !sharedRevision || sharedRevision === meta.lastAppliedSyncRevision;
   const devicesUnchanged = !deviceRevision || deviceRevision === meta.lastAppliedDeviceSnapshotRevision;
   const workUnchanged = !workRevision || workRevision === meta.lastAppliedWorkSyncRevision;
+
+  // Commit markers are a fast signal, not proof that every storage.sync record
+  // visible in this running browser has already been applied. Firefox can deliver
+  // a multi-key extension snapshot in batches, and an event can be delayed or
+  // missed. Compare the actual usable remote semantic content with the current
+  // local workspaces before taking the cheap "already applied" exit.
+  let contentUnchanged = true;
   if (sharedUnchanged && devicesUnchanged && workUnchanged) {
+    const core = combinedRemoteCore(sources.shared, sources.device);
+    const local = await ensureLocalStorage();
+    if (remoteCoreUsable(core)) {
+      const personal = workspaceStateNormalized(local.state, PERSONAL_SPACE_ID);
+      const localRecords = flattenStateNormalized(personal, meta.deviceId);
+      const localSettings = makeSettingsRecordNormalized(personal, meta.deviceId);
+      contentUnchanged = recordFingerprint(core.records) === recordFingerprint(localRecords) &&
+        settingsRecordEqual(core.settings, localSettings);
+    }
+    if (contentUnchanged && isSnapshotUsable(workSnapshot)) {
+      const work = workspaceStateNormalized(local.state, WORK_SPACE_ID);
+      const localRecords = flattenStateNormalized(work, meta.deviceId);
+      const localSettings = makeSettingsRecordNormalized(work, meta.deviceId);
+      contentUnchanged = recordFingerprint(workSnapshot.records) === recordFingerprint(localRecords) &&
+        settingsRecordEqual(workSnapshot.settings, localSettings);
+    }
+  }
+  if (sharedUnchanged && devicesUnchanged && workUnchanged && contentUnchanged) {
     return { ok: true, skipped: true, reason: "already-applied", meta };
   }
   return reconcile("merge");

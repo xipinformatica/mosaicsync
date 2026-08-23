@@ -50,7 +50,7 @@ export async function hasTopSitesPermission() {
  */
 export function requestWebAccessFromGesture() {
   if (!browser.permissions?.request) {
-    return Promise.reject(new Error("Firefox could not enable website access for MosaicSync."));
+    return Promise.reject(new Error(""));
   }
   return browser.permissions.request({ origins: [...WEB_ORIGINS] });
 }

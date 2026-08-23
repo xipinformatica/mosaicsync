@@ -51,6 +51,8 @@ When that permission is available, MosaicSync may make direct requests to the we
 
 Remote image and SVG handling is subject to validation and size/safety limits in the source code.
 
+Automatic favicon recovery may keep bounded device-local retry metadata, including the last local failure/capability reason and attempt time, so MosaicSync can distinguish a missing permission from a network or parser failure. This metadata is not synchronized, included in `.mosaicsync` profile exports, or transmitted to the developer.
+
 ## Custom images and profile files
 
 Images selected by the user are processed and stored by the extension using browser-local storage.
@@ -85,3 +87,4 @@ Privacy questions can be sent to:
 The source code is public at:
 
 https://github.com/xipinformatica/mosaicsync
+

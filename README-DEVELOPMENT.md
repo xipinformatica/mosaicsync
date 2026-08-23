@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.14.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.16.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -84,26 +84,19 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
 
-## 1.26.14 favicon compatibility / safety policy
+## 1.26.16 favicon, Sync self-heal and release-identity policy
 
-1.26.14 keeps the 1.26.13b Frequently Visited and permission work but corrects a favicon compatibility regression exposed by the fail-closed 1.26.13b geometry guard. Remote favicon MIME labels are hints, not identity: PNG/JPEG/GIF/WebP/ICO byte signatures must be sniffed before an HTTP `Content-Type` such as `image/x-icon` selects a header parser. Unknown remote raster geometry still fails closed before `createImageBitmap`; the fix is to identify known bytes correctly, not to weaken the pre-decode resource bound.
+1.26.16 treats automatic favicon retrieval as one coherent capability/recovery pipeline. The browser's live `permissions.contains()` result is authoritative for remote Website Access. New iconless shortcuts are targeted immediately; network work stays outside the serialized state queue; commit-time ownership is resolved again across Personal/Work; permission failures do not consume website retry budget; and Chromium may use its permission-free native favicon database even when remote Website Access is absent. A browser-native provisional icon is committed as useful fallback but must not pin a quality-only queue forever while Website Access is unavailable. A later explicit grant re-seeds upgrade candidates.
 
-Website-declared inline `data:image/...` favicons are accepted only from recognized `<link rel=icon>` metadata, remain bounded to the existing remote-image byte ceiling, and pass through the same MIME sniffing, geometry and SVG-safety/rasterization checks as network icons. Inline pixels are stored as ordinary device-local learned favicon data; the original data URL is not duplicated into `imageSourceUrl`.
+Chromium's `_favicon` endpoint can return the browser's generic placeholder for an unknown page. MosaicSync learns one process-local placeholder signature from a reserved `.invalid` URL and treats byte-identical native results as a cache miss, so the generic globe is never persisted as site artwork. Remote favicon identity is determined from known image byte signatures before unreliable HTTP MIME labels; bounded inline `data:image/...` favicons use the same safety path.
 
-A browser-provided favicon learned from an explicit shortcut visit is local browser data and must remain available even when the optional all-sites Website Access permission is absent. Website Access continues to gate independent remote HTML/icon discovery and quality recovery, not the browser-native tab/favicon fallback. Firefox and Chrome regression tests cover MIME-mismatched favicon responses, bounded inline declared icons and permission-independent clicked-tab eligibility.
+Remote SVGs are self-contained-only, their real root element must be found after XML prolog comments/processing instructions rather than by a raw first-`<svg` search, and SVG decode is always requested at a bounded tile-sized output. Unknown/oversized remote raster geometry remains fail-closed before browser decoding.
 
-## 1.26.13b Frequently Visited / permission / SVG hardening policy
+Frequently Visited remains device-local. Its first-frame snapshot is bounded and stale-while-revalidate; the synchronous bootstrap also filters the persisted hidden-domain list before painting, so a hidden site cannot flash merely because an older render manifest survived. Drag-to-grid and registrable-domain hiding remain browser-neutral and do not enter Sync/profile backups.
 
-`1.26.13b` was an internal candidate built after `1.26.12`; there is no separately published `1.26.13` release. The Frequently Visited refactor routes native Top Sites through `getNativeTopSites()` in the browser platform adapter. Firefox New Tab must explicitly import that adapter symbol before `frequentCandidates()` calls it; a missing import is a runtime `ReferenceError` that is intentionally caught by the UI refresh path and can therefore present as a silent empty Frequently Visited list rather than a page crash. Permanent regression coverage must verify both the import binding and an executable Firefox adapter call with Firefox-specific `topSites.get()` options.
+Firefox/Chrome Sync self-healing must not depend on a browser restart. `storage.onChanged` remains the fast event path and `reconcileIfNewCommit()` keeps a cheap revision check, but equal revision markers are not treated as proof that all currently visible Sync records were applied: usable remote semantic records/settings are compared with the current local workspaces before taking the no-op exit. The periodic Sync watchdog performs the same strong semantic consistency verification and triggers the full merge when content disagrees, so a delayed/missed extension-storage event is eventually repaired without asking the user to restart.
 
-The candidate label was `1.26.13b` with technical manifest version `1.26.13.1`; it was not published.
-
-
-Frequently Visited remains browser-derived, device-local presentation data. Its tiny first-frame snapshot may live only in the existing disposable render manifest so New Tab geometry can be stable immediately; the authoritative browser Top Sites result is refreshed after first paint. The snapshot, hidden-domain list and Website-access prompt decision must never enter browser Sync or `.mosaicsync` profile data. Do not delay first paint waiting for Top Sites or permission APIs.
-
-Dragging a Frequently Visited card onto an empty top-level grid slot creates an ordinary MosaicSync shortcut at that exact position through the normal audited state writer. Hiding a Frequent site stores the registrable domain locally and applies to all of its subdomains. Registrable-domain calculation uses the bundled Mozilla/Public Suffix List, loaded lazily only on the explicit Hide gesture so routine New Tab startup does not parse the list.
-
-Website access remains optional host permission. Existing users may receive one non-blocking local callout when automatic icon learning is enabled and useful shortcuts still lack artwork, but Firefox/Chrome permission requests must originate from a user gesture. Remote SVG pre-decode geometry extraction must be quote-aware, and remote image geometry with unknown/zero dimensions must fail closed before `createImageBitmap`.
+Release identity has exactly one canonical, browser-valid numeric version string. Firefox manifest, Chrome manifest and `version_name`, shared `VERSION`, Settings labels, build manifest, package names, README/current docs, release notes and current-version tests must match exactly. MosaicSync never uses a separate internal/display/technical version. Corrective releases therefore use another valid numeric component (for example `1.26.15.1`) rather than a letter suffix. Unpublished candidate numbers do not receive standalone entries in the public `CHANGELOG.md`; their changes are folded into the next published release.
 
 ## 1.26.12 remote-image and local-asset integrity policy
 
@@ -119,7 +112,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.14` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.16` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

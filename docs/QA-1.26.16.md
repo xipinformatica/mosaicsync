@@ -1,0 +1,14 @@
+# MosaicSync 1.26.16 QA contract
+
+1. **One version identity:** Firefox manifest, Chrome manifest and `version_name`, shared `VERSION`, Settings labels, build manifest, README/current documentation, release notes and package filenames must all report exactly `1.26.16`. No alternate internal/display version is permitted.
+2. **Public history:** `CHANGELOG.md` must contain a single 1.26.16 entry after 1.26.12; unpublished candidate numbers must not appear as standalone release headings.
+3. **Automatic favicon before visit:** with Automatic site icons enabled and Website Access granted, create a never-before-used HTTP/HTTPS shortcut in Firefox and Chrome. The favicon must appear automatically without visiting the site. Repeat in the inactive Space.
+4. **Chrome permission-free native fallback:** revoke Website Access, visit a site so Chrome knows its favicon, then create the shortcut. Chrome may use its native cache; its generic placeholder globe must never be persisted as artwork. Firefox must remain permission-honest.
+5. **Permission lifecycle:** deny Website Access while enabling Automatic site icons; the toggle must not misleadingly remain enabled. Grant it later and verify missing/provisional icons are re-seeded. Revoking it must not leave quality-only recovery jobs waking forever.
+6. **SVG safety:** a leading XML comment containing a decoy `<svg width="16" height="16">` followed by a real oversized root must be rejected based on the real root. Remote SVG decoding must use bounded resize options and no unbounded `createImageBitmap(svgBlob)` call.
+7. **Frequently Visited:** enable, drag into an exact empty grid slot, hide a registrable domain, open a new tab and verify the hidden domain/subdomains do not flash in the synchronous first frame.
+8. **Firefox Sync PC-B scenario:** on a second Firefox device, allow Sync data to arrive while MosaicSync is open. A missed/delayed `storage.onChanged` must self-heal through New Tab or periodic semantic verification, which must trigger a full merge when content disagrees, without restarting Firefox.
+9. **Concurrency:** edit/delete/move a shortcut while favicon recovery is in flight; stale work must not recreate or overwrite it. Cross-Space recovery must respect the destination Space's setting at commit time.
+10. **Boundaries:** learned favicon pixels, recovery diagnostics, hidden Frequently Visited domains, render snapshots and permission UI memory remain device-local and excluded from Sync/profile export unless explicitly designed otherwise.
+11. **Localization/security:** no new raw user-visible English is introduced; permission failures fall back to localized UI. No required permissions, remote code, telemetry or CSP weakening.
+12. Run `npm test`, `npm run bench`, JavaScript syntax checks, ZIP integrity checks, secret scans and manifest-permission comparison before packaging.

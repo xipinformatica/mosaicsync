@@ -103,11 +103,36 @@ function parseSvgViewBox(value) {
 }
 
 function rootSvgOpenTag(source) {
-  const match = /<(?:[a-z0-9_-]+:)?svg\b/i.exec(source);
+  if (typeof source !== "string") return "";
+
+  // XML permits declarations, processing instructions and comments before the
+  // document element. Never search the raw text for the first `<svg`, because a
+  // decoy inside a prolog comment could otherwise become the geometry source.
+  let index = 0;
+  while (index < source.length) {
+    while (index < source.length && /\s/.test(source[index])) index += 1;
+    if (source.startsWith("<!--", index)) {
+      const end = source.indexOf("-->", index + 4);
+      if (end < 0) return "";
+      index = end + 3;
+      continue;
+    }
+    if (source.startsWith("<?", index)) {
+      const end = source.indexOf("?>", index + 2);
+      if (end < 0) return "";
+      index = end + 2;
+      continue;
+    }
+    break;
+  }
+
+  const tail = source.slice(index);
+  const match = /^<(?:[a-z0-9_-]+:)?svg\b/i.exec(tail);
   if (!match) return "";
+  const start = index + match.index;
   let quote = "";
-  for (let index = match.index; index < source.length; index += 1) {
-    const char = source[index];
+  for (let cursor = start; cursor < source.length; cursor += 1) {
+    const char = source[cursor];
     if (quote) {
       if (char === quote) quote = "";
       continue;
@@ -116,9 +141,9 @@ function rootSvgOpenTag(source) {
       quote = char;
       continue;
     }
-    if (char === ">") return source.slice(match.index, index + 1);
+    if (char === ">") return source.slice(start, cursor + 1);
     // A second unquoted '<' cannot occur inside a well-formed opening tag.
-    if (char === "<" && index !== match.index) return "";
+    if (char === "<" && cursor !== start) return "";
   }
   return "";
 }

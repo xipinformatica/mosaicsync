@@ -136,7 +136,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(result.candidates[0].sideHint, 32);
   });
 
-  test(`1.26.14 ${browser} clicked-tab native favicon learning does not require Website Access`, async () => {
+  test(`1.26.14 ${browser} clicked-tab favicon-learning preflight does not itself request Website Access`, async () => {
     const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const code = extract(src, "prepareFaviconLearning");
     const ctx = {
