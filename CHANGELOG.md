@@ -1,3 +1,11 @@
+## 1.26.12
+
+- Hardened automatic favicon recovery against compressed image "pixel-flood" inputs: known oversized PNG, GIF, JPEG, ICO/DIB and WebP dimensions are rejected before browser decoding, with the same pre-decode guard applied to safe SVG favicon geometry.
+- Strengthened the local content-addressed image store: an existing asset ID is now reused only after exact-byte verification, missing/corrupt bytes are repaired atomically, and a valid-but-different value under the same ID fails closed instead of silently showing the wrong image.
+- Kept normal writes fast by caching only already-verified live asset bytes in memory and pruning that cache with the live asset index.
+- Added focused Firefox/Chrome regression coverage for pre-decode image bounds, WebP metadata parsing, SVG geometry checks, asset verification/repair and the existing atomic write path.
+- No UI behavior, permissions, Sync/profile schema, localization strings or wallpaper/folder logic changed. Versioning is unified as `1.26.12` across both browser builds and public source metadata.
+
 ## 1.26.11
 
 - Simplified the **Frequently visited** Settings section in Firefox and Chrome: when the Show toggle is off, the device-local options below it are now hidden completely.

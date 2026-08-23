@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.11.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.12.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -83,6 +83,13 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 ## 1.24.14k duplicate-record-ID policy
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
+
+## 1.26.12 remote-image and local-asset integrity policy
+
+Remote favicon decoding must remain bounded *before* `createImageBitmap` whenever MosaicSync can determine intrinsic dimensions from the resource header. Raster candidates with known geometry above the shared 4096px / 8-million-pixel background limit are rejected before optimization or raw-data fallback; safe SVG favicons likewise have their root raster geometry checked before decoding. PNG, GIF, JPEG, ICO/DIB and all standard WebP container variants stay covered by the pre-decode metadata path.
+
+Content-addressed `storage.local` pixels must not be trusted solely because an ID is already listed in the local asset index. Exact bytes that were already hydrated/verified may use the in-memory fast path; otherwise the persisted value is checked before reuse. Missing/corrupt bytes are repaired atomically with the compact state write, while a valid-but-different value under the same content ID fails closed as a collision. Keep the verification cache pruned to live asset IDs so normal shortcut edits do not add repeated image reads or unbounded memory.
+
 ## 1.26.11 appearance lifecycle regression policy
 
 1.26.11 keeps the 1.26.9 runtime appearance/wallpaper isolation architecture unchanged and closes its highest-value automated test gap. Permanent Firefox/Chrome behavioral tests execute the production preview/commit functions rather than only matching source text. They must prove that a live theme switch while Settings is open updates the isolated preview immediately, leaves the real `.page` background untouched, commits the authoritative background exactly once after the real Settings `close` event plus one animation frame, clears the preview state, and suppresses that commit if Settings is reopened before the frame runs.
@@ -91,7 +98,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current version string must be `1.26.11` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+The current version string must be `1.26.12` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

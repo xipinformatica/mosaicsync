@@ -44,11 +44,16 @@ import {
   hydrateStateLocalAssets,
   projectStateToLocalAssets,
   stateHasInlineLocalAssets,
-  validateLocalAsset
+  validateLocalAsset,
+  LOCAL_ASSET_COLLISION_ERROR_CODE
 } from "./local-assets.js";
 import { ERROR_CODES, codedError } from "./errors.js";
 
 let lastSessionRenderCacheStatus = "unknown";
+// Exact bytes already read from storage.local in this extension context. Keeping
+// this map lets routine writes verify immutable content-addressed assets without
+// re-reading every favicon/image on every shortcut edit. It is pruned to live IDs.
+const verifiedLocalAssetValues = new Map();
 
 function cloneCompactJson(value) {
   if (typeof structuredClone === "function") return structuredClone(value);
@@ -120,6 +125,7 @@ async function retryPendingLocalAssetCleanup() {
     try {
       if (removableIds.length) {
         await browser.storage.local.remove(removableIds.map(localAssetStorageKey));
+        for (const assetId of removableIds) verifiedLocalAssetValues.delete(assetId);
       }
       // A pending ID that became referenced again is no longer garbage. Rebuild
       // the active index from the authoritative compact state and clear the retry
@@ -146,7 +152,12 @@ async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS } = {}) {
   const assets = new Map();
   for (const id of ids) {
     const value = result[localAssetStorageKey(id)];
-    if (validateLocalAsset(id, value)) assets.set(id, value);
+    if (validateLocalAsset(id, value)) {
+      assets.set(id, value);
+      verifiedLocalAssetValues.set(id, value);
+    } else {
+      verifiedLocalAssetValues.delete(id);
+    }
   }
   return { assets, storageMs };
 }
@@ -403,10 +414,37 @@ async function persistNormalizedState(normalized, {
       [LOCAL_ASSET_INDEX_KEY]: assetIndexValue(currentIds, pendingGcIds)
     };
 
-    // Content-addressed keys are immutable. Existing IDs never need to be rewritten;
-    // only genuinely new image bytes are added to storage.local.
+    // Content-addressed keys are immutable only when the stored bytes really match
+    // the bytes this state expects. Most assets were already hydrated and verified
+    // in this context, so routine edits take the cache-fast path. A newly introduced
+    // value that reuses an existing ID is read back exactly once: missing/corrupt
+    // bytes are repaired atomically; valid-but-different bytes fail closed as a true
+    // content-address collision instead of silently displaying the wrong pixels.
+    const existingAssetsToVerify = [];
     for (const [assetId, dataUrl] of projection.assets) {
-      if (!previousIds.has(assetId)) writes[localAssetStorageKey(assetId)] = dataUrl;
+      const key = localAssetStorageKey(assetId);
+      if (!previousIds.has(assetId)) {
+        writes[key] = dataUrl;
+      } else if (verifiedLocalAssetValues.get(assetId) !== dataUrl) {
+        existingAssetsToVerify.push([assetId, dataUrl, key]);
+      }
+    }
+    if (existingAssetsToVerify.length) {
+      const storedAssets = await browser.storage.local.get(existingAssetsToVerify.map(([, , key]) => key));
+      for (const [assetId, dataUrl, key] of existingAssetsToVerify) {
+        const storedValue = storedAssets[key];
+        if (storedValue === dataUrl) {
+          verifiedLocalAssetValues.set(assetId, dataUrl);
+          continue;
+        }
+        if (!validateLocalAsset(assetId, storedValue)) {
+          writes[key] = dataUrl;
+          continue;
+        }
+        const collision = new Error("Local asset content collision.");
+        collision.code = LOCAL_ASSET_COLLISION_ERROR_CODE;
+        throw collision;
+      }
     }
 
     if (effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
@@ -434,6 +472,10 @@ async function persistNormalizedState(normalized, {
     // pointing at an asset that was deleted first.
     try {
       await browser.storage.local.set(writes);
+      for (const [assetId, dataUrl] of projection.assets) verifiedLocalAssetValues.set(assetId, dataUrl);
+      for (const assetId of [...verifiedLocalAssetValues.keys()]) {
+        if (!currentIds.has(assetId)) verifiedLocalAssetValues.delete(assetId);
+      }
     } catch (error) {
       // Never fall back to a compact-state-only write here: that could publish
       // references to asset pixels that were not committed. Preserve the entire
@@ -449,6 +491,7 @@ async function persistNormalizedState(normalized, {
     if (canCollectStale && pendingGcIds.size) {
       try {
         await browser.storage.local.remove([...pendingGcIds].map(localAssetStorageKey));
+        for (const assetId of pendingGcIds) verifiedLocalAssetValues.delete(assetId);
         // Clearing the retry ledger is a second best-effort write. If this write
         // fails after pixels were removed, the ledger remains and a later retry
         // merely removes already-missing keys before clearing itself.

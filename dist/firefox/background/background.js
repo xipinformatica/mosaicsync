@@ -101,7 +101,7 @@ import {
 import { cleanupLegacyWebOriginPermissions } from "../core/permissions.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
 import { devMark, devMeasure } from "../core/perf.js";
-import { isSafeSelfContainedSvgText } from "../core/svg-safety.js";
+import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
 
 let queue = Promise.resolve();
 const ignoredLocalStateSignatures = new Map();
@@ -616,6 +616,8 @@ browser.permissions?.onRemoved?.addListener(permissions => {
 });
 
 const REMOTE_IMAGE_MAX_BYTES = 250_000;
+const REMOTE_IMAGE_MAX_DECODE_DIMENSION = 4096;
+const REMOTE_IMAGE_MAX_DECODED_PIXELS = 8_000_000;
 const FAVICON_LOCAL_TARGET_BYTES = 16_000;
 const FAVICON_LOCAL_MAX_SIDE = 192;
 const REMOTE_HTML_HEAD_MAX_BYTES = 256_000;
@@ -754,6 +756,9 @@ function sniffImageMime(bytes, declaredType = "") {
 function imageDimensionsFromBytes(bytes, type) {
   if (!bytes?.length) return { width: 0, height: 0 };
   const readU16LE = offset => offset + 1 < bytes.length ? bytes[offset] | (bytes[offset + 1] << 8) : 0;
+  const readU32LE = offset => offset + 3 < bytes.length
+    ? (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | ((bytes[offset + 3] << 24) >>> 0)) >>> 0
+    : 0;
   const readU32BE = offset => offset + 3 < bytes.length
     ? (((bytes[offset] << 24) >>> 0) | (bytes[offset + 1] << 16) | (bytes[offset + 2] << 8) | bytes[offset + 3]) >>> 0
     : 0;
@@ -771,11 +776,39 @@ function imageDimensionsFromBytes(bytes, type) {
     for (let index = 0; index < count; index += 1) {
       const offset = 6 + index * 16;
       if (offset + 15 >= bytes.length) break;
-      const width = bytes[offset] || 256;
-      const height = bytes[offset + 1] || 256;
+      let width = bytes[offset] || 256;
+      let height = bytes[offset + 1] || 256;
+      const payloadSize = readU32LE(offset + 8);
+      const payloadOffset = readU32LE(offset + 12);
+      if (payloadSize && payloadOffset < bytes.length && payloadOffset + Math.min(payloadSize, 24) <= bytes.length) {
+        if (payloadOffset + 24 <= bytes.length &&
+            bytes[payloadOffset] === 0x89 && bytes[payloadOffset + 1] === 0x50 &&
+            bytes[payloadOffset + 2] === 0x4e && bytes[payloadOffset + 3] === 0x47 &&
+            bytes[payloadOffset + 4] === 0x0d && bytes[payloadOffset + 5] === 0x0a &&
+            bytes[payloadOffset + 6] === 0x1a && bytes[payloadOffset + 7] === 0x0a) {
+          width = Math.max(width, readU32BE(payloadOffset + 16));
+          height = Math.max(height, readU32BE(payloadOffset + 20));
+        } else if (payloadOffset + 12 <= bytes.length) {
+          // ICO bitmap payloads use either the 12-byte OS/2 core header (16-bit
+          // geometry) or a Windows DIB header (32-bit geometry). The stored DIB
+          // height commonly includes both the XOR bitmap and AND mask.
+          const dibHeaderSize = readU32LE(payloadOffset);
+          const dibWidth = dibHeaderSize === 12
+            ? readU16LE(payloadOffset + 4)
+            : (dibHeaderSize >= 40 ? readU32LE(payloadOffset + 4) : 0);
+          const dibStoredHeight = dibHeaderSize === 12
+            ? readU16LE(payloadOffset + 6)
+            : (dibHeaderSize >= 40 ? readU32LE(payloadOffset + 8) : 0);
+          if (dibWidth) width = Math.max(width, dibWidth);
+          if (dibStoredHeight) height = Math.max(height, Math.ceil(dibStoredHeight / 2));
+        }
+      }
       if (Math.min(width, height) > Math.min(bestWidth, bestHeight)) {
         bestWidth = width;
         bestHeight = height;
+      } else {
+        bestWidth = Math.max(bestWidth, width);
+        bestHeight = Math.max(bestHeight, height);
       }
     }
     return { width: bestWidth, height: bestHeight };
@@ -799,15 +832,36 @@ function imageDimensionsFromBytes(bytes, type) {
       offset += length;
     }
   }
-  if (type === "image/webp" && bytes.length >= 30) {
+  if (type === "image/webp" && bytes.length >= 25 &&
+      String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+      String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP") {
     const chunk = String.fromCharCode(...bytes.subarray(12, 16));
-    if (chunk === "VP8X") {
+    if (chunk === "VP8X" && bytes.length >= 30) {
       const width = 1 + bytes[24] + (bytes[25] << 8) + (bytes[26] << 16);
       const height = 1 + bytes[27] + (bytes[28] << 8) + (bytes[29] << 16);
       return { width, height };
     }
+    if (chunk === "VP8 " && bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+      const width = readU16LE(26) & 0x3fff;
+      const height = readU16LE(28) & 0x3fff;
+      return { width, height };
+    }
+    if (chunk === "VP8L" && bytes[20] === 0x2f) {
+      const width = 1 + (((bytes[22] & 0x3f) << 8) | bytes[21]);
+      const height = 1 + (((bytes[24] & 0x0f) << 10) | (bytes[23] << 2) | ((bytes[22] & 0xc0) >> 6));
+      return { width, height };
+    }
   }
   return { width: 0, height: 0 };
+}
+
+function imageDimensionsSafeForRemoteDecode(dimensions) {
+  const width = Math.max(0, Number(dimensions?.width) || 0);
+  const height = Math.max(0, Number(dimensions?.height) || 0);
+  if ((width && width > REMOTE_IMAGE_MAX_DECODE_DIMENSION) ||
+      (height && height > REMOTE_IMAGE_MAX_DECODE_DIMENSION)) return false;
+  if (width && height && width * height > REMOTE_IMAGE_MAX_DECODED_PIXELS) return false;
+  return true;
 }
 
 function faviconQualitySide(candidate) {
@@ -832,7 +886,7 @@ async function encodeOptimizedFaviconBitmap(bitmap, { maxSide = FAVICON_LOCAL_MA
   if (!bitmap || typeof OffscreenCanvas !== "function") return null;
   const sourceWidth = Number(bitmap.width) || 0;
   const sourceHeight = Number(bitmap.height) || 0;
-  if (!sourceWidth || !sourceHeight || sourceWidth > 4096 || sourceHeight > 4096 || sourceWidth * sourceHeight > 8_000_000) return null;
+  if (!sourceWidth || !sourceHeight || !imageDimensionsSafeForRemoteDecode({ width: sourceWidth, height: sourceHeight })) return null;
 
   const ratio = Math.min(1, maxSide / sourceWidth, maxSide / sourceHeight);
   let width = Math.max(1, Math.round(sourceWidth * ratio));
@@ -871,6 +925,7 @@ async function encodeOptimizedFaviconBitmap(bitmap, { maxSide = FAVICON_LOCAL_MA
 async function optimizedFaviconFromBytes(bytes, type, dimensions = { width: 0, height: 0 }) {
   if (!bytes?.length || typeof createImageBitmap !== "function" || typeof OffscreenCanvas !== "function") return null;
   const largestSide = Math.max(Number(dimensions?.width) || 0, Number(dimensions?.height) || 0);
+  if (!imageDimensionsSafeForRemoteDecode(dimensions)) return null;
   if (bytes.length <= FAVICON_LOCAL_TARGET_BYTES && (!largestSide || largestSide <= FAVICON_LOCAL_MAX_SIDE)) return null;
   let bitmap = null;
   try {
@@ -901,6 +956,10 @@ async function rasterizeSafeSvg(bytes) {
   // script/event handlers, XML entities/stylesheets, embedded documents/images,
   // and every href/CSS url() that is not a same-document fragment reference.
   if (!isSafeSelfContainedSvgText(source)) return { image: "", width: 0, height: 0 };
+  const declaredDimensions = svgRasterDimensionsFromText(source);
+  if (!declaredDimensions.valid || !imageDimensionsSafeForRemoteDecode(declaredDimensions)) {
+    return { image: "", width: 0, height: 0 };
+  }
   let bitmap = null;
   try {
     const svgBlob = new Blob([bytes], { type: "image/svg+xml" });
@@ -949,6 +1008,9 @@ async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON
       : { image: "", sourceUrl: resource.url || value, reason: "unsupported-svg", width: 0, height: 0, qualitySide: 0, declared };
   }
   const dimensions = imageDimensionsFromBytes(resource.bytes, type);
+  if (!imageDimensionsSafeForRemoteDecode(dimensions)) {
+    return { image: "", sourceUrl: resource.url || value, reason: "image-too-large", width: 0, height: 0, qualitySide: 0, declared };
+  }
   const optimized = await optimizedFaviconFromBytes(resource.bytes, type, dimensions);
   const width = optimized?.width || dimensions.width;
   const height = optimized?.height || dimensions.height;
@@ -976,7 +1038,9 @@ async function normalizeLocalFaviconDataUrl(image) {
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
     const type = match[1].toLowerCase();
-    const optimized = await optimizedFaviconFromBytes(bytes, type, imageDimensionsFromBytes(bytes, type));
+    const dimensions = imageDimensionsFromBytes(bytes, type);
+    if (!imageDimensionsSafeForRemoteDecode(dimensions)) return "";
+    const optimized = await optimizedFaviconFromBytes(bytes, type, dimensions);
     return optimized?.image || image;
   } catch {
     return image;
@@ -1846,6 +1910,7 @@ function shortcutHostKey(value) {
 async function applyLearnedFavicon(loaded, targets, { image, sourceKind, sourceUrl = "" }) {
   if (!image) return false;
   image = await normalizeLocalFaviconDataUrl(image);
+  if (!image) return false;
   const writeBaseline = createWriteBaseline(loaded.state);
   let changed = false;
   for (const shortcut of targets) {
