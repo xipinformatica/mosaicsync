@@ -139,6 +139,102 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
+
+for (const browser of ["firefox", "chrome"]) {
+  test(`1.26.17.7 ${browser} shared favicon fan-out still applies the real per-ID stale revalidation`, async () => {
+    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const sharedUrl = "https://shared.example/app";
+    const currentState = {
+      activeSpaceId: "personal",
+      spaces: {
+        personal: {
+          settings: { autoSiteIcons: true },
+          shortcuts: ["stay", "changed", "deleted", "moved"].map(id => ({
+            type: "shortcut", id, url: sharedUrl, image: "", imageSyncKind: "none", imageSourceKind: "none"
+          }))
+        },
+        work: { settings: { autoSiteIcons: false }, shortcuts: [] }
+      }
+    };
+    const queue = {
+      version: 2,
+      items: ["stay", "changed", "deleted", "moved"].map(id => ({
+        id, url: sharedUrl, attempts: 0, nextAttemptAt: 0, qualityUpgrade: false
+      }))
+    };
+    let resolverCalls = 0;
+    let writeCalls = 0;
+    let finalQueue = null;
+    const ctx = { console, structuredClone };
+    vm.createContext(ctx);
+    Object.assign(ctx, {
+      ICON_RECOVERY_CONCURRENCY: 3,
+      ICON_RECOVERY_QUEUE_VERSION: 2,
+      ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
+      ICON_RECOVERY_MAX_ATTEMPTS: 5,
+      ICON_RECOVERY_EXHAUSTED_RETRY_MS: 86_400_000,
+      ICON_RECOVERY_ALARM: "icon",
+      browser: { alarms: { clear: async () => {} } },
+      devMark: () => {}, devMeasure: () => {},
+      readIconRecoveryQueue: async () => structuredClone(queue),
+      ensureLocalStorage: async () => ({ state: currentState }),
+      pruneIconRecoveryQueueAgainstState: async value => value,
+      scheduleIconRecoveryAlarm: async () => {},
+      hasWebAccess: async () => true,
+      platformHasPermissionFreeFaviconSource: () => true,
+      resolveFaviconForUrl: async () => {
+        resolverCalls += 1;
+        const personal = currentState.spaces.personal.shortcuts;
+        personal.find(item => item.id === "changed").url = "https://changed.example/";
+        currentState.spaces.personal.shortcuts = personal.filter(item => item.id !== "deleted" && item.id !== "moved");
+        currentState.spaces.work.shortcuts.push({
+          type: "shortcut", id: "moved", url: sharedUrl, image: "", imageSyncKind: "none", imageSourceKind: "none"
+        });
+        return { image: "data:image/png;base64,QUJD", sourceUrl: `${sharedUrl}/favicon.ico`, provisional: false };
+      },
+      enqueue: async task => task(),
+      createWriteBaseline: state => state,
+      findShortcutLocationById: (state, id) => {
+        for (const [spaceId, workspace] of Object.entries(state.spaces || {})) {
+          const shortcut = (workspace.shortcuts || []).find(item => item.id === id);
+          if (shortcut) return { spaceId, workspace, shortcut };
+        }
+        return null;
+      },
+      workspaceAllowsAutoIcons: (state, id) => {
+        const location = ctx.findShortcutLocationById(state, id);
+        return Boolean(location?.workspace?.settings?.autoSiteIcons);
+      },
+      shortcutNeedsProactiveFavicon: shortcut => Boolean(shortcut && !shortcut.image),
+      writeLocalState: async state => { writeCalls += 1; return state; },
+      nextIconRecoveryQualityRetry: item => ({ item }),
+      nextIconRecoveryFailure: item => ({ item: { ...item, attempts: item.attempts + 1 }, exhausted: false }),
+      iconRecoveryItemStillRelevantInState: (state, item) => {
+        const location = ctx.findShortcutLocationById(state, item.id);
+        return Boolean(location && location.shortcut.url === item.url && location.workspace.settings.autoSiteIcons && !location.shortcut.image);
+      },
+      writeIconRecoveryQueue: async value => { finalQueue = structuredClone(value); return value; },
+      writeIconRecoveryStatus: async () => {},
+      scheduleImmediateIconRecoveryContinuation: () => {}
+    });
+    vm.runInContext(`
+      let iconRecoveryRun = null;
+      ${extract(src, "applyProactiveFaviconResults")}
+      ${extract(src, "processIconRecoveryQueue")}
+    `, ctx);
+
+    const summary = await ctx.processIconRecoveryQueue();
+    assert.equal(resolverCalls, 1, "all four exact-URL records must share one resolver job");
+    assert.equal(writeCalls, 1, "only the still-applicable result should cause one batch state write");
+    assert.equal(currentState.spaces.personal.shortcuts.find(item => item.id === "stay")?.image, "data:image/png;base64,QUJD");
+    assert.equal(currentState.spaces.personal.shortcuts.find(item => item.id === "changed")?.image, "", "URL-changed duplicate must reject stale result");
+    assert.equal(currentState.spaces.personal.shortcuts.some(item => item.id === "deleted"), false, "deleted duplicate stays deleted");
+    assert.equal(currentState.spaces.work.shortcuts.find(item => item.id === "moved")?.image, "", "move into an auto-icon-disabled Space must reject stale result");
+    assert.equal(summary.hydrated, 1);
+    assert.equal(finalQueue.items.length, 0, "stale/inapplicable records must not linger in the durable queue");
+  });
+}
+
 test("1.26.17.6 Frequently Visited explicit-host memo reuses only the same state generation", async () => {
   const ui = await import("../dist/firefox/newtab/ui-utils.js");
   const memo = ui.createShortcutHostsAcrossSpacesMemo();

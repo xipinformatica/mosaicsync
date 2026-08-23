@@ -1,8 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.26.17.7 optional-permission recovery policy
+
+Frequently Visited stores user intent separately from the browser's optional `topSites` grant. If the preference is enabled while the grant is unavailable, MosaicSync must keep the preference enabled, render no Top Sites data, show a localized direct permission-recovery action, and request the permission only from that explicit user gesture. Denial/revocation must never force an OFF state or require an OFF → ON toggle to recover.
+
+`permissions.onAdded` / `permissions.onRemoved` and one delayed post-start reconciliation keep the UI aligned with the browser's live permission state. If a grant becomes available again, suggestions refresh automatically; if it remains unavailable, the recovery action remains available. Profile import preserves the remembered Frequently Visited preference independently from the installation-local permission state. No permission is silently granted, and the manifest permission model is unchanged.
+
+The exact-URL favicon single-flight optimization from 1.26.17.6 remains unchanged. Regression coverage must compose the production queue grouping with the real `applyProactiveFaviconResults()` stale-result checks so a shared resolver result cannot hydrate an ID that changed URL, was deleted, or moved into a Space that no longer allows automatic icons while networking was in flight.
 
 ## 1.26.17.6 performance/stability policy
 
@@ -154,7 +162,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

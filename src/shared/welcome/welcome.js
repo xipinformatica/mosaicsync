@@ -18,7 +18,7 @@ import {
 import { fetchFirefoxShortcuts, prepareFirefoxShortcutFavicons, replaceWithFirefoxShortcuts } from "../core/importer.js";
 import { nextMutationTime, normalizeMeta, normalizeState, now, stableStringify } from "../core/model.js";
 import { ensureLocalStorage, writeLocalMeta, writeLocalState } from "../core/storage.js";
-import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
+import { cleanupLegacyWebOriginPermissions, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -173,12 +173,13 @@ async function importMosaicSyncProfile(file) {
   const importedState = stampImportedProfileState(parsed.state);
   await writeLocalState(importedState);
   await setLocalePreference(parsed.preferences.uiLocale || "auto");
-  let hasTopSites = false;
-  try { hasTopSites = await hasTopSitesPermission(); } catch {}
+  // Preserve the imported preference independently from this installation's
+  // optional Top Sites permission. New Tab will expose a localized recovery
+  // action if the user still needs to grant that permission here.
   try {
     localStorage.setItem(
       FREQUENTLY_VISITED_PREF_KEY,
-      parsed.preferences.frequentlyVisitedEnabled && hasTopSites ? "1" : "0"
+      parsed.preferences.frequentlyVisitedEnabled ? "1" : "0"
     );
   } catch {}
   localizeDocument(document);

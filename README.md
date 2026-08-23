@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.26.17.6**
+**Current source release: 1.26.17.7**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -64,11 +64,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active public release is **1.26.17.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active public release is **1.26.17.7** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.26.17.6 is a focused performance/stability release: exact-URL favicon recovery work is single-flighted per quality mode, Frequently Visited reuses its explicit-host Set within the same state mutation generation, and production startup performance diagnostics are silent unless the existing local development flag is enabled. It also adds behavioral first-paint URL-safety and deeper normalized-tree prototype-pollution regression coverage. Permissions, Sync/profile formats, persisted schemas, CSP and normal UI behavior are unchanged.
+1.26.17.7 is a focused permission-recovery/stability release. Frequently Visited now preserves the user's enabled preference independently from the optional Top Sites grant, exposes a localized direct permission-recovery button when that grant is missing, reacts immediately to browser permission add/remove events, and performs one delayed startup reconciliation so a temporarily unavailable grant can self-heal without an OFF → ON toggle. Profile import preserves the feature preference even when the current installation still needs permission. The release also closes the remaining exact-URL favicon single-flight test gap by executing the real per-ID stale-result application path against in-flight URL-change/delete/move scenarios. No permissions, Sync/profile formats, persisted schemas, CSP, favicon resolver behavior or remote-code/telemetry behavior changed.
 
 ## Privacy and permissions
 

@@ -218,6 +218,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const frequentOptions = document.getElementById("frequentOptions");
   const frequentCountRow = document.getElementById("frequentCountRow");
   const frequentlyVisitedStatus = document.getElementById("frequentlyVisitedStatus");
+  const frequentlyVisitedPermissionButton = document.getElementById("frequentlyVisitedPermissionButton");
   const exportProfileButton = document.getElementById("exportProfileButton");
   const importProfileButton = document.getElementById("importProfileButton");
   const importProfileFile = document.getElementById("importProfileFile");
@@ -917,12 +918,19 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (frequentlyVisitedStatus) frequentlyVisitedStatus.textContent = t(key);
   }
 
+  function setFrequentlyVisitedPermissionActionVisible(visible) {
+    if (!frequentlyVisitedPermissionButton) return;
+    frequentlyVisitedPermissionButton.hidden = visible !== true;
+    frequentlyVisitedPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
+  }
+
   async function refreshFrequentlyVisited() {
     const generation = ++frequentRefreshGeneration;
     if (!frequentlyVisitedEnabled) {
       renderFrequentlyVisited([]);
       updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentHidden");
+      setFrequentlyVisitedPermissionActionVisible(false);
       return;
     }
     let permitted = false;
@@ -932,8 +940,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       renderFrequentlyVisited([]);
       updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentPermissionRequired");
+      setFrequentlyVisitedPermissionActionVisible(true);
       return;
     }
+    setFrequentlyVisitedPermissionActionVisible(false);
     try {
       // Ask Firefox for a broad candidate pool first, then filter. Requesting only
       // a handful before removing explicit shortcuts could leave fewer than five
@@ -964,6 +974,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function scheduleFrequentlyVisitedRefresh(delay = 80) {
     clearTimeout(frequentRefreshTimer);
     frequentRefreshTimer = setTimeout(() => { void refreshFrequentlyVisited(); }, delay);
+  }
+
+  function scheduleFrequentlyVisitedPermissionReconciliation(delay = 1400) {
+    setTimeout(() => {
+      if (!frequentlyVisitedEnabled) return;
+      void refreshFrequentlyVisited();
+    }, delay);
   }
 
   function preloadResolvedBackground(presetId, imageValue = "") {
@@ -1050,6 +1067,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       renderFrequentlyVisited(frequentRenderSnapshot.sites || []);
     }
     scheduleFrequentlyVisitedRefresh(250);
+    // The browser may briefly rehydrate optional-permission state while an updated
+    // extension context is starting. Reconcile once more after startup so an
+    // already-granted Top Sites permission restores suggestions automatically.
+    scheduleFrequentlyVisitedPermissionReconciliation();
     scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 900);
     void preloadBackgroundForSettings(state.settings);
     preloadOtherSpaceBackgrounds();
@@ -4064,6 +4085,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     refreshThemeWallpaperControls();
     if (settingsFrequentlyVisitedDescription) settingsFrequentlyVisitedDescription.textContent = t("frequentlyVisitedDescription");
     if (settingsFrequentlyVisitedCountLabel) settingsFrequentlyVisitedCountLabel.textContent = t("frequentCount");
+    if (frequentlyVisitedPermissionButton) frequentlyVisitedPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
     if (wallpaperGalleryDialog?.open) renderWallpaperGallery();
     render();
     updateSyncUi(meta, lastSyncStatus);
@@ -4399,6 +4421,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 50);
       }
     }).catch(() => {});
+    // Optional Top Sites permission is independent from the remembered feature
+    // preference. Reflect revocation immediately without silently turning it off.
+    if (frequentlyVisitedEnabled) scheduleFrequentlyVisitedRefresh(0);
   });
 
   browser.permissions?.onAdded?.addListener?.(() => {
@@ -4408,6 +4433,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         requestMissingSiteIcons([], { force: true });
       }
     }).catch(() => {});
+    // If the browser restores/grants Top Sites permission, suggestions should return
+    // automatically without requiring the user to toggle the feature twice.
+    if (frequentlyVisitedEnabled) {
+      frequentCandidateCacheAt = 0;
+      frequentCandidateCache = [];
+      scheduleFrequentlyVisitedRefresh(0);
+    }
   });
 
   systemThemeMedia.addEventListener?.("change", () => {
@@ -5069,6 +5101,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (!wantsEnabled) {
       writeFrequentlyVisitedPreference(false);
       setFrequentlyVisitedOptionsVisibility(false);
+      setFrequentlyVisitedPermissionActionVisible(false);
       frequentCandidateCacheAt = 0;
       frequentCandidateCache = [];
       frequentRefreshGeneration += 1;
@@ -5077,30 +5110,61 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       setFrequentlyVisitedStatus("frequentHidden");
       return;
     }
+
+    // Remember the user's intent independently from the browser permission.
+    // If permission is denied/revoked, keep the switch ON and expose the direct
+    // recovery action instead of forcing an OFF -> ON toggle ritual.
+    writeFrequentlyVisitedPreference(true);
+    setFrequentlyVisitedOptionsVisibility(true);
     try {
       // permissions.request() must be invoked synchronously from this user gesture.
       const permissionPromise = requestTopSitesPermissionFromGesture();
       const granted = await permissionPromise;
       if (!granted) {
-        settingsFrequentlyVisited.checked = false;
-        writeFrequentlyVisitedPreference(false);
-        setFrequentlyVisitedOptionsVisibility(false);
+        setFrequentlyVisitedPermissionActionVisible(true);
         updateFrequentRenderSnapshot([]);
         setFrequentlyVisitedStatus("frequentPermissionDenied");
         return;
       }
-      writeFrequentlyVisitedPreference(true);
-      setFrequentlyVisitedOptionsVisibility(true);
+      setFrequentlyVisitedPermissionActionVisible(false);
       frequentCandidateCacheAt = 0;
       frequentCandidateCache = [];
       await refreshFrequentlyVisited();
     } catch (error) {
-      settingsFrequentlyVisited.checked = false;
-      writeFrequentlyVisitedPreference(false);
-      setFrequentlyVisitedOptionsVisibility(false);
+      setFrequentlyVisitedPermissionActionVisible(true);
       updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentEnableFailed");
     }
+  });
+
+  frequentlyVisitedPermissionButton?.addEventListener("click", () => {
+    // Keep the permission request directly in the click handler so Firefox's
+    // user-gesture requirement is satisfied. The feature preference remains ON
+    // regardless of whether the browser grants the optional permission.
+    const permissionPromise = requestTopSitesPermissionFromGesture();
+    frequentlyVisitedPermissionButton.disabled = true;
+    void (async () => {
+      try {
+        const granted = await permissionPromise;
+        writeFrequentlyVisitedPreference(true);
+        if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = true;
+        setFrequentlyVisitedOptionsVisibility(true);
+        if (!granted) {
+          setFrequentlyVisitedPermissionActionVisible(true);
+          setFrequentlyVisitedStatus("frequentPermissionDenied");
+          return;
+        }
+        setFrequentlyVisitedPermissionActionVisible(false);
+        frequentCandidateCacheAt = 0;
+        frequentCandidateCache = [];
+        await refreshFrequentlyVisited();
+      } catch {
+        setFrequentlyVisitedPermissionActionVisible(true);
+        setFrequentlyVisitedStatus("frequentEnableFailed");
+      } finally {
+        frequentlyVisitedPermissionButton.disabled = false;
+      }
+    })();
   });
 
   exportProfileButton?.addEventListener("click", async () => {
@@ -5154,8 +5218,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
       writeBaseline = createWriteBaseline(state);
       await setLocalePreference(parsed.preferences.uiLocale || "auto");
-      const hasTopSites = await hasTopSitesPermission().catch(() => false);
-      writeFrequentlyVisitedPreference(parsed.preferences.frequentlyVisitedEnabled && hasTopSites);
+      // Profile preferences express user intent; optional browser permission is
+      // installation-local and may be granted later through the recovery button.
+      writeFrequentlyVisitedPreference(parsed.preferences.frequentlyVisitedEnabled);
       writeFrequentlyVisitedCountPreference(parsed.preferences.frequentlyVisitedCount);
       if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
       if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);

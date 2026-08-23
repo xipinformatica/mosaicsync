@@ -3555,6 +3555,8 @@ button { color: inherit; }
 .frequent-site-copy strong { font-size: 11.5px; font-weight: 650; }
 .frequent-site-copy small { font-size: 9.5px; color: var(--canvas-muted); }
 .feature-permission-status { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
+.frequent-permission-button { margin-top: 8px; justify-self: start; }
+.frequent-permission-button[hidden] { display: none !important; }
 @media (max-width: 900px) {
   .frequent-sites-list { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }

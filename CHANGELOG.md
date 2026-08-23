@@ -1,3 +1,13 @@
+## 1.26.17.7
+
+- Improved Frequently Visited optional-permission recovery without changing the permission model: the remembered ON/OFF preference is now independent from the live `topSites` grant, so a missing/revoked grant no longer forces the feature preference off or requires an OFF → ON toggle to recover.
+- Added a localized direct **Grant permission** action inside the enabled Frequently Visited settings state. The permission request remains user-gesture-only; denial leaves the preference enabled and the recovery action available.
+- Added permission-event and delayed-startup reconciliation. `permissions.onAdded` / `permissions.onRemoved` refresh Frequently Visited immediately, and one delayed post-start check allows a temporarily unavailable browser grant to restore suggestions automatically when it becomes visible again.
+- Profile import, including first-run profile import, now preserves the user's Frequently Visited preference independently from installation-local Top Sites permission state; an enabled imported preference exposes the same recovery UI when permission is still needed.
+- Added the missing favicon single-flight stale-fan-out regression: the production queue grouping is composed with the real `applyProactiveFaviconResults()` path and verifies that, during one shared exact-URL resolver job, an unchanged shortcut can hydrate while a URL-edited duplicate, a deleted duplicate and a duplicate moved into an auto-icon-disabled Space are independently rejected. Runtime favicon resolver/discovery behavior is unchanged from 1.26.17.6.
+- Added the permission-recovery button string to all 32 MosaicSync UI locale catalogs and permanent Firefox/Chrome behavioral/source regressions for the recovery state, permission-event self-heal and profile-preference preservation.
+- No new permissions or host permissions, Sync/profile/schema changes, CSP changes, favicon resolver changes, telemetry, remote code or visual redesign. Version identity is exactly `1.26.17.7` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.26.17.6
 
 - Reduced duplicate favicon recovery work by grouping queued jobs with the exact same normalized shortcut URL **and** quality mode. One validated resolver result can now satisfy every matching shortcut in the queue turn while distinct pages on the same origin and fast-vs-quality passes remain independent. Existing stale-result revalidation, per-item retry/backoff and atomic device-local commits are unchanged.
