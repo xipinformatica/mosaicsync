@@ -1,18 +1,27 @@
-## 1.26.13b
+## 1.26.14
 
-- Fixed a Firefox-only Frequently Visited regression introduced in 1.26.13. Firefox now imports the shared `getNativeTopSites()` browser adapter before calling it, so enabling Frequently Visited correctly loads native Top Sites instead of silently falling back to an empty cached list.
-- Added permanent Firefox/Chrome regression coverage that verifies the Frequently Visited code imports the platform adapter it calls, plus an executable Firefox adapter test confirming the expected `browser.topSites.get()` options and result bound.
-- No UI, permissions, Sync/profile schema, first-frame snapshot, drag/drop, hidden-domain, wallpaper, folder or favicon-hardening behavior changed.
-- Public release label is `1.26.13b`; Chromium-compatible technical manifest version is `1.26.13.1`.
+Changes since the last published 1.26.12 source:
 
-## 1.26.13
+- Improved Frequently Visited startup rendering so the last known device-local suggestions can appear in the first New Tab frame without pushing the shortcut grid down after load; live browser Top Sites still refresh asynchronously after first paint.
+- Added drag-to-grid for Frequently Visited cards, persistent device-local **Hide this site** for the whole registrable domain/subdomain family, and the existing one-time Website Access reminder for users who want full automatic favicon recovery.
+- Fixed Firefox Frequently Visited adapter binding from the unpublished 1.26.13 candidate.
+- Fixed a favicon compatibility regression introduced by the stricter pre-decode image checks: actual PNG/JPEG/GIF/WebP/ICO byte signatures now take precedence over inaccurate HTTP MIME labels, while unknown or oversized remote geometry still fails closed before browser decoding.
+- Added bounded support for website-declared inline `data:image/...` favicons, including MosaicSync's own website, through the same raster/SVG safety pipeline used for remote icons.
+- Restored browser-native clicked/visited-tab favicon learning even when optional Website Access is not granted; independent remote favicon discovery remains permission-gated.
+- Preserved the 1.26.12 SVG quote-aware geometry hardening and local content-addressed asset verification unchanged.
+- Added focused Firefox/Chrome regression coverage for MIME-mismatched favicon responses, inline favicon metadata, native fallback without Website Access, Frequently Visited behavior and release-version parity.
+- No new required permissions, Sync/profile schema, profile format, wallpaper architecture or folder behavior.
+
+## 1.26.13b (internal candidate — not published)
 
 - Removed the **Frequently Visited** startup layout jump by caching a tiny bounded, device-local display snapshot in MosaicSync's existing first-frame render manifest. New Tabs can paint the last known suggestions with the shortcut grid immediately, then refresh them asynchronously without delaying first paint or synchronizing browser-history data.
 - Frequently Visited cards can now be dragged directly onto an empty grid slot to create a normal MosaicSync shortcut at that exact position; the existing context-menu action remains available.
 - Added **Hide this site** to Frequently Visited. Hiding is persistent and device-local, uses the bundled Mozilla/Public Suffix List to block the whole registrable site family (including subdomains), and does not enter Sync or profile backups.
 - Added a one-time, non-blocking Website access callout for existing users when automatic favicon learning is enabled, useful shortcuts still need icons, and HTTP/HTTPS host access has not been granted. Website access remains an optional permission requested only from a user gesture.
 - Completed the 1.26.12 remote-image hardening: SVG root geometry is now parsed with quote-aware opening-tag scanning so a literal `>` inside a quoted attribute cannot hide oversized dimensions, and unknown raster dimensions fail closed before remote browser decoding.
-- Added localized **Hide this site** text to all 32 UI catalogs and focused Firefox/Chrome regression coverage for the new Frequently Visited, permission and image-safety behavior. No Sync/profile schema or required-permission changes were introduced.
+- Fixed Firefox Frequently Visited loading in the same release candidate by explicitly importing the shared `getNativeTopSites()` adapter used by `frequentCandidates()`.
+- Added localized **Hide this site** text to all 32 UI catalogs and focused Firefox/Chrome regression coverage for Frequently Visited, permission handling, image safety, and the Firefox Top Sites adapter binding.
+- No Sync/profile schema or required-permission changes were introduced. Internal candidate label was `1.26.13b`; technical manifest version was `1.26.13.1`.
 
 ## 1.26.12
 

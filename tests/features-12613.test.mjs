@@ -24,7 +24,7 @@ function extract(src, name) {
   throw new Error(`unterminated ${name}`);
 }
 
-test("1.26.13 SVG root parsing is quote-aware and exposes huge declared geometry", async () => {
+test("1.26.13b SVG root parsing is quote-aware and exposes huge declared geometry", async () => {
   const { svgRasterDimensionsFromText } = await import(`../dist/firefox/core/svg-safety.js?12613-${Date.now()}`);
   const result = svgRasterDimensionsFromText('<svg id=">" width="99999" height="99999" xmlns="http://www.w3.org/2000/svg"><path d="M0 0h1v1H0z"/></svg>');
   assert.equal(result.valid, true);
@@ -33,7 +33,7 @@ test("1.26.13 SVG root parsing is quote-aware and exposes huge declared geometry
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.26.13 ${browser} remote image dimensions fail closed when unknown`, () => {
+  test(`1.26.13b ${browser} remote image dimensions fail closed when unknown`, () => {
     const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const ctx = { REMOTE_IMAGE_MAX_DECODE_DIMENSION: 4096, REMOTE_IMAGE_MAX_DECODED_PIXELS: 8_000_000 };
     vm.createContext(ctx);
@@ -42,7 +42,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(ctx.imageDimensionsSafeForRemoteDecode({ width: 64, height: 64 }), true);
   });
 
-  test(`1.26.13 ${browser} wires stable Frequently Visited first-frame, drag, hide and website-access flows`, () => {
+  test(`1.26.13b ${browser} wires stable Frequently Visited first-frame, drag, hide and website-access flows`, () => {
     const js = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const bootstrap = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
     const html = fs.readFileSync(`dist/${browser}/newtab/newtab.html`, "utf8");
@@ -56,7 +56,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-test("1.26.13 registrable-domain hiding follows the bundled Public Suffix List", async () => {
+test("1.26.13b registrable-domain hiding follows the bundled Public Suffix List", async () => {
   const source = fs.readFileSync("dist/firefox/core/public_suffix_list.dat", "utf8");
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, text: async () => source });
@@ -71,7 +71,7 @@ test("1.26.13 registrable-domain hiding follows the bundled Public Suffix List",
   }
 });
 
-test("1.26.13 first-frame render manifest carries a bounded Frequently Visited snapshot", async () => {
+test("1.26.13b first-frame render manifest carries a bounded Frequently Visited snapshot", async () => {
   const data = new Map();
   const previousStorage = globalThis.localStorage;
   globalThis.localStorage = {

@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.13b.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.14.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -84,13 +84,20 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
 
-## 1.26.13b Firefox Frequently Visited adapter binding policy
+## 1.26.14 favicon compatibility / safety policy
 
-The 1.26.13 Frequently Visited refactor routes native Top Sites through `getNativeTopSites()` in the browser platform adapter. Firefox New Tab must explicitly import that adapter symbol before `frequentCandidates()` calls it; a missing import is a runtime `ReferenceError` that is intentionally caught by the UI refresh path and can therefore present as a silent empty Frequently Visited list rather than a page crash. Permanent regression coverage must verify both the import binding and an executable Firefox adapter call with Firefox-specific `topSites.get()` options.
+1.26.14 keeps the 1.26.13b Frequently Visited and permission work but corrects a favicon compatibility regression exposed by the fail-closed 1.26.13b geometry guard. Remote favicon MIME labels are hints, not identity: PNG/JPEG/GIF/WebP/ICO byte signatures must be sniffed before an HTTP `Content-Type` such as `image/x-icon` selects a header parser. Unknown remote raster geometry still fails closed before `createImageBitmap`; the fix is to identify known bytes correctly, not to weaken the pre-decode resource bound.
 
-Public release label is `1.26.13b`; technical manifest version is `1.26.13.1`. No permission, state, Sync/profile, render-manifest or Frequently Visited data-model behavior changes in this corrective build.
+Website-declared inline `data:image/...` favicons are accepted only from recognized `<link rel=icon>` metadata, remain bounded to the existing remote-image byte ceiling, and pass through the same MIME sniffing, geometry and SVG-safety/rasterization checks as network icons. Inline pixels are stored as ordinary device-local learned favicon data; the original data URL is not duplicated into `imageSourceUrl`.
 
-## 1.26.13 Frequently Visited / permission / SVG hardening policy
+A browser-provided favicon learned from an explicit shortcut visit is local browser data and must remain available even when the optional all-sites Website Access permission is absent. Website Access continues to gate independent remote HTML/icon discovery and quality recovery, not the browser-native tab/favicon fallback. Firefox and Chrome regression tests cover MIME-mismatched favicon responses, bounded inline declared icons and permission-independent clicked-tab eligibility.
+
+## 1.26.13b Frequently Visited / permission / SVG hardening policy
+
+`1.26.13b` was an internal candidate built after `1.26.12`; there is no separately published `1.26.13` release. The Frequently Visited refactor routes native Top Sites through `getNativeTopSites()` in the browser platform adapter. Firefox New Tab must explicitly import that adapter symbol before `frequentCandidates()` calls it; a missing import is a runtime `ReferenceError` that is intentionally caught by the UI refresh path and can therefore present as a silent empty Frequently Visited list rather than a page crash. Permanent regression coverage must verify both the import binding and an executable Firefox adapter call with Firefox-specific `topSites.get()` options.
+
+The candidate label was `1.26.13b` with technical manifest version `1.26.13.1`; it was not published.
+
 
 Frequently Visited remains browser-derived, device-local presentation data. Its tiny first-frame snapshot may live only in the existing disposable render manifest so New Tab geometry can be stable immediately; the authoritative browser Top Sites result is refreshed after first paint. The snapshot, hidden-domain list and Website-access prompt decision must never enter browser Sync or `.mosaicsync` profile data. Do not delay first paint waiting for Top Sites or permission APIs.
 
@@ -112,7 +119,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release label is `1.26.13b` across Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Browser manifest technical versions are `1.26.13.1` because Chromium-compatible manifest versions must be numeric. Historical release references remain historical.
+The current public release is `1.26.14` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

@@ -736,8 +736,12 @@ async function fetchBoundedResource(value, { maxBytes, deadlineAt }) {
 
 function sniffImageMime(bytes, declaredType = "") {
   const declared = String(declaredType || "").toLowerCase().split(";")[0];
-  if (REMOTE_IMAGE_TYPES.has(declared)) return declared;
   if (!bytes?.length) return "";
+
+  // Trust file signatures before HTTP/data-URL MIME labels. Favicon servers
+  // commonly return PNG bytes as image/x-icon (and occasionally the reverse).
+  // 1.26.13b made unknown geometry fail closed, which exposed those harmless
+  // MIME mismatches as missing icons because the wrong header parser was used.
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
       bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
   if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return "image/jpeg";
@@ -748,9 +752,67 @@ function sniffImageMime(bytes, declaredType = "") {
   if (bytes.length >= 12 && String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
       String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP") return "image/webp";
   if (bytes.length >= 4 && bytes[0] === 0 && bytes[1] === 0 && bytes[2] === 1 && bytes[3] === 0) return "image/x-icon";
-  if (declared === "image/svg+xml") return "image/svg+xml";
-  const prefix = textDecoder.decode(bytes.subarray(0, Math.min(bytes.length, 512))).replace(/^\s*<\?xml[^>]*>\s*/i, "").trimStart();
-  return /^<svg(?:\s|>)/i.test(prefix) ? "image/svg+xml" : "";
+
+  const prefix = textDecoder.decode(bytes.subarray(0, Math.min(bytes.length, 1024)))
+    .replace(/^\s*<\?xml[^>]*>\s*/i, "")
+    .replace(/^\s*<!--(?:.|\n|\r)*?-->\s*/i, "")
+    .trimStart();
+  if (/^<svg(?:\s|>)/i.test(prefix)) return "image/svg+xml";
+
+  // A declared raster type is still useful when its format has no stronger
+  // signature at byte zero, but it remains subject to the fail-closed geometry
+  // parser before any browser decoder is called.
+  if (REMOTE_IMAGE_TYPES.has(declared)) return declared;
+  return declared === "image/svg+xml" ? "image/svg+xml" : "";
+}
+
+function decodeInlineFaviconResource(value) {
+  if (typeof value !== "string" || value.length > REMOTE_IMAGE_MAX_BYTES * 2) {
+    return { ok: false, reason: "too-large", type: "", bytes: null };
+  }
+  const comma = value.indexOf(",");
+  if (comma <= 5) return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+  const header = value.slice(5, comma);
+  const parts = header.split(";").map(part => part.trim()).filter(Boolean);
+  const declaredType = String(parts.shift() || "").toLowerCase();
+  const parameters = parts.map(part => part.toLowerCase());
+  if (parameters.some(part => part !== "base64" && !part.startsWith("charset="))) {
+    return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+  }
+  const isBase64 = parameters.includes("base64");
+  const isSupportedRaster = REMOTE_IMAGE_TYPES.has(declaredType);
+  const isSvg = declaredType === "image/svg+xml";
+  if (!isSupportedRaster && !isSvg) return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+
+  try {
+    let bytes;
+    const payload = value.slice(comma + 1);
+    if (isBase64) {
+      const compact = payload.replace(/[\t\n\f\r ]+/g, "");
+      if (!compact || compact.length > Math.ceil(REMOTE_IMAGE_MAX_BYTES * 4 / 3) + 8 || !/^[A-Za-z0-9+/]*={0,2}$/.test(compact)) {
+        return { ok: false, reason: "too-large", type: "", bytes: null };
+      }
+      const binary = atob(compact);
+      if (!binary.length || binary.length > REMOTE_IMAGE_MAX_BYTES) return { ok: false, reason: "too-large", type: "", bytes: null };
+      bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    } else if (isSvg) {
+      // Non-base64 inline SVG is legal in favicon metadata. Decode it only into
+      // bounded bytes and send it through the existing self-contained SVG
+      // validator/rasterizer; non-base64 raster data URLs are intentionally not
+      // supported because browsers conventionally encode those as base64.
+      const decoded = decodeURIComponent(payload);
+      bytes = new TextEncoder().encode(decoded);
+      if (!bytes.length || bytes.length > REMOTE_IMAGE_MAX_BYTES) return { ok: false, reason: "too-large", type: "", bytes: null };
+    } else {
+      return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+    }
+    const type = sniffImageMime(bytes, declaredType);
+    if (!type) return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+    return { ok: true, reason: "", type, bytes };
+  } catch {
+    return { ok: false, reason: "unsupported-image", type: "", bytes: null };
+  }
 }
 
 function imageDimensionsFromBytes(bytes, type) {
@@ -1000,26 +1062,31 @@ async function rasterizeSafeSvg(bytes) {
 }
 
 async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, declared = false, qualityHint = 0 } = {}) {
-  const resource = await fetchBoundedResource(value, { maxBytes: REMOTE_IMAGE_MAX_BYTES, deadlineAt });
-  if (!resource.ok) return { image: "", sourceUrl: resource.url || value, reason: resource.reason, width: 0, height: 0, qualitySide: 0, declared };
-  const type = sniffImageMime(resource.bytes, resource.type);
-  if (!type) return { image: "", sourceUrl: resource.url || value, reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
+  const inline = typeof value === "string" && /^data:/i.test(value);
+  if (inline && !declared) return { image: "", sourceUrl: "", reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
+  const resource = inline
+    ? decodeInlineFaviconResource(value)
+    : await fetchBoundedResource(value, { maxBytes: REMOTE_IMAGE_MAX_BYTES, deadlineAt });
+  const sourceUrl = inline ? "" : (resource.url || value);
+  if (!resource.ok) return { image: "", sourceUrl, reason: resource.reason, width: 0, height: 0, qualitySide: 0, declared };
+  const type = inline ? resource.type : sniffImageMime(resource.bytes, resource.type);
+  if (!type) return { image: "", sourceUrl, reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
   if (type === "image/svg+xml") {
     const raster = await rasterizeSafeSvg(resource.bytes);
     return raster.image
-      ? { ...raster, qualitySide: Math.min(raster.width, raster.height), sourceUrl: resource.url || value, reason: "", declared }
-      : { image: "", sourceUrl: resource.url || value, reason: "unsupported-svg", width: 0, height: 0, qualitySide: 0, declared };
+      ? { ...raster, qualitySide: Math.min(raster.width, raster.height), sourceUrl, reason: "", declared }
+      : { image: "", sourceUrl, reason: "unsupported-svg", width: 0, height: 0, qualitySide: 0, declared };
   }
   const dimensions = imageDimensionsFromBytes(resource.bytes, type);
   if (!imageDimensionsSafeForRemoteDecode(dimensions)) {
-    return { image: "", sourceUrl: resource.url || value, reason: "image-too-large", width: 0, height: 0, qualitySide: 0, declared };
+    return { image: "", sourceUrl, reason: "image-too-large", width: 0, height: 0, qualitySide: 0, declared };
   }
   const optimized = await optimizedFaviconFromBytes(resource.bytes, type, dimensions);
   const width = optimized?.width || dimensions.width;
   const height = optimized?.height || dimensions.height;
   return {
     image: optimized?.image || `data:${type};base64,${bytesToBase64(resource.bytes)}`,
-    sourceUrl: resource.url || value,
+    sourceUrl,
     reason: "",
     width,
     height,
@@ -1040,7 +1107,8 @@ async function normalizeLocalFaviconDataUrl(image) {
     if (!binary.length || binary.length > REMOTE_IMAGE_MAX_BYTES) return image;
     const bytes = new Uint8Array(binary.length);
     for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    const type = match[1].toLowerCase();
+    const type = sniffImageMime(bytes, match[1].toLowerCase());
+    if (!type || type === "image/svg+xml") return "";
     const dimensions = imageDimensionsFromBytes(bytes, type);
     if (!imageDimensionsSafeForRemoteDecode(dimensions)) return "";
     const optimized = await optimizedFaviconFromBytes(bytes, type, dimensions);
@@ -1182,7 +1250,9 @@ async function discoverPageIconInfo(pageUrl, { deadlineAt = Date.now() + ICON_RE
     if (!href) continue;
     let resolved;
     try { resolved = new URL(href, baseUrl).href; } catch { continue; }
-    if (!/^https?:/i.test(resolved) || seen.has(resolved)) continue;
+    const isNetworkIcon = /^https?:/i.test(resolved);
+    const isInlineImage = /^data:image\//i.test(resolved);
+    if ((!isNetworkIcon && !isInlineImage) || seen.has(resolved)) continue;
     seen.add(resolved);
 
     const sizes = htmlAttribute(tag, "sizes").toLowerCase();
@@ -1962,14 +2032,17 @@ function findFaviconLearningTargets(state, pageUrl, shortcutId = "") {
 async function prepareFaviconLearning(pageUrl, shortcutId = "") {
   if (!pageUrl || !/^https?:/i.test(pageUrl)) return false;
   const loaded = await ensureLocalStorage();
-  if (!loaded.state.settings.autoSiteIcons || !(await hasWebAccess())) return false;
+  // Browser-provided tab favicons are already local browser data. Do not make
+  // that click/visit fallback depend on the optional all-sites host permission;
+  // only the subsequent remote quality pass needs Website Access.
+  if (!loaded.state.settings.autoSiteIcons) return false;
   return findFaviconLearningTargets(loaded.state, pageUrl, shortcutId).length > 0;
 }
 
 async function applyLearnedFaviconForTab(pageUrl, shortcutId, candidate) {
   if (!candidate?.image || !pageUrl || !/^https?:/i.test(pageUrl)) return false;
   const loaded = await ensureLocalStorage();
-  if (!loaded.state.settings.autoSiteIcons || !(await hasWebAccess())) return false;
+  if (!loaded.state.settings.autoSiteIcons) return false;
   const targets = findFaviconLearningTargets(loaded.state, pageUrl, shortcutId);
   if (!targets.length) return false;
   return applyLearnedFavicon(loaded, targets, candidate);
