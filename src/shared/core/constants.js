@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.26.17.5";
+export const VERSION = "1.26.17.6";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;

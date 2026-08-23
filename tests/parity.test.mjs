@@ -22,10 +22,10 @@ test("Firefox/Chrome runtime divergence is confined to approved adapters/overlay
   assert.deepEqual(unexpected, []);
 });
 
-test("both manifests use version 1.26.17.5", async () => {
+test("both manifests use version 1.26.17.6", async () => {
   for(const browser of ["firefox","chrome"]) {
     const manifest=JSON.parse(await readFile(resolve(`dist/${browser}/manifest.json`),"utf8"));
-    assert.equal(manifest.version,"1.26.17.5");
+    assert.equal(manifest.version,"1.26.17.6");
     assert.equal(manifest.manifest_version,3);
   }
 });
@@ -35,5 +35,5 @@ test("browser-specific display-version manifest policy is valid", async () => {
   const firefox=JSON.parse(await readFile(resolve("dist/firefox/manifest.json"),"utf8"));
   const chrome=JSON.parse(await readFile(resolve("dist/chrome/manifest.json"),"utf8"));
   assert.equal(Object.hasOwn(firefox,"version_name"),false,"Firefox must not receive Chrome-only version_name");
-  assert.equal(chrome.version_name,"1.26.17.5");
+  assert.equal(chrome.version_name,"1.26.17.6");
 });

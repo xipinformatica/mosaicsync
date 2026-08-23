@@ -45,7 +45,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.17.1 ${browser} Frequently Visited refresh uses the global Space host set`, () => {
     const source = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
-    assert.match(source, /const explicitHosts = shortcutHostsAcrossSpaces\(state\);/);
+    assert.match(source, /const explicitHosts = frequentExplicitHostsForState\(state, stateMutationGeneration\);/);
     assert.doesNotMatch(source, /function activeShortcutHosts\(/);
   });
 }

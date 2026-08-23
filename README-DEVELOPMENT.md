@@ -1,8 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.26.17.6 performance/stability policy
+
+The favicon recovery engine may coalesce only resolver jobs with the **exact same normalized shortcut URL and the same quality mode**. Distinct pages on one origin remain independent because page-level metadata can legitimately advertise different icons. The concurrency limit applies to distinct resolver jobs; a shared validated result may fan out to multiple matching shortcut records, but every record still goes through the existing stale-state re-read, per-ID applicability checks, durable backoff and atomic device-local commit path.
+
+Frequently Visited may reuse its explicit-shortcut host `Set` only while both the in-memory state identity and `stateMutationGeneration` are unchanged. A state replacement or generation advance must rebuild the Set so local edits, imports, Sync restores and cross-Space changes cannot leave stale duplicate filtering.
+
+Production New Tab performance diagnostics remain local development instrumentation only. `console.debug` performance output must be gated by `devMetricsEnabled()` / `MOSAICSYNC_DEV_METRICS === true`; no telemetry or remote reporting is introduced.
+
+The 1.26.17.5 URL/profile hardening remains a frozen safety boundary. Behavioral regression coverage now executes the classic first-paint renderer against hostile shortcut/Frequently Visited URLs and verifies fail-closed behavior when the shared URL helper is absent. Prototype-pollution tests also assert that dangerous own keys do not survive on normalized settings, Spaces, folders, shortcuts or nested children.
 
 ## 1.26.17.5 shared HTTP(S) validation / import hardening policy
 
@@ -144,7 +154,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

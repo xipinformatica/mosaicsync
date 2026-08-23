@@ -1858,8 +1858,28 @@ async function processIconRecoveryQueue() {
     const canAutonomouslyRetry = webAccessGranted || platformHasPermissionFreeFaviconSource();
 
     const now = Date.now();
-    const due = queue.items.filter(item => Number(item.nextAttemptAt) <= now).slice(0, ICON_RECOVERY_CONCURRENCY);
-    if (!due.length) {
+    const dueGroups = [];
+    const dueByResolutionKey = new Map();
+    for (const item of queue.items) {
+      if (Number(item.nextAttemptAt) > now) continue;
+      // Deduplicate only semantically identical resolver work. Different pages
+      // on the same origin can legitimately declare different icons, and the
+      // fast and quality passes intentionally use different resolver ordering.
+      const key = `${item.qualityUpgrade ? "quality" : "fast"}\n${item.url}`;
+      const existing = dueByResolutionKey.get(key);
+      if (existing) {
+        existing.items.push(item);
+        continue;
+      }
+      // Concurrency limits distinct resolver jobs. Duplicates for an already
+      // selected job still join this turn, while a new unique URL waits for the
+      // next durable queue pass.
+      if (dueGroups.length >= ICON_RECOVERY_CONCURRENCY) continue;
+      const group = { representative: item, items: [item] };
+      dueByResolutionKey.set(key, group);
+      dueGroups.push(group);
+    }
+    if (!dueGroups.length) {
       if (canAutonomouslyRetry) await scheduleIconRecoveryAlarm(queue);
       else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
       const waiting = { ok: true, granted: webAccessGranted, attempted: 0, hydrated: 0, unchanged: 0, failed: 0, timedOut: 0, exhausted: 0, blockedByPermission: 0, pending: queue.items.length };
@@ -1872,10 +1892,18 @@ async function processIconRecoveryQueue() {
     // queue is retried on the next alarm instead of dying with JavaScript state.
     await scheduleIconRecoveryAlarm(queue, { watchdog: true });
 
-    const resolved = await Promise.all(due.map(async item => {
+    // Resolve each exact URL + quality mode once per queue turn, then fan the
+    // already-validated result out to every matching shortcut record. This
+    // removes duplicate cold-network/HTML/image work without conflating distinct
+    // pages that merely share an origin.
+    const resolvedGroups = await Promise.all(dueGroups.map(async group => {
+      const item = group.representative;
       const result = await resolveFaviconForUrl(item.url, { timeoutMs: ICON_RECOVERY_FETCH_TIMEOUT_MS, preferQuality: Boolean(item.qualityUpgrade) });
-      return { item, result };
+      return { group, result };
     }));
+    const resolved = resolvedGroups.flatMap(({ group, result }) =>
+      group.items.map(item => ({ item, result }))
+    );
     const successfulResults = resolved
       .filter(entry => entry.result?.image)
       .map(({ item, result }) => ({

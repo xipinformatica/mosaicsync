@@ -76,8 +76,8 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl, shortcutHostsAcrossSpaces } from "./ui-utils.js";
-import { devMark, devMeasure } from "../core/perf.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl } from "./ui-utils.js";
+import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 (() => {
@@ -363,6 +363,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let hiddenFrequentDomains = new Set();
   let frequentDragSite = null;
   let frequentRenderSnapshot = globalThis.__mosaicsyncBootGrid?.manifest?.frequent || null;
+  const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
   let deviceDefaultSpace = "last";
@@ -384,7 +385,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   window.addEventListener("pageshow", event => {
     pageshowPersisted = event.persisted === true;
-    if (pageshowPersisted) {
+    if (pageshowPersisted && devMetricsEnabled()) {
       console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
         event: "bfcache-restore",
         persisted: true,
@@ -937,7 +938,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Ask Firefox for a broad candidate pool first, then filter. Requesting only
       // a handful before removing explicit shortcuts could leave fewer than five
       // suggestions even when Firefox had more valid candidates available.
-      const explicitHosts = shortcutHostsAcrossSpaces(state);
+      const explicitHosts = frequentExplicitHostsForState(state, stateMutationGeneration);
       const sites = await frequentCandidates();
       if (generation !== frequentRefreshGeneration) return;
       const seenHosts = new Set();
@@ -1212,7 +1213,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     schedulePostPaintMaintenance();
 
-    console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
+    if (devMetricsEnabled()) console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
       navigationType: diagnostics.navigationType,
       persisted: diagnostics.persisted,
       bootGrid: diagnostics.bootGrid,

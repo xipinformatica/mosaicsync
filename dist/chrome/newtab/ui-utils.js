@@ -45,6 +45,22 @@ export function shortcutHostsAcrossSpaces(state) {
 }
 
 
+
+export function createShortcutHostsAcrossSpacesMemo() {
+  let cachedState = null;
+  let cachedGeneration = Number.NaN;
+  let cachedHosts = null;
+  return (state, generation = 0) => {
+    const token = Number(generation);
+    const normalizedGeneration = Number.isFinite(token) ? token : 0;
+    if (cachedHosts && cachedState === state && cachedGeneration === normalizedGeneration) return cachedHosts;
+    cachedState = state;
+    cachedGeneration = normalizedGeneration;
+    cachedHosts = shortcutHostsAcrossSpaces(state);
+    return cachedHosts;
+  };
+}
+
 export function safeShortcutNavigationUrl(value) {
   return globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
 }

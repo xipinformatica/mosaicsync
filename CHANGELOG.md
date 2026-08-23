@@ -1,3 +1,12 @@
+## 1.26.17.6
+
+- Reduced duplicate favicon recovery work by grouping queued jobs with the exact same normalized shortcut URL **and** quality mode. One validated resolver result can now satisfy every matching shortcut in the queue turn while distinct pages on the same origin and fast-vs-quality passes remain independent. Existing stale-result revalidation, per-item retry/backoff and atomic device-local commits are unchanged.
+- Memoized the Frequently Visited explicit-shortcut host Set within the same in-memory state identity and `stateMutationGeneration`, avoiding repeated full cross-Space/folder walks on focus/refresh when shortcut state has not changed. State replacement or any mutation-generation advance rebuilds the Set.
+- Gated New Tab performance `console.debug` diagnostics behind the existing local `MOSAICSYNC_DEV_METRICS` flag so production tabs avoid unnecessary diagnostics object construction and console calls. No telemetry is added.
+- Added behavioral regression coverage that actually executes the classic synchronous first-paint renderer with hostile shortcut/Frequently Visited URLs and with the shared URL helper absent; no unsafe anchor may be created and missing safety infrastructure must abort the disposable first paint cleanly.
+- Deepened checksum-valid prototype-pollution regression coverage by asserting dangerous own `__proto__`, `constructor` and `prototype` keys do not survive on accepted normalized package/state/settings/Space/folder/shortcut/nested-child objects.
+- Kept the performance release intentionally narrow: no CSS/visual changes, PSL format change, state-normalization redesign, permission change, Sync/profile/schema change, CSP relaxation, remote code or telemetry. Version identity is exactly `1.26.17.6` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.26.17.5
 
 - Unified HTTP(S)-only shortcut URL validation behind one tiny classic/module-compatible safety primitive shared by the state model, session-render validation, Firefox native import, registrable-domain URL handling, render-manifest generation and the authoritative New Tab UI. This removes duplicated protocol/scheme logic without changing the accepted shortcut URL policy.
