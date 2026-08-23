@@ -227,7 +227,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.26.17.1</p>
+          <p class="eyebrow">MosaicSync · 1.26.17.2</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -407,22 +407,36 @@
           </div>
           <p id="settingsThemeWallpapersDescription" class="section-subtitle"></p>
           <div id="themeWallpaperChoices" class="theme-wallpaper-choices" hidden>
-            <button id="settingsLightWallpaper" class="theme-wallpaper-choice" data-appearance="light" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
-              <span id="settingsLightWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
-              <span class="theme-wallpaper-choice-copy">
-                <strong id="settingsLightWallpaperLabel"></strong>
-                <small id="settingsLightWallpaperValue"></small>
-              </span>
-              <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
-            </button>
-            <button id="settingsDarkWallpaper" class="theme-wallpaper-choice" data-appearance="dark" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
-              <span id="settingsDarkWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
-              <span class="theme-wallpaper-choice-copy">
-                <strong id="settingsDarkWallpaperLabel"></strong>
-                <small id="settingsDarkWallpaperValue"></small>
-              </span>
-              <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
-            </button>
+            <div class="theme-wallpaper-option">
+              <button id="settingsLightWallpaper" class="theme-wallpaper-choice" data-appearance="light" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
+                <span id="settingsLightWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
+                <span class="theme-wallpaper-choice-copy">
+                  <strong id="settingsLightWallpaperLabel"></strong>
+                  <small id="settingsLightWallpaperValue"></small>
+                </span>
+                <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
+              </button>
+              <label class="theme-wallpaper-dim-row">
+                <span id="settingsLightWallpaperDimLabel"></span>
+                <input id="settingsLightWallpaperDim" type="range" min="0" max="100" step="1" value="0">
+                <output id="settingsLightWallpaperDimValue">0%</output>
+              </label>
+            </div>
+            <div class="theme-wallpaper-option">
+              <button id="settingsDarkWallpaper" class="theme-wallpaper-choice" data-appearance="dark" type="button" aria-haspopup="dialog" aria-controls="wallpaperGalleryDialog">
+                <span id="settingsDarkWallpaperPreview" class="theme-wallpaper-choice-preview" aria-hidden="true"></span>
+                <span class="theme-wallpaper-choice-copy">
+                  <strong id="settingsDarkWallpaperLabel"></strong>
+                  <small id="settingsDarkWallpaperValue"></small>
+                </span>
+                <span class="theme-wallpaper-choice-arrow" aria-hidden="true">›</span>
+              </button>
+              <label class="theme-wallpaper-dim-row">
+                <span id="settingsDarkWallpaperDimLabel"></span>
+                <input id="settingsDarkWallpaperDim" type="range" min="0" max="100" step="1" value="0">
+                <output id="settingsDarkWallpaperDimValue">0%</output>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -432,7 +446,7 @@
           <input id="settingsBackgroundFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon">
           <button id="clearBackgroundImage" class="text-button" type="button">Clear</button>
         </div>
-        <div class="compact-background-controls">
+        <div id="backgroundDimControls" class="compact-background-controls">
           <label class="compact-dim-row" title="Darken the wallpaper so shortcut names remain easy to read">
             <span class="dim-copy"><strong>Background darkness</strong><small>Darkens the wallpaper behind shortcuts.</small></span>
             <input id="settingsBackgroundDim" type="range" min="0" max="100" step="1" value="0" aria-label="Background darkness">

@@ -7,28 +7,12 @@ function extractFunction(source, name) {
   const marker = `function ${name}(`;
   const start = source.indexOf(marker);
   assert.ok(start >= 0, `${name} missing`);
-  const signatureEnd = source.indexOf(") {", start);
-  assert.ok(signatureEnd >= 0, `${name} body missing`);
-  const brace = signatureEnd + 2;
-  let depth = 0;
-  let quote = null;
-  let escaped = false;
-  for (let i = brace; i < source.length; i += 1) {
-    const ch = source[i];
-    if (quote) {
-      if (escaped) escaped = false;
-      else if (ch === "\\") escaped = true;
-      else if (ch === quote) quote = null;
-      continue;
-    }
-    if (ch === '"' || ch === "'" || ch === "`") { quote = ch; continue; }
-    if (ch === "{") depth += 1;
-    else if (ch === "}") {
-      depth -= 1;
-      if (depth === 0) return source.slice(start, i + 1);
-    }
-  }
-  throw new Error(`unterminated ${name}`);
+  // These are top-level functions inside the New Tab IIFE and are consistently
+  // indented by two spaces. Slice to the next top-level declaration instead of
+  // trying to hand-parse JavaScript template-literal interpolation.
+  const next = source.indexOf("\n  function ", start + marker.length);
+  assert.ok(next > start, `${name} terminator missing`);
+  return source.slice(start, next).trimEnd();
 }
 
 function makeStyle(initial = {}) {
@@ -82,7 +66,7 @@ for (const browser of ["firefox", "chrome"]) {
         backgroundPosition: "center center"
       })
     };
-    const documentElement = { dataset: {}, style: makeStyle({ "--page-bg": "#222222" }) };
+    const documentElement = { dataset: {}, style: makeStyle({ "--page-bg": "#222222", "--background-dim": "0.3" }) };
     const raf = [];
     let applySettingsCalls = 0;
     let hintRefreshCalls = 0;
@@ -103,6 +87,7 @@ for (const browser of ["firefox", "chrome"]) {
       effectiveBackgroundColor(settings) { return settings.theme === "light" ? "#f7f3fb" : "#15101d"; },
       effectiveBackgroundPresetId(settings) { return settings.theme === "light" ? "light-wallpaper" : "dark-wallpaper"; },
       effectiveBackgroundImageValue() { return ""; },
+      effectiveBackgroundDim(settings) { return settings.theme === "light" ? 5 : 30; },
       resolveBackgroundImage(presetId) { return `extension:///${presetId}.webp`; },
       effectiveCanvasText() { return context.state.settings.theme === "light" ? "dark" : "light"; },
       cssUrl(value) { return `"${String(value)}"`; },
@@ -145,6 +130,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(page.style.backgroundColor, "#222222", "real page color must remain frozen under Settings");
     assert.equal(page.style.backgroundImage, 'url("old-wallpaper.webp")', "real page wallpaper must remain frozen under Settings");
     assert.equal(documentElement.style["--page-bg"], "#222222");
+    assert.equal(documentElement.style["--background-dim"], "0.05", "theme switch should apply the matching wallpaper darkness immediately");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
     assert.equal(applySettingsCalls, 0, "open-Settings live switching must not invoke the full renderer");
 

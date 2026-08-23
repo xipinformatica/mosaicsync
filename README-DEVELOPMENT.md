@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -84,6 +84,14 @@ The proactive favicon architecture from 1.24.14h/i remains unchanged: network di
 
 Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
 
+## 1.26.17.2 per-appearance wallpaper darkness policy
+
+When separate Light/Dark wallpapers are enabled, wallpaper darkness is part of each appearance rather than a shared global value. `lightBackgroundDim` and `darkBackgroundDim` travel with the synchronized visual settings and complete `.mosaicsync` profile backups; the legacy `backgroundDim` remains authoritative only when separate theme wallpapers are disabled.
+
+The one-time migration from older state must preserve the appearance actually active after system-theme reconciliation: the active Light or Dark appearance inherits the legacy `backgroundDim`, while the opposite appearance starts at 0%. Older Sync records that do not contain the new fields must not erase values already migrated on a newer client. The synchronous appearance hint stores the **effective** current darkness so first paint never applies the other appearance's value during a later automatic theme switch.
+
+Settings exposes independent darkness sliders beside the Light and Dark wallpaper choices and hides the legacy single darkness slider while separate wallpapers are enabled. These controls reuse the existing localized `Background darkness` string; no new hardcoded user-facing English is introduced. Runtime theme switching must resolve wallpaper and darkness together, including while the Settings preview layer is open.
+
 ## 1.26.17.1 Frequently Visited global-exclusion policy
 
 Frequently Visited is a device-local discovery aid, not a per-Space duplicate list. Before a candidate is shown, MosaicSync builds one canonical host set from every shortcut in every stored Space, including shortcuts nested inside folders, and excludes any candidate whose canonical host is already present anywhere in MosaicSync. The helper iterates the `spaces` object rather than only the active compatibility aliases, so the behavior naturally covers future stored Spaces as well as Personal and Work. Matching semantics remain host-based and unchanged; this release only broadens the shortcut scope from active Space to all Spaces.
@@ -118,7 +126,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

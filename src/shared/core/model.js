@@ -317,6 +317,45 @@ export function repairTopLevelPositions(items) {
   });
 }
 
+function normalizeOptionalBackgroundDim(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.min(100, Math.max(0, number)) : null;
+}
+
+function projectThemeBackgroundDims(settings) {
+  const projected = {};
+  const light = normalizeOptionalBackgroundDim(settings?.lightBackgroundDim);
+  const dark = normalizeOptionalBackgroundDim(settings?.darkBackgroundDim);
+  if (light !== null) projected.lightBackgroundDim = light;
+  if (dark !== null) projected.darkBackgroundDim = dark;
+  return projected;
+}
+
+export function effectiveBackgroundDimForTheme(settings, effectiveTheme = "dark") {
+  const base = Math.min(100, Math.max(0, Number.isFinite(Number(settings?.backgroundDim))
+    ? Number(settings.backgroundDim)
+    : DEFAULT_SETTINGS.backgroundDim));
+  if (settings?.themeWallpapersEnabled !== true) return base;
+  const value = effectiveTheme === "light" ? settings.lightBackgroundDim : settings.darkBackgroundDim;
+  const specific = normalizeOptionalBackgroundDim(value);
+  return specific === null ? base : specific;
+}
+
+export function initializeThemeWallpaperDims(settings, effectiveTheme = "dark") {
+  const base = Math.min(100, Math.max(0, Number.isFinite(Number(settings?.backgroundDim))
+    ? Number(settings.backgroundDim)
+    : DEFAULT_SETTINGS.backgroundDim));
+  let lightBackgroundDim = normalizeOptionalBackgroundDim(settings?.lightBackgroundDim);
+  let darkBackgroundDim = normalizeOptionalBackgroundDim(settings?.darkBackgroundDim);
+  if (lightBackgroundDim !== null && darkBackgroundDim !== null) {
+    return { changed: false, lightBackgroundDim, darkBackgroundDim };
+  }
+  if (lightBackgroundDim === null) lightBackgroundDim = effectiveTheme === "light" ? base : 0;
+  if (darkBackgroundDim === null) darkBackgroundDim = effectiveTheme === "dark" ? base : 0;
+  return { changed: true, lightBackgroundDim, darkBackgroundDim };
+}
+
 function normalizeSettings(rawSettings, memo = null) {
   const safe = { ...DEFAULT_SETTINGS };
   if (!rawSettings || typeof rawSettings !== "object") return safe;
@@ -355,6 +394,8 @@ function normalizeSettings(rawSettings, memo = null) {
   safe.darkBackgroundPreset = typeof settings.darkBackgroundPreset === "string" && BACKGROUND_PRESETS[settings.darkBackgroundPreset]
     ? settings.darkBackgroundPreset
     : "";
+  safe.lightBackgroundDim = normalizeOptionalBackgroundDim(settings.lightBackgroundDim);
+  safe.darkBackgroundDim = normalizeOptionalBackgroundDim(settings.darkBackgroundDim);
   safe.brandVisible = settings.brandVisible !== false;
   safe.autoSiteIcons = settings.autoSiteIcons !== false;
   safe.webAccessPrompted = settings.webAccessPrompted === true;
@@ -908,6 +949,7 @@ export function makeSettingsRecordNormalized(normalized, deviceId = "") {
       themeWallpapersEnabled: settings.themeWallpapersEnabled === true,
       lightBackgroundPreset: settings.lightBackgroundPreset || "",
       darkBackgroundPreset: settings.darkBackgroundPreset || "",
+      ...projectThemeBackgroundDims(settings),
       brandVisible: settings.brandVisible,
       spaceName: settings.spaceName || "",
       multipleSpacesEnabled: settings.multipleSpacesEnabled !== false
@@ -1155,6 +1197,11 @@ function settingsFromRecord(record, localState, assets) {
     themeWallpapersEnabled: incoming.themeWallpapersEnabled === true,
     lightBackgroundPreset: typeof incoming.lightBackgroundPreset === "string" ? incoming.lightBackgroundPreset : localState.settings.lightBackgroundPreset,
     darkBackgroundPreset: typeof incoming.darkBackgroundPreset === "string" ? incoming.darkBackgroundPreset : localState.settings.darkBackgroundPreset,
+    // Older synchronized records do not have per-appearance darkness fields.
+    // Preserve the receiving device's already-migrated values in that case so
+    // an older client cannot erase the new preference merely by publishing.
+    lightBackgroundDim: normalizeOptionalBackgroundDim(incoming.lightBackgroundDim) ?? localState.settings.lightBackgroundDim,
+    darkBackgroundDim: normalizeOptionalBackgroundDim(incoming.darkBackgroundDim) ?? localState.settings.darkBackgroundDim,
     brandVisible: incoming.brandVisible,
     spaceName: typeof incoming.spaceName === "string" ? incoming.spaceName : localState.settings.spaceName,
     multipleSpacesEnabled: typeof incoming.multipleSpacesEnabled === "boolean"
@@ -1366,6 +1413,7 @@ function projectStateForSyncSignature(source) {
         themeWallpapersEnabled: settings.themeWallpapersEnabled === true,
         lightBackgroundPreset: settings.lightBackgroundPreset || "",
         darkBackgroundPreset: settings.darkBackgroundPreset || "",
+        ...projectThemeBackgroundDims(settings),
         brandVisible: settings.brandVisible,
         spaceName: settings.spaceName || "",
         multipleSpacesEnabled: settings.multipleSpacesEnabled !== false

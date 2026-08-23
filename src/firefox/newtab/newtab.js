@@ -36,6 +36,8 @@ import {
   classifyImage,
   clampInt,
   createCrossSpaceSyncIntent,
+  effectiveBackgroundDimForTheme,
+  initializeThemeWallpaperDims,
   hexLuminance,
   hostLabel,
   localStateSyncClockSignature,
@@ -235,6 +237,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const clearBackgroundImage = document.getElementById("clearBackgroundImage");
   const settingsBackgroundDim = document.getElementById("settingsBackgroundDim");
   const settingsBackgroundDimValue = document.getElementById("settingsBackgroundDimValue");
+  const backgroundDimControls = document.getElementById("backgroundDimControls");
   const settingsThemeWallpapers = document.getElementById("settingsThemeWallpapers");
   const settingsThemeWallpapersLabel = document.getElementById("settingsThemeWallpapersLabel");
   const settingsThemeWallpapersDescription = document.getElementById("settingsThemeWallpapersDescription");
@@ -247,6 +250,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const settingsDarkWallpaperValue = document.getElementById("settingsDarkWallpaperValue");
   const settingsLightWallpaperPreview = document.getElementById("settingsLightWallpaperPreview");
   const settingsDarkWallpaperPreview = document.getElementById("settingsDarkWallpaperPreview");
+  const settingsLightWallpaperDim = document.getElementById("settingsLightWallpaperDim");
+  const settingsDarkWallpaperDim = document.getElementById("settingsDarkWallpaperDim");
+  const settingsLightWallpaperDimValue = document.getElementById("settingsLightWallpaperDimValue");
+  const settingsDarkWallpaperDimValue = document.getElementById("settingsDarkWallpaperDimValue");
+  const settingsLightWallpaperDimLabel = document.getElementById("settingsLightWallpaperDimLabel");
+  const settingsDarkWallpaperDimLabel = document.getElementById("settingsDarkWallpaperDimLabel");
   const backgroundPresetGrid = document.getElementById("backgroundPresetGrid");
   const moreWallpapersButton = document.getElementById("moreWallpapersButton");
   const wallpaperGalleryDialog = document.getElementById("wallpaperGalleryDialog");
@@ -431,7 +440,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       typeof existing?.backgroundPreview === "string";
     const preview = preset ? "" : (backgroundPreview ?? (canReusePreview ? existing.backgroundPreview : ""));
     const serialized = JSON.stringify({
-      backgroundDim: Math.min(100, Math.max(0, Number(settings.backgroundDim) || 0)),
+      // Persist the darkness that belongs to the wallpaper actually being
+      // shown. Older hints still contain the legacy shared value and remain a
+      // safe first-paint fallback during the one-time 1.26.17.2 migration.
+      backgroundDim: effectiveBackgroundDimForTheme(settings, effectiveThemeFor(settings)),
       backgroundColor: validHex(settings.backgroundColor) ? settings.backgroundColor : DEFAULT_STATE.settings.backgroundColor,
       backgroundColorCustomized: settings.backgroundColorCustomized === true,
       theme: ["system", "dark", "light"].includes(settings.theme) ? settings.theme : "system",
@@ -1181,9 +1193,23 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       void warmSessionRenderCache(state, meta);
     }
 
-    // Reconcile Automatic appearance with Firefox's actual UI theme as well as
-    // prefers-color-scheme. This is asynchronous and never blocks first paint.
-    void refreshResolvedSystemTheme();
+    // Reconcile Automatic appearance with the browser's actual UI theme as well
+    // as prefers-color-scheme. This happens after first paint, so awaiting it here
+    // does not delay the user's initial grid.
+    await refreshResolvedSystemTheme();
+
+    // 1.26.17.2 migration: older builds had one shared backgroundDim even when
+    // separate Light/Dark wallpapers were enabled. Preserve the appearance that
+    // is actually active after system-theme reconciliation and initialize the
+    // opposite appearance at 0%. Do this only after the authoritative state wins
+    // so a session-cache paint can never publish stale migration data.
+    if (initializeThemeWallpaperDimsForState(state)) {
+      state = normalizeState(state);
+      void saveState().then(() => warmSessionRenderCache(state, meta)).catch(error => {
+        console.warn(`${PRODUCT_NAME}: could not persist theme wallpaper darkness migration`, error);
+      });
+    }
+
     schedulePostPaintMaintenance();
 
     console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
@@ -1615,6 +1641,28 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return settings?.backgroundPreset || "";
   }
 
+  function effectiveBackgroundDim(settings = state.settings) {
+    return effectiveBackgroundDimForTheme(settings, effectiveThemeFor(settings));
+  }
+
+  function initializeThemeWallpaperDimsForState(targetState) {
+    if (!targetState?.spaces) return false;
+    let changed = false;
+    for (const spaceId of SPACE_IDS) {
+      const workspace = targetState.spaces?.[spaceId];
+      if (!workspace?.settings || workspace.settings.themeWallpapersEnabled !== true) continue;
+      const initialized = initializeThemeWallpaperDims(workspace.settings, effectiveThemeFor(workspace.settings));
+      if (!initialized.changed) continue;
+      workspace.settings.lightBackgroundDim = initialized.lightBackgroundDim;
+      workspace.settings.darkBackgroundDim = initialized.darkBackgroundDim;
+      const timestamp = nextMutationTime(workspace.settingsModifiedAt, workspace.updatedAt, targetState.updatedAt);
+      workspace.settingsModifiedAt = timestamp;
+      workspace.updatedAt = timestamp;
+      changed = true;
+    }
+    return changed;
+  }
+
   function effectiveBackgroundImageValue(settings = state.settings) {
     return effectiveBackgroundPresetId(settings) ? "" : (settings?.backgroundImage || "");
   }
@@ -1622,7 +1670,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function effectiveCanvasText() {
     const preset = BACKGROUND_PRESETS[effectiveBackgroundPresetId(state.settings)];
     if (preset?.canvasText) return preset.canvasText;
-    if (state.settings.backgroundDim >= 18) return "light";
+    if (effectiveBackgroundDim(state.settings) >= 18) return "light";
     if (!effectiveBackgroundImageValue(state.settings) && !state.settings.backgroundImageDeferred) {
       return hexLuminance(effectiveBackgroundColor(state.settings)) > 0.46 ? "dark" : "light";
     }
@@ -1648,7 +1696,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // Establish the dim overlay before exposing the wallpaper. A tiny synchronous
     // boot hint already covers first paint; this ordering prevents a bright image
     // from becoming visible even when the authoritative state differs from it.
-    document.documentElement.style.setProperty("--background-dim", String(settings.backgroundDim / 100));
+    document.documentElement.style.setProperty("--background-dim", String(effectiveBackgroundDim(settings) / 100));
     applyPageBackgroundVisual({ deferHeavyAssets });
 
     applyThemeSkinVisual();
@@ -1684,6 +1732,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function applyPageBackgroundVisual({ deferHeavyAssets = false } = {}) {
     const settings = state.settings;
+    // Theme wallpaper and its darkness are one visual choice. Keep them coupled
+    // even while Settings is open so an OS/system theme transition cannot carry
+    // the previous appearance's dim value onto the new wallpaper.
+    document.documentElement.style.setProperty("--background-dim", String(effectiveBackgroundDim(settings) / 100));
     const renderedBackgroundColor = effectiveBackgroundColor(settings);
     const effectivePresetId = effectiveBackgroundPresetId(settings);
     const effectiveImage = effectiveBackgroundImageValue(settings);
@@ -3739,6 +3791,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function paintThemeWallpaperPreview(preview, target, presetId) {
     if (!preview) return;
     const preset = presetId && BACKGROUND_PRESETS[presetId] ? BACKGROUND_PRESETS[presetId] : null;
+    const dim = effectiveBackgroundDimForTheme(state.settings, target);
+    preview.style.setProperty("--theme-preview-dim", String(dim / 100));
     if (preset) {
       preview.style.backgroundImage = `url(${cssUrl(browser.runtime.getURL(preset.file))})`;
       preview.style.backgroundColor = "";
@@ -3761,12 +3815,31 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     paintThemeWallpaperPreview(preview, target, safePresetId);
   }
 
+  function refreshThemeWallpaperDimControl(target) {
+    const isLight = target === "light";
+    const input = isLight ? settingsLightWallpaperDim : settingsDarkWallpaperDim;
+    const output = isLight ? settingsLightWallpaperDimValue : settingsDarkWallpaperDimValue;
+    const label = isLight ? settingsLightWallpaperDimLabel : settingsDarkWallpaperDimLabel;
+    const preview = isLight ? settingsLightWallpaperPreview : settingsDarkWallpaperPreview;
+    if (!input || !output) return;
+    const dim = effectiveBackgroundDimForTheme(state.settings, target);
+    const targetLabel = t(isLight ? "light" : "dark");
+    const darknessLabel = t("backgroundDarkness");
+    input.value = String(dim);
+    input.setAttribute("aria-label", `${targetLabel} — ${darknessLabel}`);
+    output.value = `${dim}%`;
+    output.textContent = `${dim}%`;
+    if (label) label.textContent = darknessLabel;
+    if (preview) preview.style.setProperty("--theme-preview-dim", String(dim / 100));
+  }
+
   function refreshThemeWallpaperControls() {
     if (settingsThemeWallpapersLabel) settingsThemeWallpapersLabel.textContent = t("lightDarkWallpapers");
     if (settingsThemeWallpapersDescription) settingsThemeWallpapersDescription.textContent = t("themeWallpapersDescription");
     const enabled = state.settings.themeWallpapersEnabled === true;
     if (settingsThemeWallpapers) settingsThemeWallpapers.checked = enabled;
     if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
+    if (backgroundDimControls) backgroundDimControls.hidden = enabled;
     refreshThemeWallpaperChoice(
       settingsLightWallpaper,
       settingsLightWallpaperLabel,
@@ -3783,6 +3856,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       "dark",
       state.settings.darkBackgroundPreset || ""
     );
+    refreshThemeWallpaperDimControl("light");
+    refreshThemeWallpaperDimControl("dark");
   }
 
   function themeWallpaperVisualChanged(previousPresetId, previousImageValue) {
@@ -3826,16 +3901,52 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const enabled = settingsThemeWallpapers?.checked === true;
     if (state.settings.themeWallpapersEnabled === enabled) {
       if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
+      if (backgroundDimControls) backgroundDimControls.hidden = enabled;
+      if (enabled) {
+        const initialized = initializeThemeWallpaperDims(state.settings, effectiveThemeFor(state.settings));
+        if (initialized.changed) {
+          state.settings.lightBackgroundDim = initialized.lightBackgroundDim;
+          state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
+          stampThemeWallpaperMutation();
+          refreshThemeWallpaperControls();
+          applySettings();
+          queueThemeWallpaperPersistence();
+        }
+      }
       return;
     }
 
     const previousPresetId = effectiveBackgroundPresetId(state.settings);
     const previousImageValue = effectiveBackgroundImageValue(state.settings);
     state.settings.themeWallpapersEnabled = enabled;
+    if (enabled) {
+      const initialized = initializeThemeWallpaperDims(state.settings, effectiveThemeFor(state.settings));
+      state.settings.lightBackgroundDim = initialized.lightBackgroundDim;
+      state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
+    }
     stampThemeWallpaperMutation();
     if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
+    if (backgroundDimControls) backgroundDimControls.hidden = enabled;
+    refreshThemeWallpaperControls();
 
     applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue);
+    queueThemeWallpaperPersistence();
+  }
+
+  function applyThemeWallpaperDimLive(target) {
+    if (target !== "light" && target !== "dark" || state.settings.themeWallpapersEnabled !== true) return;
+    const input = target === "light" ? settingsLightWallpaperDim : settingsDarkWallpaperDim;
+    if (!input) return;
+    const key = target === "light" ? "lightBackgroundDim" : "darkBackgroundDim";
+    const dim = Math.min(100, Math.max(0, Number(input.value) || 0));
+    if (state.settings[key] === dim) {
+      refreshThemeWallpaperDimControl(target);
+      return;
+    }
+    state.settings[key] = dim;
+    stampThemeWallpaperMutation();
+    refreshThemeWallpaperDimControl(target);
+    if (effectiveThemeFor(state.settings) === target) applySettings();
     queueThemeWallpaperPersistence();
   }
 
@@ -4036,6 +4147,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   settingsThemeWallpapers?.addEventListener("change", persistThemeWallpaperControls);
   settingsLightWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("light"));
   settingsDarkWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("dark"));
+  settingsLightWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("light"));
+  settingsDarkWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("dark"));
 
   settingsBackgroundFile.addEventListener("change", async () => {
     const file = settingsBackgroundFile.files?.[0];
@@ -5015,7 +5128,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         `${t("profileImportConfirm")}\n\n${meta?.syncEnabled && meta?.syncInitialized ? t("profileImportConfirmSync") : t("profileImportConfirmLocal")}`
       );
       if (!confirmed) return;
-      const importedState = stampImportedProfileState(parsed.state);
+      let importedState = stampImportedProfileState(parsed.state);
+      initializeThemeWallpaperDimsForState(importedState);
+      importedState = normalizeState(importedState);
       stateMutationGeneration += 1;
       state = importedState;
       state = await writeLocalState(state, {

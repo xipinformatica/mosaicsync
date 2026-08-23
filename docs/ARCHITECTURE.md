@@ -11,11 +11,13 @@ MosaicSync is built from one canonical source tree. `src/shared` contains browse
 
 Heavy image bytes are local content-addressed assets and are not part of the small synchronized layout core. `.mosaicsync` format v2 includes the compact profile plus its deduplicated assets and remains browser-neutral. This intentionally includes automatically learned/browser-native favicons in an explicit user-created profile backup even though those pixels are excluded from browser `storage.sync`.
 
+Appearance settings use one legacy/base wallpaper darkness (`backgroundDim`) when separate theme wallpapers are disabled. When **Separate light and dark wallpapers** is enabled, `lightBackgroundDim` and `darkBackgroundDim` travel with the corresponding synchronized preset settings and complete profile exports. Runtime rendering always resolves the effective theme, wallpaper and darkness together; the synchronous appearance hint stores only the currently effective darkness for first paint.
+
 Remote raster/SVG artwork is admitted to browser decoding only after the format-specific header/root geometry passes the bounded pre-decode limits. `createImageBitmap` resize options bound the requested output size but are not treated as a guarantee that a browser implementation avoids intrinsic decode allocation; the geometry gate is the security boundary.
 
 ## Development safety rules
 
-1. User-facing strings go through the 21-language localization catalog.
+1. User-facing strings go through the 32-language localization catalog.
 2. Runtime data-format changes require migration + backward-compatibility tests.
 3. Firefox and Chrome are built together from this tree.
 4. Favicon, Sync and storage changes require focused regression tests before packaging.
