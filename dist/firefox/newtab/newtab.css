@@ -3557,7 +3557,6 @@ button { color: inherit; }
 .feature-permission-status { margin: 10px 0 0; font-size: 11px; color: var(--muted); }
 @media (max-width: 900px) {
   .frequent-sites-list { grid-template-columns: repeat(3, minmax(0,1fr)); }
-  .frequent-site-card:nth-child(n+4) { display: none; }
 }
 .sync-metric[hidden] { display: none !important; }
 /* Keep the Spaces control visually invariant across Space wallpapers while respecting the active theme. */

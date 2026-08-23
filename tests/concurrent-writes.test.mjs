@@ -265,3 +265,51 @@ test("concurrent edits to the same settings field with equal clocks converge det
   assert.ok(["light", "dark"].includes(firstOntoSecond.settings.theme));
   assert.equal(firstOntoSecond.settingsModifiedAt, 500);
 });
+
+
+test("1.26.17.4 inactive-Space concurrent core edit survives an active-Space write", () => {
+  const base = baseState();
+  const seeded = structuredClone(base);
+  seeded.spaces.work.shortcuts = [shortcut("w", "Work", 0, 100)];
+  seeded.spaces.work.updatedAt = 100;
+  const starting = model.normalizeState(seeded);
+
+  const intendedItems = starting.spaces.personal.shortcuts.map(item => ({ ...item }));
+  intendedItems[0].title = "A active-space edit";
+  intendedItems[0].modifiedAt = 610;
+  const intended = replacePersonal(starting, intendedItems, 610);
+
+  const latest = structuredClone(starting);
+  latest.spaces.work.shortcuts[0].title = "Work concurrent edit";
+  latest.spaces.work.shortcuts[0].modifiedAt = 611;
+  latest.spaces.work.updatedAt = 611;
+  // The active Personal Space clock deliberately remains unchanged in this
+  // external state, matching the edge case behind the storage-event audit.
+  const merged = rebaseConcurrentState(starting, intended, model.normalizeState(latest));
+  assert.equal(merged.spaces.personal.shortcuts.find(item => item.id === "a")?.title, "A active-space edit");
+  assert.equal(merged.spaces.work.shortcuts.find(item => item.id === "w")?.title, "Work concurrent edit");
+});
+
+test("1.26.17.4 same-shortcut core edit and device-local favicon interleave without losing either", () => {
+  const base = baseState();
+  const icon = `data:image/png;base64,${Buffer.from("reciprocal-favicon".repeat(40)).toString("base64")}`;
+  const iconId = model.assetIdForDataUrl(icon);
+
+  const intendedItems = base.shortcuts.map(item => ({ ...item }));
+  intendedItems[0] = {
+    ...intendedItems[0], image:"", localImageAssetId:iconId, imageSyncKind:"device",
+    imageSourceKind:"favicon", imageSourceUrl:"https://a.example/favicon.ico"
+  };
+  const intendedCache = replacePersonal(base, intendedItems, 100); // cache-only: no core clock change
+
+  const latestItems = base.shortcuts.map(item => ({ ...item }));
+  latestItems[0].title = "A concurrent rename";
+  latestItems[0].modifiedAt = 620;
+  const latestCore = replacePersonal(base, latestItems, 620);
+
+  const merged = rebaseConcurrentState(base, intendedCache, latestCore);
+  const a = merged.shortcuts.find(item => item.id === "a");
+  assert.equal(a.title, "A concurrent rename");
+  assert.equal(a.localImageAssetId, iconId);
+  assert.equal(a.imageSourceKind, "favicon");
+});

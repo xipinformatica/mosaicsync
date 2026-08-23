@@ -1,6 +1,6 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.26.17.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
@@ -10,6 +10,16 @@ Requires Node.js 22+.
 - `python tools/package.py` — creates deterministic Firefox/Chrome runtime ZIPs from `dist/`.
 
 The runtime ZIPs should be created from `dist/firefox` and `dist/chrome`; tests, fixtures and documentation are development-only and are not shipped inside the extension packages.
+
+## 1.26.17.4 import/navigation hardening policy
+
+Profile imports retain the intentionally generous 256 MiB abuse ceiling, but the `File.size` boundary must be checked before `File.text()` in every import entry point so an oversized local file cannot force a large allocation before structural validation. The parser keeps its independent post-read character limit. The specific too-large UI error remains localized through every supported MosaicSync UI catalog.
+
+Shortcut URLs are normalized to HTTP(S) at the model/profile/Sync trust boundaries. The authoritative New Tab navigation sinks also fail closed independently: top-level tiles, folder-item anchors, permission-resume navigation and “Open in new tab” must never navigate a shortcut whose current URL is not valid HTTP(S). This is defense-in-depth and must not loosen the central model invariant.
+
+A user-confirmed `.mosaicsync` restore remains an authoritative profile replacement. When Sync is enabled, `bootstrapLocal()` intentionally publishes that restored profile as the synchronized source; historical Sync tombstones must not silently override an explicit backup restore. Concurrent local writes continue through the existing write-baseline/rebase architecture; audit-driven changes to self-write suppression require a reproducing behavioral test rather than a speculative rewrite.
+
+Historical upgrade maintenance is keyed from the `previousVersion` range that needs repair. Do not gate old migrations on the current `VERSION` literal. Frequently Visited below 900 px keeps the current configurable show-and-wrap behavior; do not reintroduce the obsolete rule that hid card 4 and later.
 
 ## 1.24.11 engineering policy
 
@@ -126,7 +136,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.26.17.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

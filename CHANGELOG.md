@@ -1,3 +1,12 @@
+## 1.26.17.4
+
+- Hardened `.mosaicsync` profile import against local resource exhaustion: both Settings and first-run Welcome now reject files above the existing 256 MiB abuse ceiling **before** calling `File.text()`, while the parser keeps its independent post-read character limit. The new too-large error is localized in every supported MosaicSync UI language.
+- Added final HTTP(S)-only shortcut navigation defense-in-depth in the authoritative New Tab UI. Normal state/Sync/profile normalization already rejected non-HTTP(S) shortcuts; top-level tiles, folder items, permission-resume navigation and “Open in new tab” now independently fail closed if an invalid scheme somehow reaches the render boundary.
+- Removed the obsolete `VERSION === "1.24.7b"` migration gate while preserving the historical `previousVersion`-based resolver repair behavior.
+- Removed the superseded mobile Frequently Visited CSS rule that hid cards 4+ below 900 px; the current configurable show-and-wrap behavior is unchanged.
+- Expanded regression coverage for oversized pre-read rejection, non-HTTP(S) profile/Sync/navigation inputs, checksum-valid hostile object keys/prototype-pollution attempts, authoritative profile-restore semantics, inactive-Space concurrent edits and same-shortcut core/favicon interleavings.
+- No new permissions, Sync/profile format change, persisted schema change, remote code, telemetry or CSP relaxation. Version identity is exactly `1.26.17.4` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.26.17.3
 
 Changes since the last published 1.26.12 source:

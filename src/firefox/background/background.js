@@ -429,7 +429,7 @@ browser.runtime.onInstalled.addListener(details => {
       return requestMissingShortcutIconHydration({
         // Resolver changes reset exhausted retry backoff once so existing
         // automatically learned icons can benefit immediately after upgrade.
-        force: (VERSION === "1.24.7b" && /^1\.24\.7$/.test(previousVersion)) || resolverQualityUpgrade,
+        force: resolverQualityUpgrade,
         // 1.20.9 treated the first valid favicon.ico as final. 1.24.14c also
         // recovers declared site artwork from the original public root when an
         // authenticated deep link redirects to a login provider, so re-check

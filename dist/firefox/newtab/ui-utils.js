@@ -43,6 +43,17 @@ export function shortcutHostsAcrossSpaces(state) {
   return hosts;
 }
 
+
+export function safeShortcutNavigationUrl(value) {
+  if (typeof value !== "string" || !value || value.length > 2048) return "";
+  try {
+    const parsed = new URL(value);
+    return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
 export function normalizeShortcutUrl(raw) {
   let value = String(raw || "").trim();
   if (!value) throw new Error("Enter a URL.");

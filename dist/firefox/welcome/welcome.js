@@ -20,7 +20,7 @@ import { nextMutationTime, normalizeMeta, normalizeState, now, stableStringify }
 import { ensureLocalStorage, writeLocalMeta, writeLocalState } from "../core/storage.js";
 import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
-import { parseProfilePackage } from "../core/profile.js";
+import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 localizeDocument(document);
@@ -169,7 +169,7 @@ function stampImportedProfileState(importedState) {
 }
 
 async function importMosaicSyncProfile(file) {
-  const parsed = await parseProfilePackage(await file.text());
+  const parsed = await parseProfilePackage(await readProfileImportText(file));
   const importedState = stampImportedProfileState(parsed.state);
   await writeLocalState(importedState);
   await setLocalePreference(parsed.preferences.uiLocale || "auto");
@@ -417,7 +417,7 @@ welcomeProfileFile?.addEventListener("change", () => {
       await importMosaicSyncProfile(file);
     } catch (error) {
       console.error(error);
-      setStatus(t("profileImportFailed"), "error");
+      setStatus(error?.code === "PROFILE_TOO_LARGE" ? t("profileImportTooLarge") : t("profileImportFailed"), "error");
       sourceFinishButton.disabled = false;
       return;
     }

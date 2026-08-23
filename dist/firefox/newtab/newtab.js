@@ -76,7 +76,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, formatBytes, normalizeShortcutUrl, shortcutHostsAcrossSpaces } from "./ui-utils.js";
+import { canonicalSiteHost, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl, shortcutHostsAcrossSpaces } from "./ui-utils.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
@@ -2003,10 +2003,22 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return item.type === "folder" ? createFolderSlot(item) : createShortcutSlot(item);
   }
 
+  function shortcutNavigationUrl(item) {
+    return safeShortcutNavigationUrl(item?.url);
+  }
+
+  function navigateToShortcut(item) {
+    const url = shortcutNavigationUrl(item);
+    if (!url) return false;
+    window.location.assign(url);
+    return true;
+  }
+
   function openShortcutInNewTab(item) {
-    if (!item?.url) return;
+    const url = shortcutNavigationUrl(item);
+    if (!url) return;
     void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
-    void browser.tabs.create({ url: item.url, active: false }).catch(error => console.warn(`${PRODUCT_NAME}: could not open shortcut in new tab`, error));
+    void browser.tabs.create({ url, active: false }).catch(error => console.warn(`${PRODUCT_NAME}: could not open shortcut in new tab`, error));
   }
 
   function createShortcutSlot(item) {
@@ -2018,7 +2030,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // Native anchors keep shortcut navigation on Firefox's fast path.
     const card = document.createElement("a");
     card.className = "shortcut-card";
-    card.href = item.url;
+    const navigationUrl = shortcutNavigationUrl(item);
+    if (navigationUrl) card.href = navigationUrl;
     card.draggable = false;
     card.rel = "noreferrer";
     card.title = `${item.title}\n${item.url}`;
@@ -2056,7 +2069,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           }
           try { await saveState({ localCacheOnly: true }); } catch {}
           if (webAccessGranted && state.settings.autoSiteIcons) requestMissingSiteIcons([item.id], { force: true });
-          window.location.assign(item.url);
+          navigateToShortcut(item);
         }).catch(async () => {
           state.settings.webAccessPrompted = true;
           if (state.settings.autoSiteIcons) {
@@ -2064,7 +2077,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
           }
           try { await saveState({ localCacheOnly: true }); } catch {}
-          window.location.assign(item.url);
+          navigateToShortcut(item);
         });
       });
     }
@@ -2563,7 +2576,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
       const button = document.createElement("a");
       button.className = "folder-item-card";
-      button.href = item.url;
+      const navigationUrl = shortcutNavigationUrl(item);
+      if (navigationUrl) button.href = navigationUrl;
       button.rel = "noreferrer";
       button.draggable = false;
       button.title = `${item.title}\n${item.url}`;
@@ -5122,8 +5136,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     importProfileFile.value = "";
     if (!file) return;
     try {
-      const { parseProfilePackage } = await loadProfileModule();
-      const parsed = await parseProfilePackage(await file.text());
+      const { parseProfilePackage, readProfileImportText } = await loadProfileModule();
+      const parsed = await parseProfilePackage(await readProfileImportText(file));
       const confirmed = window.confirm(
         `${t("profileImportConfirm")}\n\n${meta?.syncEnabled && meta?.syncInitialized ? t("profileImportConfirmSync") : t("profileImportConfirmLocal")}`
       );
@@ -5165,7 +5179,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       showToast(t("profileImported"));
     } catch (error) {
       console.error(error);
-      showToast(error?.message === "PROFILE_SYNC_PUBLISH_FAILED" ? t("profilePublishFailed") : t("profileImportFailed"));
+      showToast(
+        error?.message === "PROFILE_SYNC_PUBLISH_FAILED"
+          ? t("profilePublishFailed")
+          : error?.code === "PROFILE_TOO_LARGE"
+            ? t("profileImportTooLarge")
+            : t("profileImportFailed")
+      );
     }
   });
 

@@ -29,11 +29,29 @@ export const PROFILE_FILE_EXTENSION = ".mosaicsync";
 // storage limits; the high ceiling only prevents JSON.parse from accepting an
 // absurdly large hostile file before any structural validation can run.
 export const PROFILE_IMPORT_MAX_CHARS = 256 * 1024 * 1024;
+// File.size is measured in bytes. Keep the pre-read ceiling at the same abuse
+// boundary so a hostile file is rejected before Blob/File.text() can allocate it.
+export const PROFILE_IMPORT_MAX_BYTES = PROFILE_IMPORT_MAX_CHARS;
 
 const encoder = new TextEncoder();
 
 export function isProfileImportTextLengthAllowed(length) {
   return Number.isFinite(Number(length)) && Number(length) >= 0 && Number(length) <= PROFILE_IMPORT_MAX_CHARS;
+}
+
+export function isProfileImportFileSizeAllowed(size) {
+  return Number.isFinite(Number(size)) && Number(size) >= 0 && Number(size) <= PROFILE_IMPORT_MAX_BYTES;
+}
+
+export async function readProfileImportText(file) {
+  const size = Number(file?.size);
+  if (!Number.isFinite(size) || size < 0 || typeof file?.text !== "function") {
+    throw codedError(ERROR_CODES.PROFILE_INVALID_FILE, "The selected file is not valid MosaicSync profile data.");
+  }
+  if (!isProfileImportFileSizeAllowed(size)) {
+    throw codedError(ERROR_CODES.PROFILE_TOO_LARGE, "The selected MosaicSync profile is too large to import.");
+  }
+  return file.text();
 }
 
 function cloneJson(value) {
