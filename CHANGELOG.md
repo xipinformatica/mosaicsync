@@ -1,4 +1,4 @@
-## 1.26.17.2
+## 1.26.17.3
 
 Changes since the last published 1.26.12 source:
 
@@ -12,12 +12,13 @@ Changes since the last published 1.26.12 source:
 - Improved **Frequently Visited** with stable first-frame rendering, direct drag-to-grid shortcut creation and device-local registrable-domain hiding. If the persisted hidden-domain list exists but is corrupt/unreadable, the synchronous cached first frame now fails closed instead of flashing suggestions that may have been hidden.
 - Fixed **Frequently Visited cross-Space duplication**: candidates are now filtered against normal shortcuts from every MosaicSync Space, including shortcuts nested inside folders. A site already saved in Personal is therefore not suggested while viewing Work, and vice versa; the existing canonical-host matching semantics are otherwise unchanged.
 - Fixed **Light/Dark wallpaper darkness leakage**: separate Light and Dark wallpapers now keep independent darkness values. Existing users preserve the darkness of the appearance active during migration while the opposite appearance starts at 0%; automatic system-theme switching changes wallpaper and darkness together, including the synchronous first-paint hint.
+- Fixed localized **Firefox Sync settings footer** alignment: longer translations such as French can now wrap within localization-safe grid tracks instead of running into the destructive “Clear Sync copy” action. The fix is CSS-only, applies to both Firefox and Chrome, and does not change any translated strings.
 - Fixed Firefox Frequently Visited native Top Sites adapter binding and kept Public Suffix List handling lazy/device-local.
 - Strengthened Firefox/Chrome Sync self-healing. Equal commit markers are no longer sufficient to skip reconciliation when usable remote semantic content differs from the current workspace, and the periodic Sync watchdog verifies actual remote semantic content so missed/delayed extension-storage events can recover without restarting Firefox once the data is locally visible.
 - Reduced partial-delivery Sync write amplification: when an atomic device snapshot is usable but the compatibility shared ledger is visibly incomplete, MosaicSync applies the usable core locally but waits for the ledger to become coherent instead of immediately republishing/repairing the partial view.
 - Clarified the backup boundary: automatically learned/browser-native favicon pixels stay out of browser `storage.sync` but are intentionally included in an explicit complete `.mosaicsync` profile export; retry diagnostics, permission UI memory, render snapshots and Frequently Visited hidden-domain data remain excluded from profile exports.
 - Added stronger production-module regression coverage for Chrome placeholder failure/retry behavior, native retry scheduling, corrupt Frequently Visited first-frame storage, cross-Space recovery/concurrency, favicon safety and same-marker semantic Sync reconciliation.
-- No new required permissions, Sync/profile format-version bump, profile format change, remote code, telemetry or CSP relaxation. The two additive per-appearance darkness settings are backward-compatible and omitted from synchronized settings until initialized. Version identity is exactly `1.26.17.2` everywhere; there is no separate internal/display/technical version.
+- No new required permissions, Sync/profile format-version bump, profile format change, remote code, telemetry or CSP relaxation. The two additive per-appearance darkness settings are backward-compatible and omitted from synchronized settings until initialized. Version identity is exactly `1.26.17.3` everywhere; there is no separate internal/display/technical version.
 
 ## 1.26.12
 

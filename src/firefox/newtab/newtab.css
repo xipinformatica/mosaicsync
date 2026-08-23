@@ -1844,7 +1844,7 @@ button { color: inherit; }
 .sync-direction-icon svg { width: 16px; height: 16px; }
 .sync-compact-footer {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(min-content, max-content) auto;
   align-items: center;
   gap: 8px;
   margin-top: 7px;
@@ -1853,9 +1853,11 @@ button { color: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-width: 0;
   color: var(--muted);
   font-size: 9.6px;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
 }
 .sync-delay-compact svg { width: 14px; height: 14px; }
 .sync-privacy-hover {
@@ -1865,7 +1867,8 @@ button { color: inherit; }
   min-width: 0;
   color: var(--muted);
   font-size: 9.7px;
-  white-space: nowrap;
+  line-height: 1.25;
+  white-space: normal;
 }
 .sync-settings-help .sync-help-tooltip {
   left: 50%;
@@ -1875,7 +1878,7 @@ button { color: inherit; }
 }
 .sync-settings-help:hover .sync-help-tooltip,
 .sync-settings-help:focus-within .sync-help-tooltip { transform: translate(-50%, 0); }
-.sync-compact-footer .danger-text-button { justify-self: end; }
+.sync-compact-footer .danger-text-button { justify-self: end; white-space: nowrap; }
 .development-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2194,7 +2197,7 @@ button { color: inherit; }
 .sync-direction-actions { gap: 10px; margin-top: 10px; }
 .sync-direction-button { min-height: 44px; }
 .sync-compact-footer {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(min-content, max-content) auto;
   gap: 10px;
   margin-top: 10px;
 }

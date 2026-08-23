@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.26.17.2";
+export const VERSION = "1.26.17.3";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -147,7 +147,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   lightBackgroundPreset: "",
   darkBackgroundPreset: "",
   // When separate Light/Dark wallpapers are enabled each appearance keeps its
-  // own darkness. null means a pre-1.26.17.2 setting that has not yet been
+  // own darkness. null means a pre-1.26.17.3 setting that has not yet been
   // migrated from the legacy shared backgroundDim value.
   lightBackgroundDim: null,
   darkBackgroundDim: null,
