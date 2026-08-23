@@ -1,5 +1,7 @@
 # MosaicSync development
 
+> **Current release: 1.26.11.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+
 Requires Node.js 22+.
 
 - `npm run build` — generates `dist/firefox` and `dist/chrome` from the shared source plus browser overlays.
