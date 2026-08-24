@@ -7,6 +7,7 @@ import { getNativeTopSites } from "../core/platform.js";
 import {
   APPEARANCE_HINT_KEY,
   BACKGROUND_PRESETS,
+  BUILTIN_SHORTCUT_ICON_KEYS,
   DEFAULT_LIGHT_BACKGROUND_COLOR,
   DEFAULT_STATE,
   FREQUENTLY_VISITED_PREF_KEY,
@@ -14,6 +15,9 @@ import {
   FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY,
   DEFAULT_SPACE_PREF_KEY,
   BOOKMARK_FOLDER_COLORS_PREF_KEY,
+  SHORTCUT_COLOR_TAG_KEYS,
+  SHORTCUT_ORDER_PREF_KEY,
+  SHORTCUT_USAGE_PREF_KEY,
   FREQUENT_TOP_SITES_LIMIT,
   FREQUENT_HIDDEN_DOMAINS_MAX,
   FREQUENT_CANDIDATE_CACHE_MS,
@@ -76,7 +80,8 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import "./builtin-icons.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
@@ -181,6 +186,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const shortcutTitle = document.getElementById("shortcutTitle");
   const shortcutUrl = document.getElementById("shortcutUrl");
   const shortcutImageFile = document.getElementById("shortcutImageFile");
+  const chooseBuiltinShortcutIcon = document.getElementById("chooseBuiltinShortcutIcon");
+  const shortcutBuiltinIconPicker = document.getElementById("shortcutBuiltinIconPicker");
+  const shortcutColorPicker = document.getElementById("shortcutColorPicker");
   const shortcutImageUrl = document.getElementById("shortcutImageUrl");
   const useShortcutImageUrl = document.getElementById("useShortcutImageUrl");
   const shortcutSyncImage = document.getElementById("shortcutSyncImage");
@@ -203,6 +211,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const settingsTileSize = document.getElementById("settingsTileSize");
   const settingsTileSizeValue = document.getElementById("settingsTileSizeValue");
   const settingsLanguage = document.getElementById("settingsLanguage");
+  const settingsShortcutOrder = document.getElementById("settingsShortcutOrder");
+  const settingsShortcutOrderHint = document.getElementById("settingsShortcutOrderHint");
   const settingsMultipleSpaces = document.getElementById("settingsMultipleSpaces");
   const settingsSpaceNames = document.getElementById("settingsSpaceNames");
   const settingsPersonalSpaceName = document.getElementById("settingsPersonalSpaceName");
@@ -297,6 +307,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const closeFolderButton = document.getElementById("closeFolderButton");
   const folderItems = document.getElementById("folderItems");
   const folderCount = document.getElementById("folderCount");
+  const openAllFolderButton = document.getElementById("openAllFolderButton");
   const ungroupFolderButton = document.getElementById("ungroupFolderButton");
   const toast = document.getElementById("toast");
 
@@ -309,6 +320,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let pendingShortcutImageSourceKind = "none";
   let pendingShortcutImageSourceUrl = "";
   let pendingShortcutImageIsFallback = false;
+  let pendingShortcutBuiltinIcon = "";
+  let pendingShortcutColorTag = "";
   let shortcutArtworkEdited = false;
   let shortcutSyncPrepareGeneration = 0;
   let pendingBackgroundImage = "";
@@ -369,6 +382,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let activeSpacePersistQueue = Promise.resolve();
   let deviceDefaultSpace = "last";
   let bookmarkFolderColors = {};
+  let shortcutOrderMode = "manual";
+  let shortcutUsage = Object.create(null);
+  let recentOrderRenderTimer = null;
   let frequentContextMenu = null;
   let bookmarkColorMenu = null;
   const backgroundPreloadCache = new Map();
@@ -558,10 +574,24 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       String(value?.settings?.backgroundImage?.length || 0)
     ];
     for (const item of value?.shortcuts || []) {
-      parts.push(item.id, String(item.imageAssetId || ""), String(item.image?.length || 0), String(item.imageSyncData?.length || 0));
+      parts.push(
+        item.id,
+        String(item.builtinIcon || ""),
+        String(item.colorTag || ""),
+        String(item.imageAssetId || ""),
+        String(item.image?.length || 0),
+        String(item.imageSyncData?.length || 0)
+      );
       if (item.type === "folder") {
         for (const child of item.items || []) {
-          parts.push(child.id, String(child.imageAssetId || ""), String(child.image?.length || 0), String(child.imageSyncData?.length || 0));
+          parts.push(
+            child.id,
+            String(child.builtinIcon || ""),
+            String(child.colorTag || ""),
+            String(child.imageAssetId || ""),
+            String(child.image?.length || 0),
+            String(child.imageSyncData?.length || 0)
+          );
         }
       }
     }
@@ -638,6 +668,67 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const normalized = [3, 5, 8, 10].includes(Number(value)) ? Number(value) : 5;
     frequentlyVisitedCount = normalized;
     try { localStorage.setItem(FREQUENTLY_VISITED_COUNT_PREF_KEY, String(normalized)); } catch {}
+  }
+
+  function readShortcutOrderPreference() {
+    try { return localStorage.getItem(SHORTCUT_ORDER_PREF_KEY) === "recent" ? "recent" : "manual"; }
+    catch { return "manual"; }
+  }
+
+  function writeShortcutOrderPreference(value) {
+    shortcutOrderMode = value === "recent" ? "recent" : "manual";
+    try { localStorage.setItem(SHORTCUT_ORDER_PREF_KEY, shortcutOrderMode); } catch {}
+  }
+
+  function normalizeShortcutUsageMap(raw) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    const entries = [];
+    for (const [id, value] of Object.entries(raw)) {
+      const timestamp = Number(value);
+      if (typeof id !== "string" || !id || id.length > 256 || !Number.isFinite(timestamp) || timestamp <= 0) continue;
+      entries.push([id, Math.trunc(timestamp)]);
+    }
+    entries.sort((a, b) => b[1] - a[1]);
+    const normalized = Object.create(null);
+    for (const [id, timestamp] of entries.slice(0, 512)) normalized[id] = timestamp;
+    return normalized;
+  }
+
+  function readShortcutUsage() {
+    try { return normalizeShortcutUsageMap(JSON.parse(localStorage.getItem(SHORTCUT_USAGE_PREF_KEY) || "{}")); }
+    catch { return {}; }
+  }
+
+  function writeShortcutUsage() {
+    shortcutUsage = normalizeShortcutUsageMap(shortcutUsage);
+    try { localStorage.setItem(SHORTCUT_USAGE_PREF_KEY, JSON.stringify(shortcutUsage)); } catch {}
+  }
+
+  function scheduleRecentOrderRender() {
+    if (shortcutOrderMode !== "recent") return;
+    clearTimeout(recentOrderRenderTimer);
+    recentOrderRenderTimer = setTimeout(() => {
+      if (shortcutOrderMode !== "recent" || isAwaitingRemote()) return;
+      render();
+    }, 0);
+  }
+
+  function recordShortcutsOpened(shortcutIds) {
+    const ids = [...new Set((Array.isArray(shortcutIds) ? shortcutIds : []).filter(id => typeof id === "string" && id))];
+    if (!ids.length) return;
+    const openedAt = Date.now();
+    for (const id of ids) shortcutUsage[id] = openedAt;
+    writeShortcutUsage();
+    scheduleRecentOrderRender();
+  }
+
+  function recordShortcutOpened(shortcutId) {
+    recordShortcutsOpened([shortcutId]);
+  }
+
+  function recentGridItems(capacity) {
+    const visible = (state.shortcuts || []).filter(item => Number.isInteger(item?.position) && item.position >= 0 && item.position < capacity);
+    return sortTopLevelByRecent(visible, shortcutUsage);
   }
 
   function readHiddenFrequentDomains() {
@@ -1058,6 +1149,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function schedulePostPaintMaintenance() {
     frequentlyVisitedEnabled = readFrequentlyVisitedPreference();
     frequentlyVisitedCount = readFrequentlyVisitedCountPreference();
+    shortcutOrderMode = readShortcutOrderPreference();
+    shortcutUsage = readShortcutUsage();
     hiddenFrequentDomains = readHiddenFrequentDomains();
     deviceDefaultSpace = readDeviceDefaultSpacePreference();
     bookmarkFolderColors = readBookmarkFolderColors();
@@ -1956,7 +2049,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     syncWaitNoticeTimer = null;
 
     const capacity = state.settings.columns * state.settings.rows;
-    const byPosition = new Map(state.shortcuts.map(item => [item.position, item]));
+    const byPosition = shortcutOrderMode === "recent"
+      ? new Map(recentGridItems(capacity).map((item, index) => [index, item]))
+      : new Map(state.shortcuts.map(item => [item.position, item]));
 
     emptyState.hidden = state.shortcuts.length !== 0;
     grid.hidden = state.shortcuts.length === 0;
@@ -2036,18 +2131,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return true;
   }
 
-  function openShortcutInNewTab(item) {
+  function openShortcutInNewTab(item, { recordUsage = true } = {}) {
     const url = shortcutNavigationUrl(item);
-    if (!url) return;
+    if (!url) return false;
+    if (recordUsage) recordShortcutOpened(item.id);
     void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     void browser.tabs.create({ url, active: false }).catch(error => console.warn(`${PRODUCT_NAME}: could not open shortcut in new tab`, error));
+    return true;
   }
 
   function createShortcutSlot(item) {
     const slot = document.createElement("div");
     slot.className = "shortcut-slot";
     slot.dataset.id = item.id;
-    slot.draggable = true;
+    slot.draggable = shortcutOrderMode !== "recent";
 
     // Native anchors keep shortcut navigation on Firefox's fast path.
     const card = document.createElement("a");
@@ -2064,7 +2161,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // It lets favicon learning follow redirects (for example bare domain -> www)
     // while ignoring unrelated browsing tabs even after all-sites access is granted.
     card.addEventListener("click", event => {
-      if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      if (event.defaultPrevented || event.button !== 0) return;
+      recordShortcutOpened(item.id);
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
 
@@ -2073,7 +2172,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // valid user gesture to repair that capability mismatch before navigation.
     // A denial turns Automatic site icons off instead of leaving a misleading
     // enabled preference that cannot resolve a never-before-visited site.
-    const automaticNeedsWebAccess = !item.image && state.settings.autoSiteIcons;
+    const automaticNeedsWebAccess = !item.image && !item.builtinIcon && state.settings.autoSiteIcons;
     const remoteImageNeedsWebAccess = !item.image && item.imageSourceKind === "remote" &&
       item.imageSourceUrl && !state.settings.webAccessPrompted;
     if ((automaticNeedsWebAccess || remoteImageNeedsWebAccess) && !webAccessGranted) {
@@ -2106,7 +2205,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     const tile = document.createElement("span");
     tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
-    appendImageOrFallback(tile, item.image, item.title);
+    applyShortcutColorTag(tile, item);
+    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon);
 
     const label = document.createElement("span");
     label.className = "shortcut-label";
@@ -2132,10 +2232,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     });
     card.addEventListener("auxclick", event => {
       if (event.button !== 1) return;
+      recordShortcutOpened(item.id);
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
 
-    attachDragHandlers(slot, item);
+    if (shortcutOrderMode !== "recent") attachDragHandlers(slot, item);
     slot.append(card, edit);
     return slot;
   }
@@ -2144,7 +2245,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const slot = document.createElement("div");
     slot.className = "shortcut-slot folder-slot";
     slot.dataset.id = folder.id;
-    slot.draggable = true;
+    slot.draggable = shortcutOrderMode !== "recent";
 
     const card = document.createElement("button");
     card.type = "button";
@@ -2160,7 +2261,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     for (const child of folder.items.slice(0, 4)) {
       const cell = document.createElement("span");
       cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
-      appendImageOrFallback(cell, child.image, child.title);
+      applyShortcutColorTag(cell, child);
+      appendImageOrFallback(cell, child.image, child.title, child.builtinIcon);
       mosaic.append(cell);
     }
     tile.append(mosaic);
@@ -2196,7 +2298,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       openFolder(folder, slot, true);
     });
 
-    attachDragHandlers(slot, folder);
+    if (shortcutOrderMode !== "recent") attachDragHandlers(slot, folder);
     slot.append(card, edit);
     return slot;
   }
@@ -2308,7 +2410,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return slot;
   }
 
-  function appendImageOrFallback(container, image, title) {
+  function applyShortcutColorTag(container, item) {
+    if (!container) return;
+    const colorTag = SHORTCUT_COLOR_TAG_KEYS.includes(item?.colorTag) ? item.colorTag : "";
+    if (colorTag) container.dataset.colorTag = colorTag;
+    else delete container.dataset.colorTag;
+  }
+
+  function appendImageOrFallback(container, image, title, builtinIcon = "") {
     if (image) {
       const img = document.createElement("img");
       img.alt = "";
@@ -2317,10 +2426,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       img.src = image;
       img.addEventListener("error", () => {
         img.remove();
-        container.append(createFallback(title));
+        if (!globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) container.append(createFallback(title));
       }, { once: true });
       container.append(img);
-    } else {
+    } else if (!globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) {
       container.append(createFallback(title));
     }
   }
@@ -2566,18 +2675,24 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function positionFolderPopover(anchorEl) {
     if (!anchorEl || folderPopover.hidden) return;
-    const rect = anchorEl.getBoundingClientRect();
+    const tileRect = (anchorEl.querySelector?.(".folder-tile") || anchorEl).getBoundingClientRect();
+    const labelEl = anchorEl.querySelector?.(".shortcut-label") || null;
     const panel = folderPopover.querySelector(".folder-panel");
     const panelWidth = Math.min(390, window.innerWidth - 24);
     panel.style.width = `${panelWidth}px`;
 
-    let left = rect.left + rect.width / 2 - panelWidth / 2;
+    let left = tileRect.left + tileRect.width / 2 - panelWidth / 2;
     left = Math.max(12, Math.min(window.innerWidth - panelWidth - 12, left));
 
+    // The label reserves a 34px two-line slot even when its title uses only one
+    // line. Measure the visible text line boxes so that empty reserved label
+    // height does not become part of the perceived folder-to-popover gap.
+    const gap = 3;
+    const anchorBottom = (labelEl && visibleTextBottom(labelEl)) || tileRect.bottom;
     const estimatedHeight = Math.min(430, 140 + Math.ceil((getTopLevelItem(activeFolderId)?.items.length || 1) / 3) * 96);
-    let top = rect.bottom + 10;
+    let top = anchorBottom + gap;
     if (top + estimatedHeight > window.innerHeight - 12) {
-      top = Math.max(12, rect.top - estimatedHeight - 10);
+      top = Math.max(12, tileRect.top - estimatedHeight - gap);
     }
 
     folderPopover.style.left = `${left}px`;
@@ -2588,6 +2703,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     folderTitleInput.value = folder.title || "";
     folderItems.replaceChildren();
     folderCount.textContent = t("folderContains", { count: folder.items.length });
+    if (openAllFolderButton) {
+      openAllFolderButton.textContent = t("openAllInBackground");
+      openAllFolderButton.disabled = folder.items.length === 0;
+    }
     const fragment = document.createDocumentFragment();
 
     for (const item of folder.items) {
@@ -2606,14 +2725,19 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
       const tile = document.createElement("span");
       tile.className = `folder-item-tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
-      appendImageOrFallback(tile, item.image, item.title);
+      applyShortcutColorTag(tile, item);
+      appendImageOrFallback(tile, item.image, item.title, item.builtinIcon);
 
       const label = document.createElement("span");
       label.className = "folder-item-label";
       label.textContent = item.title;
       button.append(tile, label);
       button.addEventListener("click", event => {
-        if (Date.now() < suppressFolderClickUntil) event.preventDefault();
+        if (Date.now() < suppressFolderClickUntil) {
+          event.preventDefault();
+          return;
+        }
+        if (!event.defaultPrevented && event.button === 0) recordShortcutOpened(item.id);
       });
 
       const edit = document.createElement("button");
@@ -2686,6 +2810,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
       button.addEventListener("auxclick", event => {
         if (event.button !== 1) return;
+        recordShortcutOpened(item.id);
         void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
       });
 
@@ -2737,6 +2862,22 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     closeFolder();
   });
 
+  openAllFolderButton?.addEventListener("click", () => {
+    if (!activeFolderId) return;
+    const folder = getTopLevelItem(activeFolderId);
+    if (folder?.type !== "folder" || !folder.items.length) return;
+    const eligible = folder.items.filter(item => Boolean(shortcutNavigationUrl(item)));
+    if (!eligible.length) return;
+    // One localStorage write for the whole batch keeps large folders cheap while
+    // treating all children opened by the same action as equally recent.
+    recordShortcutsOpened(eligible.map(item => item.id));
+    let opened = 0;
+    for (const item of eligible) {
+      if (openShortcutInNewTab(item, { recordUsage: false })) opened += 1;
+    }
+    if (opened) showToast(t("openedTabsInBackground", { count: opened }));
+  });
+
   ungroupFolderButton.addEventListener("click", async () => {
     if (!activeFolderId) return;
     const folder = getTopLevelItem(activeFolderId);
@@ -2769,6 +2910,72 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   // Shortcut editor and local artwork
   // ---------------------------------------------------------------------------
 
+  const BUILTIN_ICON_LABEL_KEYS = Object.freeze({
+    home: "builtinIconHome", mail: "builtinIconMail", work: "builtinIconWork", star: "builtinIconStar",
+    heart: "builtinIconHeart", shopping: "builtinIconShopping", finance: "builtinIconFinance", video: "builtinIconVideo",
+    music: "builtinIconMusic", news: "builtinIconNews", code: "builtinIconCode", cloud: "builtinIconCloud", game: "builtinIconGame"
+  });
+
+  const SHORTCUT_COLOR_LABEL_KEYS = Object.freeze({
+    red: "shortcutColorRed", orange: "shortcutColorOrange", amber: "shortcutColorAmber", green: "shortcutColorGreen",
+    teal: "shortcutColorTeal", blue: "shortcutColorBlue", violet: "shortcutColorViolet", pink: "shortcutColorPink"
+  });
+
+  function updateShortcutColorSelection() {
+    for (const button of shortcutColorPicker?.querySelectorAll?.("[data-shortcut-color]") || []) {
+      const selected = String(button.dataset.shortcutColor || "") === pendingShortcutColorTag;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+      const value = String(button.dataset.shortcutColor || "");
+      const colorLabel = value ? t(SHORTCUT_COLOR_LABEL_KEYS[value] || "shortcutColor") : t("noColor");
+      button.title = colorLabel;
+      button.setAttribute("aria-label", colorLabel);
+    }
+  }
+
+  function ensureBuiltinShortcutIconPicker() {
+    if (!shortcutBuiltinIconPicker || shortcutBuiltinIconPicker.childElementCount) return;
+    for (const key of BUILTIN_SHORTCUT_ICON_KEYS) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "builtin-icon-choice";
+      button.dataset.builtinIcon = key;
+      globalThis.__mosaicsyncBuiltinIcons?.append?.(button, key);
+      button.addEventListener("click", () => {
+        shortcutSyncPrepareGeneration += 1;
+        pendingShortcutBuiltinIcon = key;
+        pendingShortcutImage = "";
+        pendingShortcutSyncData = "";
+        pendingShortcutImageKind = "none";
+        pendingShortcutImageSourceKind = "builtin";
+        pendingShortcutImageSourceUrl = "";
+        pendingShortcutImageIsFallback = false;
+        shortcutImageStyle.value = "contain";
+        shortcutImageUrl.value = "";
+        shortcutSyncImage.checked = false;
+        shortcutArtworkEdited = true;
+        updateBuiltinShortcutIconSelection();
+        updateImagePreview();
+      });
+      shortcutBuiltinIconPicker.append(button);
+    }
+  }
+
+  function updateBuiltinShortcutIconSelection() {
+    ensureBuiltinShortcutIconPicker();
+    for (const button of shortcutBuiltinIconPicker?.querySelectorAll?.("[data-builtin-icon]") || []) {
+      const key = String(button.dataset.builtinIcon || "");
+      const selected = key === pendingShortcutBuiltinIcon;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", selected ? "true" : "false");
+      const label = t(BUILTIN_ICON_LABEL_KEYS[key] || "builtInIcons");
+      button.title = label;
+      button.setAttribute("aria-label", label);
+    }
+    if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.setAttribute("aria-label", t("builtInIcons"));
+    if (chooseBuiltinShortcutIcon) chooseBuiltinShortcutIcon.textContent = t("builtInIcons");
+  }
+
   function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
     localizeDocument(shortcutDialog);
     closeDropChoice();
@@ -2790,10 +2997,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     pendingShortcutImageSourceKind = item?.imageSourceKind || (item?.source === "firefox-import" ? "firefox" : "none");
     pendingShortcutImageSourceUrl = item?.imageSourceUrl || "";
     pendingShortcutImageIsFallback = item?.imageIsFallback === true;
+    pendingShortcutBuiltinIcon = BUILTIN_SHORTCUT_ICON_KEYS.includes(item?.builtinIcon) ? item.builtinIcon : "";
+    pendingShortcutColorTag = SHORTCUT_COLOR_TAG_KEYS.includes(item?.colorTag) ? item.colorTag : "";
     shortcutImageUrl.value = pendingShortcutImageSourceKind === "remote" ? pendingShortcutImageSourceUrl : "";
     shortcutSyncImage.checked = pendingShortcutImageKind === "sync" || pendingShortcutImageKind === "local";
     shortcutArtworkEdited = false;
     deleteShortcutButton.hidden = !item;
+    if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.hidden = true;
+    if (chooseBuiltinShortcutIcon) chooseBuiltinShortcutIcon.setAttribute("aria-expanded", "false");
+    updateBuiltinShortcutIconSelection();
+    updateShortcutColorSelection();
     updateImagePreview();
     updateShortcutSpaceChoice();
     shortcutDialog.showModal();
@@ -2818,8 +3031,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     imagePreview.replaceChildren();
     imagePreview.classList.toggle("cover", shortcutImageStyle.value === "cover");
     const image = pendingShortcutImage;
-    if (image) appendImageOrFallback(imagePreview, image, shortcutTitle.value);
-    else imagePreview.append(createFallback(shortcutTitle.value || "A"));
+    appendImageOrFallback(imagePreview, image, shortcutTitle.value || "A", pendingShortcutBuiltinIcon);
 
     const isUserArtwork = pendingShortcutImageSourceKind === "upload" ||
       (pendingShortcutImageKind === "sync" && !["remote", "favicon", "firefox"].includes(pendingShortcutImageSourceKind));
@@ -2835,20 +3047,39 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       }
     }
     if (shortcutImageHint) {
-      shortcutImageHint.textContent = pendingShortcutImageSourceKind === "favicon" || pendingShortcutImageSourceKind === "firefox"
-        ? t("autoIconsDescription")
-        : t("imageLocalHint");
+      shortcutImageHint.textContent = pendingShortcutBuiltinIcon
+        ? t("builtInIconSyncHint")
+        : (pendingShortcutImageSourceKind === "favicon" || pendingShortcutImageSourceKind === "firefox"
+            ? t("autoIconsDescription")
+            : t("imageLocalHint"));
     }
   }
 
   shortcutTitle.addEventListener("input", updateImagePreview);
   shortcutImageStyle.addEventListener("change", updateImagePreview);
 
+  chooseBuiltinShortcutIcon?.addEventListener("click", () => {
+    ensureBuiltinShortcutIconPicker();
+    const opening = shortcutBuiltinIconPicker?.hidden !== false;
+    if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.hidden = !opening;
+    chooseBuiltinShortcutIcon.setAttribute("aria-expanded", opening ? "true" : "false");
+    if (opening) updateBuiltinShortcutIconSelection();
+  });
+
+  shortcutColorPicker?.addEventListener("click", event => {
+    const button = event.target?.closest?.("[data-shortcut-color]");
+    if (!button || !shortcutColorPicker.contains(button)) return;
+    const value = String(button.dataset.shortcutColor || "");
+    pendingShortcutColorTag = SHORTCUT_COLOR_TAG_KEYS.includes(value) ? value : "";
+    updateShortcutColorSelection();
+  });
+
   shortcutImageFile.addEventListener("change", async () => {
     const file = shortcutImageFile.files?.[0];
     if (!file) return;
     shortcutSyncPrepareGeneration += 1;
     try {
+      pendingShortcutBuiltinIcon = "";
       pendingShortcutImage = await optimizeImageFile(file, {
         maxWidth: 384,
         maxHeight: 384,
@@ -2865,6 +3096,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       pendingShortcutImageIsFallback = false;
       shortcutSyncImage.checked = false;
       shortcutArtworkEdited = true;
+      updateBuiltinShortcutIconSelection();
       updateImagePreview();
     } catch (error) {
       showToast(error.message || t("operationFailed"));
@@ -2882,8 +3114,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     pendingShortcutImageSourceKind = "none";
     pendingShortcutImageSourceUrl = "";
     pendingShortcutImageIsFallback = false;
+    pendingShortcutBuiltinIcon = "";
     shortcutImageUrl.value = "";
     shortcutSyncImage.checked = false;
+    updateBuiltinShortcutIconSelection();
     updateImagePreview();
   });
 
@@ -2920,6 +3154,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         if (declaredLength > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
         const blob = await response.blob();
         if (blob.size > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
+        pendingShortcutBuiltinIcon = "";
         pendingShortcutImage = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
         pendingShortcutSyncData = "";
         pendingShortcutImageKind = "device";
@@ -2928,6 +3163,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         pendingShortcutImageIsFallback = false;
         shortcutSyncImage.checked = false;
         shortcutArtworkEdited = true;
+        updateBuiltinShortcutIconSelection();
         updateImagePreview();
         showToast(t("webImageCached"));
       } catch (error) {
@@ -2995,7 +3231,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // onboarding did not already decide it. The shortcut itself is saved even
     // if the user declines; only automatic icon hydration is skipped.
     const shouldRequestWebAccess = state.settings.autoSiteIcons &&
-      !pendingShortcutImage && !webAccessGranted;
+      !pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;
     const webAccessPermissionPromise = shouldRequestWebAccess
       ? requestWebAccessFromGesture()
       : null;
@@ -3026,6 +3262,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           type: "shortcut",
           title,
           url,
+          builtinIcon: pendingShortcutBuiltinIcon,
+          colorTag: pendingShortcutColorTag,
           image,
           imageSyncData,
           imageSyncKind,
@@ -3044,6 +3282,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           id: uid(),
           title,
           url,
+          builtinIcon: pendingShortcutBuiltinIcon,
+          colorTag: pendingShortcutColorTag,
           image,
           imageSyncData,
           imageSyncKind,
@@ -3133,7 +3373,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // A newly saved iconless shortcut should fill itself without requiring a
       // first visit. Target just this record for low latency; the normal idle
       // maintenance pass continues to repair any other missing icons.
-      if (!image && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
+      if (!image && !pendingShortcutBuiltinIcon && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
     } catch (error) {
       showToast(error.message || t("operationFailed"));
     }
@@ -4038,6 +4278,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     settingsTileSizeValue.value = `${s.tileSize}px`;
     settingsTileSizeValue.textContent = `${s.tileSize}px`;
     populateLanguageSelect(settingsLanguage);
+    shortcutOrderMode = readShortcutOrderPreference();
+    shortcutUsage = readShortcutUsage();
+    if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
+    if (settingsShortcutOrderHint) settingsShortcutOrderHint.textContent = t("shortcutOrderDeviceOnly");
     refreshSpacesSettings();
     frequentlyVisitedEnabled = readFrequentlyVisitedPreference();
     frequentlyVisitedCount = readFrequentlyVisitedCountPreference();
@@ -4077,6 +4321,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // core/i18n.js, so the same DOM can be translated repeatedly without reload.
     localizeDocument(document);
     populateLanguageSelect(settingsLanguage);
+    if (settingsShortcutOrderHint) settingsShortcutOrderHint.textContent = t("shortcutOrderDeviceOnly");
+    updateBuiltinShortcutIconSelection();
+    updateShortcutColorSelection();
 
     // Re-render only presentation surfaces whose labels are generated at runtime.
     // Pending Settings values are intentionally untouched.
@@ -5061,6 +5308,25 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     updateSpaceSwitcher();
     refreshSpacesSettings();
   });
+  settingsShortcutOrder?.addEventListener("change", () => {
+    writeShortcutOrderPreference(settingsShortcutOrder.value);
+    render();
+    scheduleRenderManifestRefresh(state, meta);
+  });
+  window.addEventListener("storage", event => {
+    if (event.storageArea !== localStorage) return;
+    if (event.key === SHORTCUT_ORDER_PREF_KEY) {
+      shortcutOrderMode = readShortcutOrderPreference();
+      if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
+      if (!isAwaitingRemote()) render();
+      scheduleRenderManifestRefresh(state, meta);
+      return;
+    }
+    if (event.key === SHORTCUT_USAGE_PREF_KEY) {
+      shortcutUsage = readShortcutUsage();
+      if (shortcutOrderMode === "recent" && !isAwaitingRemote()) render();
+    }
+  });
   let brandHelloTimer = 0;
   function triggerBrandHello() {
     if (!brandHelloButton) return;
@@ -5363,6 +5629,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (Number(current.createdAt) !== Number(incoming.createdAt) || Number(current.modifiedAt) !== Number(incoming.modifiedAt)) return false;
     if (current.type === "folder") return (current.items?.length || 0) === (incoming.items?.length || 0);
     return current.url === incoming.url &&
+      (current.builtinIcon || "") === (incoming.builtinIcon || "") &&
+      (current.colorTag || "") === (incoming.colorTag || "") &&
       Number(current.spaceMoveAt || 0) === Number(incoming.spaceMoveAt || 0) &&
       (current.imageStyle || "contain") === (incoming.imageStyle || "contain") &&
       (current.source || "manual") === (incoming.source || "manual");
@@ -5387,7 +5655,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       for (const child of (folder.items || []).slice(0, 4)) {
         const cell = document.createElement("span");
         cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
-        appendImageOrFallback(cell, child.image, child.title);
+        applyShortcutColorTag(cell, child);
+        appendImageOrFallback(cell, child.image, child.title, child.builtinIcon);
         fragment.append(cell);
       }
       mosaic.replaceChildren(fragment);
@@ -5402,8 +5671,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       const tile = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(id)}"] .shortcut-card .tile`);
       if (!tile) continue;
       tile.classList.toggle("cover", record.item.imageStyle === "cover");
+      applyShortcutColorTag(tile, record.item);
       tile.replaceChildren();
-      appendImageOrFallback(tile, record.item.image, record.item.title);
+      appendImageOrFallback(tile, record.item.image, record.item.title, record.item.builtinIcon);
     }
     for (const folderId of changedFolderIds) {
       const folder = getTopLevelItem(folderId);

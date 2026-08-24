@@ -12,6 +12,7 @@
  * hydrated MosaicSync state, so the renderer/editor/sync model stays simple.
  */
 import {
+  BUILTIN_SHORTCUT_ICON_KEYS,
   DEFAULT_META,
   DEFAULT_STATE,
   LOCAL_ACTIVE_SPACE_KEY,
@@ -28,7 +29,8 @@ import {
   RENDER_SNAPSHOT_SCHEMA_VERSION,
   SESSION_RENDER_INLINE_IMAGE_MAX_CHARS,
   SESSION_RENDER_META_KEY,
-  SESSION_RENDER_STATE_KEY
+  SESSION_RENDER_STATE_KEY,
+  SHORTCUT_COLOR_TAG_KEYS
 } from "./constants.js";
 import {
   createCrossSpaceSyncIntent,
@@ -197,7 +199,9 @@ function projectRenderShortcut(item) {
     };
   }
 
-  const image = typeof item.image === "string" && item.image.length <= SESSION_RENDER_INLINE_IMAGE_MAX_CHARS
+  const builtinIcon = BUILTIN_SHORTCUT_ICON_KEYS.includes(item.builtinIcon) ? item.builtinIcon : "";
+  const colorTag = SHORTCUT_COLOR_TAG_KEYS.includes(item.colorTag) ? item.colorTag : "";
+  const image = !builtinIcon && typeof item.image === "string" && item.image.length <= SESSION_RENDER_INLINE_IMAGE_MAX_CHARS
     ? item.image
     : "";
   return {
@@ -205,6 +209,8 @@ function projectRenderShortcut(item) {
     id: item.id,
     title: item.title,
     url: item.url,
+    builtinIcon,
+    colorTag,
     image,
     localImageAssetId: item.localImageAssetId || "",
     // Sync derivatives can be independently quota-compressed but are not needed
@@ -260,7 +266,12 @@ function isRenderShortcutValid(item, depth = 0) {
       item.items.every(child => isRenderShortcutValid(child, depth + 1) && child.type === "shortcut");
   }
   if (item.type !== "shortcut" || !validHttpUrl(item.url)) return false;
+  const builtinIcon = item.builtinIcon ?? "";
+  const colorTag = item.colorTag ?? "";
+  if (typeof builtinIcon !== "string" || (builtinIcon && !BUILTIN_SHORTCUT_ICON_KEYS.includes(builtinIcon))) return false;
+  if (typeof colorTag !== "string" || (colorTag && !SHORTCUT_COLOR_TAG_KEYS.includes(colorTag))) return false;
   if (typeof item.image !== "string" || item.image.length > SESSION_RENDER_INLINE_IMAGE_MAX_CHARS) return false;
+  if (builtinIcon && item.image) return false;
   if (item.image && !/^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/i.test(item.image)) return false;
   return true;
 }

@@ -1,8 +1,26 @@
 # MosaicSync development
 
-> **Current release: 1.26.17.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.1 folder-popover positioning policy
+
+1.27.1 is a presentation-only correction to 1.27.0. The `.shortcut-label` element intentionally reserves a two-line slot (`min-height: 34px`) for grid alignment, so its element rectangle is not a valid visual anchor for one-line folder titles. Folder popover placement must measure the actually rendered visible text line boxes and use their bottom edge, with a 3 px nominal gap. Line boxes clipped beyond the label viewport must not influence the anchor. If text-range geometry is unexpectedly unavailable, placement may safely fall back to the label element rectangle.
+
+The existing horizontal centering, 12 px viewport clamping, estimated-height collision handling and above-the-tile fallback remain unchanged. No permissions, storage/Sync/profile schemas, favicon behavior, CSP, telemetry, remote code, localization strings or feature semantics change in this patch.
+
+## 1.27.0 feature / presentation policy
+
+1.27.0 adds synchronized shortcut metadata for `builtinIcon` and `colorTag`. Both fields are strict allow-list values at the model boundary. A built-in icon is packaged MosaicSync UI artwork, not imported SVG/user markup: selecting one clears shortcut image bytes, local/sync asset IDs and automatic favicon state, and automatic favicon recovery must not overwrite it. Built-in icon metadata synchronizes as part of the shortcut record without consuming image-asset quota. Shortcut color tags are visual metadata and synchronize with the shortcut. The local state schema is 18 and the Sync record schema is 10; older records without these optional fields continue to normalize to the empty/default values.
+
+The **Recently opened** order is a device-local presentation mode. Its mode and bounded per-shortcut last-opened timestamps live only in `localStorage` under the centralized `SHORTCUT_ORDER_PREF_KEY` / `SHORTCUT_USAGE_PREF_KEY`; they must never enter MosaicSync profile exports, browser Sync records or canonical shortcut `position` fields. Manual order remains authoritative and drag reordering is disabled only while the recent presentation is active. The synchronous first-paint projection and authoritative renderer must use the same recency semantics to avoid a startup layout jump.
+
+The lightweight `storage.session` render snapshot is also a presentation boundary. It must carry only allow-listed `builtinIcon` / `colorTag` values (including folder children), and the authoritative visual-reconciliation signature must include those fields. This guarantees an older or incomplete disposable startup projection is repainted from authoritative state instead of leaving a built-in icon/color visually stale.
+
+Folder **Open all in background** reuses the existing final HTTP(S)-validated background-tab path for each child. It introduces no new data model. Folder popovers must remain visually close to their visible tile/label (`4px` nominal gap) while retaining viewport clamping and above/below collision handling.
+
+All 1.27.0 user-visible labels, icon names and color names remain in the 32-locale UI catalog. Do not hardcode new user-facing English. The release does not broaden permissions, CSP, remote code, telemetry or favicon network behavior.
 
 ## 1.26.17.7 optional-permission recovery policy
 
@@ -162,7 +180,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.26.17.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current public release is `1.27.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

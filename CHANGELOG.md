@@ -1,3 +1,21 @@
+## 1.27.1
+
+- Fixed the remaining visual gap between a folder tile/title and its opened popover. MosaicSync now anchors the popover to the bottom of the **actually rendered visible folder-title text** instead of the `.shortcut-label` element's reserved 34 px two-line layout box. One-line titles no longer inherit invisible empty label height; genuine two-line titles remain fully visible.
+- Reduced the nominal folder-title-to-popover gap from 4 px to 3 px while preserving horizontal centering, viewport clamping and the existing above/below collision fallback. The text-range measurement ignores clipped line boxes and fails safely back to the label element rectangle if range geometry is unavailable.
+- Added permanent geometry regression coverage for one-line labels, two-line labels, clipped hidden lines and range-unavailable fallback. No new UI strings, permissions/host permissions, storage/Sync/profile schema changes, favicon changes, CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.1` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
+## 1.27.0
+
+- Added a compact **Open all in background** action to folder popovers. It reuses MosaicSync's existing HTTP(S)-validated background-tab navigation path, records local recency usage for the opened shortcuts, and does not change the folder/state model.
+- Fixed folder popover placement so folders open much closer to the originating folder tile/label (4 px nominal gap) while preserving viewport clamping and above/below collision handling.
+- Added 13 bundled MosaicSync shortcut icons (Home, Mail, Work, Star, Heart, Shopping, Finance, Video, Music, News, Code, Cloud and Game). Built-in icons are fixed packaged SVG primitives, synchronize as compact metadata, consume no image Sync/storage budget, clear stale image assets when selected, and are protected from automatic favicon replacement.
+- Added synchronized shortcut color tags with eight restrained accent colors. Tags are strict allow-list metadata and render consistently on normal tiles, folder items and folder mosaics.
+- Added an optional device-local **Recently opened** shortcut order. Opening a shortcut records only a bounded local timestamp map; the view reorders presentation without mutating or synchronizing canonical manual positions. Switching back to Manual order restores the synchronized layout immediately, and first-paint/authoritative rendering use matching recency semantics.
+- Advanced the additive local state schema to 18 and Sync shortcut-record schema to 10 for built-in icon/color metadata. Older records remain compatible through default normalization; the `.mosaicsync` profile container format itself is unchanged.
+- Added the new UI strings, icon labels and color labels to all 32 MosaicSync UI locale catalogs (400 keys per catalog) and expanded regression coverage for Sync/profile round-trips, local-only recency, built-in-icon favicon exclusion, safe folder Open all, close popover anchoring, packaging and cross-browser parity.
+- Hardened the lightweight `storage.session` startup projection for the new presentation metadata: built-in icon and shortcut-color values are now allow-list validated into the session snapshot (including folder children), and authoritative reconciliation includes both fields in its visual signature. An older/incomplete session snapshot can therefore never leave a first-frame icon/color mismatch when the disposable render manifest is unavailable.
+- Preserved the 1.26.17.7 permission-recovery behavior and 1.26.17.6 favicon single-flight/resolver quality unchanged. No new permissions/host permissions, CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.0` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.26.17.7
 
 - Improved Frequently Visited optional-permission recovery without changing the permission model: the remembered ON/OFF preference is now independent from the live `topSites` grant, so a missing/revoked grant no longer forces the feature preference off or requires an OFF → ON toggle to recover.

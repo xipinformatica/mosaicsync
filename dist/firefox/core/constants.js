@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.26.17.7";
+export const VERSION = "1.27.1";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -38,6 +38,8 @@ export const FREQUENTLY_VISITED_COUNT_PREF_KEY = "mosaicsync.frequently-visited-
 export const FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY = "mosaicsync.frequently-visited-hidden-domains.v1";
 export const DEFAULT_SPACE_PREF_KEY = "mosaicsync.default-space.v1";
 export const BOOKMARK_FOLDER_COLORS_PREF_KEY = "mosaicsync.bookmark-folder-colors.v1";
+export const SHORTCUT_ORDER_PREF_KEY = "mosaicsync.shortcut-order.v1";
+export const SHORTCUT_USAGE_PREF_KEY = "mosaicsync.shortcut-usage.v1";
 export const UI_LOCALE_STORAGE_KEY = "mosaicsync.ui-locale.v1";
 export const SESSION_LOCAL_IGNORE_KEY = "mosaicsync.session.local-ignore";
 export const SESSION_SYNC_EXPECTATIONS_KEY = "mosaicsync.session.sync-expectations";
@@ -54,9 +56,9 @@ export const LEGACY_ICON_HYDRATION_ALARM = "mosaicsync-icon-hydration-v1";
 export const ICON_RECOVERY_ALARM = "mosaicsync-icon-recovery-v2";
 export const SYNC_WATCH_ALARM = "mosaicsync-sync-watch-v1";
 
-export const STATE_SCHEMA_VERSION = 17;
+export const STATE_SCHEMA_VERSION = 18;
 export const META_SCHEMA_VERSION = 11;
-export const SYNC_SCHEMA_VERSION = 9;
+export const SYNC_SCHEMA_VERSION = 10;
 
 export const SYNC_PREFIX = "mosaicsync.sync.";
 export const SYNC_SETTINGS_KEY = `${SYNC_PREFIX}settings`;
@@ -123,6 +125,9 @@ export const DEFAULT_LIGHT_BACKGROUND_COLOR = "#e9e2f1";
 
 export const SPACE_IDS = Object.freeze(["personal", "work"]);
 export const DEFAULT_SPACE_ID = "personal";
+
+export const SHORTCUT_COLOR_TAG_KEYS = Object.freeze(["red", "orange", "amber", "green", "teal", "blue", "violet", "pink"]);
+export const BUILTIN_SHORTCUT_ICON_KEYS = Object.freeze(["home", "mail", "work", "star", "heart", "shopping", "finance", "video", "music", "news", "code", "cloud", "game"]);
 
 export const DEFAULT_SETTINGS = Object.freeze({
   columns: 8,

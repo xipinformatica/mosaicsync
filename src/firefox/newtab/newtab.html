@@ -94,6 +94,7 @@
 
     <!-- Paint the cached grid before parsing hundreds of hidden dialog controls. -->
     <script src="../core/http-url-safety.js"></script>
+    <script src="builtin-icons.js"></script>
     <script src="render-bootstrap.js"></script>
 
     <button id="bookmarksButton" class="bookmarks-button" type="button" aria-label="Bookmarks" title="Bookmarks" aria-haspopup="dialog" aria-controls="bookmarksDialog">
@@ -191,8 +192,10 @@
             <div class="row-actions">
               <label class="file-button" for="shortcutImageFile">Choose local image</label>
               <input id="shortcutImageFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon">
+              <button id="chooseBuiltinShortcutIcon" class="secondary-button compact-icon-picker-button" type="button" aria-expanded="false">Built-in icons</button>
               <button id="clearShortcutImage" class="text-button" type="button">Clear image</button>
             </div>
+            <div id="shortcutBuiltinIconPicker" class="builtin-icon-picker" role="group" aria-label="Built-in icons" hidden></div>
             <div class="web-image-row">
               <input id="shortcutImageUrl" type="url" inputmode="url" maxlength="2048" autocomplete="off" placeholder="https://example.com/icon.png" aria-label="Online image address">
               <button id="useShortcutImageUrl" class="secondary-button" type="button">Use web image</button>
@@ -214,6 +217,21 @@
         </select>
       </label>
 
+      <div class="field shortcut-color-field">
+        <span>Shortcut color</span>
+        <div id="shortcutColorPicker" class="shortcut-color-picker" role="group" aria-label="Shortcut color">
+          <button type="button" data-shortcut-color="" class="shortcut-color-choice no-color selected" aria-pressed="true" title="No color"><span aria-hidden="true">×</span></button>
+          <button type="button" data-shortcut-color="red" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="orange" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="amber" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="green" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="teal" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="blue" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="violet" class="shortcut-color-choice" aria-pressed="false"></button>
+          <button type="button" data-shortcut-color="pink" class="shortcut-color-choice" aria-pressed="false"></button>
+        </div>
+      </div>
+
       <div class="dialog-actions split-actions">
         <button id="deleteShortcutButton" class="danger-button" type="button" hidden>Delete</button>
         <span class="action-spacer"></span>
@@ -227,7 +245,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.26.17.7</p>
+          <p class="eyebrow">MosaicSync · 1.27.1</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -279,6 +297,14 @@
           <span>Language</span>
           <select id="settingsLanguage" aria-label="Language"></select>
         </label>
+        <label class="shortcut-order-setting-row" for="settingsShortcutOrder">
+          <span>Shortcut order</span>
+          <select id="settingsShortcutOrder">
+            <option value="manual">Manual order</option>
+            <option value="recent">Recently opened</option>
+          </select>
+        </label>
+        <p id="settingsShortcutOrderHint" class="feature-permission-status shortcut-order-hint">This device only. Your synchronized layout order is unchanged.</p>
       </div>
 
       <div class="settings-section spaces-settings-section">
@@ -667,7 +693,10 @@
       <div id="folderItems" class="folder-items"></div>
       <div class="folder-footer">
         <span id="folderCount" class="folder-count"></span>
-        <button id="ungroupFolderButton" class="text-button compact-text-button" type="button">Ungroup</button>
+        <div class="folder-footer-actions">
+          <button id="openAllFolderButton" class="text-button compact-text-button folder-open-all-button" type="button">Open all in background</button>
+          <button id="ungroupFolderButton" class="text-button compact-text-button" type="button">Ungroup</button>
+        </div>
       </div>
     </div>
   </div>

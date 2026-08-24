@@ -47,7 +47,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.15 ${browser} shortcut save repairs missing Website Access instead of trusting old prompt state`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
-    assert.match(src, /const shouldRequestWebAccess = state\.settings\.autoSiteIcons\s*&&\s*!pendingShortcutImage && !webAccessGranted;/);
+    assert.match(src, /const shouldRequestWebAccess = state\.settings\.autoSiteIcons\s*&&\s*!pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;/);
     assert.doesNotMatch(src, /const shouldRequestWebAccess =[^;]+webAccessPrompted/s);
     assert.match(src, /requestMissingSiteIcons\(\[savedShortcutId\], \{ force: true \}\)/);
   });

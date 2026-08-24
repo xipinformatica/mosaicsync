@@ -9,11 +9,13 @@
  */
 import {
   BACKGROUND_PRESETS,
+  BUILTIN_SHORTCUT_ICON_KEYS,
   DEFAULT_META,
   DEFAULT_SETTINGS,
   DEFAULT_STATE,
   DEFAULT_SPACE_ID,
   SPACE_IDS,
+  SHORTCUT_COLOR_TAG_KEYS,
   META_SCHEMA_VERSION,
   STATE_SCHEMA_VERSION,
   SYNC_SCHEMA_VERSION
@@ -97,6 +99,18 @@ function normalizeImageSourceKind(value) {
   return ["none", "upload", "remote", "favicon", "firefox"].includes(value) ? value : "none";
 }
 
+function normalizeShortcutImageSourceKind(value) {
+  return value === "builtin" ? "builtin" : normalizeImageSourceKind(value);
+}
+
+function normalizeShortcutColorTag(value) {
+  return SHORTCUT_COLOR_TAG_KEYS.includes(value) ? value : "";
+}
+
+function normalizeBuiltinShortcutIcon(value) {
+  return BUILTIN_SHORTCUT_ICON_KEYS.includes(value) ? value : "";
+}
+
 function normalizeImageSourceUrl(value) {
   return normalizeHttpUrl(value);
 }
@@ -173,14 +187,16 @@ function normalizeShortcut(item, index = 0, memo = null) {
   if (!item || typeof item.url !== "string") return null;
   const url = normalizeHttpUrl(item.url);
   if (!url) return null;
+  const builtinIcon = normalizeBuiltinShortcutIcon(item.builtinIcon);
+  const colorTag = normalizeShortcutColorTag(item.colorTag);
   const timestamp = now();
   // Persisted display pixels are always local image data. MosaicSync may preserve
   // a separate HTTP(S) source URL for explicit, permission-gated reconstruction,
   // but a remote URL is never accepted directly as an <img> source.
-  const image = isSafeImageDataUrl(item.image) ? item.image : "";
-  let imageSourceKind = normalizeImageSourceKind(item.imageSourceKind);
-  if (imageSourceKind === "none" && item.source === "firefox-import") imageSourceKind = "firefox";
-  let imageSyncKind = normalizeImageSyncKind(
+  const image = builtinIcon ? "" : (isSafeImageDataUrl(item.image) ? item.image : "");
+  let imageSourceKind = builtinIcon ? "builtin" : normalizeShortcutImageSourceKind(item.imageSourceKind);
+  if (!builtinIcon && imageSourceKind === "none" && item.source === "firefox-import") imageSourceKind = "firefox";
+  let imageSyncKind = builtinIcon ? "none" : normalizeImageSyncKind(
     item.imageSyncKind,
     Boolean(image) || Boolean(item.imageSyncData),
     Boolean(item.imageAssetId)
@@ -216,17 +232,21 @@ function normalizeShortcut(item, index = 0, memo = null) {
   const imageSourceUrl = ["remote", "favicon"].includes(imageSourceKind)
     ? normalizeImageSourceUrl(item.imageSourceUrl)
     : "";
-  const localImageAssetId = image
-    ? assetIdForDataUrl(image, memo)
-    : ((imageSourceKind !== "none" || imageSyncKind !== "none" || item.imageIsFallback === true)
-        ? reusableAssetId(item.localImageAssetId)
-        : "");
+  const localImageAssetId = builtinIcon
+    ? ""
+    : (image
+        ? assetIdForDataUrl(image, memo)
+        : ((imageSourceKind !== "none" || imageSyncKind !== "none" || item.imageIsFallback === true)
+            ? reusableAssetId(item.localImageAssetId)
+            : ""));
   const imageIsFallback = item.imageIsFallback === true && imageSyncKind === "device" && Boolean(image || localImageAssetId);
   return {
     type: "shortcut",
     id: typeof item.id === "string" && item.id ? item.id : uid("shortcut"),
     title: cleanTitle(item.title, 80) || hostLabel(url),
     url,
+    builtinIcon,
+    colorTag,
     image,
     localImageAssetId,
     imageSyncData,
@@ -862,7 +882,7 @@ function folderToRecord(folder, deviceId) {
 }
 
 function shortcutToRecord(shortcut, parentId, deviceId) {
-  const localSourceKind = normalizeImageSourceKind(shortcut.imageSourceKind);
+  const localSourceKind = normalizeShortcutImageSourceKind(shortcut.imageSourceKind);
   const automaticallyLearnedArtwork = localSourceKind === "favicon" || localSourceKind === "firefox";
   // Automatically learned site artwork is a device-local cache, not user data.
   // Do not let a favicon discovery mutate the synchronized shortcut record or
@@ -882,6 +902,8 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
   const imageSourceUrl = imageSourceKind === "remote"
     ? normalizeImageSourceUrl(shortcut.imageSourceUrl)
     : "";
+  const builtinIcon = normalizeBuiltinShortcutIcon(shortcut.builtinIcon);
+  const colorTag = normalizeShortcutColorTag(shortcut.colorTag);
   const record = {
     schemaVersion: SYNC_SCHEMA_VERSION,
     kind: "shortcut",
@@ -900,6 +922,11 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
     source: shortcut.source,
     deviceId
   };
+  // Keep the common record compact. These additive 1.27 fields are omitted when
+  // unset, just like spaceMoveAt below, so existing users do not pay Sync quota
+  // for empty presentation metadata on every shortcut.
+  if (builtinIcon) record.builtinIcon = builtinIcon;
+  if (colorTag) record.colorTag = colorTag;
   // Almost every shortcut has never crossed Spaces. Keep the common Sync record
   // compact and only pay for this conflict-resolution marker when it is needed.
   if (Number.isFinite(shortcut.spaceMoveAt) && shortcut.spaceMoveAt > 0) {
@@ -1038,13 +1065,15 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     if (!record || record.kind !== "shortcut" || typeof record.url !== "string") continue;
     const url = normalizeHttpUrl(record.url);
     if (!url) continue;
+    const builtinIcon = normalizeBuiltinShortcutIcon(record.builtinIcon);
+    const colorTag = normalizeShortcutColorTag(record.colorTag);
 
     let image = "";
     let imageSyncData = "";
     let imageIsFallback = false;
     const localItem = findItemById(local, record.id);
-    const remoteSourceKind = normalizeImageSourceKind(record.imageSourceKind);
-    const localSourceKind = normalizeImageSourceKind(localItem?.imageSourceKind);
+    const remoteSourceKind = normalizeShortcutImageSourceKind(record.imageSourceKind);
+    const localSourceKind = normalizeShortcutImageSourceKind(localItem?.imageSourceKind);
     const localAutoArtwork = Boolean(
       localItem?.image && localItem?.url === url && ["favicon", "firefox"].includes(localSourceKind)
     );
@@ -1101,16 +1130,25 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
         ? normalizeImageSourceUrl(localItem?.imageSourceUrl)
         : "";
     }
+    if (builtinIcon) {
+      image = "";
+      imageSyncData = "";
+      imageIsFallback = false;
+      reconstructedSourceKind = "builtin";
+      reconstructedSourceUrl = "";
+    }
 
     const shortcut = {
       type: "shortcut",
       id: record.id,
       title: cleanTitle(record.title, 80) || hostLabel(url),
       url,
+      builtinIcon,
+      colorTag,
       image,
       imageSyncData,
-      imageAssetId: ["sync", "local"].includes(record.imageKind) && typeof record.imageAssetId === "string" ? record.imageAssetId : "",
-      imageSyncKind: normalizeImageSyncKind(record.imageKind, Boolean(image) || Boolean(imageSyncData), Boolean(record.imageAssetId)),
+      imageAssetId: builtinIcon ? "" : (["sync", "local"].includes(record.imageKind) && typeof record.imageAssetId === "string" ? record.imageAssetId : ""),
+      imageSyncKind: builtinIcon ? "none" : normalizeImageSyncKind(record.imageKind, Boolean(image) || Boolean(imageSyncData), Boolean(record.imageAssetId)),
       imageSourceKind: reconstructedSourceKind,
       imageSourceUrl: reconstructedSourceUrl,
       imageIsFallback,
@@ -1375,6 +1413,8 @@ function projectStateForSyncSignature(source) {
       id: item.id,
       title: item.title,
       url: item.url,
+      builtinIcon: normalizeBuiltinShortcutIcon(item.builtinIcon),
+      colorTag: normalizeShortcutColorTag(item.colorTag),
       imageAssetId: automaticallyLearnedArtwork ? "" : (item.imageAssetId || ""),
       imageSyncKind: automaticallyLearnedArtwork ? "none" : (item.imageSyncKind || "none"),
       imageSourceKind: automaticallyLearnedArtwork ? "none" : localSourceKind,

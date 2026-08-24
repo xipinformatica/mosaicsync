@@ -16,6 +16,9 @@
   // Classic first-frame scripts cannot import the module constants registry. Build
   // the already-centralized key without duplicating its exact persisted literal.
   const HIDDEN_FREQUENT_KEY = ["mosaicsync", "frequently-visited-hidden-domains", "v1"].join(".");
+  const SHORTCUT_ORDER_KEY = ["mosaicsync", "shortcut-order", "v1"].join(".");
+  const SHORTCUT_USAGE_KEY = ["mosaicsync", "shortcut-usage", "v1"].join(".");
+  const COLOR_TAGS = new Set(["red", "orange", "amber", "green", "teal", "blue", "violet", "pink"]);
   const MAX_PREVIEW_CHARS = 6000;
   const root = document.documentElement;
   const grid = document.getElementById("shortcutGrid");
@@ -58,6 +61,47 @@
       return true;
     }
   }
+  function readShortcutUsage() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(SHORTCUT_USAGE_KEY) || "{}");
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+      const entries = [];
+      for (const [id, raw] of Object.entries(parsed)) {
+        const timestamp = Number(raw);
+        if (!id || id.length > 256 || !Number.isFinite(timestamp) || timestamp <= 0) continue;
+        entries.push([id, Math.trunc(timestamp)]);
+      }
+      entries.sort((a, b) => b[1] - a[1]);
+      return Object.fromEntries(entries.slice(0, 512));
+    } catch {
+      return {};
+    }
+  }
+  function lastOpenedAt(item, usage) {
+    const read = id => {
+      const value = Number(usage?.[id]);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    };
+    if (item?.type === "folder") {
+      let latest = 0;
+      for (const child of item.items || []) latest = Math.max(latest, read(child?.id));
+      return latest;
+    }
+    return read(item?.id);
+  }
+  function recentOrder(items) {
+    const usage = readShortcutUsage();
+    return [...items].sort((a, b) => {
+      const recentDelta = lastOpenedAt(b, usage) - lastOpenedAt(a, usage);
+      if (recentDelta) return recentDelta;
+      if (a.position !== b.position) return a.position - b.position;
+      return String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function applyColorTag(target, item) {
+    if (target && COLOR_TAGS.has(item?.colorTag)) target.dataset.colorTag = item.colorTag;
+  }
+
   function fallback(title) {
     const icon = document.createElement("span");
     icon.className = "fallback-icon";
@@ -73,6 +117,7 @@
       target.append(image);
       return;
     }
+    if (globalThis.__mosaicsyncBuiltinIcons?.append?.(target, item?.builtinIcon)) return;
     target.append(fallback(item?.title));
   }
   function shortcutSlot(item) {
@@ -89,6 +134,7 @@
     card.setAttribute("aria-label", `${item.title}, ${safeUrl}`);
     const tile = document.createElement("span");
     tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
+    applyColorTag(tile, item);
     appendPreviewOrFallback(tile, item);
     const label = document.createElement("span");
     label.className = "shortcut-label";
@@ -111,6 +157,7 @@
     for (const child of item.items.slice(0, 4)) {
       const cell = document.createElement("span");
       cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
+      applyColorTag(cell, child);
       appendPreviewOrFallback(cell, child);
       mosaic.append(cell);
     }
@@ -206,25 +253,38 @@ ${safeUrl}`;
     if (brand) brand.hidden = manifest.brandVisible === false;
     paintFrequentSnapshot(manifest.frequent);
 
-    const byPosition = new Map();
+    const validItems = [];
     for (const source of manifest.shortcuts) {
       if (!source || typeof source !== "object" || typeof source.id !== "string" || !source.id ||
           typeof source.title !== "string" || !Number.isInteger(source.position) || source.position < 0) continue;
       const item = { ...source };
       if (item.preview && !validPreview(item.preview)) item.preview = "";
+      item.builtinIcon = globalThis.__mosaicsyncBuiltinIcons?.isValid?.(item.builtinIcon) ? item.builtinIcon : "";
+      item.colorTag = COLOR_TAGS.has(item.colorTag) ? item.colorTag : "";
       if (item.type === "shortcut") {
         if (!safeShortcutNavigationUrl(item.url)) continue;
       } else if (item.type === "folder") {
         if (!Array.isArray(item.items)) continue;
         item.items = item.items.filter(child => child && typeof child.title === "string" && safeShortcutNavigationUrl(child.url)).map(child => ({
           ...child,
+          builtinIcon: globalThis.__mosaicsyncBuiltinIcons?.isValid?.(child.builtinIcon) ? child.builtinIcon : "",
+          colorTag: COLOR_TAGS.has(child.colorTag) ? child.colorTag : "",
           preview: validPreview(child.preview) ? child.preview : ""
         }));
       } else continue;
-      byPosition.set(item.position, item);
+      validItems.push(item);
     }
 
     const capacity = columns * rows;
+    const byPosition = new Map();
+    let recentMode = false;
+    try { recentMode = localStorage.getItem(SHORTCUT_ORDER_KEY) === "recent"; } catch {}
+    if (recentMode) {
+      const ordered = recentOrder(validItems.filter(item => item.position < capacity));
+      ordered.forEach((item, index) => byPosition.set(index, item));
+    } else {
+      for (const item of validItems) byPosition.set(item.position, item);
+    }
     const fragment = document.createDocumentFragment();
     for (let position = 0; position < capacity; position += 1) {
       const item = byPosition.get(position);

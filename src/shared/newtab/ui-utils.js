@@ -61,6 +61,38 @@ export function createShortcutHostsAcrossSpacesMemo() {
   };
 }
 
+export function visibleTextBottom(element, documentRef = globalThis.document) {
+  const elementRect = element?.getBoundingClientRect?.();
+  const fallback = Number(elementRect?.bottom);
+  if (!Number.isFinite(fallback)) return 0;
+
+  if (typeof documentRef?.createRange !== "function") return fallback;
+  let range = null;
+  try {
+    range = documentRef.createRange();
+    range.selectNodeContents(element);
+    const rects = Array.from(range.getClientRects?.() || []);
+    let bottom = 0;
+    for (const rect of rects) {
+      const top = Number(rect?.top);
+      const candidateBottom = Number(rect?.bottom);
+      const width = Number(rect?.width);
+      const height = Number(rect?.height);
+      if (![top, candidateBottom, width, height].every(Number.isFinite) || width <= 0 || height <= 0) continue;
+      // Ignore line boxes clipped by the two-line label viewport. In particular,
+      // this prevents a hidden third line from turning the fixed label box back
+      // into the positioning anchor.
+      if (top < elementRect.top - 1 || candidateBottom > elementRect.bottom + 1) continue;
+      bottom = Math.max(bottom, candidateBottom);
+    }
+    return bottom || fallback;
+  } catch {
+    return fallback;
+  } finally {
+    try { range?.detach?.(); } catch {}
+  }
+}
+
 export function safeShortcutNavigationUrl(value) {
   return globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
 }
@@ -85,3 +117,29 @@ export function formatBytes(bytes) {
 
 export function clearCanonicalHostCacheForTests() { canonicalHostCache.clear(); }
 export function getCanonicalHostCacheSizeForTests() { return canonicalHostCache.size; }
+
+export function shortcutLastOpenedAt(item, usage) {
+  const valueForId = id => {
+    const raw = usage instanceof Map ? usage.get(id) : usage?.[id];
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  };
+  if (item?.type === "folder") {
+    let latest = 0;
+    for (const child of item.items || []) latest = Math.max(latest, valueForId(child?.id));
+    return latest;
+  }
+  return valueForId(item?.id);
+}
+
+export function sortTopLevelByRecent(items, usage) {
+  const source = Array.isArray(items) ? items : [];
+  return [...source].sort((left, right) => {
+    const recentDelta = shortcutLastOpenedAt(right, usage) - shortcutLastOpenedAt(left, usage);
+    if (recentDelta) return recentDelta;
+    const leftPosition = Number.isInteger(left?.position) ? left.position : Number.MAX_SAFE_INTEGER;
+    const rightPosition = Number.isInteger(right?.position) ? right.position : Number.MAX_SAFE_INTEGER;
+    if (leftPosition !== rightPosition) return leftPosition - rightPosition;
+    return String(left?.id || "").localeCompare(String(right?.id || ""));
+  });
+}

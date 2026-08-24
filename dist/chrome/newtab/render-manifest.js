@@ -103,6 +103,8 @@ function projectItem(item, previews) {
           id: child.id,
           title: child.title,
           url: child.url,
+          builtinIcon: child.builtinIcon || "",
+          colorTag: child.colorTag || "",
           imageStyle: child.imageStyle === "cover" ? "cover" : "contain",
           imageKey: childKey,
           preview: childKey ? (previews.get(childKey) || "") : ""
@@ -115,6 +117,8 @@ function projectItem(item, previews) {
     id: item.id,
     title: item.title,
     url: item.url,
+    builtinIcon: item.builtinIcon || "",
+    colorTag: item.colorTag || "",
     position: item.position,
     imageStyle: item.imageStyle === "cover" ? "cover" : "contain",
     imageKey,

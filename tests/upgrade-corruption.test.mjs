@@ -50,3 +50,24 @@ test("invalid session render snapshots are rejected rather than rendered", async
   assert.equal(await storage.readSessionRenderCache(),null);
   assert.equal(storage.getSessionRenderCacheStatus(),"invalid");
 });
+
+
+test("1.27.0 session render cache rejects hostile built-in icon/color metadata", async()=>{
+  browser.storage.session.data={};
+  const t=Date.now();
+  const state=model.normalizeState({schemaVersion:constants.STATE_SCHEMA_VERSION,activeSpaceId:"personal",spaces:{personal:{shortcuts:[{type:"shortcut",id:"safe",title:"Safe",url:"https://safe.example/",builtinIcon:"code",colorTag:"blue",image:"",imageSyncKind:"none",imageSourceKind:"builtin",imageStyle:"contain",position:0,createdAt:t,modifiedAt:t,source:"manual"}],settings:{...constants.DEFAULT_SETTINGS},settingsModifiedAt:t,updatedAt:t},work:{shortcuts:[],settings:{...constants.DEFAULT_SETTINGS},settingsModifiedAt:t,updatedAt:t}}});
+  const snapshot=storage.createRenderSnapshot(state);
+  snapshot.shortcuts[0].builtinIcon="javascript:alert(1)";
+  browser.storage.session.data={
+    [constants.SESSION_RENDER_STATE_KEY]:snapshot,
+    [constants.SESSION_RENDER_META_KEY]:{deviceId:"test-device"}
+  };
+  assert.equal(await storage.readSessionRenderCache(),null);
+  assert.equal(storage.getSessionRenderCacheStatus(),"invalid");
+
+  snapshot.shortcuts[0].builtinIcon="code";
+  snapshot.shortcuts[0].colorTag="expression(alert(1))";
+  browser.storage.session.data[constants.SESSION_RENDER_STATE_KEY]=snapshot;
+  assert.equal(await storage.readSessionRenderCache(),null);
+  assert.equal(storage.getSessionRenderCacheStatus(),"invalid");
+});

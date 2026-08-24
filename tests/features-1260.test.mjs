@@ -40,10 +40,10 @@ const themedState = () => {
   });
 };
 
-test("1.26.17.7 public version and 1.26 schema changes are unified", () => {
-  assert.equal(VERSION, "1.26.17.7");
-  assert.equal(STATE_SCHEMA_VERSION, 17);
-  assert.equal(SYNC_SCHEMA_VERSION, 9);
+test("1.27.1 public version and schema changes are unified", () => {
+  assert.equal(VERSION, "1.27.1");
+  assert.equal(STATE_SCHEMA_VERSION, 18);
+  assert.equal(SYNC_SCHEMA_VERSION, 10);
 });
 
 test("light/dark built-in wallpaper choices survive normalization and Sync reconstruction", () => {

@@ -1560,7 +1560,7 @@ function flattenShortcuts(state) {
 }
 
 function shortcutNeedsProactiveFavicon(shortcut) {
-  if (!shortcut || shortcut.type !== "shortcut" || !/^https?:/i.test(shortcut.url || "")) return false;
+  if (!shortcut || shortcut.type !== "shortcut" || shortcut.builtinIcon || !/^https?:/i.test(shortcut.url || "")) return false;
   const sourceKind = shortcut.imageSourceKind || "none";
   if (sourceKind === "firefox") return true;
   if (sourceKind === "favicon") return !shortcut.image;
