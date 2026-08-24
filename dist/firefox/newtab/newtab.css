@@ -20,7 +20,7 @@
   --shadow: 0 18px 55px rgba(0, 0, 0, 0.34);
   --columns: 8;
   --tile-size: 76px;
-  --shortcut-icon-size: 48px;
+  --shortcut-icon-size: 58px;
   --tile-label-gap: 52px;
   --folder-mosaic-cell-size: 25px;
   --folder-mosaic-icon-size: 19px;
@@ -3868,8 +3868,8 @@ button { color: inherit; }
 /* MosaicSync 1.27.0 — shortcut accents, built-in icons and local recency view. */
 .builtin-shortcut-icon {
   display: block;
-  width: 72%;
-  height: 72%;
+  width: 78%;
+  height: 78%;
   color: rgba(255,255,255,.93);
   pointer-events: none;
 }

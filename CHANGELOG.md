@@ -1,3 +1,14 @@
+## 1.27.5
+
+- Increased contained shortcut artwork from the previous ~63% footprint to a proportional ~76% of the tile (58 px at the default 76 px tile), with bundled top-level icons at 78%. Tile dimensions and grid density are unchanged; the existing shortcut-size slider continues scaling artwork and tiles together, while Cover mode remains edge-to-edge.
+- Hardened the user-invoked favicon-choice cache against just-revoked Website Access by forcing a live permission refresh before cache reads. Cache admission already refreshed permission and remains unchanged. The automatic favicon resolver/ranking path is untouched.
+- Reduced manual favicon-choice latency on redirected sites by batching the redirected `/favicon.ico` with the first conventional fallback under the existing maximum concurrency of two. The ordered two-wide batching model is intentionally retained so candidate priority/network semantics do not become completion-order dependent.
+- Strengthened Public Suffix List build safety with deterministic semantic rule counts/hash metadata, minimum wildcard/exception sanity checks, duplicate/embedded-whitespace rejection, synthetic transformation coverage, and functional exact/private/wildcard/exception/IDN registrable-domain equivalence between source and compact runtime PSLs.
+- Strengthened package-size monitoring: baseline categories may no longer silently disappear, significant individual top-file growth is guarded with combined percentage/absolute thresholds, report accounting is regression-tested, and JavaScript/Python size-category classifiers are parity-tested.
+- Added deterministic hostile/special-character coverage for compact runtime locale reconstruction and a complete New Tab CSS class-selector reference audit. The audit found no additional proven-dead class selectors beyond the rules already removed in 1.27.4, so no speculative CSS deletion was made.
+- Documented the generated-artifact contract in `CONTRIBUTING.md`: `src/` remains authoritative, compact PSL/locale files in `dist/` are deterministic build output and must never be edited directly.
+- No new permissions or host permissions, no state/Sync/profile schema changes, no automatic favicon resolver/ranking/single-flight changes, no CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.5` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.4
 
 - Reduced runtime package size without removing features or source readability. The deterministic build now strips non-semantic PSL comments/blank lines into a rules-only runtime artifact while retaining the full reviewed upstream PSL in source, and generates compact runtime locale modules from the unchanged 32 readable source catalogs. Exhaustive tests prove exact PSL rule order and exact locale key/value equivalence.

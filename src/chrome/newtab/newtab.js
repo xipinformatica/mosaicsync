@@ -1814,7 +1814,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const settings = state.settings;
     document.documentElement.style.setProperty("--columns", String(settings.columns));
     const tileSize = clampInt(settings.tileSize, 60, 96, 76);
-    const iconSize = Math.round(tileSize * 48 / 76);
+    const iconSize = Math.round(tileSize * 58 / 76);
     const scale = tileSize / 76;
     document.documentElement.style.setProperty("--tile-size", `${tileSize}px`);
     document.documentElement.style.setProperty("--shortcut-icon-size", `${iconSize}px`);

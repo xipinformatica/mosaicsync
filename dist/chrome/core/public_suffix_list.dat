@@ -1,6 +1,7 @@
 // Generated rules-only Public Suffix List for MosaicSync runtime.
 // Source Code Form: MPL-2.0 — https://mozilla.org/MPL/2.0/
 // Upstream VERSION: 2026-08-19_19-18-48_UTC; COMMIT: e8c9a2b2b2856b6449999dd0ec0d118f364ed0cd
+// Rules: 10248; Wildcards: 283; Exceptions: 8; SHA-256: 9533a47fdb73b0b9388527abe5550e0921a5a112776815a2ff44c65a8d531dc2
 ac
 com.ac
 edu.ac

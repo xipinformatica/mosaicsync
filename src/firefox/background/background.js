@@ -1585,7 +1585,11 @@ function rememberFaviconChoices(cacheKey, result, now = Date.now()) {
 }
 
 async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}) {
-  if (!(await hasWebAccess())) return { ok: false, error: "permission", candidates: [] };
+  // This picker is explicitly user-triggered, so prefer a live permission read
+  // before consulting even the short-lived in-memory candidate cache. This
+  // prevents a just-revoked Website Access grant from exposing stale cached
+  // candidates during the browser permission-event reconciliation window.
+  if (!(await hasWebAccess({ refresh: true }))) return { ok: false, error: "permission", candidates: [] };
   let parsed;
   try {
     parsed = new URL(pageUrl);
@@ -1690,15 +1694,18 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
 
   let finalOrigin = "";
   try { finalOrigin = new URL(discovered.finalPageUrl || parsed.href).origin; } catch {}
-  if (finalOrigin && finalOrigin !== initialOrigin) {
-    const redirected = await fetchChoice(`${finalOrigin}/favicon.ico`, { source: "redirect" });
-    if (redirected?.candidate) addChoice(redirected.candidate, redirected.source);
-  }
-
-  await fetchChoiceBatches(["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"].map(path => ({
-    value: `${initialOrigin}${path}`,
-    options: { declared: true, source: "conventional" }
-  })));
+  // Keep the same redirect-before-conventional priority, but let the redirected
+  // favicon share the existing two-wide manual-discovery batch with the first
+  // conventional fallback instead of leaving one network slot idle.
+  await fetchChoiceBatches([
+    ...(finalOrigin && finalOrigin !== initialOrigin
+      ? [{ value: `${finalOrigin}/favicon.ico`, options: { source: "redirect" } }]
+      : []),
+    ...["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"].map(path => ({
+      value: `${initialOrigin}${path}`,
+      options: { declared: true, source: "conventional" }
+    }))
+  ]);
 
   choices.sort((a, b) =>
     b.qualitySide - a.qualitySide ||

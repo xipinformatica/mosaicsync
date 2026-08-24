@@ -46,6 +46,17 @@ python tools/package.py
 - `docs/` — architecture, QA and historical engineering notes
 - `dist/` — generated browser runtime trees
 
+## Generated runtime artifacts
+
+`src/` is the authoritative reviewed source. `dist/firefox` and `dist/chrome` are disposable deterministic build products and must **not** be edited directly. In particular:
+
+- `src/shared/core/public_suffix_list.dat` is the complete reviewed upstream Public Suffix List; `dist/*/core/public_suffix_list.dat` is the generated rules-only runtime representation.
+- `src/shared/core/i18n-locales/*.js` are the readable translation catalogs; `dist/*/core/i18n-locales/*.js` and `dist/*/core/i18n-runtime-catalog.js` are compact generated runtime catalogs.
+- `build-manifest.json` records the SHA-256 identity of every generated runtime file.
+- `package-size-baseline.json` is updated consciously for each release after reviewing intentional runtime-size changes.
+
+Always run `npm run build` (or `npm test`, which rebuilds first) after editing authoritative source. If a generated runtime file looks wrong, fix the generator or source rather than patching `dist/`.
+
 ## Contribution rules
 
 Please keep these project invariants in mind:

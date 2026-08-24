@@ -1,5 +1,6 @@
 import { cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { runtimePublicSuffixList } from "./runtime-data.mjs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -23,22 +24,6 @@ async function fileHashes(dir) {
     hashes[rel]=createHash("sha256").update(bytes).digest("hex");
   }
   return hashes;
-}
-
-function runtimePublicSuffixList(source) {
-  const rules = String(source || "")
-    .split(/\r?\n/)
-    .map(line => line.trim())
-    .filter(line => line && !line.startsWith("//"));
-  const version = String(source || "").match(/^\/\/ VERSION:\s*(.+)$/m)?.[1]?.trim() || "unknown";
-  const commit = String(source || "").match(/^\/\/ COMMIT:\s*(.+)$/m)?.[1]?.trim() || "unknown";
-  return [
-    "// Generated rules-only Public Suffix List for MosaicSync runtime.",
-    "// Source Code Form: MPL-2.0 — https://mozilla.org/MPL/2.0/",
-    `// Upstream VERSION: ${version}; COMMIT: ${commit}`,
-    ...rules,
-    ""
-  ].join("\n");
 }
 
 async function readSourceLocaleCatalogs() {

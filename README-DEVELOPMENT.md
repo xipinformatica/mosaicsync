@@ -1,8 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.27.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.5 tile-artwork / favicon-permission / build-integrity policy
+
+Contained top-level shortcut artwork uses a proportional 58/76 ratio (about 76%) across the supported 60–96 px tile-size range; bundled top-level MosaicSync icons use 78%. Tile dimensions, grid density and Cover-mode edge-to-edge behavior remain unchanged. The synchronous first-paint renderer and authoritative renderer must use the same ratio so startup cannot visibly resize artwork after hydration.
+
+The manual **Choose detected favicon** cache is gated by a live `hasWebAccess({ refresh: true })` permission read before cache access. Redirect-origin `/favicon.ico` may share the existing two-wide ordered fallback batch, but the automatic `resolveFaviconForUrl()` ranking/winner/single-flight pipeline remains a protected baseline. The manual picker intentionally keeps ordered two-wide batches rather than a completion-order worker pool unless a future change can prove candidate-priority and network semantics remain stable.
+
+The compact PSL build must emit deterministic semantic rule counts and SHA-256 metadata, reject implausibly small wildcard/exception sets, duplicate rules and embedded rule whitespace, and remain functionally equivalent to the authoritative source for exact/private/wildcard/exception/IDN behavior. Package-size regression checks cover total/category growth, missing categories and significant individual top-file growth; JavaScript and Python category classifiers must remain equivalent. Compact locale generation must preserve arbitrary Unicode, quotes, backslashes, newlines, placeholder-like text and other literal content exactly. `src/` is authoritative; generated compact runtime artifacts under `dist/` must never be edited directly.
 
 ## 1.27.4 runtime-size / favicon-picker lifecycle policy
 
@@ -208,7 +216,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
