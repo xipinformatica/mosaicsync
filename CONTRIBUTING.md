@@ -22,7 +22,7 @@ This generates `dist/firefox` and `dist/chrome` from the canonical shared source
 npm test
 ```
 
-The test command rebuilds the browser trees and runs the permanent regression suite.
+The test command rebuilds the browser trees and runs the permanent regression suite. The package-size parity regression invokes the `python3` executable directly, so Python 3 must also be available on `PATH`.
 
 For the reproducible worst-case benchmark:
 

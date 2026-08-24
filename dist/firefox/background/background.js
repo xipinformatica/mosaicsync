@@ -723,19 +723,34 @@ async function readBoundedResponseBytes(response, maxBytes) {
   return { ok: true, reason: "", bytes };
 }
 
-async function fetchBoundedResource(value, { maxBytes, deadlineAt }) {
+function linkedFetchAbortController(signal, timeoutMs) {
+  const controller = new AbortController();
+  const abortFromCaller = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener?.("abort", abortFromCaller, { once: true });
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  return {
+    signal: controller.signal,
+    callerAborted: () => signal?.aborted === true,
+    cleanup() {
+      clearTimeout(timeout);
+      try { signal?.removeEventListener?.("abort", abortFromCaller); } catch {}
+    }
+  };
+}
+
+async function fetchBoundedResource(value, { maxBytes, deadlineAt, signal = null }) {
   if (!(await canReadOrigin(value))) return { ok: false, reason: "permission", url: value, type: "", bytes: null };
   const remaining = Math.max(0, Number(deadlineAt) - Date.now());
   if (remaining <= 0) return { ok: false, reason: "timeout", url: value, type: "", bytes: null };
   const timeoutMs = Math.max(250, Math.min(4_000, remaining));
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = linkedFetchAbortController(signal, timeoutMs);
   try {
     const response = await fetch(value, {
       credentials: "omit",
       cache: "force-cache",
       referrerPolicy: "no-referrer",
-      signal: controller.signal
+      signal: abort.signal
     });
     if (!response.ok) return { ok: false, reason: `http-${response.status}`, url: response.url || value, type: "", bytes: null };
     const body = await readBoundedResponseBytes(response, maxBytes);
@@ -748,10 +763,10 @@ async function fetchBoundedResource(value, { maxBytes, deadlineAt }) {
       bytes: body.bytes
     };
   } catch (error) {
-    const timedOut = controller.signal.aborted || error?.name === "AbortError";
-    return { ok: false, reason: timedOut ? "timeout" : "network", url: value, type: "", bytes: null };
+    const aborted = abort.signal.aborted || error?.name === "AbortError";
+    return { ok: false, reason: abort.callerAborted() ? "cancelled" : (aborted ? "timeout" : "network"), url: value, type: "", bytes: null };
   } finally {
-    clearTimeout(timeout);
+    abort.cleanup();
   }
 }
 
@@ -1074,12 +1089,12 @@ async function rasterizeSafeSvg(bytes) {
   }
 }
 
-async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, declared = false, qualityHint = 0 } = {}) {
+async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, declared = false, qualityHint = 0, signal = null } = {}) {
   const inline = typeof value === "string" && /^data:/i.test(value);
   if (inline && !declared) return { image: "", sourceUrl: "", reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
   const resource = inline
     ? decodeInlineFaviconResource(value)
-    : await fetchBoundedResource(value, { maxBytes: REMOTE_IMAGE_MAX_BYTES, deadlineAt });
+    : await fetchBoundedResource(value, { maxBytes: REMOTE_IMAGE_MAX_BYTES, deadlineAt, signal });
   const sourceUrl = inline ? "" : (resource.url || value);
   if (!resource.ok) return { image: "", sourceUrl, reason: resource.reason, width: 0, height: 0, qualitySide: 0, declared };
   const type = inline ? resource.type : sniffImageMime(resource.bytes, resource.type);
@@ -1138,18 +1153,17 @@ function htmlAttribute(tag, name) {
   return match ? (match[1] ?? match[2] ?? match[3] ?? "") : "";
 }
 
-async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS } = {}) {
+async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null } = {}) {
   if (!(await canReadOrigin(pageUrl))) return { ok: false, reason: "permission", finalPageUrl: pageUrl, text: "" };
   const remaining = Math.max(0, Number(deadlineAt) - Date.now());
   if (remaining <= 0) return { ok: false, reason: "timeout", finalPageUrl: pageUrl, text: "" };
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), Math.max(250, Math.min(4_000, remaining)));
+  const abort = linkedFetchAbortController(signal, Math.max(250, Math.min(4_000, remaining)));
   try {
     const response = await fetch(pageUrl, {
       credentials: "omit",
       cache: "force-cache",
       referrerPolicy: "no-referrer",
-      signal: controller.signal
+      signal: abort.signal
     });
     const finalPageUrl = response.url || pageUrl;
     if (!response.ok) return { ok: false, reason: `http-${response.status}`, finalPageUrl, text: "" };
@@ -1196,15 +1210,15 @@ async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_
     }
     return { ok: true, reason: "", finalPageUrl, text };
   } catch (error) {
-    const timedOut = controller.signal.aborted || error?.name === "AbortError";
-    return { ok: false, reason: timedOut ? "timeout" : "network", finalPageUrl: pageUrl, text: "" };
+    const aborted = abort.signal.aborted || error?.name === "AbortError";
+    return { ok: false, reason: abort.callerAborted() ? "cancelled" : (aborted ? "timeout" : "network"), finalPageUrl: pageUrl, text: "" };
   } finally {
-    clearTimeout(timeout);
+    abort.cleanup();
   }
 }
 
-async function discoverManifestIconCandidates(manifestUrl, pageUrl, { deadlineAt }) {
-  const resource = await fetchBoundedResource(manifestUrl, { maxBytes: REMOTE_MANIFEST_MAX_BYTES, deadlineAt });
+async function discoverManifestIconCandidates(manifestUrl, pageUrl, { deadlineAt, signal = null }) {
+  const resource = await fetchBoundedResource(manifestUrl, { maxBytes: REMOTE_MANIFEST_MAX_BYTES, deadlineAt, signal });
   if (!resource.ok) return [];
   let manifest;
   try { manifest = JSON.parse(textDecoder.decode(resource.bytes)); }
@@ -1235,8 +1249,8 @@ async function discoverManifestIconCandidates(manifestUrl, pageUrl, { deadlineAt
   return result;
 }
 
-async function discoverPageIconInfo(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS } = {}) {
-  const resource = await fetchHtmlHead(pageUrl, { deadlineAt });
+async function discoverPageIconInfo(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null } = {}) {
+  const resource = await fetchHtmlHead(pageUrl, { deadlineAt, signal });
   if (!resource.ok) return { urls: [], candidates: [], finalPageUrl: resource.finalPageUrl || pageUrl, reason: resource.reason };
   const baseUrl = resource.finalPageUrl || pageUrl;
   const icons = [];
@@ -1299,7 +1313,8 @@ async function discoverPageIconInfo(pageUrl, { deadlineAt = Date.now() + ICON_RE
 
   for (const manifestUrl of manifests.slice(0, 2)) {
     if (Date.now() >= deadlineAt) break;
-    const manifestIcons = await discoverManifestIconCandidates(manifestUrl, baseUrl, { deadlineAt });
+    if (signal?.aborted) break;
+    const manifestIcons = await discoverManifestIconCandidates(manifestUrl, baseUrl, { deadlineAt, signal });
     for (const candidate of manifestIcons) {
       if (seen.has(candidate.url)) continue;
       seen.add(candidate.url);
@@ -1311,11 +1326,11 @@ async function discoverPageIconInfo(pageUrl, { deadlineAt = Date.now() + ICON_RE
   return { urls: icons.map(icon => icon.url), candidates: icons, finalPageUrl: baseUrl, reason: "" };
 }
 
-async function resolveBrowserCachedFavicon(pageUrl) {
+async function resolveBrowserCachedFavicon(pageUrl, { signal = null } = {}) {
   // With the already-granted website host permission Firefox exposes favIconUrl
   // for matching open tabs without requiring the broad `tabs` permission. Query
   // only this host so favicon recovery never scans unrelated browsing tabs.
-  if (!browser.tabs?.query || !(await hasWebAccess())) return null;
+  if (signal?.aborted || !browser.tabs?.query || !(await hasWebAccess())) return null;
   let parsed;
   try { parsed = new URL(pageUrl); } catch { return null; }
   const patterns = [`${parsed.protocol}//${parsed.host}/*`];
@@ -1325,14 +1340,16 @@ async function resolveBrowserCachedFavicon(pageUrl) {
   for (const pattern of patterns) {
     let tabs = [];
     try { tabs = await browser.tabs.query({ url: pattern }); } catch { continue; }
+    if (signal?.aborted) return null;
     for (const tab of tabs || []) {
+      if (signal?.aborted) return null;
       const favicon = String(tab?.favIconUrl || "");
       if (/^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/i.test(favicon)) {
         const image = await normalizeLocalFaviconDataUrl(favicon);
         if (image) return { image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, native: true };
       }
       if (/^https?:/i.test(favicon)) {
-        const image = await fetchImageDataUrlDetailed(favicon, { deadlineAt: Date.now() + 2_500, declared: true });
+        const image = await fetchImageDataUrlDetailed(favicon, { deadlineAt: Date.now() + 2_500, declared: true, signal });
         if (image.image) return { ...image, native: true };
       }
     }
@@ -1538,6 +1555,35 @@ const FAVICON_CHOICE_CACHE_MAX_ENTRIES = 4;
 const FAVICON_CHOICE_CACHE_MAX_RESULT_CHARS = 400_000;
 const FAVICON_CHOICE_CACHE_MAX_TOTAL_CHARS = 800_000;
 const faviconChoiceCache = new Map();
+const faviconChoiceRequests = new Map();
+
+function normalizeFaviconChoiceRequestId(value) {
+  const requestId = String(value || "");
+  return /^[A-Za-z0-9._:-]{8,128}$/.test(requestId) ? requestId : "";
+}
+
+function cancelFaviconChoiceRequest(value) {
+  const requestId = normalizeFaviconChoiceRequestId(value);
+  if (!requestId) return false;
+  const controller = faviconChoiceRequests.get(requestId);
+  if (!controller) return false;
+  faviconChoiceRequests.delete(requestId);
+  try { controller.abort(); } catch {}
+  return true;
+}
+
+async function runFaviconChoiceRequest(pageUrl, value) {
+  const requestId = normalizeFaviconChoiceRequestId(value);
+  if (!requestId) return { ok: false, error: "invalid-request", candidates: [] };
+  cancelFaviconChoiceRequest(requestId);
+  const controller = new AbortController();
+  faviconChoiceRequests.set(requestId, controller);
+  try {
+    return await discoverFaviconChoicesForUrl(pageUrl, { signal: controller.signal });
+  } finally {
+    if (faviconChoiceRequests.get(requestId) === controller) faviconChoiceRequests.delete(requestId);
+  }
+}
 
 function faviconChoiceResultChars(result) {
   return (result?.candidates || []).reduce((total, candidate) => total + String(candidate?.image || "").length, 0);
@@ -1584,7 +1630,8 @@ function rememberFaviconChoices(cacheKey, result, now = Date.now()) {
   }
 }
 
-async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}) {
+async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signal = null } = {}) {
+  if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
   // This picker is explicitly user-triggered, so prefer a live permission read
   // before consulting even the short-lived in-memory candidate cache. This
   // prevents a just-revoked Website Access grant from exposing stale cached
@@ -1628,7 +1675,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   };
 
   const prepareResource = (value, { declared = false } = {}) => {
-    if (Date.now() >= deadlineAt || choices.length >= maxChoices) return "";
+    if (signal?.aborted || Date.now() >= deadlineAt || choices.length >= maxChoices) return "";
     const raw = String(value || "");
     let resourceKey = "";
     if (declared && /^data:/i.test(raw)) {
@@ -1650,7 +1697,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   const fetchChoice = async (value, { declared = false, qualityHint = 0, source = "site" } = {}) => {
     const resourceKey = prepareResource(value, { declared });
     if (!resourceKey) return null;
-    const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint });
+    const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint, signal });
     return candidate?.image ? { candidate, source } : null;
   };
 
@@ -1660,7 +1707,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   const fetchChoiceBatches = async entries => {
     const values = Array.isArray(entries) ? entries : [];
     for (let index = 0; index < values.length; index += 2) {
-      if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
+      if (signal?.aborted || Date.now() >= deadlineAt || choices.length >= maxChoices) break;
       const batch = values.slice(index, index + 2);
       const results = await Promise.all(batch.map(entry => fetchChoice(entry.value, entry.options)));
       for (const result of results) {
@@ -1673,7 +1720,8 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   // Browser-local artwork is a useful user-selectable candidate, but unlike the
   // automatic resolver the picker keeps going so the user can compare it with
   // the site's own declared alternatives.
-  try { addChoice(await resolveBrowserCachedFavicon(parsed.href), "browser"); } catch {}
+  try { addChoice(await resolveBrowserCachedFavicon(parsed.href, { signal }), "browser"); } catch {}
+  if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
 
   const initialOrigin = parsed.origin;
   const parentUrl = parentHostFaviconUrl(parsed.href);
@@ -1682,7 +1730,8 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
     ...(parentUrl ? [{ value: parentUrl, options: { declared: true, source: "parent" } }] : [])
   ]);
 
-  const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt });
+  const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt, signal });
+  if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
   await fetchChoiceBatches((discovered.candidates || []).slice(0, 16).map(candidate => ({
     value: candidate.url,
     options: {
@@ -1707,6 +1756,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
     }))
   ]);
 
+  if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
   choices.sort((a, b) =>
     b.qualitySide - a.qualitySide ||
     Number(b.declared) - Number(a.declared) ||
@@ -2480,7 +2530,9 @@ browser.runtime.onMessage.addListener((message, sender) => {
         upgradeRecoveredFavicons: message.upgradeRecoveredFavicons === true
       });
     case "mosaicsync:discover-favicon-choices":
-      return discoverFaviconChoicesForUrl(message.pageUrl);
+      return runFaviconChoiceRequest(message.pageUrl, message.requestId);
+    case "mosaicsync:cancel-favicon-choices":
+      return Promise.resolve({ ok: true, cancelled: cancelFaviconChoiceRequest(message.requestId) });
     case "mosaicsync:get-sync-status":
       return enqueue(getSyncStatus, { persistSyncError: false });
     case "mosaicsync:set-sync-enabled":

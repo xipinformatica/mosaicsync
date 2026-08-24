@@ -332,6 +332,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let shortcutSyncPrepareGeneration = 0;
   let detectedFaviconGeneration = 0;
   let detectedFaviconPickerUrl = "";
+  let detectedFaviconRequestId = "";
   let pendingBackgroundImage = "";
   let pendingBackgroundSourceKind = "none";
   let pendingBackgroundSourceUrl = "";
@@ -1814,7 +1815,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const settings = state.settings;
     document.documentElement.style.setProperty("--columns", String(settings.columns));
     const tileSize = clampInt(settings.tileSize, 60, 96, 76);
-    const iconSize = Math.round(tileSize * 58 / 76);
+    const iconSize = Math.round(tileSize * 53 / 76);
     const scale = tileSize / 76;
     document.documentElement.style.setProperty("--tile-size", `${tileSize}px`);
     document.documentElement.style.setProperty("--shortcut-icon-size", `${iconSize}px`);
@@ -3016,7 +3017,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (detectedFaviconPicker) detectedFaviconPicker.setAttribute("aria-label", t("detectedFavicons"));
   }
 
+  function cancelDetectedFaviconRequest() {
+    const requestId = detectedFaviconRequestId;
+    detectedFaviconRequestId = "";
+    if (!requestId) return;
+    void browser.runtime.sendMessage({ type: "mosaicsync:cancel-favicon-choices", requestId }).catch(() => {});
+  }
+
   function resetDetectedFaviconPicker() {
+    cancelDetectedFaviconRequest();
     detectedFaviconGeneration += 1;
     detectedFaviconPickerUrl = "";
     detectedFaviconChoices?.replaceChildren();
@@ -3195,6 +3204,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     chooseDetectedFavicon.setAttribute("aria-expanded", "true");
 
     void (async () => {
+      let requestId = "";
       try {
         const granted = await permissionPromise;
         if (generation !== detectedFaviconGeneration) return;
@@ -3204,7 +3214,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           await saveState({ localCacheOnly: true });
         }
         if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
-        const result = await browser.runtime.sendMessage({ type: "mosaicsync:discover-favicon-choices", pageUrl: sourceUrl });
+        requestId = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${generation}-${Math.random().toString(36).slice(2)}`;
+        detectedFaviconRequestId = requestId;
+        const result = await browser.runtime.sendMessage({ type: "mosaicsync:discover-favicon-choices", pageUrl: sourceUrl, requestId });
+        if (detectedFaviconRequestId === requestId) detectedFaviconRequestId = "";
         if (generation !== detectedFaviconGeneration) return;
         let currentUrl = "";
         try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch {}
@@ -3216,6 +3229,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         detectedFaviconChoices?.replaceChildren();
         if (detectedFaviconStatus) detectedFaviconStatus.textContent = error.message || t("noDetectedFavicons");
       } finally {
+        if (requestId && detectedFaviconRequestId === requestId) detectedFaviconRequestId = "";
         if (generation === detectedFaviconGeneration) chooseDetectedFavicon.disabled = false;
       }
     })();

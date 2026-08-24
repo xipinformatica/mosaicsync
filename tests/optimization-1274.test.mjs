@@ -255,6 +255,7 @@ for (const browser of ["firefox", "chrome"]) {
       detectedFaviconStatus: status,
       detectedFaviconPicker: picker,
       chooseDetectedFavicon: button,
+      cancelDetectedFaviconRequest() {},
       t: key => key
     };
     vm.createContext(context);

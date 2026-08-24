@@ -1,3 +1,12 @@
+## 1.27.6
+
+- Reduced contained top-level shortcut artwork from the 1.27.5 ~76–78% footprint to approximately 70% of the tile (53 px at the default 76 px tile), including bundled top-level icons. Tile dimensions, grid density, the existing fixed label reservation and Cover-mode edge-to-edge behavior are unchanged; the size slider and synchronous first paint use the same proportional ratio.
+- Added real cancellation for user-triggered **Choose detected favicon** discovery without sending non-cloneable `AbortSignal` objects through extension messaging. New Tab assigns each picker operation a request ID; closing/resetting the editor sends a scoped cancel message, the background worker owns the matching `AbortController`, and in-flight manual HTTP(S) favicon/page/manifest fetches are aborted. Cancellation cannot affect unrelated picker requests.
+- Expanded favicon-picker regressions so a live Website Access revocation is proven to block an already-populated short-lived cache, and the aggregate 800K-character cache-retention bound is exercised directly.
+- Expanded Public Suffix List functional coverage with IPv4, bracketed IPv6, localhost/single-label and additional Kawasaki wildcard/exception cases while retaining the exact reviewed source/runtime semantic ruleset.
+- Strengthened the New Tab CSS dead-selector audit so class usage is derived from class-bearing HTML/JS contexts instead of arbitrary substring matches; no selectors were removed speculatively. Package-size parity failures now explain the required `python3` executable directly.
+- The automatic favicon resolver/ranking/winner/single-flight path remains unchanged; only the manual picker supplies the new optional cancellation signal to shared bounded fetch helpers. No new permissions or host permissions, no state/Sync/profile schema changes, no CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.6` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.5
 
 - Increased contained shortcut artwork from the previous ~63% footprint to a proportional ~76% of the tile (58 px at the default 76 px tile), with bundled top-level icons at 78%. Tile dimensions and grid density are unchanged; the existing shortcut-size slider continues scaling artwork and tiles together, while Cover mode remains edge-to-edge.

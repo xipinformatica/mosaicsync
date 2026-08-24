@@ -247,7 +247,7 @@ ${safeUrl}`;
     const scale = tileSize / 76;
     root.style.setProperty("--columns", String(columns));
     root.style.setProperty("--tile-size", `${tileSize}px`);
-    root.style.setProperty("--shortcut-icon-size", `${Math.round(tileSize * 58 / 76)}px`);
+    root.style.setProperty("--shortcut-icon-size", `${Math.round(tileSize * 53 / 76)}px`);
     root.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     root.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
     if (brand) brand.hidden = manifest.brandVisible === false;

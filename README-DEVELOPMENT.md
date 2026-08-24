@@ -1,8 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.27.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.6 artwork / cancellable picker / edge-regression policy
+
+Contained top-level shortcut artwork uses a proportional 53/76 ratio (about 70%) across the supported 60–96 px tile-size range; bundled top-level MosaicSync icons use 70%. Tile dimensions, the fixed label reservation, grid density and Cover-mode edge-to-edge behavior remain unchanged. The synchronous first-paint renderer and authoritative renderer must use the same ratio.
+
+Manual **Choose detected favicon** work may be cancelled only through a structured-clone-safe request ID sent over extension messaging. The background worker owns the corresponding `AbortController`; closing/resetting the editor sends a cancel message for the active request, and only manual picker fetches receive that signal. `AbortSignal`/`AbortController` objects must never be passed through extension messaging. Automatic `resolveFaviconForUrl()` calls continue to omit the optional signal and retain the existing ranking, single-flight, quality and fallback semantics.
+
+Regression coverage must prove live Website Access revocation blocks cache reads, aggregate favicon-choice cache retention obeys its total bound, request-ID cancellation cannot affect another request, in-flight manual HTTP(S) fetches observe caller cancellation, local/IP/single-label and wildcard/exception PSL edge cases match between source/runtime data, and CSS dead-selector checks rely on class-bearing references rather than arbitrary substrings.
 
 ## 1.27.5 tile-artwork / favicon-permission / build-integrity policy
 
@@ -216,7 +224,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

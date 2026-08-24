@@ -71,7 +71,13 @@ async function registrableResults(pslText, browser, tag) {
       "foo.www.ck",
       "foo.city.kawasaki.jp",
       "foo.bar.nom.br",
-      "www.公司.cn"
+      "www.公司.cn",
+      "127.0.0.1",
+      "[2001:db8::1]",
+      "localhost",
+      "intranet",
+      "a.b.kawasaki.jp",
+      "a.city.kawasaki.jp"
     ];
     const out = Object.create(null);
     for (const host of hosts) out[host] = await mod.registrableDomainFromHostname(host);
@@ -81,7 +87,7 @@ async function registrableResults(pslText, browser, tag) {
   }
 }
 
-test("1.27.5 anchors the compact PSL to an independent semantic hash and rule-shape sanity checks", async () => {
+test("1.27.6 anchors the compact PSL to an independent semantic hash and rule-shape sanity checks", async () => {
   const source = await readFile("src/shared/core/public_suffix_list.dat", "utf8");
   const summary = summarizePslRules(source);
   assert.deepEqual({
@@ -113,7 +119,7 @@ test("1.27.5 anchors the compact PSL to an independent semantic hash and rule-sh
   }
 });
 
-test("1.27.5 source and compact-runtime PSLs produce identical registrable-domain behavior for exact, private, wildcard, exception and IDN rules", async () => {
+test("1.27.6 source and compact-runtime PSLs produce identical registrable-domain behavior for exact, private, wildcard, exception and IDN rules", async () => {
   const source = await readFile("src/shared/core/public_suffix_list.dat", "utf8");
   const expected = {
     "news.example.co.uk": "example.co.uk",
@@ -122,7 +128,13 @@ test("1.27.5 source and compact-runtime PSLs produce identical registrable-domai
     "foo.www.ck": "www.ck",
     "foo.city.kawasaki.jp": "city.kawasaki.jp",
     "foo.bar.nom.br": "foo.bar.nom.br",
-    "www.公司.cn": "www.xn--55qx5d.cn"
+    "www.公司.cn": "www.xn--55qx5d.cn",
+    "127.0.0.1": "127.0.0.1",
+    "[2001:db8::1]": "[2001:db8::1]",
+    "localhost": "localhost",
+    "intranet": "intranet",
+    "a.b.kawasaki.jp": "a.b.kawasaki.jp",
+    "a.city.kawasaki.jp": "city.kawasaki.jp"
   };
   for (const browser of ["firefox", "chrome"]) {
     const runtime = await readFile(`dist/${browser}/core/public_suffix_list.dat`, "utf8");
@@ -131,7 +143,7 @@ test("1.27.5 source and compact-runtime PSLs produce identical registrable-domai
   }
 });
 
-test("1.27.5 compact locale helper preserves source key order and hostile/special translation text exactly", async () => {
+test("1.27.6 compact locale helper preserves source key order and hostile/special translation text exactly", async () => {
   const sourceEnglish = (await import(`../src/shared/core/i18n-locales/en.js?1275-source=${Date.now()}`)).MESSAGES;
   const keys = Object.keys(sourceEnglish);
   const specials = [
@@ -156,7 +168,7 @@ test("1.27.5 compact locale helper preserves source key order and hostile/specia
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.5 ${browser} favicon-choice cache is gated by a live Website Access permission read`, async () => {
+  test(`1.27.6 ${browser} favicon-choice cache is gated by a live Website Access permission read`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     const permissionCalls = [];
@@ -172,7 +184,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(permissionCalls[0]?.refresh, true, "cache-read gate must bypass any stale permission memo");
   });
 
-  test(`1.27.5 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
+  test(`1.27.6 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helperNames = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"];
     const helpers = helperNames.map(name => extractFunction(source, name)).join("\n");
@@ -210,42 +222,68 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-test("1.27.5 shortcut artwork uses a proportional 75–80% contain footprint at every tile-size slider value", async () => {
+test("current shortcut artwork keeps a proportional ~70% contain footprint at every tile-size slider value", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
     const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
-    assert.match(js, /Math\.round\(tileSize \* 58 \/ 76\)/);
-    assert.match(css, /--shortcut-icon-size:\s*58px;/);
-    assert.match(css, /\.builtin-shortcut-icon\s*\{[^}]*width:\s*78%;[^}]*height:\s*78%;/s);
+    assert.match(js, /Math\.round\(tileSize \* 53 \/ 76\)/);
+    assert.match(css, /--shortcut-icon-size:\s*53px;/);
+    assert.match(css, /\.builtin-shortcut-icon\s*\{[^}]*width:\s*70%;[^}]*height:\s*70%;/s);
     assert.match(css, /\.tile\.cover img\s*\{[^}]*width:\s*100%;[^}]*height:\s*100%;/s, "cover mode intentionally remains edge-to-edge");
   }
   const bootstrap = await readFile("dist/firefox/newtab/render-bootstrap.js", "utf8");
-  assert.match(bootstrap, /Math\.round\(tileSize \* 58 \/ 76\)/, "first paint must use the same artwork ratio as authoritative render");
+  assert.match(bootstrap, /Math\.round\(tileSize \* 53 \/ 76\)/, "first paint must use the same artwork ratio as authoritative render");
   for (const tileSize of [60, 76, 96]) {
-    const icon = Math.round(tileSize * 58 / 76);
+    const icon = Math.round(tileSize * 53 / 76);
     const ratio = icon / tileSize;
-    assert.ok(ratio >= 0.75 && ratio <= 0.80, `${tileSize}px tile -> ${icon}px artwork ratio ${ratio}`);
+    assert.ok(ratio >= 0.68 && ratio <= 0.72, `${tileSize}px tile -> ${icon}px artwork ratio ${ratio}`);
   }
 });
 
-test("1.27.5 New Tab CSS class audit finds no class selector with no runtime HTML/JS reference", async () => {
+test("1.27.6 New Tab CSS class audit uses class-bearing references instead of arbitrary substrings", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const base = resolve(`dist/${browser}/newtab`);
     const css = await readFile(resolve(base, "newtab.css"), "utf8");
     const classNames = [...new Set([...css.matchAll(/(?<![\\w-])\\.([A-Za-z_][\\w-]*)/g)].map(match => match[1]))].sort();
-    const files = (await readdir(base)).filter(name => /\.(?:js|html)$/.test(name));
-    const runtimeText = (await Promise.all(files.map(name => readFile(resolve(base, name), "utf8")))).join("\n");
-    const missing = classNames.filter(name => !new RegExp(`(?<![\\w-])${name.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}(?![\\w-])`).test(runtimeText));
-    assert.deepEqual(missing, [], `${browser}: remove proven-dead selectors or document intentional CSS-only state classes`);
+    const files = (await readdir(base)).filter(name => /\\.(?:js|html)$/.test(name));
+    const refs = new Set();
+    for (const fileName of files) {
+      const text = await readFile(resolve(base, fileName), "utf8");
+      if (fileName.endsWith(".html")) {
+        for (const match of text.matchAll(/\\bclass\\s*=\\s*["']([^"']*)["']/g)) {
+          for (const token of match[1].split(/\\s+/)) if (token) refs.add(token);
+        }
+      }
+      const directClassStrings = [
+        /\\.className\\s*=\\s*(["'`])([\\s\\S]*?)\\1/g,
+        /\\.classList\\.(?:add|remove|toggle|contains|replace)\\(([\\s\\S]*?)\\)/g,
+        /\\.(?:querySelector|querySelectorAll|closest|matches)\\(([\\s\\S]*?)\\)/g,
+        /\\.setAttribute\\(\\s*["']class["']\\s*,([\\s\\S]*?)\\)/g
+      ];
+      for (const pattern of directClassStrings) {
+        for (const match of text.matchAll(pattern)) {
+          const body = match[2] ?? match[1] ?? "";
+          for (const literal of body.matchAll(/(["'`])([\\s\\S]*?)\\1/g)) {
+            for (const token of literal[2].match(/[A-Za-z_][\\w-]*/g) || []) refs.add(token);
+          }
+          if (match[2] !== undefined) {
+            for (const token of body.match(/[A-Za-z_][\\w-]*/g) || []) refs.add(token);
+          }
+          for (const selector of body.matchAll(/\\.([A-Za-z_][\\w-]*)/g)) refs.add(selector[1]);
+        }
+      }
+    }
+    const missing = classNames.filter(name => !refs.has(name));
+    assert.deepEqual(missing, [], `${browser}: remove only selectors proven dead by class-bearing HTML/JS references`);
   }
 });
 
-test("1.27.5 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
+test("1.27.6 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
   const baseline = JSON.parse(await readFile("package-size-baseline.json", "utf8"));
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.27.5");
+    assert.equal(actual.version, "1.27.6");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);
@@ -266,7 +304,7 @@ test("1.27.5 size guard detects missing categories and significant individual-fi
   }
 });
 
-test("1.27.5 JavaScript and Python package-size category classifiers remain identical", () => {
+test("1.27.6 JavaScript and Python package-size category classifiers remain identical", () => {
   const paths = [
     "core/i18n-locales/ca.js", "core/i18n-runtime-catalog.js", "core/public_suffix_list.dat",
     "assets/backgrounds/aether-flow.webp", "_locales/en/messages.json", "newtab/newtab.js",
@@ -275,6 +313,7 @@ test("1.27.5 JavaScript and Python package-size category classifiers remain iden
   ];
   const python = `import importlib.util, json\nspec=importlib.util.spec_from_file_location('pkg','tools/package.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\npaths=${JSON.stringify(paths)}\nprint(json.dumps({p:m.size_category(p) for p in paths}))`;
   const result = spawnSync("python3", ["-c", python], { cwd: process.cwd(), encoding: "utf8" });
+  assert.equal(result.error?.code, undefined, "Python 3 (`python3`) is required for the package-size JS/Python parity test; install Python 3 and ensure `python3` is on PATH.");
   assert.equal(result.status, 0, result.stderr);
   const py = JSON.parse(result.stdout);
   for (const path of paths) assert.equal(sizeCategory(path), py[path], path);
