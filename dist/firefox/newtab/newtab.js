@@ -186,6 +186,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const shortcutTitle = document.getElementById("shortcutTitle");
   const shortcutUrl = document.getElementById("shortcutUrl");
   const shortcutImageFile = document.getElementById("shortcutImageFile");
+  const chooseDetectedFavicon = document.getElementById("chooseDetectedFavicon");
+  const detectedFaviconPicker = document.getElementById("detectedFaviconPicker");
+  const detectedFaviconChoices = document.getElementById("detectedFaviconChoices");
+  const detectedFaviconStatus = document.getElementById("detectedFaviconStatus");
   const chooseBuiltinShortcutIcon = document.getElementById("chooseBuiltinShortcutIcon");
   const shortcutBuiltinIconPicker = document.getElementById("shortcutBuiltinIconPicker");
   const shortcutColorPicker = document.getElementById("shortcutColorPicker");
@@ -324,6 +328,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let pendingShortcutColorTag = "";
   let shortcutArtworkEdited = false;
   let shortcutSyncPrepareGeneration = 0;
+  let detectedFaviconGeneration = 0;
+  let detectedFaviconPickerUrl = "";
   let pendingBackgroundImage = "";
   let pendingBackgroundSourceKind = "none";
   let pendingBackgroundSourceUrl = "";
@@ -719,17 +725,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 0);
   }
 
-  function recordShortcutsOpened(shortcutIds) {
+  function recordShortcutsOpened(shortcutIds, { renderRecent = true } = {}) {
     const ids = [...new Set((Array.isArray(shortcutIds) ? shortcutIds : []).filter(id => typeof id === "string" && id))];
     if (!ids.length) return;
     const openedAt = Date.now();
     for (const id of ids) shortcutUsage[id] = openedAt;
     writeShortcutUsage();
-    scheduleRecentOrderRender();
+    if (renderRecent) scheduleRecentOrderRender();
   }
 
-  function recordShortcutOpened(shortcutId) {
-    recordShortcutsOpened([shortcutId]);
+  function recordShortcutOpened(shortcutId, options = {}) {
+    recordShortcutsOpened([shortcutId], options);
   }
 
   function recentGridItems(capacity) {
@@ -2173,8 +2179,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // while ignoring unrelated browsing tabs even after all-sites access is granted.
     card.addEventListener("click", event => {
       if (event.defaultPrevented || event.button !== 0) return;
-      recordShortcutOpened(item.id);
-      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const opensElsewhere = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
+      // Persist recency for every open, but do not rebuild a grid that an ordinary
+      // same-tab click is about to navigate away from. Modified/background opens
+      // keep the render because MosaicSync remains visible.
+      recordShortcutOpened(item.id, { renderRecent: opensElsewhere });
+      if (opensElsewhere) return;
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
 
@@ -2373,7 +2383,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Recent is a presentation view, never a canonical-layout editor. A visual
       // Recent slot has no stable meaning in Manual order, so top-level grid
       // drops are deliberately unavailable until the user returns to Manual.
-      if (shortcutOrderMode === "recent") return;
+      if (shortcutOrderMode === "recent") {
+        event.stopPropagation();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+        return;
+      }
       if (!dragId && !frequentDragSite) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = frequentDragSite ? "copy" : "move";
@@ -2757,7 +2771,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           event.preventDefault();
           return;
         }
-        if (!event.defaultPrevented && event.button === 0) recordShortcutOpened(item.id);
+        if (!event.defaultPrevented && event.button === 0) {
+          const opensElsewhere = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
+          recordShortcutOpened(item.id, { renderRecent: opensElsewhere });
+        }
       });
 
       const edit = document.createElement("button");
@@ -2994,12 +3011,84 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.setAttribute("aria-label", t("builtInIcons"));
     if (chooseBuiltinShortcutIcon) chooseBuiltinShortcutIcon.textContent = t("builtInIcons");
+    if (chooseDetectedFavicon) chooseDetectedFavicon.textContent = t("chooseDetectedFavicon");
+    if (detectedFaviconPicker) detectedFaviconPicker.setAttribute("aria-label", t("detectedFavicons"));
+  }
+
+  function resetDetectedFaviconPicker() {
+    detectedFaviconGeneration += 1;
+    detectedFaviconPickerUrl = "";
+    detectedFaviconChoices?.replaceChildren();
+    if (detectedFaviconStatus) detectedFaviconStatus.textContent = "";
+    if (detectedFaviconPicker) detectedFaviconPicker.hidden = true;
+    if (chooseDetectedFavicon) {
+      chooseDetectedFavicon.disabled = false;
+      chooseDetectedFavicon.setAttribute("aria-expanded", "false");
+      chooseDetectedFavicon.textContent = t("chooseDetectedFavicon");
+    }
+  }
+
+  function renderDetectedFaviconChoices(candidates, sourceUrl) {
+    if (!detectedFaviconChoices || !detectedFaviconPicker) return;
+    detectedFaviconChoices.replaceChildren();
+    const safeCandidates = (Array.isArray(candidates) ? candidates : []).slice(0, 8);
+    for (let index = 0; index < safeCandidates.length; index += 1) {
+      const candidate = safeCandidates[index];
+      if (!candidate || typeof candidate.image !== "string" || !candidate.image.startsWith("data:image/")) continue;
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "detected-favicon-choice";
+      button.setAttribute("aria-pressed", "false");
+      button.setAttribute("aria-label", `${t("detectedFavicons")} ${index + 1}`);
+      const image = document.createElement("img");
+      image.src = candidate.image;
+      image.alt = "";
+      image.setAttribute("aria-hidden", "true");
+      button.append(image);
+      button.addEventListener("click", () => {
+        let currentUrl = "";
+        try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch {}
+        if (!currentUrl || currentUrl !== sourceUrl || sourceUrl !== detectedFaviconPickerUrl) {
+          resetDetectedFaviconPicker();
+          showToast(t("faviconChoicesExpired"));
+          return;
+        }
+        shortcutSyncPrepareGeneration += 1;
+        pendingShortcutBuiltinIcon = "";
+        pendingShortcutImage = candidate.image;
+        pendingShortcutSyncData = "";
+        pendingShortcutImageKind = "device";
+        // A manually selected detected favicon becomes explicit user artwork,
+        // not an automatic recovery result. Preserve the exact chosen pixels and
+        // let the existing optional “Sync this image” control decide whether a
+        // compact derivative should travel to other devices.
+        pendingShortcutImageSourceKind = "upload";
+        pendingShortcutImageSourceUrl = "";
+        pendingShortcutImageIsFallback = false;
+        shortcutImageStyle.value = "contain";
+        shortcutImageUrl.value = "";
+        shortcutSyncImage.checked = false;
+        shortcutArtworkEdited = true;
+        for (const choice of detectedFaviconChoices.querySelectorAll?.(".detected-favicon-choice") || []) {
+          const selected = choice === button;
+          choice.classList.toggle("selected", selected);
+          choice.setAttribute("aria-pressed", selected ? "true" : "false");
+        }
+        updateBuiltinShortcutIconSelection();
+        updateImagePreview();
+      });
+      detectedFaviconChoices.append(button);
+    }
+    if (detectedFaviconStatus) detectedFaviconStatus.textContent = detectedFaviconChoices.childElementCount ? "" : t("noDetectedFavicons");
+    detectedFaviconPicker.hidden = false;
+    chooseDetectedFavicon?.setAttribute("aria-expanded", "true");
   }
 
   function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
     localizeDocument(shortcutDialog);
     closeDropChoice();
     shortcutSyncPrepareGeneration += 1;
+    resetDetectedFaviconPicker();
     shortcutForm.reset();
     shortcutId.value = item?.id || "";
     editingParentFolderId = parentFolderId;
@@ -3077,6 +3166,54 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   shortcutTitle.addEventListener("input", updateImagePreview);
   shortcutImageStyle.addEventListener("change", updateImagePreview);
+
+  chooseDetectedFavicon?.addEventListener("click", () => {
+    let sourceUrl = "";
+    try { sourceUrl = normalizeShortcutUrl(shortcutUrl.value); }
+    catch (error) { showToast(error.message || t("operationFailed")); return; }
+
+    // Permission request remains directly in the user's click. Candidate discovery
+    // then runs in the background using the exact same bounded image/SVG fetch
+    // primitives as automatic favicon recovery, without changing that resolver.
+    const permissionPromise = webAccessGranted ? Promise.resolve(true) : requestWebAccessFromGesture();
+    const generation = ++detectedFaviconGeneration;
+    detectedFaviconPickerUrl = sourceUrl;
+    detectedFaviconChoices?.replaceChildren();
+    if (detectedFaviconPicker) detectedFaviconPicker.hidden = false;
+    if (detectedFaviconStatus) detectedFaviconStatus.textContent = t("detectingFavicons");
+    chooseDetectedFavicon.disabled = true;
+    chooseDetectedFavicon.setAttribute("aria-expanded", "true");
+
+    void (async () => {
+      try {
+        const granted = await permissionPromise;
+        if (generation !== detectedFaviconGeneration) return;
+        webAccessGranted = granted === true;
+        if (!state.settings.webAccessPrompted) {
+          state.settings.webAccessPrompted = true;
+          await saveState({ localCacheOnly: true });
+        }
+        if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
+        const result = await browser.runtime.sendMessage({ type: "mosaicsync:discover-favicon-choices", pageUrl: sourceUrl });
+        if (generation !== detectedFaviconGeneration) return;
+        let currentUrl = "";
+        try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch {}
+        if (currentUrl !== sourceUrl) { resetDetectedFaviconPicker(); return; }
+        if (!result?.ok) throw new Error(result?.error === "permission" ? t("websiteAccessDenied") : t("operationFailed"));
+        renderDetectedFaviconChoices(result.candidates, sourceUrl);
+      } catch (error) {
+        if (generation !== detectedFaviconGeneration) return;
+        detectedFaviconChoices?.replaceChildren();
+        if (detectedFaviconStatus) detectedFaviconStatus.textContent = error.message || t("noDetectedFavicons");
+      } finally {
+        if (generation === detectedFaviconGeneration) chooseDetectedFavicon.disabled = false;
+      }
+    })();
+  });
+
+  shortcutUrl.addEventListener("input", () => {
+    if (detectedFaviconPickerUrl) resetDetectedFaviconPicker();
+  });
 
   chooseBuiltinShortcutIcon?.addEventListener("click", () => {
     ensureBuiltinShortcutIconPicker();
@@ -5602,11 +5739,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void switchActiveSpace(spaceId);
   });
 
-  window.addEventListener("resize", () => {
-    if (activeFolderId && !folderPopover.hidden) {
-      const anchor = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(activeFolderId)}"]`);
+  let folderRepositionFrame = 0;
+  function scheduleFolderPopoverReposition() {
+    if (!activeFolderId || folderPopover.hidden || folderRepositionFrame) return;
+    folderRepositionFrame = requestAnimationFrame(() => {
+      folderRepositionFrame = 0;
+      if (!activeFolderId || folderPopover.hidden) return;
+      const anchor = resolveLiveFolderAnchor(activeFolderId);
       if (anchor) positionFolderPopover(anchor);
-    }
+    });
+  }
+
+  page?.addEventListener("scroll", scheduleFolderPopoverReposition, { passive: true });
+  window.addEventListener("resize", () => {
+    scheduleFolderPopoverReposition();
     if (!dropChoice.hidden) closeDropChoice();
   });
 

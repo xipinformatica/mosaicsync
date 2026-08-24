@@ -40,8 +40,8 @@ const themedState = () => {
   });
 };
 
-test("1.27.2 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.27.2");
+test("1.27.3 public version and schema changes are unified", () => {
+  assert.equal(VERSION, "1.27.3");
   assert.equal(STATE_SCHEMA_VERSION, 18);
   assert.equal(SYNC_SCHEMA_VERSION, 10);
 });

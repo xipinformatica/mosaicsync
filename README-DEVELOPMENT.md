@@ -1,8 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.27.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.3 favicon-choice / folder-follow / recency-efficiency policy
+
+The automatic favicon resolver remains a protected baseline: `resolveFaviconForUrl()` must remain byte-for-byte identical to 1.27.2 unless a future release explicitly changes automatic favicon behavior. The manual favicon chooser is a separate user-initiated path that reuses the same bounded fetch, image-dimension and SVG-safety primitives, returns at most eight deduplicated validated images, and never widens host permissions or introduces a remote favicon proxy. Choosing one makes those exact pixels explicit user artwork so automatic recovery cannot overwrite the user's selection; optional image Sync remains user-controlled through the existing checkbox.
+
+Open folder popovers must remain visually attached while `.page` scrolls or the viewport resizes. Reposition work is coalesced through `requestAnimationFrame` so scroll events cannot create an unbounded layout loop. Recent mode remains presentation-only: top-level visual-slot dragover now stops propagation and advertises no-drop, while ordinary same-tab shortcut navigation records recency locally without scheduling a grid render that will be discarded by immediate navigation. Modified/background opens continue to schedule Recent rendering because MosaicSync remains visible.
+
+Regression coverage must lock both chronological directions of built-in-icon/upload conflict resolution, automatic favicon resolver byte identity, favicon-choice bounds/deduplication, explicit-selection semantics, folder scroll/resize coalescing, Recent dragover containment, and localization completeness.
 
 ## 1.27.2 Recent-mode / editor / projection hardening policy
 
@@ -190,7 +198,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

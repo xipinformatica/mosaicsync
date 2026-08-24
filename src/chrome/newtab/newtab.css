@@ -3927,6 +3927,39 @@ button { color: inherit; }
 [data-color-tag="pink"] { --shortcut-tag-color: #ec4899; }
 
 .compact-icon-picker-button { min-height: 34px; padding: 6px 10px; }
+
+.detected-favicon-picker[hidden] { display: none !important; }
+.detected-favicon-picker {
+  display: grid;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(15,11,21,.34);
+}
+:root[data-effective-theme="light"] .detected-favicon-picker { background: rgba(55,45,68,.045); }
+.detected-favicon-choices { display: flex; flex-wrap: wrap; gap: 7px; min-height: 0; }
+.detected-favicon-choice {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 5px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,.035);
+  cursor: pointer;
+}
+.detected-favicon-choice:hover { background: rgba(139,92,246,.13); border-color: rgba(139,92,246,.55); }
+.detected-favicon-choice.selected,
+.detected-favicon-choice[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(139,92,246,.14); }
+.detected-favicon-choice img { display: block; width: 32px; height: 32px; object-fit: contain; }
+.detected-favicon-status { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
+.detected-favicon-status:empty { display: none; }
 .builtin-icon-picker[hidden] { display: none !important; }
 .builtin-icon-picker {
   display: grid;

@@ -1,3 +1,12 @@
+## 1.27.3
+
+- Added a user-invoked **Choose detected favicon** picker in the shortcut editor. It discovers up to eight validated site-icon candidates using MosaicSync's existing bounded favicon/image/SVG primitives, deduplicates equivalent pixels, and lets the user choose the exact artwork they prefer. The automatic favicon resolver itself is byte-for-byte unchanged from 1.27.2. A selected detected favicon becomes explicit user artwork and is therefore protected from later automatic replacement; the existing optional **Sync this image** control remains the only way to synchronize its compact pixel derivative.
+- Improved open-folder anchoring during viewport movement: an open folder now follows `.page` scrolling as well as window resize through one `requestAnimationFrame`-throttled reposition path, keeping the popover visually attached without repeated synchronous layout work.
+- Completed the Recent-mode no-drop boundary by stopping `dragover` propagation and explicitly advertising `dropEffect = none`; grid-gap drops remain browser no-ops and no parent visual-slot handler exists.
+- Reduced unnecessary Recent-mode work on ordinary same-tab navigation. Shortcut usage timestamps are still persisted locally before navigation, but MosaicSync no longer schedules a full Recent-grid render when the current New Tab is about to leave; background/modifier opens still re-render because MosaicSync remains visible.
+- Expanded regression coverage for both chronological directions of uploaded-artwork vs built-in-icon Sync conflicts, favicon-picker safety and selection semantics, automatic-resolver byte identity, scroll/resize folder reposition coalescing, Recent dragover containment, grid-gap no-op behavior, and all 32 localized favicon-picker strings.
+- No new permissions or host permissions, no state/Sync/profile schema changes, no automatic favicon resolver changes, no CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.3` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.2
 
 - Made **Recently opened** explicitly presentation-only for top-level drag/drop. While Recent mode is active, visual-slot grid drops are blocked so Frequently Visited drags and folder-child extraction cannot write a temporary Recent slot into synchronized Manual positions. Normal Add shortcut still works and chooses a canonical free Manual position; Manual-mode exact-slot drag/drop remains unchanged.

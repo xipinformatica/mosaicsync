@@ -1498,6 +1498,90 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   return { image: "", sourceUrl: "", reason: sawTimeout ? "timeout" : "not-found", provisional: false };
 }
 
+async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}) {
+  if (!(await hasWebAccess())) return { ok: false, error: "permission", candidates: [] };
+  let parsed;
+  try {
+    parsed = new URL(pageUrl);
+    if (!/^https?:$/.test(parsed.protocol)) throw new Error();
+  } catch {
+    return { ok: false, error: "invalid-url", candidates: [] };
+  }
+
+  const deadlineAt = Date.now() + Math.max(2_000, Math.min(15_000, Number(timeoutMs) || 10_000));
+  const choices = [];
+  const seenImages = new Set();
+  const seenResources = new Set();
+  const maxChoices = 8;
+
+  const addChoice = (candidate, source = "") => {
+    if (!candidate?.image || seenImages.has(candidate.image)) return;
+    seenImages.add(candidate.image);
+    let sourceUrl = "";
+    try {
+      const value = String(candidate.sourceUrl || "");
+      if (/^https?:/i.test(value)) sourceUrl = new URL(value).href;
+    } catch {}
+    choices.push({
+      image: candidate.image,
+      sourceUrl,
+      width: Math.max(0, Math.trunc(Number(candidate.width) || 0)),
+      height: Math.max(0, Math.trunc(Number(candidate.height) || 0)),
+      qualitySide: faviconQualitySide(candidate),
+      declared: candidate.declared === true,
+      source: String(source || "").slice(0, 24)
+    });
+  };
+
+  const fetchChoice = async (value, { declared = false, qualityHint = 0, source = "site" } = {}) => {
+    if (Date.now() >= deadlineAt || choices.length >= maxChoices) return;
+    const resourceKey = String(value || "");
+    if (!resourceKey || seenResources.has(resourceKey)) return;
+    seenResources.add(resourceKey);
+    const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint });
+    if (candidate?.image) addChoice(candidate, source);
+  };
+
+  // Browser-local artwork is a useful user-selectable candidate, but unlike the
+  // automatic resolver the picker keeps going so the user can compare it with
+  // the site's own declared alternatives.
+  try { addChoice(await resolveBrowserCachedFavicon(parsed.href), "browser"); } catch {}
+
+  const initialOrigin = parsed.origin;
+  await fetchChoice(`${initialOrigin}/favicon.ico`, { source: "favicon" });
+
+  const parentUrl = parentHostFaviconUrl(parsed.href);
+  if (parentUrl) await fetchChoice(parentUrl, { declared: true, source: "parent" });
+
+  const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt });
+  for (const candidate of (discovered.candidates || []).slice(0, 16)) {
+    if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
+    await fetchChoice(candidate.url, {
+      declared: true,
+      qualityHint: candidate.sideHint,
+      source: candidate.source || "declared"
+    });
+  }
+
+  let finalOrigin = "";
+  try { finalOrigin = new URL(discovered.finalPageUrl || parsed.href).origin; } catch {}
+  if (finalOrigin && finalOrigin !== initialOrigin) {
+    await fetchChoice(`${finalOrigin}/favicon.ico`, { source: "redirect" });
+  }
+
+  for (const path of ["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"]) {
+    if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
+    await fetchChoice(`${initialOrigin}${path}`, { declared: true, source: "conventional" });
+  }
+
+  choices.sort((a, b) =>
+    b.qualitySide - a.qualitySide ||
+    Number(b.declared) - Number(a.declared) ||
+    a.source.localeCompare(b.source)
+  );
+  return { ok: true, error: "", candidates: choices.slice(0, maxChoices) };
+}
+
 function flattenShortcuts(state) {
   const shortcuts = [];
   const seen = new Set();
@@ -2272,6 +2356,8 @@ browser.runtime.onMessage.addListener((message, sender) => {
         force: message.force === true,
         upgradeRecoveredFavicons: message.upgradeRecoveredFavicons === true
       });
+    case "mosaicsync:discover-favicon-choices":
+      return discoverFaviconChoicesForUrl(message.pageUrl);
     case "mosaicsync:get-sync-status":
       return enqueue(getSyncStatus, { persistSyncError: false });
     case "mosaicsync:set-sync-enabled":
