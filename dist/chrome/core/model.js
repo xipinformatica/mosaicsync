@@ -195,6 +195,10 @@ function normalizeShortcut(item, index = 0, memo = null) {
   // but a remote URL is never accepted directly as an <img> source.
   const image = builtinIcon ? "" : (isSafeImageDataUrl(item.image) ? item.image : "");
   let imageSourceKind = builtinIcon ? "builtin" : normalizeShortcutImageSourceKind(item.imageSourceKind);
+  // A malformed/legacy record must not be able to claim the protected built-in
+  // artwork source without naming a valid built-in icon. Fail back to ordinary
+  // icon recovery instead of leaving the shortcut permanently icon-less.
+  if (!builtinIcon && imageSourceKind === "builtin") imageSourceKind = "none";
   if (!builtinIcon && imageSourceKind === "none" && item.source === "firefox-import") imageSourceKind = "firefox";
   let imageSyncKind = builtinIcon ? "none" : normalizeImageSyncKind(
     item.imageSyncKind,

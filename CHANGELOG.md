@@ -1,3 +1,12 @@
+## 1.27.2
+
+- Made **Recently opened** explicitly presentation-only for top-level drag/drop. While Recent mode is active, visual-slot grid drops are blocked so Frequently Visited drags and folder-child extraction cannot write a temporary Recent slot into synchronized Manual positions. Normal Add shortcut still works and chooses a canonical free Manual position; Manual-mode exact-slot drag/drop remains unchanged.
+- Tightened the Edit shortcut dialog for normal desktop-height viewports so the ordinary desktop editor fits without the visible internal right scrollbar. Vertical spacing, image-preview size and action margins are reduced modestly; generic internal overflow remains available on genuinely short viewports for localization/accessibility safety.
+- Hardened disposable render-manifest projection so `builtinIcon` and `colorTag` are allow-list validated before serialization, matching the existing session-snapshot and render-sink validation.
+- Hardened malformed built-in artwork metadata: `imageSourceKind: "builtin"` without a valid built-in icon now normalizes to `none`, allowing normal favicon recovery instead of leaving an icon-less protected state. Intentional synchronized built-in-icon choices continue to use normal last-writer-wins presentation semantics, including replacing local custom artwork.
+- Added behavioral/integration regressions for Recent-mode drop safety in both browsers, canonical Add behavior, render-manifest allow-list parity, malformed built-in source recovery, cross-device built-in-vs-upload semantics, full folder-popover geometry (one/two-line, clipped, edge clamp, flip-above), and classic-first-paint vs authoritative Recent-order equivalence.
+- No new permissions or host permissions, no state/Sync/profile schema changes, no favicon resolver changes, no CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.2` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.1
 
 - Fixed the remaining visual gap between a folder tile/title and its opened popover. MosaicSync now anchors the popover to the bottom of the **actually rendered visible folder-title text** instead of the `.shortcut-label` element's reserved 34 px two-line layout box. One-line titles no longer inherit invisible empty label height; genuine two-line titles remain fully visible.

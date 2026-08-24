@@ -17,7 +17,9 @@ import {
   RENDER_PREVIEW_CONCURRENCY,
   RENDER_PREVIEW_DIMENSION,
   RENDER_PREVIEW_MAX_CHARS,
-  RENDER_PREVIEW_TARGET_BYTES
+  RENDER_PREVIEW_TARGET_BYTES,
+  BUILTIN_SHORTCUT_ICON_KEYS,
+  SHORTCUT_COLOR_TAG_KEYS
 } from "../core/constants.js";
 
 const KEY = RENDER_MANIFEST_KEY;
@@ -103,8 +105,8 @@ function projectItem(item, previews) {
           id: child.id,
           title: child.title,
           url: child.url,
-          builtinIcon: child.builtinIcon || "",
-          colorTag: child.colorTag || "",
+          builtinIcon: BUILTIN_SHORTCUT_ICON_KEYS.includes(child.builtinIcon) ? child.builtinIcon : "",
+          colorTag: SHORTCUT_COLOR_TAG_KEYS.includes(child.colorTag) ? child.colorTag : "",
           imageStyle: child.imageStyle === "cover" ? "cover" : "contain",
           imageKey: childKey,
           preview: childKey ? (previews.get(childKey) || "") : ""
@@ -117,8 +119,8 @@ function projectItem(item, previews) {
     id: item.id,
     title: item.title,
     url: item.url,
-    builtinIcon: item.builtinIcon || "",
-    colorTag: item.colorTag || "",
+    builtinIcon: BUILTIN_SHORTCUT_ICON_KEYS.includes(item.builtinIcon) ? item.builtinIcon : "",
+    colorTag: SHORTCUT_COLOR_TAG_KEYS.includes(item.colorTag) ? item.colorTag : "",
     position: item.position,
     imageStyle: item.imageStyle === "cover" ? "cover" : "contain",
     imageKey,

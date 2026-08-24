@@ -1,8 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.27.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.2 Recent-mode / editor / projection hardening policy
+
+1.27.2 keeps **Recently opened** strictly presentation-only at the top-level grid. While Recent mode is active, top-level visual-slot drops must not create or move canonical Manual positions: Frequently Visited drag-to-grid and folder-child extraction-to-grid are blocked, top-level drag sources remain disabled, and normal Add shortcut ignores the Recent visual slot and selects a canonical free Manual position. Folder-internal reordering may continue because it does not depend on the top-level Recent projection. Manual mode retains the existing exact-slot drag/drop behavior.
+
+The shortcut editor should fit without a visible internal scrollbar on normal desktop-height viewports by modestly tightening vertical spacing, image-preview size and action margins. The generic dialog overflow remains intact as a fallback for genuinely short viewports and localization/accessibility must not be weakened to remove scrolling.
+
+Disposable render-manifest projection must allow-list `builtinIcon` and `colorTag` exactly like the session render snapshot. A shortcut claiming `imageSourceKind: "builtin"` without a valid `builtinIcon` must normalize to source kind `none`, allowing normal favicon recovery instead of creating a permanently icon-less malformed state. A deliberate synchronized built-in-icon choice remains normal last-writer-wins presentation metadata and may replace local uploaded artwork; this behavior is intentional and regression-tested.
+
+Regression coverage must execute the real empty-slot drop path in Recent and Manual modes, execute folder popover positioning for one-line/two-line/clipped/clamped/flipped geometry, and mechanically compare classic first-paint Recent ordering against the authoritative sorter across varied inputs.
 
 ## 1.27.1 folder-popover positioning policy
 
@@ -180,7 +190,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current public release is `1.27.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

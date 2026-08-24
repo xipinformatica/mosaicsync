@@ -675,9 +675,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     catch { return "manual"; }
   }
 
+  function updateFrequentDragAvailability() {
+    const enabled = shortcutOrderMode !== "recent";
+    for (const card of frequentSitesList?.querySelectorAll?.(".frequent-site-card") || []) card.draggable = enabled;
+  }
+
   function writeShortcutOrderPreference(value) {
     shortcutOrderMode = value === "recent" ? "recent" : "manual";
     try { localStorage.setItem(SHORTCUT_ORDER_PREF_KEY, shortcutOrderMode); } catch {}
+    updateFrequentDragAvailability();
   }
 
   function normalizeShortcutUsageMap(raw) {
@@ -948,9 +954,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       card.className = "frequent-site-card";
       card.href = site.url;
       card.rel = "noreferrer";
-      card.draggable = true;
+      card.draggable = shortcutOrderMode !== "recent";
       card.title = `${site.title || frequentHostLabel(site.url)}\n${site.url}`;
       card.addEventListener("dragstart", event => {
+        if (shortcutOrderMode === "recent") {
+          event.preventDefault();
+          frequentDragSite = null;
+          return;
+        }
         frequentDragSite = {
           title: String(site?.title || frequentHostLabel(site?.url) || "").trim().slice(0, 120),
           url: String(site?.url || "")
@@ -2356,9 +2367,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const plus = document.createElement("span");
     plus.textContent = "+";
     add.append(plus);
-    add.addEventListener("click", () => openShortcutEditor(null, null, position));
+    add.addEventListener("click", () => openShortcutEditor(null, null, shortcutOrderMode === "recent" ? null : position));
 
     slot.addEventListener("dragover", event => {
+      // Recent is a presentation view, never a canonical-layout editor. A visual
+      // Recent slot has no stable meaning in Manual order, so top-level grid
+      // drops are deliberately unavailable until the user returns to Manual.
+      if (shortcutOrderMode === "recent") return;
       if (!dragId && !frequentDragSite) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = frequentDragSite ? "copy" : "move";
@@ -2367,7 +2382,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     slot.addEventListener("dragleave", () => slot.classList.remove("drag-over-empty"));
     slot.addEventListener("drop", async event => {
       event.preventDefault();
+      event.stopPropagation();
       slot.classList.remove("drag-over-empty");
+      if (shortcutOrderMode === "recent") {
+        frequentDragSite = null;
+        return;
+      }
       if (frequentDragSite) {
         const site = frequentDragSite;
         frequentDragSite = null;
@@ -5318,6 +5338,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (event.key === SHORTCUT_ORDER_PREF_KEY) {
       shortcutOrderMode = readShortcutOrderPreference();
       if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
+      updateFrequentDragAvailability();
       if (!isAwaitingRemote()) render();
       scheduleRenderManifestRefresh(state, meta);
       return;
