@@ -1533,6 +1533,57 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   return { image: "", sourceUrl: "", reason: sawTimeout ? "timeout" : "not-found", provisional: false };
 }
 
+const FAVICON_CHOICE_CACHE_TTL_MS = 30_000;
+const FAVICON_CHOICE_CACHE_MAX_ENTRIES = 4;
+const FAVICON_CHOICE_CACHE_MAX_RESULT_CHARS = 400_000;
+const FAVICON_CHOICE_CACHE_MAX_TOTAL_CHARS = 800_000;
+const faviconChoiceCache = new Map();
+
+function faviconChoiceResultChars(result) {
+  return (result?.candidates || []).reduce((total, candidate) => total + String(candidate?.image || "").length, 0);
+}
+
+function cloneFaviconChoiceResult(result) {
+  return {
+    ok: result?.ok === true,
+    error: String(result?.error || ""),
+    candidates: (Array.isArray(result?.candidates) ? result.candidates : []).map(candidate => ({ ...candidate }))
+  };
+}
+
+function readCachedFaviconChoices(cacheKey, now = Date.now()) {
+  const entry = faviconChoiceCache.get(cacheKey);
+  if (!entry) return null;
+  if (now - entry.createdAt > FAVICON_CHOICE_CACHE_TTL_MS) {
+    faviconChoiceCache.delete(cacheKey);
+    return null;
+  }
+  // Refresh insertion order so the tiny map behaves as an LRU during repeated
+  // user-triggered editing without retaining favicon pixels for long periods.
+  faviconChoiceCache.delete(cacheKey);
+  faviconChoiceCache.set(cacheKey, entry);
+  return cloneFaviconChoiceResult(entry.result);
+}
+
+function rememberFaviconChoices(cacheKey, result, now = Date.now()) {
+  if (!cacheKey || result?.ok !== true) return;
+  const chars = faviconChoiceResultChars(result);
+  if (chars > FAVICON_CHOICE_CACHE_MAX_RESULT_CHARS) return;
+  const copy = cloneFaviconChoiceResult(result);
+  faviconChoiceCache.delete(cacheKey);
+  faviconChoiceCache.set(cacheKey, { createdAt: now, chars, result: copy });
+
+  let totalChars = 0;
+  for (const entry of faviconChoiceCache.values()) totalChars += entry.chars;
+  while (faviconChoiceCache.size > FAVICON_CHOICE_CACHE_MAX_ENTRIES || totalChars > FAVICON_CHOICE_CACHE_MAX_TOTAL_CHARS) {
+    const oldestKey = faviconChoiceCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    const oldest = faviconChoiceCache.get(oldestKey);
+    faviconChoiceCache.delete(oldestKey);
+    totalChars -= oldest?.chars || 0;
+  }
+}
+
 async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}) {
   if (!(await hasWebAccess())) return { ok: false, error: "permission", candidates: [] };
   let parsed;
@@ -1542,6 +1593,10 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   } catch {
     return { ok: false, error: "invalid-url", candidates: [] };
   }
+
+  const cacheKey = parsed.href;
+  const cached = readCachedFaviconChoices(cacheKey);
+  if (cached) return cached;
 
   const deadlineAt = Date.now() + Math.max(2_000, Math.min(15_000, Number(timeoutMs) || 10_000));
   const choices = [];
@@ -1568,13 +1623,47 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
     });
   };
 
-  const fetchChoice = async (value, { declared = false, qualityHint = 0, source = "site" } = {}) => {
-    if (Date.now() >= deadlineAt || choices.length >= maxChoices) return;
-    const resourceKey = String(value || "");
-    if (!resourceKey || seenResources.has(resourceKey)) return;
+  const prepareResource = (value, { declared = false } = {}) => {
+    if (Date.now() >= deadlineAt || choices.length >= maxChoices) return "";
+    const raw = String(value || "");
+    let resourceKey = "";
+    if (declared && /^data:/i.test(raw)) {
+      // Site-declared inline favicons were already supported by the chooser and
+      // remain subject to decodeInlineFaviconResource/image/SVG bounds.
+      resourceKey = raw;
+    } else {
+      try {
+        const parsedResource = new URL(raw);
+        if (!/^https?:$/.test(parsedResource.protocol)) return "";
+        resourceKey = parsedResource.href;
+      } catch { return ""; }
+    }
+    if (seenResources.has(resourceKey)) return "";
     seenResources.add(resourceKey);
+    return resourceKey;
+  };
+
+  const fetchChoice = async (value, { declared = false, qualityHint = 0, source = "site" } = {}) => {
+    const resourceKey = prepareResource(value, { declared });
+    if (!resourceKey) return null;
     const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint });
-    if (candidate?.image) addChoice(candidate, source);
+    return candidate?.image ? { candidate, source } : null;
+  };
+
+  // Candidate image work is bounded to two simultaneous fetch/decode jobs. This
+  // mirrors the mature automatic resolver's conservative concurrency without
+  // changing its ranking, helpers, single-flight key or winner selection.
+  const fetchChoiceBatches = async entries => {
+    const values = Array.isArray(entries) ? entries : [];
+    for (let index = 0; index < values.length; index += 2) {
+      if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
+      const batch = values.slice(index, index + 2);
+      const results = await Promise.all(batch.map(entry => fetchChoice(entry.value, entry.options)));
+      for (const result of results) {
+        if (result?.candidate) addChoice(result.candidate, result.source);
+        if (choices.length >= maxChoices) break;
+      }
+    }
   };
 
   // Browser-local artwork is a useful user-selectable candidate, but unlike the
@@ -1583,40 +1672,48 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000 } = {}
   try { addChoice(await resolveBrowserCachedFavicon(parsed.href), "browser"); } catch {}
 
   const initialOrigin = parsed.origin;
-  await fetchChoice(`${initialOrigin}/favicon.ico`, { source: "favicon" });
-
   const parentUrl = parentHostFaviconUrl(parsed.href);
-  if (parentUrl) await fetchChoice(parentUrl, { declared: true, source: "parent" });
+  await fetchChoiceBatches([
+    { value: `${initialOrigin}/favicon.ico`, options: { source: "favicon" } },
+    ...(parentUrl ? [{ value: parentUrl, options: { declared: true, source: "parent" } }] : [])
+  ]);
 
   const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt });
-  for (const candidate of (discovered.candidates || []).slice(0, 16)) {
-    if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
-    await fetchChoice(candidate.url, {
+  await fetchChoiceBatches((discovered.candidates || []).slice(0, 16).map(candidate => ({
+    value: candidate.url,
+    options: {
       declared: true,
       qualityHint: candidate.sideHint,
       source: candidate.source || "declared"
-    });
-  }
+    }
+  })));
 
   let finalOrigin = "";
   try { finalOrigin = new URL(discovered.finalPageUrl || parsed.href).origin; } catch {}
   if (finalOrigin && finalOrigin !== initialOrigin) {
-    await fetchChoice(`${finalOrigin}/favicon.ico`, { source: "redirect" });
+    const redirected = await fetchChoice(`${finalOrigin}/favicon.ico`, { source: "redirect" });
+    if (redirected?.candidate) addChoice(redirected.candidate, redirected.source);
   }
 
-  for (const path of ["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"]) {
-    if (Date.now() >= deadlineAt || choices.length >= maxChoices) break;
-    await fetchChoice(`${initialOrigin}${path}`, { declared: true, source: "conventional" });
-  }
+  await fetchChoiceBatches(["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"].map(path => ({
+    value: `${initialOrigin}${path}`,
+    options: { declared: true, source: "conventional" }
+  })));
 
   choices.sort((a, b) =>
     b.qualitySide - a.qualitySide ||
     Number(b.declared) - Number(a.declared) ||
     a.source.localeCompare(b.source)
   );
-  return { ok: true, error: "", candidates: choices.slice(0, maxChoices) };
-}
+  const result = { ok: true, error: "", candidates: choices.slice(0, maxChoices) };
 
+  // Do not retain candidates if the optional host permission disappeared while
+  // discovery was in flight. Otherwise keep only a tiny, short-lived in-memory
+  // cache for repeated clicks in the same editor session.
+  if (!(await hasWebAccess({ refresh: true }))) return { ok: false, error: "permission", candidates: [] };
+  rememberFaviconChoices(cacheKey, result);
+  return cloneFaviconChoiceResult(result);
+}
 function flattenShortcuts(state) {
   const shortcuts = [];
   const seen = new Set();

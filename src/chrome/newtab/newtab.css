@@ -688,8 +688,6 @@ button { color: inherit; }
 .settings-section { padding: 17px 0; border-top: 1px solid rgba(255,255,255,.09); }
 .settings-section:first-of-type { border-top: 0; padding-top: 0; }
 .settings-section h3 { margin: 0 0 13px; font-size: 15px; }
-.stack-actions { display: grid; gap: 8px; }
-.full-button { width: 100%; text-align: left; }
 .privacy-section p { margin: 8px 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 
 
@@ -2217,8 +2215,6 @@ button { color: inherit; }
 .sync-settings-help:hover .sync-help-tooltip,
 .sync-settings-help:focus-within .sync-help-tooltip { transform: translateY(0); }
 
-.stack-actions { gap: 9px; }
-.stack-actions .full-button { min-height: 40px; }
 .development-actions {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;

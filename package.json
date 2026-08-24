@@ -5,6 +5,7 @@
   "scripts": {
     "build": "node tools/build.mjs",
     "test": "node tools/build.mjs && node --test tests/*.test.mjs",
-    "bench": "node tools/build.mjs && node bench/performance.mjs"
+    "bench": "node tools/build.mjs && node bench/performance.mjs",
+    "size": "node tools/build.mjs && node tools/size-report.mjs"
   }
 }

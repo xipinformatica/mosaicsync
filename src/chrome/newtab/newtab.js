@@ -3040,7 +3040,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       button.type = "button";
       button.className = "detected-favicon-choice";
       button.setAttribute("aria-pressed", "false");
-      button.setAttribute("aria-label", `${t("detectedFavicons")} ${index + 1}`);
+      const width = Math.max(0, Math.trunc(Number(candidate.width) || 0));
+      const height = Math.max(0, Math.trunc(Number(candidate.height) || 0));
+      const sourceLabel = candidate.source === "browser" ? t("firefox") : t("website");
+      const choiceLabel = width && height
+        ? `${t("detectedFavicons")} ${index + 1} — ${width} × ${height} — ${sourceLabel}`
+        : `${t("detectedFavicons")} ${index + 1} — ${sourceLabel}`;
+      button.setAttribute("aria-label", choiceLabel);
+      button.title = choiceLabel;
       const image = document.createElement("img");
       image.src = candidate.image;
       image.alt = "";
@@ -3127,6 +3134,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (dialog === settingsDialog) closeBackgroundColorPicker();
     if (dialog.open) dialog.close();
   }
+
+  shortcutDialog?.addEventListener("close", resetDetectedFaviconPicker);
 
   settingsDialog?.addEventListener("close", () => {
     if (!deferredAppearanceVisual) return;

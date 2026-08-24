@@ -1,8 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.27.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.27.4 runtime-size / favicon-picker lifecycle policy
+
+The reviewed files under `src/shared/core/i18n-locales/` remain the authoritative human-readable 32-language catalogs. `tools/build.mjs` may generate a compact runtime representation in `dist/` only when exhaustive tests prove exact source→runtime key/value equivalence. Locale lazy-loading remains unchanged: English plus only the active locale are loaded, and compacting must not cause all catalogs to parse on New Tab startup.
+
+The authoritative `src/shared/core/public_suffix_list.dat` remains the complete upstream PSL with provenance/comments. The build emits a rules-only runtime copy with a compact license/provenance header. Every non-comment rule and its order must be byte-text equivalent after trimming; no PSL rule may be removed or rewritten. Package-size monitoring is deterministic and category-based. `package-size-baseline.json` is a conscious release baseline, not a hard product-size ceiling; unexpected category/total deflated growth above the configured 15% tolerance must require an explicit baseline update.
+
+The automatic favicon resolver remains the protected 1.27.2/1.27.3 baseline and must not be modified by manual-picker optimizations. Manual candidate discovery may use at most two simultaneous bounded fetch/decode jobs. A repeated exact-URL picker request may reuse only a tiny short-lived in-memory cache (30-second TTL, four-entry cap, explicit retained-character bounds); permission is still checked before cache use and refreshed before cache admission. Site-declared inline data favicons remain supported only through the existing declared-image decoding/SVG safety path. Closing the shortcut editor or changing its URL must increment the picker generation, release candidate DOM/data immediately and cause late async results to be ignored.
+
+Detected-favicon accessibility metadata may expose dimensions and a localized Browser/Website source label without adding raw technical source strings to the UI. No discovered candidate except the one deliberately selected becomes persisted artwork. Obsolete CSS may be removed only when full-source/runtime searches confirm no static or dynamic use.
 
 ## 1.27.3 favicon-choice / folder-follow / recency-efficiency policy
 
@@ -198,7 +208,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

@@ -164,6 +164,12 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.3 ${browser} detected-favicon discovery is bounded, deduplicated and uses validated favicon primitives`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const body = extractFunction(source, "discoverFaviconChoicesForUrl");
+    const cacheHelpers = [
+      "faviconChoiceResultChars",
+      "cloneFaviconChoiceResult",
+      "readCachedFaviconChoices",
+      "rememberFaviconChoices"
+    ].map(name => extractFunction(source, name)).join("\n");
     assert.doesNotMatch(body, /resolveFaviconForUrl\s*\(/, "manual chooser must not alter or piggyback on the automatic winner algorithm");
 
     let webAccess = true;
@@ -195,10 +201,15 @@ for (const browser of ["firefox", "chrome"]) {
       fetchImageDataUrlDetailed: async value => {
         fetches.push(value);
         return images.get(value) || { image: "", sourceUrl: "", width: 0, height: 0 };
-      }
+      },
+      faviconChoiceCache: new Map(),
+      FAVICON_CHOICE_CACHE_TTL_MS: 30_000,
+      FAVICON_CHOICE_CACHE_MAX_ENTRIES: 4,
+      FAVICON_CHOICE_CACHE_MAX_RESULT_CHARS: 400_000,
+      FAVICON_CHOICE_CACHE_MAX_TOTAL_CHARS: 800_000
     };
     vm.createContext(context);
-    vm.runInContext(`${body}; this.discoverFaviconChoicesForUrl = discoverFaviconChoicesForUrl;`, context);
+    vm.runInContext(`${cacheHelpers}\n${body}; this.discoverFaviconChoicesForUrl = discoverFaviconChoicesForUrl;`, context);
     const result = await context.discoverFaviconChoicesForUrl("https://site.example/page");
     assert.equal(result.ok, true);
     assert.ok(result.candidates.length >= 3 && result.candidates.length <= 8);

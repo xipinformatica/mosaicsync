@@ -23,6 +23,54 @@ def package(browser: str, version: str) -> Path:
             archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
     return output
 
+
+def size_category(rel: str) -> str:
+    if rel.startswith("core/i18n-locales/") or rel == "core/i18n-runtime-catalog.js": return "localization"
+    if rel == "core/public_suffix_list.dat": return "public-suffix-list"
+    if rel.startswith("assets/backgrounds/"): return "wallpapers"
+    if rel.startswith("_locales/"): return "manifest-localization"
+    if rel.startswith("newtab/") and rel.endswith(".js"): return "newtab-js"
+    if rel.startswith("newtab/") and rel.endswith(".css"): return "newtab-css"
+    if rel.startswith("newtab/") and rel.endswith(".html"): return "newtab-html"
+    if rel.startswith("background/"): return "background"
+    if rel.startswith("core/"): return "shared-core"
+    if rel.startswith("welcome/"): return "welcome"
+    if rel.startswith("assets/"): return "assets"
+    if rel == "manifest.json": return "manifest"
+    return "other"
+
+def package_size_report(paths: dict[str, Path], version: str) -> Path:
+    report = {"schemaVersion": 1, "version": version, "browsers": {}}
+    for browser, path in paths.items():
+        categories = {}
+        files = []
+        with ZipFile(path, "r") as archive:
+            for info in archive.infolist():
+                if info.is_dir():
+                    continue
+                category = size_category(info.filename)
+                entry = categories.setdefault(category, {"files": 0, "rawBytes": 0, "compressedBytes": 0})
+                entry["files"] += 1
+                entry["rawBytes"] += info.file_size
+                entry["compressedBytes"] += info.compress_size
+                files.append({
+                    "path": info.filename,
+                    "category": category,
+                    "rawBytes": info.file_size,
+                    "compressedBytes": info.compress_size,
+                })
+        files.sort(key=lambda item: (-item["compressedBytes"], -item["rawBytes"], item["path"]))
+        report["browsers"][browser] = {
+            "archiveBytes": path.stat().st_size,
+            "rawBytes": sum(item["rawBytes"] for item in files),
+            "compressedPayloadBytes": sum(item["compressedBytes"] for item in files),
+            "categories": dict(sorted(categories.items())),
+            "largestFiles": files[:30],
+        }
+    output = OUT / "package-size-report.json"
+    output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return output
+
 def verify_release_identity(version: str) -> None:
     checks = {
         ROOT / "src" / "shared" / "core" / "constants.js": rf'export const VERSION = "{re.escape(version)}";',
@@ -65,5 +113,7 @@ if __name__ == "__main__":
         )
     release_label = versions["chrome"]
     verify_release_identity(release_label)
+    outputs = {browser: package(browser, release_label) for browser in ("firefox", "chrome")}
     for browser in ("firefox", "chrome"):
-        print(package(browser, release_label))
+        print(outputs[browser])
+    print(package_size_report(outputs, release_label))
