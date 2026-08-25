@@ -1,0 +1,121 @@
+name: Build MosaicSync 1.27.8
+
+on:
+  push:
+    branches:
+      - build-1.27.8
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out staged source
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply 1.27.8 source transform
+        run: python3 tools/build-1278.py
+
+      - name: Run complete regression suite
+        run: npm test
+
+      - name: Run package-size regression audit
+        run: npm run size
+
+      - name: Create deterministic browser packages
+        run: python3 tools/package.py
+
+      - name: Create complete GitHub-ready source archive
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+
+          root = Path.cwd()
+          output = root / 'artifacts' / 'mosaicsync-1.27.8-source.zip'
+          fixed = (2026, 1, 1, 0, 0, 0)
+          excluded_exact = {
+              '.github/workflows/build-1.27.8.yml',
+              'tools/build-1278.py',
+          }
+          excluded_prefixes = ('.git/', 'artifacts/', 'node_modules/')
+          files = []
+          for path in root.rglob('*'):
+              if not path.is_file():
+                  continue
+              rel = path.relative_to(root).as_posix()
+              if rel in excluded_exact or rel.startswith(excluded_prefixes):
+                  continue
+              files.append((rel, path))
+          output.parent.mkdir(exist_ok=True)
+          with ZipFile(output, 'w', compression=ZIP_DEFLATED, compresslevel=9) as archive:
+              for rel, path in sorted(files):
+                  info = ZipInfo(rel, fixed)
+                  info.compress_type = ZIP_DEFLATED
+                  info.external_attr = 0o100644 << 16
+                  archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
+          print(output)
+          PY
+
+      - name: Verify release bundle identity
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile
+          import json
+
+          root = Path.cwd()
+          expected = [
+              root/'artifacts/mosaicsync-1.27.8-firefox.zip',
+              root/'artifacts/mosaicsync-1.27.8-chrome.zip',
+              root/'artifacts/mosaicsync-1.27.8-source.zip',
+              root/'artifacts/package-size-report.json',
+              root/'release-notes/AMO-1.27.8-changelog.txt',
+              root/'release-notes/AMO-1.27.8-notes-to-reviewer.txt',
+              root/'release-notes/GitHub-1.27.8-release.md',
+          ]
+          missing = [str(p) for p in expected if not p.is_file()]
+          if missing:
+              raise SystemExit('Missing release files: ' + ', '.join(missing))
+          for browser in ('firefox','chrome'):
+              path=root/f'artifacts/mosaicsync-1.27.8-{browser}.zip'
+              with ZipFile(path) as z:
+                  manifest=json.loads(z.read('manifest.json'))
+                  assert manifest['version']=='1.27.8'
+                  if browser=='chrome': assert manifest.get('version_name')=='1.27.8'
+          with ZipFile(root/'artifacts/mosaicsync-1.27.8-source.zip') as z:
+              names=set(z.namelist())
+              assert 'src/shared/background/profile-snapshot.js' in names
+              assert 'tests/profile-sync-1278.test.mjs' in names
+              assert 'CHANGELOG.md' in names
+              assert '.github/workflows/build-1.27.8.yml' not in names
+              assert 'tools/build-1278.py' not in names
+          print('Release bundle identity verified.')
+          PY
+
+      - name: Collect release bundle
+        run: |
+          mkdir -p release-bundle
+          cp artifacts/mosaicsync-1.27.8-firefox.zip release-bundle/
+          cp artifacts/mosaicsync-1.27.8-chrome.zip release-bundle/
+          cp artifacts/mosaicsync-1.27.8-source.zip release-bundle/
+          cp artifacts/package-size-report.json release-bundle/
+          cp release-notes/AMO-1.27.8-changelog.txt release-bundle/
+          cp release-notes/AMO-1.27.8-notes-to-reviewer.txt release-bundle/
+          cp release-notes/GitHub-1.27.8-release.md release-bundle/
+
+      - name: Upload release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosaicsync-1.27.8-release-bundle
+          path: release-bundle/
+          if-no-files-found: error
+          retention-days: 7
