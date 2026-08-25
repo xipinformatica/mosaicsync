@@ -115,34 +115,39 @@ test("1.27.8.3 normal startup reuses the exact persisted compact state as the co
 });
 
 for (const browserName of ["firefox", "chrome"]) {
-  test(`1.27.8.3 ${browserName} loads a small critical stylesheet first and the full stylesheet through a CSP-safe external bootstrap`, () => {
+  test(`1.27.8.4 ${browserName} loads critical and secondary-only styles through a CSP-safe external bootstrap`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browserName}/newtab/newtab-critical.css`, "utf8");
     const full = fs.readFileSync(`dist/${browserName}/newtab/newtab.css`, "utf8");
+    const secondaryCss = fs.readFileSync(`dist/${browserName}/newtab/newtab-secondary.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browserName}/newtab/secondary-style-bootstrap.js`, "utf8");
     assert.match(html, /<link rel="stylesheet" href="newtab-critical\.css">/);
     assert.doesNotMatch(html, /<link rel="stylesheet" href="newtab\.css">/, "128 KB full sheet must no longer block the bootstrap frame");
     assert.match(html, /<script src="secondary-style-bootstrap\.js"><\/script>/);
-    assert.ok(Buffer.byteLength(critical) < Buffer.byteLength(full) * 0.45,
-      "critical sheet should cut at least 55% of blocking CSS source bytes");
+    assert.ok(Buffer.byteLength(critical) < Buffer.byteLength(full) * 0.30,
+      "critical sheet should cut at least 70% of blocking CSS source bytes");
+    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondaryCss) < Buffer.byteLength(full),
+      "critical + secondary-only CSS should parse fewer total bytes than the old monolithic sheet");
     for (const selector of [".shortcut-grid", ".shortcut-card", ".tile", ".folder-mosaic", ".frequent-sites", ".sync-pending-state", ".settings-button", ".bookmarks-button"]) {
       assert.ok(critical.includes(selector), `${browserName}: critical CSS must include ${selector}`);
     }
     assert.doesNotMatch(secondary, /onload\s*=/i, "secondary CSS loader must not depend on an inline event-handler CSP exception");
     assert.match(secondary, /document\.createElement\("link"\)/);
-    assert.match(secondary, /link\.href = "newtab\.css"/);
+    assert.match(secondary, /link\.href = "newtab-secondary\.css"/);
     assert.match(secondary, /requestAnimationFrame\(\(\) => requestAnimationFrame\(load\)\)/,
-      "the complete sheet must be queued only after the critical launcher has had a paint opportunity");
+      "the secondary-only sheet must be queued only after the critical launcher has had a paint opportunity");
   });
 
-  test(`1.27.8.3 ${browserName} begins authoritative local storage before secondary UI wiring`, () => {
+  test(`1.27.8.4 ${browserName} begins authoritative local storage before the module graph consumes it`, () => {
+    const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const src = fs.readFileSync(`dist/${browserName}/newtab/newtab.js`, "utf8");
-    const early = src.indexOf("const earlyLocalRawPromise = readLocalStorageRaw()");
-    const localization = src.indexOf("localizeDocument(");
-    const loadState = src.indexOf("async function loadState()");
-    assert.ok(early >= 0 && localization >= 0 && loadState >= 0);
-    assert.ok(early < localization, "storage.local IPC should overlap localization/UI initialization");
-    assert.ok(early < loadState, "storage.local read must already be in flight before loadState consumes it");
+    const bootstrap = fs.readFileSync(`dist/${browserName}/newtab/local-storage-bootstrap.js`, "utf8");
+    const bootstrapTag = html.indexOf('<script src="local-storage-bootstrap.js"></script>');
+    const moduleTag = html.indexOf('<script type="module" src="newtab.js"></script>');
+    assert.ok(bootstrapTag >= 0 && moduleTag >= 0 && bootstrapTag < moduleTag, "storage.local IPC should start before module evaluation");
+    assert.match(bootstrap, /globalThis\.browser\?\.storage\?\.local[\s\S]*?storage\.get\(/);
+    assert.match(src, /__mosaicsyncEarlyLocalRead[\s\S]*?earlyLocalBootstrap\?\.promise/);
+    assert.match(src, /readLocalStorageRaw\(\)/, "module must retain a safe fallback if bootstrap read is unavailable");
     assert.match(src, /materializeLocalStorage\(rawLocal, \{ withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 \}\)/);
   });
 

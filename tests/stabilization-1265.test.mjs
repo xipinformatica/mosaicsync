@@ -26,7 +26,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.9 ${browser} previews active day/night wallpaper changes without touching the real page surface`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const helper = js.match(/function applyThemeWallpaperVisualSafely\(previousPresetId, previousImageValue\)\s*\{([\s\S]*?)\n  \}\n\n  function stampThemeWallpaperMutation/);
+    const helper = js.match(/function applyThemeWallpaperVisualSafely\(previousPresetId, previousImageValue, previousDim\)\s*\{([\s\S]*?)\n  \}\n\n  function stampThemeWallpaperMutation/);
     assert.ok(helper, `${browser}: wallpaper paint guard missing`);
     assert.match(helper[1], /if \(settingsDialog\?\.open\)[\s\S]*?applyPageBackgroundVisual\(\);[\s\S]*?return;/,
       `${browser}: active wallpaper changes must use the isolated live preview under Settings`);

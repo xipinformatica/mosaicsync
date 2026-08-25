@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.27.8.3**
+**Current source release: 1.27.8.4**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.27.8.3** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.27.8.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.27.8.3 is the second New Tab performance pass for older/slower computers. It reduces the blocking first-frame stylesheet, overlaps authoritative `storage.local` I/O with module/UI setup, safely adopts an exact-matching bootstrap grid on cold startup instead of rebuilding it, hydrates only the four visible artwork cells of closed folders before perceived completion, reuses the exact compact persisted state as the future-write baseline, and records local-only startup phase timings for profiling. The established full renderer remains the fallback whenever adoption is uncertain; Sync behavior, security validation, navigation safety, CSP strength and image quality are unchanged.
+1.27.8.4 is the third focused New Tab performance/stability pass for older/slower computers. It removes duplicated critical CSS from the deferred UI sheet, trims the blocking launcher CSS further, starts authoritative local-state I/O before the large module graph evaluates, and hydrates hidden folder artwork in bounded idle chunks rather than one large delayed batch. Local-only diagnostics now include perceived-paint/long-task timing. The release also fixes the Firefox Settings blanking regression when separate Light/Dark wallpaper controls change, synchronizes the Frequently Visited Show/Count preference while keeping actual history/sites and browser permission device-local, and makes the shortcut hover enlargement more noticeable without layout shift. No new permissions, CSP relaxation, telemetry, remote code or artwork-quality reduction are introduced.
 
 1.27.8 is a Sync-integrity and self-healing release. Trusted devices now publish Personal and Work together as one complete, root-last device generation while retaining the immediately previous complete generation for fallback. A fresh browser profile cannot finish initialization from Personal alone: it waits until Work is explicitly complete (including a valid zero-record Work) or a complete Personal+Work device generation is available. Local shortcuts created while waiting are merged on top of the incoming profile instead of replacing it. Complete profile snapshots can also repair a torn compatibility ledger automatically, while a half-restored device with no applied Work revision is blocked from publishing an empty Work copy. The underlying record conflict/tombstone rules remain unchanged. 1.27.8 also adds a restrained paint-only Firefox-style shortcut hover scale/brightness effect with no grid reflow. No new permissions, CSP relaxation, telemetry or remote code were added.
 

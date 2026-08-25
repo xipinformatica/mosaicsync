@@ -418,6 +418,10 @@ function normalizeSettings(rawSettings, memo = null) {
   safe.brandVisible = settings.brandVisible !== false;
   safe.autoSiteIcons = settings.autoSiteIcons !== false;
   safe.webAccessPrompted = settings.webAccessPrompted === true;
+  safe.frequentlyVisitedEnabled = settings.frequentlyVisitedEnabled === true;
+  safe.frequentlyVisitedCount = [3, 5, 8, 10].includes(Number(settings.frequentlyVisitedCount))
+    ? Number(settings.frequentlyVisitedCount)
+    : DEFAULT_SETTINGS.frequentlyVisitedCount;
   safe.spaceName = typeof settings.spaceName === "string"
     ? settings.spaceName.trim().replace(/\s+/g, " ").slice(0, 32)
     : "";
@@ -593,6 +597,24 @@ export function normalizeState(raw, memo = null) {
       }, memo);
     }
   }
+
+  // Frequently Visited is a profile-level presentation preference even though
+  // actual browser-history suggestions remain device-local. Keep the two
+  // workspace copies normalized to Personal so an unrelated Work settings write
+  // cannot accidentally re-introduce a stale per-Space value during rolling
+  // upgrades. This mirrors values only; it does not advance either settings clock.
+  const frequentEnabled = spaces.personal.settings.frequentlyVisitedEnabled === true;
+  const frequentCount = [3, 5, 8, 10].includes(Number(spaces.personal.settings.frequentlyVisitedCount))
+    ? Number(spaces.personal.settings.frequentlyVisitedCount)
+    : DEFAULT_SETTINGS.frequentlyVisitedCount;
+  spaces.work = {
+    ...spaces.work,
+    settings: {
+      ...spaces.work.settings,
+      frequentlyVisitedEnabled: frequentEnabled,
+      frequentlyVisitedCount: frequentCount
+    }
+  };
 
   const active = spaces[activeSpaceId];
   return {
@@ -981,6 +1003,8 @@ export function makeSettingsRecordNormalized(normalized, deviceId = "") {
       darkBackgroundPreset: settings.darkBackgroundPreset || "",
       ...projectThemeBackgroundDims(settings),
       brandVisible: settings.brandVisible,
+      frequentlyVisitedEnabled: settings.frequentlyVisitedEnabled === true,
+      frequentlyVisitedCount: [3, 5, 8, 10].includes(Number(settings.frequentlyVisitedCount)) ? Number(settings.frequentlyVisitedCount) : DEFAULT_SETTINGS.frequentlyVisitedCount,
       spaceName: settings.spaceName || "",
       multipleSpacesEnabled: settings.multipleSpacesEnabled !== false
     },
@@ -1244,6 +1268,12 @@ function settingsFromRecord(record, localState, assets) {
     lightBackgroundDim: normalizeOptionalBackgroundDim(incoming.lightBackgroundDim) ?? localState.settings.lightBackgroundDim,
     darkBackgroundDim: normalizeOptionalBackgroundDim(incoming.darkBackgroundDim) ?? localState.settings.darkBackgroundDim,
     brandVisible: incoming.brandVisible,
+    frequentlyVisitedEnabled: typeof incoming.frequentlyVisitedEnabled === "boolean"
+      ? incoming.frequentlyVisitedEnabled
+      : localState.settings.frequentlyVisitedEnabled === true,
+    frequentlyVisitedCount: [3, 5, 8, 10].includes(Number(incoming.frequentlyVisitedCount))
+      ? Number(incoming.frequentlyVisitedCount)
+      : ([3, 5, 8, 10].includes(Number(localState.settings.frequentlyVisitedCount)) ? Number(localState.settings.frequentlyVisitedCount) : DEFAULT_SETTINGS.frequentlyVisitedCount),
     spaceName: typeof incoming.spaceName === "string" ? incoming.spaceName : localState.settings.spaceName,
     multipleSpacesEnabled: typeof incoming.multipleSpacesEnabled === "boolean"
       ? incoming.multipleSpacesEnabled
@@ -1458,6 +1488,8 @@ function projectStateForSyncSignature(source) {
         darkBackgroundPreset: settings.darkBackgroundPreset || "",
         ...projectThemeBackgroundDims(settings),
         brandVisible: settings.brandVisible,
+        frequentlyVisitedEnabled: settings.frequentlyVisitedEnabled === true,
+        frequentlyVisitedCount: [3, 5, 8, 10].includes(Number(settings.frequentlyVisitedCount)) ? Number(settings.frequentlyVisitedCount) : DEFAULT_SETTINGS.frequentlyVisitedCount,
         spaceName: settings.spaceName || "",
         multipleSpacesEnabled: settings.multipleSpacesEnabled !== false
       },

@@ -40,8 +40,8 @@ const themedState = () => {
   });
 };
 
-test("1.27.8.3 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.27.8.3");
+test("1.27.8.4 public version and schema changes are unified", () => {
+  assert.equal(VERSION, "1.27.8.4");
   assert.equal(STATE_SCHEMA_VERSION, 18);
   assert.equal(SYNC_SCHEMA_VERSION, 10);
 });
@@ -56,7 +56,9 @@ test("light/dark built-in wallpaper choices survive normalization and Sync recon
   assert.equal(settingsRecord.settings.themeWallpapersEnabled, true);
   assert.equal(settingsRecord.settings.lightBackgroundPreset, "aurora");
   assert.equal(settingsRecord.settings.darkBackgroundPreset, "aetherFlow");
-  for (const localOnly of ["frequentlyVisitedCount", "deviceDefaultSpace", "bookmarkFolderColors"]) {
+  assert.equal(settingsRecord.settings.frequentlyVisitedEnabled, false, "Frequently Visited intent should synchronize");
+  assert.equal(settingsRecord.settings.frequentlyVisitedCount, 5, "Frequently Visited count should synchronize");
+  for (const localOnly of ["deviceDefaultSpace", "bookmarkFolderColors"]) {
     assert.equal(Object.hasOwn(settingsRecord.settings, localOnly), false, `${localOnly} must stay out of browser Sync`);
   }
 

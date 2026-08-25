@@ -1,6 +1,6 @@
 # MosaicSync Privacy
 
-Last updated: 23 August 2026
+Last updated: 25 August 2026
 
 MosaicSync is designed to work without a MosaicSync account, MosaicSync cloud service, advertising SDK, analytics service or telemetry backend.
 
@@ -31,7 +31,9 @@ Data sent through Firefox Sync or Chrome Sync is handled by Mozilla or Google re
 
 The Frequently Visited feature is optional and uses the browser's top-sites/history-derived API after the relevant permission is granted.
 
-Frequently Visited suggestions are used to display suggestions inside MosaicSync. To keep New Tab startup visually stable, MosaicSync can keep a small bounded snapshot of the last displayed suggestions in the browser profile as disposable device-local render data. Sites explicitly hidden from this section are remembered as a bounded device-local domain list. Neither the render snapshot nor the hidden-domain list is included in MosaicSync Sync data or `.mosaicsync` profile backups.
+Frequently Visited suggestions are used to display suggestions inside MosaicSync. To keep New Tab startup visually stable, MosaicSync can keep a small bounded snapshot of the last displayed suggestions in the browser profile as disposable device-local render data. Sites explicitly hidden from this section are remembered as a bounded device-local domain list. Neither the browsing-derived suggestion snapshot nor the hidden-domain list is included in ordinary MosaicSync Sync data.
+
+The user-facing **Show Frequently Visited** preference and the selected **Count** (3/5/8/10) are normal MosaicSync profile settings and can synchronize between the user's MosaicSync computers. The actual site list, browser history/top-sites data and the optional Top Sites permission remain device-local. A receiving device whose synchronized preference is ON may therefore ask the user to grant its own local browser permission before it can display that device's suggestions.
 
 MosaicSync does not send the browsing-derived list to a MosaicSync server because no such server exists.
 

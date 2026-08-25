@@ -192,13 +192,26 @@ export async function hydrateFolderLocalAssetsNormalized(normalizedState, spaceI
   return selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || normalizedState?.activeSpaceId);
 }
 
-export async function hydrateDeferredFolderLocalAssetsNormalized(normalizedState, spaceId, visibleChildren = 4) {
+export async function hydrateDeferredFolderLocalAssetsNormalized(
+  normalizedState,
+  spaceId,
+  visibleChildren = 4,
+  { batchSize = Number.POSITIVE_INFINITY, yieldBetween = null, onBatch = null } = {}
+) {
   const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
-  const explicitIds = collectDeferredFolderLocalAssetIds(normalizedState, { spaceId: id, visibleChildren });
-  if (!explicitIds.size) return normalizedState;
-  const { assets } = await readAssetMapForState(normalizedState, { explicitIds });
-  const hydrated = hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
-  return selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || normalizedState?.activeSpaceId);
+  const explicitIds = [...collectDeferredFolderLocalAssetIds(normalizedState, { spaceId: id, visibleChildren })];
+  if (!explicitIds.length) return normalizedState;
+  const size = Number.isFinite(batchSize) ? Math.max(1, Math.trunc(batchSize)) : explicitIds.length;
+  let working = normalizedState;
+  for (let offset = 0; offset < explicitIds.length; offset += size) {
+    const chunk = new Set(explicitIds.slice(offset, offset + size));
+    const { assets } = await readAssetMapForState(working, { explicitIds: chunk });
+    const hydrated = hydrateStateLocalAssets(working, assets, { spaceIds: [id] });
+    working = selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || working?.activeSpaceId);
+    if (typeof onBatch === "function") await onBatch(working, { loaded: Math.min(offset + size, explicitIds.length), total: explicitIds.length });
+    if (offset + size < explicitIds.length && typeof yieldBetween === "function") await yieldBetween();
+  }
+  return working;
 }
 
 export async function hydrateBackgroundLocalAssetNormalized(normalizedState, spaceId) {

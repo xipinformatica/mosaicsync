@@ -130,7 +130,8 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(page.style.backgroundColor, "#222222", "real page color must remain frozen under Settings");
     assert.equal(page.style.backgroundImage, 'url("old-wallpaper.webp")', "real page wallpaper must remain frozen under Settings");
     assert.equal(documentElement.style["--page-bg"], "#222222");
-    assert.equal(documentElement.style["--background-dim"], "0.05", "theme switch should apply the matching wallpaper darkness immediately");
+    assert.equal(documentElement.style["--background-dim"], "0.3", "real page darkness must remain frozen while Settings is open");
+    assert.equal(appearancePreviewLayer.style["--appearance-preview-dim"], "0.05", "isolated Settings preview should show the matching wallpaper darkness");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
     assert.equal(applySettingsCalls, 0, "open-Settings live switching must not invoke the full renderer");
 
@@ -146,6 +147,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(page.style.backgroundColor, "#f7f3fb");
     assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")');
     assert.equal(documentElement.style["--page-bg"], "#f7f3fb");
+    assert.equal(documentElement.style["--background-dim"], "0.05", "authoritative wallpaper darkness commits after Settings closes");
     assert.equal(appearancePreviewLayer.hidden, true, "preview layer should be released after authoritative commit");
     assert.equal(appearancePreviewImage.hidden, true);
     assert.equal(appearancePreviewImage.src, "");

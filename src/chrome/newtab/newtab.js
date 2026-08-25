@@ -98,18 +98,58 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (extra && typeof extra === "object") Object.assign(startupTiming, extra);
     return at;
   };
+  const schedulePaintPhase = name => {
+    const stamp = () => startupPhase(name);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(stamp));
+    else setTimeout(stamp, 0);
+  };
+  try {
+    const supported = globalThis.PerformanceObserver?.supportedEntryTypes || [];
+    if (supported.includes("longtask")) {
+      startupTiming.longTasks ||= { count: 0, totalMs: 0, maxMs: 0 };
+      const observer = new PerformanceObserver(list => {
+        for (const entry of list.getEntries()) {
+          const duration = Number(entry.duration) || 0;
+          startupTiming.longTasks.count += 1;
+          startupTiming.longTasks.totalMs += duration;
+          startupTiming.longTasks.maxMs = Math.max(startupTiming.longTasks.maxMs, duration);
+        }
+      });
+      observer.observe({ type: "longtask", buffered: true });
+      startupTiming.longTaskObserver = observer;
+      // Startup diagnostics are intentionally short-lived. Keep the collected
+      // summary for local inspection, but stop observing once post-startup jank
+      // has had a fair window to appear.
+      setTimeout(() => {
+        try { observer.disconnect(); } catch {}
+        if (startupTiming.longTaskObserver === observer) delete startupTiming.longTaskObserver;
+        startupPhase("longTaskWindowEnd");
+      }, 3000);
+    }
+  } catch {}
   startupPhase("moduleStart");
   devMark("newtab:module-start");
 
-  // Start the authoritative storage.local transaction as soon as the core module
-  // graph has evaluated. The old path waited until the bottom of this large UI
-  // module before initiating I/O; overlapping storage IPC with DOM/listener setup
-  // shortens wall-clock startup without changing which snapshot wins.
-  const earlyLocalRawStartedAt = performance.now();
-  const earlyLocalRawPromise = readLocalStorageRaw().then(raw => ({
-    raw,
-    elapsedMs: performance.now() - earlyLocalRawStartedAt
-  }));
+  // Prefer the tiny <head> bootstrap, which starts storage.local before this
+  // ~480 KB static module graph is parsed. If the disposable early read failed or
+  // is unavailable, fall back to the same authoritative core reader as before.
+  const earlyLocalBootstrap = globalThis.__mosaicsyncEarlyLocalRead || null;
+  try { delete globalThis.__mosaicsyncEarlyLocalRead; } catch {}
+  const earlyLocalRawStartedAt = Number.isFinite(earlyLocalBootstrap?.startedAt)
+    ? earlyLocalBootstrap.startedAt
+    : performance.now();
+  const earlyLocalRawPromise = (async () => {
+    if (earlyLocalBootstrap?.promise && typeof earlyLocalBootstrap.promise.then === "function") {
+      const result = await earlyLocalBootstrap.promise;
+      if (result && typeof result === "object") {
+        const elapsedMs = performance.now() - earlyLocalRawStartedAt;
+        return { raw: { result, timings: { storageMs: elapsedMs } }, elapsedMs };
+      }
+    }
+    const fallbackStartedAt = performance.now();
+    const raw = await readLocalStorageRaw();
+    return { raw, elapsedMs: performance.now() - fallbackStartedAt };
+  })();
 
   const REMOTE_IMAGE_INPUT_MAX_BYTES = 1_000_000;
   const APPEARANCE_PREVIEW_TARGET_BYTES = 10_000;
@@ -693,20 +733,35 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const updatedAt = Number(state.updatedAt) || 0;
     scheduleIdleWork(async () => {
       try {
-        const hydrated = await hydrateDeferredFolderLocalAssetsNormalized(state, spaceId, 4);
+        const yieldBetween = () => new Promise(resolve => {
+          const resume = () => resolve();
+          if (typeof requestIdleCallback === "function") requestIdleCallback(resume, { timeout: 180 });
+          else setTimeout(resume, 16);
+        });
+        const hydrated = await hydrateDeferredFolderLocalAssetsNormalized(state, spaceId, 4, {
+          batchSize: 12,
+          yieldBetween,
+          onBatch: async partial => {
+            if (generation !== deferredFolderHydrationGeneration || state.activeSpaceId !== spaceId || Number(state.updatedAt) !== updatedAt) {
+              throw new Error("DEFERRED_FOLDER_HYDRATION_CANCELLED");
+            }
+            // Make already-fetched pixels available incrementally without forcing
+            // the closed main grid to rerender. If the user opens a folder while
+            // idle hydration is progressing, its current batch is immediately usable.
+            state = partial;
+            if (activeFolderId && !folderPopover.hidden) {
+              const folder = getTopLevelItem(activeFolderId);
+              if (folder?.type === "folder") renderFolderContents(folder);
+            }
+          }
+        });
         if (generation !== deferredFolderHydrationGeneration || state.activeSpaceId !== spaceId || Number(state.updatedAt) !== updatedAt) return;
-        if (hydrated === state) return;
         state = hydrated;
-        // Hidden children are deliberately hydrated only after PCP. The closed
-        // grid does not need a rerender; an already-open folder is the one case
-        // where the newly available pixels should be patched immediately.
-        if (activeFolderId && !folderPopover.hidden) {
-          const folder = getTopLevelItem(activeFolderId);
-          if (folder?.type === "folder") renderFolderContents(folder);
-        }
         void warmSessionRenderCache(state, meta);
         startupPhase("deferredFolderArtworkReady");
-      } catch {}
+      } catch (error) {
+        if (error?.message !== "DEFERRED_FOLDER_HYDRATION_CANCELLED") return;
+      }
     }, 700);
   }
 
@@ -788,8 +843,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const metaChanged = stableStringify(chosenMeta) !== stableStringify(meta);
     const wasAwaitingRemote = isAwaitingRemote(meta);
 
+    const previousFrequentEnabled = frequentlyVisitedEnabled;
+    const previousFrequentCount = frequentlyVisitedCount;
     state = chosenState;
     meta = chosenMeta;
+    syncFrequentlyVisitedLocalsFromState(state);
+    if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
+      if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
+      if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
+      setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+      scheduleFrequentlyVisitedRefresh(0);
+    }
     updateSpaceSwitcher();
 
     if (stateChanged) {
@@ -816,17 +880,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void sendSyncMessage("mosaicsync:hydrate-missing-icons", { shortcutIds, force, upgradeRecoveredFavicons }).catch(() => {});
   }
 
-  function readFrequentlyVisitedPreference() {
+  function legacyFrequentlyVisitedPreference() {
     try { return localStorage.getItem(FREQUENTLY_VISITED_PREF_KEY) === "1"; }
     catch { return false; }
   }
 
-  function writeFrequentlyVisitedPreference(enabled) {
-    frequentlyVisitedEnabled = enabled === true;
-    try { localStorage.setItem(FREQUENTLY_VISITED_PREF_KEY, frequentlyVisitedEnabled ? "1" : "0"); } catch {}
-  }
-
-  function readFrequentlyVisitedCountPreference() {
+  function legacyFrequentlyVisitedCountPreference() {
     try {
       const value = Number.parseInt(localStorage.getItem(FREQUENTLY_VISITED_COUNT_PREF_KEY) || "5", 10);
       return [3, 5, 8, 10].includes(value) ? value : 5;
@@ -835,10 +894,115 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
   }
 
-  function writeFrequentlyVisitedCountPreference(value) {
-    const normalized = [3, 5, 8, 10].includes(Number(value)) ? Number(value) : 5;
-    frequentlyVisitedCount = normalized;
-    try { localStorage.setItem(FREQUENTLY_VISITED_COUNT_PREF_KEY, String(normalized)); } catch {}
+  function synchronizedFrequentlyVisitedSettings(currentState = state) {
+    // Frequently Visited is a global MosaicSync presentation preference rather
+    // than a Space-specific browser-history dataset. Personal is the canonical
+    // synchronized home for the preference; both workspaces are kept mirrored
+    // when a current client changes it so rolling-version devices converge.
+    const settings = currentState?.spaces?.personal?.settings || currentState?.settings || DEFAULT_STATE.settings;
+    const count = Number(settings?.frequentlyVisitedCount);
+    return {
+      enabled: settings?.frequentlyVisitedEnabled === true,
+      count: [3, 5, 8, 10].includes(count) ? count : 5
+    };
+  }
+
+  function syncFrequentlyVisitedLocalsFromState(currentState = state) {
+    const pref = synchronizedFrequentlyVisitedSettings(currentState);
+    frequentlyVisitedEnabled = pref.enabled;
+    frequentlyVisitedCount = pref.count;
+    // Keep the pre-1.27.8.4 localStorage values as a compatibility/migration
+    // cache only. They no longer own the preference once the synchronized fields
+    // exist, but older profile exports/welcome builds can still read them safely.
+    try { localStorage.setItem(FREQUENTLY_VISITED_PREF_KEY, pref.enabled ? "1" : "0"); } catch {}
+    try { localStorage.setItem(FREQUENTLY_VISITED_COUNT_PREF_KEY, String(pref.count)); } catch {}
+    return pref;
+  }
+
+  function compactStateHasSyncedFrequentlyVisitedPreference(compactState) {
+    const settings = compactState?.spaces?.personal?.settings;
+    return Boolean(settings && Object.hasOwn(settings, "frequentlyVisitedEnabled") && Object.hasOwn(settings, "frequentlyVisitedCount"));
+  }
+
+  async function persistFrequentlyVisitedPreference({ enabled = frequentlyVisitedEnabled, count = frequentlyVisitedCount } = {}) {
+    const normalizedEnabled = enabled === true;
+    const normalizedCount = [3, 5, 8, 10].includes(Number(count)) ? Number(count) : 5;
+    const baseState = writeBaseline;
+    const normalized = normalizeState(state);
+    const observedClocks = [];
+    for (const spaceId of SPACE_IDS) {
+      const workspace = normalized.spaces[spaceId];
+      observedClocks.push(workspace.settingsModifiedAt, workspace.updatedAt);
+    }
+    const timestamp = nextMutationTime(observedClocks);
+    let next = normalized;
+    for (const spaceId of SPACE_IDS) {
+      const workspace = next.spaces[spaceId];
+      const updatedWorkspace = {
+        ...workspace,
+        settings: {
+          ...workspace.settings,
+          frequentlyVisitedEnabled: normalizedEnabled,
+          frequentlyVisitedCount: normalizedCount
+        },
+        settingsModifiedAt: timestamp,
+        updatedAt: Math.max(Number(workspace.updatedAt) || 0, timestamp)
+      };
+      next = replaceWorkspace(next, spaceId, updatedWorkspace);
+    }
+    state = next;
+    stateMutationGeneration += 1;
+    state = await writeLocalState(state, {
+      baseState,
+      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
+    });
+    writeBaseline = createWriteBaseline(state);
+    syncFrequentlyVisitedLocalsFromState(state);
+    scheduleRenderManifestRefresh(state, meta);
+    void warmSessionRenderCache(state, meta);
+    return { enabled: frequentlyVisitedEnabled, count: frequentlyVisitedCount };
+  }
+
+  async function migrateLegacyFrequentlyVisitedPreferenceIfNeeded(loaded) {
+    if (compactStateHasSyncedFrequentlyVisitedPreference(loaded?.compactBaseline)) {
+      syncFrequentlyVisitedLocalsFromState(loaded.state);
+      return loaded;
+    }
+
+    const enabled = legacyFrequentlyVisitedPreference();
+    const count = legacyFrequentlyVisitedCountPreference();
+    const normalized = normalizeState(loaded.state);
+    // Rolling migration rule: a legacy positive/non-default preference is useful
+    // user intent and should enter Sync. A legacy OFF + default-count value is
+    // merely the old per-device default, so persist the new fields locally without
+    // advancing settings clocks or publishing it. This prevents a newly upgraded
+    // Work computer that happened to be OFF from racing/overwriting another
+    // computer's legacy ON preference before that ON value reaches Sync.
+    const publishLegacyIntent = enabled || count !== DEFAULT_STATE.settings.frequentlyVisitedCount;
+    const observedClocks = [];
+    for (const spaceId of SPACE_IDS) {
+      const workspace = normalized.spaces[spaceId];
+      observedClocks.push(workspace.settingsModifiedAt, workspace.updatedAt);
+    }
+    const timestamp = publishLegacyIntent ? nextMutationTime(observedClocks) : 0;
+    let migrated = normalized;
+    for (const spaceId of SPACE_IDS) {
+      const workspace = migrated.spaces[spaceId];
+      migrated = replaceWorkspace(migrated, spaceId, {
+        ...workspace,
+        settings: { ...workspace.settings, frequentlyVisitedEnabled: enabled, frequentlyVisitedCount: count },
+        settingsModifiedAt: publishLegacyIntent ? timestamp : workspace.settingsModifiedAt,
+        updatedAt: publishLegacyIntent ? Math.max(Number(workspace.updatedAt) || 0, timestamp) : workspace.updatedAt
+      });
+    }
+    migrated = selectActiveSpaceNormalized(migrated, normalized.activeSpaceId);
+    const written = await writeLocalState(migrated, {
+      baseState: loaded.compactBaseline,
+      recordSyncMutation: publishLegacyIntent && loaded.meta?.syncEnabled && loaded.meta?.syncInitialized
+    });
+    const compactBaseline = createWriteBaseline(written);
+    syncFrequentlyVisitedLocalsFromState(written);
+    return { ...loaded, state: written, compactBaseline };
   }
 
   function readShortcutOrderPreference() {
@@ -1329,8 +1493,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function schedulePostPaintMaintenance() {
-    frequentlyVisitedEnabled = readFrequentlyVisitedPreference();
-    frequentlyVisitedCount = readFrequentlyVisitedCountPreference();
+    syncFrequentlyVisitedLocalsFromState(state);
     shortcutOrderMode = readShortcutOrderPreference();
     shortcutUsage = readShortcutUsage();
     hiddenFrequentDomains = readHiddenFrequentDomains();
@@ -1461,7 +1624,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       await new Promise(resolve => requestAnimationFrame(() => resolve()));
     }
 
-    const loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 });
+    let loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 });
+    loaded = await migrateLegacyFrequentlyVisitedPreferenceIfNeeded(loaded);
     if (deviceDefaultSpace !== "last" && isMultipleSpacesEnabled(loaded.state) && loaded.state.activeSpaceId !== deviceDefaultSpace) {
       loaded.state = await hydrateLocalAssetsForSpaceNormalized(loaded.state, deviceDefaultSpace);
       loaded.state = selectActiveSpaceNormalized(loaded.state, deviceDefaultSpace);
@@ -1503,6 +1667,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     scheduleDeferredBackgroundHydration();
     scheduleDeferredFolderHydration();
     startupPhase("authoritativeStateReady", { bootGridAdopted: diagnostics.bootGridAdopted === true || document.documentElement.dataset.bootGridAdopted === "true" });
+    // Approximate PCP with a double-rAF after the authoritative structure/artwork
+    // patch. This records when the browser has had an opportunity to paint the
+    // stable launcher, not merely when JavaScript finished mutating it.
+    schedulePaintPhase("perceivedCompletePaint");
+    startupPhase("interactionReady");
+    try {
+      for (const entry of performance.getEntriesByType?.("paint") || []) {
+        if (entry?.name === "first-paint") startupTiming.phases.firstPaint = entry.startTime;
+        if (entry?.name === "first-contentful-paint") startupTiming.phases.firstContentfulPaint = entry.startTime;
+      }
+    } catch {}
 
     // Reconcile Automatic appearance with the browser's actual UI theme as well
     // as prefers-color-scheme. This happens after first paint, so awaiting it here
@@ -2017,10 +2192,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     document.documentElement.style.setProperty("--folder-item-icon-size", `${Math.max(30, Math.round(36 * scale))}px`);
     document.documentElement.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     document.documentElement.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
-    // Establish the dim overlay before exposing the wallpaper. A tiny synchronous
-    // boot hint already covers first paint; this ordering prevents a bright image
-    // from becoming visible even when the authoritative state differs from it.
-    document.documentElement.style.setProperty("--background-dim", String(effectiveBackgroundDim(settings) / 100));
+    // applyPageBackgroundVisual establishes the dim before the authoritative
+    // wallpaper when Settings is closed. While Settings is open it intentionally
+    // leaves every paint-affecting root/page value untouched and updates only the
+    // isolated preview layer, avoiding Firefox's disappearing-dialog compositor bug.
     applyPageBackgroundVisual({ deferHeavyAssets });
 
     applyThemeSkinVisual();
@@ -2031,6 +2206,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground = false } = {}) {
     if (!appearancePreviewLayer || !appearancePreviewImage) return false;
     appearancePreviewLayer.style.backgroundColor = renderedBackgroundColor;
+    appearancePreviewLayer.style.setProperty("--appearance-preview-dim", String(effectiveBackgroundDim(state.settings) / 100));
     if (!deferCustomBackground) {
       if (resolvedBackground) {
         appearancePreviewImage.src = resolvedBackground;
@@ -2048,6 +2224,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (!appearancePreviewLayer) return;
     appearancePreviewLayer.hidden = true;
     appearancePreviewLayer.style.backgroundColor = "";
+    appearancePreviewLayer.style.removeProperty("--appearance-preview-dim");
     if (appearancePreviewImage) {
       appearancePreviewImage.hidden = true;
       appearancePreviewImage.removeAttribute("src");
@@ -2056,10 +2233,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function applyPageBackgroundVisual({ deferHeavyAssets = false } = {}) {
     const settings = state.settings;
-    // Theme wallpaper and its darkness are one visual choice. Keep them coupled
-    // even while Settings is open so an OS/system theme transition cannot carry
-    // the previous appearance's dim value onto the new wallpaper.
-    document.documentElement.style.setProperty("--background-dim", String(effectiveBackgroundDim(settings) / 100));
     const renderedBackgroundColor = effectiveBackgroundColor(settings);
     const effectivePresetId = effectiveBackgroundPresetId(settings);
     const effectiveImage = effectiveBackgroundImageValue(settings);
@@ -2073,12 +2246,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // fixed child layer so Light/Dark and day/night wallpaper changes still preview
     // immediately in both Firefox and Chrome.
     if (settingsDialog?.open) {
+      // Firefox has a compositor failure mode where changing paint-affecting root
+      // variables behind an open modal can blank the dialog descendants while JS
+      // keeps running. While Settings is open, mutate only this isolated preview
+      // layer. The real root/page dim, canvas-text and wallpaper commit after the
+      // dialog has fully closed on the next animation frame.
       paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground });
-      document.documentElement.dataset.canvasText = effectiveCanvasText();
       deferredAppearanceVisual = true;
       return;
     }
 
+    document.documentElement.style.setProperty("--background-dim", String(effectiveBackgroundDim(settings) / 100));
     document.documentElement.style.setProperty("--page-bg", renderedBackgroundColor);
     page.style.backgroundColor = renderedBackgroundColor;
     page.style.backgroundSize = "cover";
@@ -2936,11 +3114,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if ((folder.items || []).some((child, index) => index >= 4 && child.localImageAssetId && !child.image)) {
       const spaceId = state.activeSpaceId;
       const folderId = folder.id;
+      const mutationGeneration = stateMutationGeneration;
+      const updatedAt = Number(state.updatedAt) || 0;
       void hydrateFolderLocalAssetsNormalized(state, spaceId, folderId).then(hydrated => {
-        if (state.activeSpaceId !== spaceId) return;
+        // Artwork hydration is a device-local enhancement and must never replace a
+        // structural edit that happened while storage.local was being read.
+        if (state.activeSpaceId !== spaceId || stateMutationGeneration !== mutationGeneration || Number(state.updatedAt) !== updatedAt) return;
+        // Cancel any older idle chunk stream before adopting this complete folder;
+        // otherwise a partial batch based on an older snapshot could momentarily
+        // replace the just-hydrated pixels. Resume idle hydration for other folders.
+        deferredFolderHydrationGeneration += 1;
         state = hydrated;
         const liveFolder = getTopLevelItem(folderId);
         if (activeFolderId === folderId && !folderPopover.hidden && liveFolder?.type === "folder") renderFolderContents(liveFolder);
+        scheduleDeferredFolderHydration();
       }).catch(() => {});
     }
     folderPopover.hidden = false;
@@ -4602,13 +4789,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     refreshThemeWallpaperDimControl("dark");
   }
 
-  function themeWallpaperVisualChanged(previousPresetId, previousImageValue) {
+  function themeWallpaperVisualChanged(previousPresetId, previousImageValue, previousDim) {
     return previousPresetId !== effectiveBackgroundPresetId(state.settings) ||
-      previousImageValue !== effectiveBackgroundImageValue(state.settings);
+      previousImageValue !== effectiveBackgroundImageValue(state.settings) ||
+      Number(previousDim) !== Number(effectiveBackgroundDim(state.settings));
   }
 
-  function applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue) {
-    if (!themeWallpaperVisualChanged(previousPresetId, previousImageValue)) return;
+  function applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim) {
+    if (!themeWallpaperVisualChanged(previousPresetId, previousImageValue, previousDim)) return;
 
     if (settingsDialog?.open) {
       // Preview on the isolated layer instead of touching the real .page surface.
@@ -4651,7 +4839,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
           stampThemeWallpaperMutation();
           refreshThemeWallpaperControls();
-          applySettings();
+          if (settingsDialog?.open) applyPageBackgroundVisual();
+          else applySettings();
           queueThemeWallpaperPersistence();
         }
       }
@@ -4660,6 +4849,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     const previousPresetId = effectiveBackgroundPresetId(state.settings);
     const previousImageValue = effectiveBackgroundImageValue(state.settings);
+    const previousDim = effectiveBackgroundDim(state.settings);
     state.settings.themeWallpapersEnabled = enabled;
     if (enabled) {
       const initialized = initializeThemeWallpaperDims(state.settings, effectiveThemeFor(state.settings));
@@ -4671,7 +4861,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (backgroundDimControls) backgroundDimControls.hidden = enabled;
     refreshThemeWallpaperControls();
 
-    applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue);
+    applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
     queueThemeWallpaperPersistence();
   }
 
@@ -4688,7 +4878,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     state.settings[key] = dim;
     stampThemeWallpaperMutation();
     refreshThemeWallpaperDimControl(target);
-    if (effectiveThemeFor(state.settings) === target) applySettings();
+    if (effectiveThemeFor(state.settings) === target) {
+      if (settingsDialog?.open) applyPageBackgroundVisual();
+      else applySettings();
+    }
     queueThemeWallpaperPersistence();
   }
 
@@ -4700,11 +4893,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     const previousPresetId = effectiveBackgroundPresetId(state.settings);
     const previousImageValue = effectiveBackgroundImageValue(state.settings);
+    const previousDim = effectiveBackgroundDim(state.settings);
     state.settings[key] = safePresetId;
     stampThemeWallpaperMutation();
     refreshThemeWallpaperControls();
 
-    applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue);
+    applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
     queueThemeWallpaperPersistence();
   }
 
@@ -4749,8 +4943,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
     if (settingsShortcutOrderHint) settingsShortcutOrderHint.textContent = t("shortcutOrderDeviceOnly");
     refreshSpacesSettings();
-    frequentlyVisitedEnabled = readFrequentlyVisitedPreference();
-    frequentlyVisitedCount = readFrequentlyVisitedCountPreference();
+    syncFrequentlyVisitedLocalsFromState(state);
     if (settingsFrequentlyVisitedDescription) settingsFrequentlyVisitedDescription.textContent = t("frequentlyVisitedDescription");
     if (settingsFrequentlyVisitedCountLabel) settingsFrequentlyVisitedCountLabel.textContent = t("frequentCount");
     if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
@@ -4891,8 +5084,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     refreshDeviceSpaceSettings();
   });
   settingsFrequentlyVisitedCount?.addEventListener("change", () => {
-    writeFrequentlyVisitedCountPreference(settingsFrequentlyVisitedCount.value);
-    scheduleFrequentlyVisitedRefresh(0);
+    const previous = frequentlyVisitedCount;
+    const requested = Number(settingsFrequentlyVisitedCount.value);
+    void persistFrequentlyVisitedPreference({ count: requested }).then(() => {
+      scheduleFrequentlyVisitedRefresh(0);
+    }).catch(error => {
+      frequentlyVisitedCount = previous;
+      settingsFrequentlyVisitedCount.value = String(previous);
+      showToast(error.message || t("operationFailed"));
+    });
   });
   settingsThemeWallpapers?.addEventListener("change", persistThemeWallpaperControls);
   settingsLightWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("light"));
@@ -5829,45 +6029,50 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     catch (error) { showToast(error.message || t("moveSpaceFailed")); }
   });
 
-  settingsFrequentlyVisited?.addEventListener("change", async () => {
+  settingsFrequentlyVisited?.addEventListener("change", () => {
     const wantsEnabled = settingsFrequentlyVisited.checked;
-    if (!wantsEnabled) {
-      writeFrequentlyVisitedPreference(false);
-      setFrequentlyVisitedOptionsVisibility(false);
-      setFrequentlyVisitedPermissionActionVisible(false);
-      frequentCandidateCacheAt = 0;
-      frequentCandidateCache = [];
-      frequentRefreshGeneration += 1;
-      renderFrequentlyVisited([]);
-      updateFrequentRenderSnapshot([]);
-      setFrequentlyVisitedStatus("frequentHidden");
-      return;
-    }
+    // Firefox requires permissions.request() to be invoked synchronously from
+    // the user's gesture. Start it before any awaited synchronized state write.
+    const permissionPromise = wantsEnabled ? requestTopSitesPermissionFromGesture() : null;
+    void (async () => {
+      try {
+        await persistFrequentlyVisitedPreference({ enabled: wantsEnabled });
+        setFrequentlyVisitedOptionsVisibility(wantsEnabled);
+        if (!wantsEnabled) {
+          setFrequentlyVisitedPermissionActionVisible(false);
+          frequentCandidateCacheAt = 0;
+          frequentCandidateCache = [];
+          frequentRefreshGeneration += 1;
+          renderFrequentlyVisited([]);
+          updateFrequentRenderSnapshot([]);
+          setFrequentlyVisitedStatus("frequentHidden");
+          return;
+        }
 
-    // Remember the user's intent independently from the browser permission.
-    // If permission is denied/revoked, keep the switch ON and expose the direct
-    // recovery action instead of forcing an OFF -> ON toggle ritual.
-    writeFrequentlyVisitedPreference(true);
-    setFrequentlyVisitedOptionsVisibility(true);
-    try {
-      // permissions.request() must be invoked synchronously from this user gesture.
-      const permissionPromise = requestTopSitesPermissionFromGesture();
-      const granted = await permissionPromise;
-      if (!granted) {
-        setFrequentlyVisitedPermissionActionVisible(true);
+        // The synchronized preference expresses intent only. Browser history and
+        // Top Sites permission remain installation-local; a receiving computer
+        // keeps the toggle ON and exposes the Grant permission recovery action.
+        const granted = await permissionPromise;
+        if (!granted) {
+          setFrequentlyVisitedPermissionActionVisible(true);
+          updateFrequentRenderSnapshot([]);
+          setFrequentlyVisitedStatus("frequentPermissionDenied");
+          return;
+        }
+        setFrequentlyVisitedPermissionActionVisible(false);
+        frequentCandidateCacheAt = 0;
+        frequentCandidateCache = [];
+        await refreshFrequentlyVisited();
+      } catch (error) {
+        syncFrequentlyVisitedLocalsFromState(state);
+        settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
+        setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+        setFrequentlyVisitedPermissionActionVisible(frequentlyVisitedEnabled);
         updateFrequentRenderSnapshot([]);
-        setFrequentlyVisitedStatus("frequentPermissionDenied");
-        return;
+        setFrequentlyVisitedStatus("frequentEnableFailed");
+        showToast(error.message || t("operationFailed"));
       }
-      setFrequentlyVisitedPermissionActionVisible(false);
-      frequentCandidateCacheAt = 0;
-      frequentCandidateCache = [];
-      await refreshFrequentlyVisited();
-    } catch (error) {
-      setFrequentlyVisitedPermissionActionVisible(true);
-      updateFrequentRenderSnapshot([]);
-      setFrequentlyVisitedStatus("frequentEnableFailed");
-    }
+    })();
   });
 
   frequentlyVisitedPermissionButton?.addEventListener("click", () => {
@@ -5879,7 +6084,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void (async () => {
       try {
         const granted = await permissionPromise;
-        writeFrequentlyVisitedPreference(true);
+        if (!frequentlyVisitedEnabled) await persistFrequentlyVisitedPreference({ enabled: true });
         if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = true;
         setFrequentlyVisitedOptionsVisibility(true);
         if (!granted) {
@@ -5943,6 +6148,22 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       let importedState = stampImportedProfileState(parsed.state);
       initializeThemeWallpaperDimsForState(importedState);
       importedState = normalizeState(importedState);
+      const importedFrequentEnabled = parsed.preferences.frequentlyVisitedEnabled === true;
+      const importedFrequentCount = [3, 5, 8, 10].includes(Number(parsed.preferences.frequentlyVisitedCount))
+        ? Number(parsed.preferences.frequentlyVisitedCount)
+        : 5;
+      for (const spaceId of SPACE_IDS) {
+        const workspace = importedState.spaces[spaceId];
+        importedState = replaceWorkspace(importedState, spaceId, {
+          ...workspace,
+          settings: {
+            ...workspace.settings,
+            frequentlyVisitedEnabled: importedFrequentEnabled,
+            frequentlyVisitedCount: importedFrequentCount
+          }
+        });
+      }
+      importedState = selectActiveSpaceNormalized(importedState, importedState.activeSpaceId);
       stateMutationGeneration += 1;
       state = importedState;
       state = await writeLocalState(state, {
@@ -5950,10 +6171,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
       writeBaseline = createWriteBaseline(state);
       await setLocalePreference(parsed.preferences.uiLocale || "auto");
-      // Profile preferences express user intent; optional browser permission is
-      // installation-local and may be granted later through the recovery button.
-      writeFrequentlyVisitedPreference(parsed.preferences.frequentlyVisitedEnabled);
-      writeFrequentlyVisitedCountPreference(parsed.preferences.frequentlyVisitedCount);
+      // Profile preferences express user intent; optional browser permission and
+      // the actual browser-derived sites remain installation-local.
+      syncFrequentlyVisitedLocalsFromState(state);
       if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
       if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
       setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
@@ -6235,6 +6455,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             }
             stateMutationGeneration += 1;
             state = incoming;
+            const previousFrequentEnabled = frequentlyVisitedEnabled;
+            const previousFrequentCount = frequentlyVisitedCount;
+            syncFrequentlyVisitedLocalsFromState(state);
+            if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
+            if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
+            setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+            if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
+              frequentCandidateCacheAt = 0;
+              frequentCandidateCache = [];
+            }
             writeBaseline = createWriteBaseline(stateChange.newValue);
             applySettings();
             render();

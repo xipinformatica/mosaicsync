@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const VERSION = "1.27.8.3";
+const VERSION = "1.27.8.4";
 
-test("1.27.8.3 has one exact release identity across public/runtime surfaces", () => {
+test("1.27.8.4 has one exact release identity across public/runtime surfaces", () => {
   const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
   const chrome = JSON.parse(fs.readFileSync("dist/chrome/manifest.json", "utf8"));
   const constants = fs.readFileSync("dist/firefox/core/constants.js", "utf8");
@@ -14,18 +14,18 @@ test("1.27.8.3 has one exact release identity across public/runtime surfaces", (
   assert.equal(ff.version, VERSION);
   assert.equal(chrome.version, VERSION);
   assert.equal(chrome.version_name, VERSION);
-  assert.match(constants, /export const VERSION = "1\.27\.8\.3";/);
-  assert.match(ffHtml, /MosaicSync · 1\.27\.8\.3/g);
-  assert.match(chromeHtml, /MosaicSync · 1\.27\.8\.3/g);
-  assert.match(readme, /Current source release: 1\.27\.8\.3/);
+  assert.match(constants, /export const VERSION = "1\.27\.8\.4";/);
+  assert.match(ffHtml, /MosaicSync · 1\.27\.8\.4/g);
+  assert.match(chromeHtml, /MosaicSync · 1\.27\.8\.4/g);
+  assert.match(readme, /Current source release: 1\.27\.8\.4/);
 });
 
-test("1.27.8.3 public changelog keeps historical release sequence intact", () => {
+test("1.27.8.4 public changelog keeps historical release sequence intact", () => {
   const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
-  assert.match(changelog, /^## 1\.27\.8\.3\n/);
+  assert.match(changelog, /^## 1\.27\.8\.4\n/);
   for (const unpublished of ["1.26.13", "1.26.13b", "1.26.14", "1.26.15", "1.26.16", "1.26.17", "1.26.17.1", "1.26.17.2"]) {
     assert.doesNotMatch(changelog, new RegExp(`^## ${unpublished.replaceAll(".", "\\\\.")}(?:\\s|$)`, "m"));
   }
   const headings = [...changelog.matchAll(/^## ([^\n]+)$/gm)].map(match => match[1]);
-  assert.deepEqual(headings.slice(0, 15), [VERSION, "1.27.8.2", "1.27.8.1", "1.27.8", "1.27.7", "1.27.6", "1.27.5", "1.27.4", "1.27.3", "1.27.2", "1.27.1", "1.27.0", "1.26.17.7", "1.26.17.6", "1.26.17.5"]);
+  assert.deepEqual(headings.slice(0, 15), [VERSION, "1.27.8.3", "1.27.8.2", "1.27.8.1", "1.27.8", "1.27.7", "1.27.6", "1.27.5", "1.27.4", "1.27.3", "1.27.2", "1.27.1", "1.27.0", "1.26.17.7", "1.26.17.6"]);
 });

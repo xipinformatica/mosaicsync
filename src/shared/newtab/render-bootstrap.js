@@ -313,6 +313,11 @@ ${safeUrl}`;
     timing.phases.bootGridReady = (globalThis.performance?.now?.() ?? Date.now());
     timing.renderManifestChars = raw.length;
     timing.bootGridSlots = capacity;
+    const stampPaint = () => {
+      timing.phases.firstLauncherPaint = (globalThis.performance?.now?.() ?? Date.now());
+    };
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(stampPaint));
+    else setTimeout(stampPaint, 0);
   } catch {
     // Disposable cache corruption must never block authoritative startup.
   }

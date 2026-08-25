@@ -46,8 +46,8 @@ for (const browser of ['firefox', 'chrome']) {
     assert.equal(frequentOptions.hidden, false);
     assert.equal(frequentCountRow.hidden, false);
 
-    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(frequentlyVisitedEnabled\)/, 'opening/import refresh must reflect the stored toggle state');
-    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(false\)/, 'disable/failure paths must hide dependent controls');
-    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(true\)/, 'successful enable path must reveal dependent controls');
+    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(frequentlyVisitedEnabled\)/, 'opening/Sync refresh must reflect the synchronized toggle state');
+    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(wantsEnabled\)/, 'toggle changes must reveal or hide dependent controls from synchronized intent');
+    assert.match(source, /setFrequentlyVisitedOptionsVisibility\(true\)/, 'permission recovery must reveal dependent controls while synchronized intent stays on');
   });
 }

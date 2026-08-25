@@ -99,6 +99,13 @@ button { color: inherit; }
   background-color: var(--page-bg);
   contain: paint;
 }
+.appearance-preview-layer::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0,0,0,var(--appearance-preview-dim,0));
+}
 .appearance-preview-image {
   display: block;
   width: 100%;
@@ -346,8 +353,8 @@ button { color: inherit; }
 /* Restrained Firefox-like pointer affordance: transforms paint only, so the
  * grid footprint never changes and neighboring shortcuts cannot shift. */
 .shortcut-card:hover .tile {
-  transform: scale(1.018);
-  filter: brightness(1.045);
+  transform: scale(1.045);
+  filter: brightness(1.065);
 }
 
 .shortcut-card:active .tile { transform: translateY(1px) scale(.985); filter: brightness(1); }

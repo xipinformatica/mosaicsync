@@ -1,9 +1,20 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.27.8.4 New Tab performance, appearance-preview and Frequently Visited policy
+
+- New Tab first-frame CSS is split into a launcher-only critical sheet plus a genuinely secondary-only sheet. Critical and secondary runtime rules must not duplicate the whole monolithic source, and secondary UI styling must remain CSP-safe and packaged locally.
+- The tiny pre-module local-storage bootstrap may start only the frozen authoritative local-state/meta/active-Space/asset-index read. The main module must consume that same Promise/result; it must not create an alternate persistence path or weaken normal normalization/concurrency checks.
+- Deferred closed-folder artwork is pixel-only work. All child records remain authoritative immediately. Hidden artwork must hydrate in bounded idle chunks with yielding between chunks, and folder-open hydration must reject stale async completion if a structural mutation occurred meanwhile.
+- Startup timing remains local, ephemeral diagnostics only. Paint/PCP and bounded long-task timing may be recorded in the current page context, but nothing may be persisted, transmitted or turned into telemetry.
+- While Settings is open, separate Light/Dark wallpaper and darkness changes must paint only the isolated appearance-preview layer. The real root/page wallpaper/dim surface stays frozen until the dialog closes and the deferred authoritative commit runs, preserving the Firefox compositor workaround.
+- Frequently Visited **Show** and **Count** are user profile preferences and synchronize through normal MosaicSync settings records. Actual Top Sites/history data, hidden-site data and the optional browser permission remain device-local. A receiving device whose synchronized preference is ON but whose permission is missing keeps the preference ON and exposes the existing user-gesture-only Grant permission action.
+- Legacy device-local Frequently Visited migration must not allow a default OFF/5 installation to race against and overwrite another device's meaningful legacy ON/non-default preference.
+- Shortcut hover remains transform/paint-only with no grid reflow; 1.27.8.4 intentionally makes the hover enlargement more noticeable while keeping layout geometry unchanged.
 
 ## 1.27.8.3 New Tab critical-path performance policy
 
@@ -261,7 +272,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

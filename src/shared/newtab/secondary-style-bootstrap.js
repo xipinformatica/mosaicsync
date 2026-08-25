@@ -4,7 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Load the complete New Tab stylesheet only after the critical launcher frame
+ * Load the secondary-only New Tab stylesheet only after the critical launcher frame
  * has had a chance to paint. This stays CSP-safe: no inline script/event handler,
  * no remote resource and no change to the extension's CSP.
  */
@@ -14,7 +14,7 @@
     const link = document.createElement("link");
     link.id = "mosaicsyncSecondaryStyles";
     link.rel = "stylesheet";
-    link.href = "newtab.css";
+    link.href = "newtab-secondary.css";
     link.addEventListener("load", () => {
       const timing = globalThis.__mosaicsyncStartupTiming;
       if (timing?.phases) timing.phases.secondaryCssReady = (globalThis.performance?.now?.() ?? Date.now());

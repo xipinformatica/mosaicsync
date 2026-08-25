@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.27.8.3";
+export const VERSION = "1.27.8.4";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -160,6 +160,10 @@ export const DEFAULT_SETTINGS = Object.freeze({
   brandVisible: true,
   autoSiteIcons: true,
   webAccessPrompted: false,
+  // Frequently Visited content is always browser-local, but the user's display
+  // intent/count is part of the synchronized MosaicSync configuration.
+  frequentlyVisitedEnabled: false,
+  frequentlyVisitedCount: 5,
   // Two-space controls. Empty spaceName means use the localized built-in label.
   spaceName: "",
   multipleSpacesEnabled: true
