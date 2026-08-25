@@ -31,3 +31,16 @@ const records=[...model.flattenStateNormalized(personal,'bench-device').values()
 const recordA=records[0], recordB={...recordA,deviceId:'other-device'};
 bench('syncRecordEqual allocation-light',()=>model.syncRecordEqual(recordA,recordB),10000);
 bench('syncRecordEqual legacy stringify equivalent',()=>model.stableStringify((({deviceId,...rest})=>rest)(recordA))===model.stableStringify((({deviceId,...rest})=>rest)(recordB)),1000);
+bench("startup compact-baseline clone(200)",()=>structuredClone(projected.state),20);
+const projectedAssetIds=[];
+for(const item of projected.state.spaces.personal.shortcuts){
+  if(item.type==="folder") for(const child of item.items||[]) { if(child.localImageAssetId) projectedAssetIds.push(child.localImageAssetId); }
+  else if(item.localImageAssetId) projectedAssetIds.push(item.localImageAssetId);
+}
+const folderHeavyIds=projectedAssetIds.slice(0,150);
+const folderHeavyCompact={spaces:{personal:{shortcuts:Array.from({length:5},(_,folderIndex)=>({
+  type:"folder",id:`bench-large-folder-${folderIndex}`,items:folderHeavyIds.slice(folderIndex*30,(folderIndex+1)*30).map((id,index)=>({type:"shortcut",localImageAssetId:id,position:index}))
+}))}}};
+const allFolderAssets=assets.collectStateLocalAssetIds(folderHeavyCompact,{spaceIds:["personal"],includeBackground:false});
+const visibleFolderAssets=assets.collectStateLocalAssetIds(folderHeavyCompact,{spaceIds:["personal"],includeBackground:false,folderChildLimit:4});
+console.log(`closed-folder startup artwork IDs: ${allFolderAssets.size} full -> ${visibleFolderAssets.size} first-frame visible`);

@@ -41,9 +41,12 @@ import {
 } from "./model.js";
 import { persistedWorkspacePayloadEqual, rebaseConcurrentState } from "./concurrency.js";
 import {
+  collectDeferredFolderLocalAssetIds,
+  collectFolderLocalAssetIds,
   collectStateLocalAssetIds,
   dehydrateStateLocalAssets,
   hydrateStateLocalAssets,
+  isLocalAssetId,
   projectStateToLocalAssets,
   stateHasInlineLocalAssets,
   validateLocalAsset,
@@ -145,9 +148,11 @@ async function retryPendingLocalAssetCleanup() {
   });
 }
 
-async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true } = {}) {
+async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true, folderChildLimit = Number.POSITIVE_INFINITY, explicitIds = null } = {}) {
   const assetIdMemo = new Map();
-  const ids = [...collectStateLocalAssetIds(rawState, { spaceIds, includeShortcuts, includeBackground })];
+  const ids = explicitIds
+    ? [...new Set([...explicitIds].filter(isLocalAssetId))]
+    : [...collectStateLocalAssetIds(rawState, { spaceIds, includeShortcuts, includeBackground, folderChildLimit })];
   if (!ids.length) return { assets: new Map(), storageMs: 0, assetIdMemo };
   const keys = ids.map(localAssetStorageKey);
   const startedAt = perfNow();
@@ -176,6 +181,24 @@ export async function hydrateLocalAssetsForSpaceNormalized(normalizedState, spac
   const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
   const { assets } = await readAssetMapForState(normalizedState, { spaceIds: [id] });
   return hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
+}
+
+export async function hydrateFolderLocalAssetsNormalized(normalizedState, spaceId, folderId) {
+  const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
+  const explicitIds = collectFolderLocalAssetIds(normalizedState, { spaceId: id, folderId });
+  if (!explicitIds.size) return normalizedState;
+  const { assets } = await readAssetMapForState(normalizedState, { explicitIds });
+  const hydrated = hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
+  return selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || normalizedState?.activeSpaceId);
+}
+
+export async function hydrateDeferredFolderLocalAssetsNormalized(normalizedState, spaceId, visibleChildren = 4) {
+  const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
+  const explicitIds = collectDeferredFolderLocalAssetIds(normalizedState, { spaceId: id, visibleChildren });
+  if (!explicitIds.size) return normalizedState;
+  const { assets } = await readAssetMapForState(normalizedState, { explicitIds });
+  const hydrated = hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
+  return selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || normalizedState?.activeSpaceId);
 }
 
 export async function hydrateBackgroundLocalAssetNormalized(normalizedState, spaceId) {
@@ -599,9 +622,12 @@ export async function readLocalStorageRaw() {
   };
 }
 
-export async function materializeLocalStorage(rawRead, { withTimings = false, hydrateAssets = "all" } = {}) {
+export async function materializeLocalStorage(rawRead, { withTimings = false, hydrateAssets = "all", folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   const result = rawRead?.result && typeof rawRead.result === "object" ? rawRead.result : {};
   const rawState = result[LOCAL_STATE_KEY] || DEFAULT_STATE;
+  let compactBaseline = result[LOCAL_STATE_KEY] && typeof result[LOCAL_STATE_KEY] === "object"
+    ? cloneCompactJson(result[LOCAL_STATE_KEY])
+    : null;
 
   const rawMultipleSpacesEnabled = rawState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
   const requestedActiveSpaceId = rawMultipleSpacesEnabled && SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
@@ -614,9 +640,10 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
   const assetStartedAt = perfNow();
   const { assets, storageMs: assetStorageMs, assetIdMemo } = await readAssetMapForState(rawState, {
     spaceIds: hydrateSpaceIds,
-    includeBackground
+    includeBackground,
+    folderChildLimit
   });
-  const hydratedRawState = hydrateStateLocalAssets(rawState, assets, { spaceIds: hydrateSpaceIds });
+  const hydratedRawState = hydrateStateLocalAssets(rawState, assets, { spaceIds: hydrateSpaceIds, folderChildLimit });
   const assetHydrationMs = perfNow() - assetStartedAt;
 
   const normalizeStartedAt = perfNow();
@@ -658,6 +685,10 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
       : state;
     await persistNormalizedState(migrationState, { knownIndex: index });
     state = migrationState;
+    // Migration is rare; pay the full projection cost here so the next real
+    // mutation still has an exact persisted concurrency baseline. Normal modern
+    // startup reuses the already-compact storage.local bytes instead.
+    compactBaseline = createWriteBaseline(migrationState, assetIdMemo);
   } else if (!SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY]) || forcedPersonal) {
     await browser.storage.local.set({ [LOCAL_ACTIVE_SPACE_KEY]: state.activeSpaceId });
   }
@@ -674,7 +705,7 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
     await retryPendingLocalAssetCleanup();
   }
 
-  const loaded = { state, meta, assetIdMemo };
+  const loaded = { state, meta, assetIdMemo, compactBaseline };
   if (withTimings) {
     loaded.timings = {
       storageMs: Number(rawRead?.timings?.storageMs) || 0,

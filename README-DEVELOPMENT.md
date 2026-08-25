@@ -1,9 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.27.8.3 New Tab critical-path performance policy
+
+- New Tab optimization must reduce work on the visible/interactive critical path rather than merely improving post-paint microbenchmarks. Local-only phase timings may be recorded in the page context for diagnosis, but they must never be persisted, transmitted, or turned into telemetry.
+- The synchronous first frame uses a deliberately smaller critical stylesheet. The complete stylesheet is loaded immediately afterward by an external CSP-safe bootstrap; no inline event handler, `unsafe-inline` exception, remote stylesheet, or visual-feature removal is permitted.
+- A bootstrap grid may become the authoritative interactive grid only after a strict structural match against current state, including revision/settings clocks, grid geometry, current order, shortcut IDs/titles/navigation targets and the first four folder-child IDs. Any uncertainty must fall back to the established full renderer.
+- Closed folders remain fully authoritative at the record level. Startup may defer only hidden child artwork bytes beyond the four visible mosaic cells; opening the folder hydrates missing pixels immediately and post-paint idle work warms the remainder.
+- Normal current-schema startup reuses the exact compact `storage.local` state as the optimistic-write baseline instead of projecting the hydrated render state. Legacy/migration paths still construct a canonical baseline explicitly.
+- Authoritative local storage I/O should begin as early as possible and overlap secondary UI initialization without changing read/write/concurrency semantics.
 
 ## 1.27.8.2 New Tab startup-performance policy
 
@@ -252,7 +261,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

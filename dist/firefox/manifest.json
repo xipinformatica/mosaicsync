@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "MosaicSync",
   "short_name": "MosaicSync",
-  "version": "1.27.8.2",
+  "version": "1.27.8.3",
   "description": "__MSG_extensionDescription__",
   "permissions": [
     "storage",

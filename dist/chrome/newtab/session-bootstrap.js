@@ -9,10 +9,16 @@
  * only overlaps browser.storage.session I/O with module/CSS/DOM startup work.
  */
 (() => {
+  const timing = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
+  timing.version = 1;
+  timing.phases ||= Object.create(null);
+  // This classic script is immediately after the blocking critical stylesheet;
+  // reaching it means the browser has fetched and parsed that critical CSS.
+  timing.phases.criticalCssReady = (globalThis.performance?.now?.() ?? Date.now());
   try {
     const storage = globalThis.browser?.storage?.session;
     if (!storage?.get) return;
-    const startedAt = performance.now();
+    const startedAt = (globalThis.performance?.now?.() ?? Date.now());
     const promise = Promise.resolve(storage.get([
       "mosaicsync.session.render-state.v2",
       "mosaicsync.session.render-meta.v1"

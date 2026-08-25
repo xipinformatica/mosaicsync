@@ -62,7 +62,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState } from "../core/storage.js";
+import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -89,7 +89,27 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 (() => {
   "use strict";
 
+  const startupTiming = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
+  startupTiming.version = 1;
+  startupTiming.phases ||= Object.create(null);
+  const startupPhase = (name, extra = null) => {
+    const at = performance.now();
+    startupTiming.phases[name] = at;
+    if (extra && typeof extra === "object") Object.assign(startupTiming, extra);
+    return at;
+  };
+  startupPhase("moduleStart");
   devMark("newtab:module-start");
+
+  // Start the authoritative storage.local transaction as soon as the core module
+  // graph has evaluated. The old path waited until the bottom of this large UI
+  // module before initiating I/O; overlapping storage IPC with DOM/listener setup
+  // shortens wall-clock startup without changing which snapshot wins.
+  const earlyLocalRawStartedAt = performance.now();
+  const earlyLocalRawPromise = readLocalStorageRaw().then(raw => ({
+    raw,
+    elapsedMs: performance.now() - earlyLocalRawStartedAt
+  }));
 
   const REMOTE_IMAGE_INPUT_MAX_BYTES = 1_000_000;
   const APPEARANCE_PREVIEW_TARGET_BYTES = 10_000;
@@ -583,7 +603,114 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     });
   }
 
-  function paintLoadedState(loaded, diagnostics, { deferHeavyAssets = false, reuseBootGrid = false } = {}) {
+  function bootGridMatchesState(currentState) {
+    const manifest = bootRenderManifest;
+    if (!manifest || manifest.version !== 2 || document.documentElement.dataset.bootGrid !== "true") return false;
+    if (isAwaitingRemote(meta)) return false;
+    if (manifest.activeSpaceId !== currentState.activeSpaceId ||
+        Number(manifest.updatedAt) !== Number(currentState.updatedAt) ||
+        Number(manifest.settingsModifiedAt) !== Number(currentState.settingsModifiedAt)) return false;
+    if (Number(manifest.columns) !== Number(currentState.settings.columns) ||
+        Number(manifest.rows) !== Number(currentState.settings.rows) ||
+        Number(manifest.tileSize) !== Number(currentState.settings.tileSize) ||
+        Boolean(manifest.brandVisible !== false) !== Boolean(currentState.settings.brandVisible !== false)) return false;
+    const capacity = currentState.settings.columns * currentState.settings.rows;
+    const slots = [...grid.children];
+    if (slots.length !== capacity) return false;
+    const byPosition = shortcutOrderMode === "recent"
+      ? new Map(recentGridItems(capacity).map((item, index) => [index, item]))
+      : new Map(currentState.shortcuts.map(item => [item.position, item]));
+    for (let position = 0; position < capacity; position += 1) {
+      const slot = slots[position];
+      const item = byPosition.get(position);
+      if (!slot) return false;
+      if (!item) {
+        if (!slot.classList.contains("empty-slot")) return false;
+        continue;
+      }
+      if (slot.dataset.id !== item.id) return false;
+      const card = slot.querySelector(":scope > .shortcut-card");
+      const label = card?.querySelector?.(":scope > .shortcut-label");
+      if (!card || !label) return false;
+      if (item.type === "folder") {
+        if (!slot.classList.contains("folder-slot") || !card.classList.contains("folder-card")) return false;
+        if (label.textContent !== (item.title || "Folder")) return false;
+        const cells = [...card.querySelectorAll(".folder-mosaic-cell")];
+        const expectedChildren = (item.items || []).slice(0, 4);
+        if (cells.length !== expectedChildren.length) return false;
+        for (let index = 0; index < expectedChildren.length; index += 1) {
+          if (cells[index]?.dataset?.id !== expectedChildren[index]?.id) return false;
+        }
+      } else {
+        if (slot.classList.contains("folder-slot") || card.classList.contains("folder-card")) return false;
+        if (label.textContent !== item.title) return false;
+        const expectedUrl = shortcutNavigationUrl(item);
+        if (!expectedUrl || card.getAttribute("href") !== expectedUrl) return false;
+      }
+    }
+    return true;
+  }
+
+  function adoptBootGridInPlace() {
+    if (!bootGridMatchesState(state)) return false;
+    const capacity = state.settings.columns * state.settings.rows;
+    const byPosition = shortcutOrderMode === "recent"
+      ? new Map(recentGridItems(capacity).map((item, index) => [index, item]))
+      : new Map(state.shortcuts.map(item => [item.position, item]));
+    const slots = [...grid.children];
+    const changedShortcutIds = new Set();
+    const changedFolderIds = new Set();
+    for (let position = 0; position < capacity; position += 1) {
+      const slot = slots[position];
+      const item = byPosition.get(position);
+      if (!item) {
+        // Empty bootstrap slots intentionally omit editing/drag affordances. They
+        // have no decoded artwork worth preserving, so upgrade only these nodes.
+        slot.replaceWith(createEmptySlot(position));
+        continue;
+      }
+      if (item.type === "folder") {
+        if (!configureFolderSlotInteractions(slot, item)) return false;
+        changedFolderIds.add(item.id);
+      } else {
+        if (!configureShortcutSlotInteractions(slot, item)) return false;
+        changedShortcutIds.add(item.id);
+      }
+    }
+    grid.hidden = state.shortcuts.length === 0;
+    emptyState.hidden = state.shortcuts.length !== 0;
+    patchVisibleShortcutArtwork(changedShortcutIds, changedFolderIds);
+    document.documentElement.dataset.bootGridAdopted = "true";
+    bootGridNeedsAuthoritativeRender = false;
+    startupPhase("bootGridAdopted");
+    return true;
+  }
+
+  let deferredFolderHydrationGeneration = 0;
+  function scheduleDeferredFolderHydration() {
+    const generation = ++deferredFolderHydrationGeneration;
+    const spaceId = state.activeSpaceId;
+    const updatedAt = Number(state.updatedAt) || 0;
+    scheduleIdleWork(async () => {
+      try {
+        const hydrated = await hydrateDeferredFolderLocalAssetsNormalized(state, spaceId, 4);
+        if (generation !== deferredFolderHydrationGeneration || state.activeSpaceId !== spaceId || Number(state.updatedAt) !== updatedAt) return;
+        if (hydrated === state) return;
+        state = hydrated;
+        // Hidden children are deliberately hydrated only after PCP. The closed
+        // grid does not need a rerender; an already-open folder is the one case
+        // where the newly available pixels should be patched immediately.
+        if (activeFolderId && !folderPopover.hidden) {
+          const folder = getTopLevelItem(activeFolderId);
+          if (folder?.type === "folder") renderFolderContents(folder);
+        }
+        void warmSessionRenderCache(state, meta);
+        startupPhase("deferredFolderArtworkReady");
+      } catch {}
+    }, 700);
+  }
+
+  function paintLoadedState(loaded, diagnostics, { deferHeavyAssets = false, reuseBootGrid = false, adoptBootGrid = false } = {}) {
     state = loaded.state;
     meta = loaded.meta;
 
@@ -592,7 +719,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     diagnostics.applySettingsMs = performance.now() - settingsStartedAt;
 
     const renderStartedAt = performance.now();
-    if (reuseBootGrid) {
+    if (adoptBootGrid && adoptBootGridInPlace()) {
+      diagnostics.bootGridReused = true;
+      diagnostics.bootGridAdopted = true;
+    } else if (reuseBootGrid) {
       bootGridNeedsAuthoritativeRender = true;
       diagnostics.bootGridReused = true;
     } else {
@@ -669,7 +799,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     const awaitingChanged = wasAwaitingRemote !== isAwaitingRemote(meta);
     if (stateChanged || awaitingChanged || bootGridNeedsAuthoritativeRender) {
-      render();
+      const adopted = bootGridNeedsAuthoritativeRender && !awaitingChanged && adoptBootGridInPlace();
+      if (!adopted) render();
       bootGridNeedsAuthoritativeRender = false;
     }
     if (stateChanged) scheduleRenderPreviewRefresh(state, meta);
@@ -1252,11 +1383,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   async function loadState() {
     deviceDefaultSpace = readDeviceDefaultSpacePreference();
+    shortcutOrderMode = readShortcutOrderPreference();
+    shortcutUsage = readShortcutUsage();
+    startupPhase("loadStateStart");
     const diagnostics = {
       navigationType: performance.getEntriesByType?.("navigation")?.[0]?.type || "unknown",
       persisted: pageshowPersisted,
       bootGrid: document.documentElement.dataset.bootGrid === "true",
       bootGridReused: false,
+      bootGridAdopted: false,
       firstSource: "local",
       sessionCacheStatus: browser.storage.session ? "pending" : "unavailable",
       sessionReadMs: null,
@@ -1273,18 +1408,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       authoritativeReconcileMs: 0
     };
 
-    // Start I/O together, but deliberately keep heavyweight local normalization
-    // out of flight until the lightweight session/boot projection has had a
-    // chance to paint. This is the key distinction from the older Promise.race
-    // architecture: a fast storage.local read can no longer block first paint by
-    // immediately canonicalizing large device-local images on the main thread.
+    // The session read began in the head bootstrap and the authoritative local
+    // read began at module start. Deliberately keep heavyweight local
+    // normalization out of flight until the lightweight session/boot projection
+    // has had a chance to paint; only storage IPC overlaps the UI setup.
     const stateGenerationAtRead = stateMutationGeneration;
     const metaGenerationAtRead = metaMutationGeneration;
 
-    const localStartedAt = performance.now();
-    const localRawPromise = readLocalStorageRaw().then(raw => {
-      diagnostics.localReadMs = performance.now() - localStartedAt;
+    const localRawPromise = earlyLocalRawPromise.then(({ raw, elapsedMs }) => {
+      diagnostics.localReadMs = elapsedMs;
       diagnostics.localStorageMs = raw.timings?.storageMs ?? null;
+      startupPhase("localRawReady");
       return raw;
     });
 
@@ -1327,7 +1461,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       await new Promise(resolve => requestAnimationFrame(() => resolve()));
     }
 
-    const loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background" });
+    const loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 });
     if (deviceDefaultSpace !== "last" && isMultipleSpacesEnabled(loaded.state) && loaded.state.activeSpaceId !== deviceDefaultSpace) {
       loaded.state = await hydrateLocalAssetsForSpaceNormalized(loaded.state, deviceDefaultSpace);
       loaded.state = selectActiveSpaceNormalized(loaded.state, deviceDefaultSpace);
@@ -1336,8 +1470,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         .then(() => writeActiveSpace(deviceDefaultSpace));
       void activeSpacePersistQueue.catch(error => console.warn(`${PRODUCT_NAME}: could not persist default Space`, error));
     }
-    const loadedWriteBaseline = createWriteBaseline(loaded.state, loaded.assetIdMemo);
-    if (!writeBaseline || stateMutationGeneration === stateGenerationAtRead) writeBaseline = loadedWriteBaseline;
+    // The compact state read from storage.local is already the exact persisted
+    // concurrency baseline. Reuse it instead of projecting/hashing the hydrated
+    // render state during every read-only New Tab startup. writeLocalState still
+    // canonicalizes this baseline on the first real mutation.
+    if ((!writeBaseline || stateMutationGeneration === stateGenerationAtRead) && loaded.compactBaseline) {
+      writeBaseline = loaded.compactBaseline;
+    }
     diagnostics.localNormalizationMs = loaded.timings?.normalizationMs ?? null;
     diagnostics.localAssetStorageMs = loaded.timings?.assetStorageMs ?? null;
     diagnostics.localAssetHydrationMs = loaded.timings?.assetHydrationMs ?? null;
@@ -1349,7 +1488,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     if (!paintedSession) {
       diagnostics.firstSource = "local";
-      paintLoadedState(loaded, diagnostics, { deferHeavyAssets: loaded.state.settings?.backgroundImageDeferred === true });
+      paintLoadedState(loaded, diagnostics, {
+        deferHeavyAssets: loaded.state.settings?.backgroundImageDeferred === true,
+        adoptBootGrid: diagnostics.bootGrid
+      });
       // Warm only the lightweight projection after the authoritative first load.
       void warmSessionRenderCache(state, meta);
     } else {
@@ -1359,6 +1501,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       void warmSessionRenderCache(state, meta);
     }
     scheduleDeferredBackgroundHydration();
+    scheduleDeferredFolderHydration();
+    startupPhase("authoritativeStateReady", { bootGridAdopted: diagnostics.bootGridAdopted === true || document.documentElement.dataset.bootGridAdopted === "true" });
 
     // Reconcile Automatic appearance with the browser's actual UI theme as well
     // as prefers-color-scheme. This happens after first paint, so awaiting it here
@@ -1379,11 +1523,27 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     schedulePostPaintMaintenance();
 
+    startupPhase("startupMaintenanceScheduled", {
+      diagnostics: {
+        firstSource: diagnostics.firstSource,
+        bootGridReused: diagnostics.bootGridReused,
+        bootGridAdopted: diagnostics.bootGridAdopted || document.documentElement.dataset.bootGridAdopted === "true",
+        sessionReadMs: diagnostics.sessionReadMs,
+        localReadMs: diagnostics.localReadMs,
+        localNormalizationMs: diagnostics.localNormalizationMs,
+        localAssetStorageMs: diagnostics.localAssetStorageMs,
+        localAssetHydrationMs: diagnostics.localAssetHydrationMs,
+        renderMs: diagnostics.renderMs,
+        firstUsableMs: diagnostics.firstUsableMs
+      }
+    });
+
     if (devMetricsEnabled()) console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
       navigationType: diagnostics.navigationType,
       persisted: diagnostics.persisted,
       bootGrid: diagnostics.bootGrid,
       bootGridReused: diagnostics.bootGridReused,
+      bootGridAdopted: diagnostics.bootGridAdopted || document.documentElement.dataset.bootGridAdopted === "true",
       firstSource: diagnostics.firstSource,
       sessionCacheStatus: diagnostics.sessionCacheStatus,
       sessionReadMs: diagnostics.sessionReadMs == null ? null : Number(diagnostics.sessionReadMs.toFixed(2)),
@@ -2092,6 +2252,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       updateSyncWaitNotice();
       devMark("newtab:render:end");
       devMeasure("newtab:render", "newtab:render:start", "newtab:render:end");
+      startupPhase("authoritativeGridRendered");
       return;
     }
     clearTimeout(syncWaitNoticeTimer);
@@ -2124,6 +2285,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     devMark("newtab:render:end");
     devMeasure("newtab:render", "newtab:render:start", "newtab:render:end");
+    startupPhase("authoritativeGridRendered");
   }
 
   function createWaitingSlot(position) {
@@ -2189,42 +2351,29 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return true;
   }
 
-  function createShortcutSlot(item) {
-    const slot = document.createElement("div");
+  function configureShortcutSlotInteractions(slot, item) {
+    if (!slot || slot.dataset.interactive === "true") return Boolean(slot);
+    const card = slot.querySelector(":scope > .shortcut-card");
+    if (!card || String(card.localName || card.tagName || "").toLowerCase() !== "a") return false;
     slot.className = "shortcut-slot";
     slot.dataset.id = item.id;
     slot.draggable = shortcutOrderMode !== "recent";
-
-    // Native anchors keep shortcut navigation on Firefox's fast path.
-    const card = document.createElement("a");
-    card.className = "shortcut-card";
     const navigationUrl = shortcutNavigationUrl(item);
     if (navigationUrl) card.href = navigationUrl;
+    else card.removeAttribute("href");
     card.draggable = false;
     card.rel = "noreferrer";
     card.title = `${item.title}\n${item.url}`;
     card.setAttribute("aria-label", `${item.title}, ${item.url}`);
 
-    // Tell the event-driven background which exact shortcut this tab is about to
-    // navigate. The message is fire-and-forget and does not delay the native link.
-    // It lets favicon learning follow redirects (for example bare domain -> www)
-    // while ignoring unrelated browsing tabs even after all-sites access is granted.
     card.addEventListener("click", event => {
       if (event.defaultPrevented || event.button !== 0) return;
       const opensElsewhere = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
-      // Persist recency for every open, but do not rebuild a grid that an ordinary
-      // same-tab click is about to navigate away from. Modified/background opens
-      // keep the render because MosaicSync remains visible.
       recordShortcutOpened(item.id, { renderRecent: opensElsewhere });
       if (opensElsewhere) return;
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
 
-    // If an older install says Automatic site icons is enabled while the actual
-    // host permission is missing, the next ordinary shortcut click is another
-    // valid user gesture to repair that capability mismatch before navigation.
-    // A denial turns Automatic site icons off instead of leaving a misleading
-    // enabled preference that cannot resolve a never-before-visited site.
     const automaticNeedsWebAccess = !item.image && !item.builtinIcon && state.settings.autoSiteIcons;
     const remoteImageNeedsWebAccess = !item.image && item.imageSourceKind === "remote" &&
       item.imageSourceUrl && !state.settings.webAccessPrompted;
@@ -2256,21 +2405,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
     }
 
-    const tile = document.createElement("span");
-    tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
-    applyShortcutColorTag(tile, item);
-    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
-
-    const label = document.createElement("span");
-    label.className = "shortcut-label";
-    label.textContent = item.title;
-
-    card.append(tile, label);
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "edit-chip";
-    edit.textContent = "⋯";
+    let edit = slot.querySelector(":scope > .edit-chip");
+    if (!edit) {
+      edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "edit-chip";
+      edit.textContent = "⋯";
+      slot.append(edit);
+    }
     edit.title = `${t("editShortcut")}: ${item.title}`;
     edit.setAttribute("aria-label", `${t("editShortcut")}: ${item.title}`);
     edit.addEventListener("click", event => {
@@ -2288,25 +2430,82 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       recordShortcutOpened(item.id);
       void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
-
     if (shortcutOrderMode !== "recent") attachDragHandlers(slot, item);
-    slot.append(card, edit);
+    slot.dataset.interactive = "true";
+    return true;
+  }
+
+  function createShortcutSlot(item) {
+    const slot = document.createElement("div");
+    slot.className = "shortcut-slot";
+    slot.dataset.id = item.id;
+
+    const card = document.createElement("a");
+    card.className = "shortcut-card";
+    const tile = document.createElement("span");
+    tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
+    applyShortcutColorTag(tile, item);
+    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
+    const label = document.createElement("span");
+    label.className = "shortcut-label";
+    label.textContent = item.title;
+    card.append(tile, label);
+    slot.append(card);
+    configureShortcutSlotInteractions(slot, item);
     return slot;
+  }
+
+  function configureFolderSlotInteractions(slot, folder) {
+    if (!slot || slot.dataset.interactive === "true") return Boolean(slot);
+    const card = slot.querySelector(":scope > .shortcut-card.folder-card");
+    if (!card) return false;
+    slot.className = "shortcut-slot folder-slot";
+    slot.dataset.id = folder.id;
+    slot.draggable = shortcutOrderMode !== "recent";
+    card.type = "button";
+    const folderName = folder.title || "Folder";
+    card.title = `${folderName}\n${t("folderContains", { count: folder.items.length })}`;
+    card.setAttribute("aria-label", `${folderName} · ${t("folderContains", { count: folder.items.length })}`);
+    card.addEventListener("click", event => {
+      event.stopPropagation();
+      if (activeFolderId === folder.id && !folderPopover.hidden) {
+        commitFolderTitle().catch(console.error);
+        closeFolder();
+        return;
+      }
+      openFolder(folder, slot, false);
+    });
+
+    let edit = slot.querySelector(":scope > .edit-chip");
+    if (!edit) {
+      edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "edit-chip";
+      edit.textContent = "⋯";
+      slot.append(edit);
+    }
+    edit.title = `${t("folder")}: ${folderName}`;
+    edit.setAttribute("aria-label", `${t("folder")}: ${folderName}`);
+    edit.addEventListener("click", event => {
+      event.stopPropagation();
+      openFolder(folder, slot, true);
+    });
+    slot.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      openFolder(folder, slot, true);
+    });
+    if (shortcutOrderMode !== "recent") attachDragHandlers(slot, folder);
+    slot.dataset.interactive = "true";
+    return true;
   }
 
   function createFolderSlot(folder) {
     const slot = document.createElement("div");
     slot.className = "shortcut-slot folder-slot";
     slot.dataset.id = folder.id;
-    slot.draggable = shortcutOrderMode !== "recent";
-
     const card = document.createElement("button");
     card.type = "button";
     card.className = "shortcut-card folder-card";
-    const folderName = folder.title || "Folder";
-    card.title = `${folderName}\n${t("folderContains", { count: folder.items.length })}`;
-    card.setAttribute("aria-label", `${folderName} · ${t("folderContains", { count: folder.items.length })}`);
-
     const tile = document.createElement("span");
     tile.className = "tile folder-tile";
     const mosaic = document.createElement("span");
@@ -2319,40 +2518,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       mosaic.append(cell);
     }
     tile.append(mosaic);
-
     const label = document.createElement("span");
     label.className = "shortcut-label";
-    label.textContent = folderName;
-
+    label.textContent = folder.title || "Folder";
     card.append(tile, label);
-    card.addEventListener("click", event => {
-      event.stopPropagation();
-      if (activeFolderId === folder.id && !folderPopover.hidden) {
-        commitFolderTitle().catch(console.error);
-        closeFolder();
-        return;
-      }
-      openFolder(folder, slot, false);
-    });
-
-    const edit = document.createElement("button");
-    edit.type = "button";
-    edit.className = "edit-chip";
-    edit.textContent = "⋯";
-    edit.title = `${t("folder")}: ${folderName}`;
-    edit.setAttribute("aria-label", `${t("folder")}: ${folderName}`);
-    edit.addEventListener("click", event => {
-      event.stopPropagation();
-      openFolder(folder, slot, true);
-    });
-
-    slot.addEventListener("contextmenu", event => {
-      event.preventDefault();
-      openFolder(folder, slot, true);
-    });
-
-    if (shortcutOrderMode !== "recent") attachDragHandlers(slot, folder);
-    slot.append(card, edit);
+    slot.append(card);
+    configureFolderSlotInteractions(slot, folder);
     return slot;
   }
 
@@ -2762,6 +2933,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     activeFolderId = folder.id;
     activeFolderAnchorId = folder.id;
     renderFolderContents(folder);
+    if ((folder.items || []).some((child, index) => index >= 4 && child.localImageAssetId && !child.image)) {
+      const spaceId = state.activeSpaceId;
+      const folderId = folder.id;
+      void hydrateFolderLocalAssetsNormalized(state, spaceId, folderId).then(hydrated => {
+        if (state.activeSpaceId !== spaceId) return;
+        state = hydrated;
+        const liveFolder = getTopLevelItem(folderId);
+        if (activeFolderId === folderId && !folderPopover.hidden && liveFolder?.type === "folder") renderFolderContents(liveFolder);
+      }).catch(() => {});
+    }
     folderPopover.hidden = false;
     folderPopover.classList.remove("open");
 

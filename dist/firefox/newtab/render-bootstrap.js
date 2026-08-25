@@ -12,6 +12,9 @@
  * recognizable icons instead of visibly stepping through fallback letters.
  */
 (() => {
+  const timing = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
+  timing.phases ||= Object.create(null);
+  timing.phases.bootGridStart = (globalThis.performance?.now?.() ?? Date.now());
   const KEY = "mosaicsync.render-manifest.v1";
   // Classic first-frame scripts cannot import the module constants registry. Build
   // the already-centralized key without duplicating its exact persisted literal.
@@ -158,6 +161,7 @@
     for (const child of item.items.slice(0, 4)) {
       const cell = document.createElement("span");
       cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
+      if (typeof child.id === "string" && child.id) cell.dataset.id = child.id;
       applyColorTag(cell, child);
       appendPreviewOrFallback(cell, child);
       mosaic.append(cell);
@@ -306,6 +310,9 @@ ${safeUrl}`;
     emptyState.hidden = hasShortcuts;
     root.dataset.bootGrid = "true";
     globalThis.__mosaicsyncBootGrid = { manifest };
+    timing.phases.bootGridReady = (globalThis.performance?.now?.() ?? Date.now());
+    timing.renderManifestChars = raw.length;
+    timing.bootGridSlots = capacity;
   } catch {
     // Disposable cache corruption must never block authoritative startup.
   }

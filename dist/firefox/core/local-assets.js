@@ -108,34 +108,60 @@ export function projectStateToLocalAssets(state, memo = null) {
   };
 }
 
-function collectShortcutRefs(item, ids) {
+function collectShortcutRefs(item, ids, { folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   if (!item || typeof item !== "object") return;
   if (item.type === "folder") {
-    for (const child of item.items || []) collectShortcutRefs(child, ids);
+    const children = Array.isArray(item.items) ? item.items : [];
+    const limit = Number.isFinite(folderChildLimit) ? Math.max(0, Math.trunc(folderChildLimit)) : children.length;
+    for (const child of children.slice(0, limit)) collectShortcutRefs(child, ids);
     return;
   }
   if (isLocalAssetId(item.localImageAssetId)) ids.add(item.localImageAssetId);
 }
 
-export function collectStateLocalAssetIds(state, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true } = {}) {
+export function collectStateLocalAssetIds(state, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true, folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   const ids = new Set();
   for (const spaceId of spaceIds) {
     const workspace = state?.spaces?.[spaceId];
     if (!workspace || typeof workspace !== "object") continue;
     if (includeShortcuts) {
-      for (const item of workspace.shortcuts || []) collectShortcutRefs(item, ids);
+      for (const item of workspace.shortcuts || []) collectShortcutRefs(item, ids, { folderChildLimit });
     }
     if (includeBackground && isLocalAssetId(workspace.settings?.backgroundLocalAssetId)) ids.add(workspace.settings.backgroundLocalAssetId);
   }
   return ids;
 }
 
-function hydrateShortcut(item, assets) {
+export function collectFolderLocalAssetIds(state, { spaceId = DEFAULT_SPACE_ID, folderId = "", skip = 0 } = {}) {
+  const ids = new Set();
+  if (!SPACE_IDS.includes(spaceId) || typeof folderId !== "string" || !folderId) return ids;
+  const folder = (state?.spaces?.[spaceId]?.shortcuts || []).find(item => item?.type === "folder" && item.id === folderId);
+  if (!folder) return ids;
+  const children = Array.isArray(folder.items) ? folder.items : [];
+  const start = Math.max(0, Math.trunc(Number(skip) || 0));
+  for (const child of children.slice(start)) collectShortcutRefs(child, ids);
+  return ids;
+}
+
+export function collectDeferredFolderLocalAssetIds(state, { spaceId = DEFAULT_SPACE_ID, visibleChildren = 4 } = {}) {
+  const ids = new Set();
+  if (!SPACE_IDS.includes(spaceId)) return ids;
+  const skip = Math.max(0, Math.trunc(Number(visibleChildren) || 0));
+  for (const item of state?.spaces?.[spaceId]?.shortcuts || []) {
+    if (item?.type !== "folder") continue;
+    for (const child of (item.items || []).slice(skip)) collectShortcutRefs(child, ids);
+  }
+  return ids;
+}
+
+function hydrateShortcut(item, assets, { folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   if (!item || typeof item !== "object") return item;
   if (item.type === "folder") {
     const sourceItems = Array.isArray(item.items) ? item.items : [];
+    const limit = Number.isFinite(folderChildLimit) ? Math.max(0, Math.trunc(folderChildLimit)) : sourceItems.length;
     let changed = false;
-    const items = sourceItems.map(child => {
+    const items = sourceItems.map((child, index) => {
+      if (index >= limit) return child;
       const hydrated = hydrateShortcut(child, assets);
       if (hydrated !== child) changed = true;
       return hydrated;
@@ -148,7 +174,7 @@ function hydrateShortcut(item, assets) {
   return image === item.image ? item : { ...item, image };
 }
 
-function hydrateWorkspace(workspace, assets) {
+function hydrateWorkspace(workspace, assets, { folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   if (!workspace || typeof workspace !== "object") return workspace;
   const settings = workspace.settings && typeof workspace.settings === "object" ? workspace.settings : {};
   const assetId = isLocalAssetId(settings.backgroundLocalAssetId) ? settings.backgroundLocalAssetId : "";
@@ -158,7 +184,7 @@ function hydrateWorkspace(workspace, assets) {
   const sourceShortcuts = Array.isArray(workspace.shortcuts) ? workspace.shortcuts : [];
   let shortcutsChanged = false;
   const shortcuts = sourceShortcuts.map(item => {
-    const hydrated = hydrateShortcut(item, assets);
+    const hydrated = hydrateShortcut(item, assets, { folderChildLimit });
     if (hydrated !== item) shortcutsChanged = true;
     return hydrated;
   });
@@ -171,7 +197,7 @@ function hydrateWorkspace(workspace, assets) {
   };
 }
 
-export function hydrateStateLocalAssets(state, assets, { spaceIds = SPACE_IDS } = {}) {
+export function hydrateStateLocalAssets(state, assets, { spaceIds = SPACE_IDS, folderChildLimit = Number.POSITIVE_INFINITY } = {}) {
   const source = state && typeof state === "object" ? state : {};
   const targetIds = new Set(spaceIds.filter(id => SPACE_IDS.includes(id)));
   let spaces = source.spaces || {};
@@ -179,7 +205,7 @@ export function hydrateStateLocalAssets(state, assets, { spaceIds = SPACE_IDS } 
   for (const spaceId of SPACE_IDS) {
     if (!targetIds.has(spaceId)) continue;
     const current = source.spaces?.[spaceId];
-    const hydrated = hydrateWorkspace(current, assets);
+    const hydrated = hydrateWorkspace(current, assets, { folderChildLimit });
     if (hydrated === current) continue;
     if (!changed) spaces = { ...spaces };
     spaces[spaceId] = hydrated;
