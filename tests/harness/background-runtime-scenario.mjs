@@ -431,6 +431,110 @@ else if (scenario === 'sync-1278-fresh-waits-for-work') {
   console.log(JSON.stringify({ok:true,waiting:waitingMeta.syncStatus,final:finalMeta.syncStatus,syncWrites,restored:restored?.ok===true}));
 }
 
+else if (scenario === 'sync-12781-work-quota-protection') {
+  websiteAccess=false;
+  const initial=stateWith({
+    personal:[shortcut('personal-a','https://personal-a.test/',100)],
+    work:[shortcut('work-a','https://work-a.test/',100)]
+  });
+  await seedLocalState(initial,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off'});
+  await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  const boot=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(boot?.ok,true);
+  let meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(meta.syncProfileProtection,'protected','initial complete profile snapshot should establish protection');
+  assert.equal(meta.syncFastSnapshotFallback,false);
+
+  const normalSet=sync.set.bind(sync);
+  sync.set=async items=>{
+    const keys=Object.keys(items||{});
+    if(keys.some(key=>key.startsWith(`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`))){
+      const error=new Error('simulated storage.sync quota exhaustion while publishing profile protection');
+      error.name='QuotaExceededError';
+      throw error;
+    }
+    return normalSet(items);
+  };
+
+  const edited=stateWith({
+    personal:[shortcut('personal-a','https://personal-a.test/',100)],
+    work:[shortcut('work-a','https://work-a.test/',100),shortcut('work-new','https://work-new.test/',400)]
+  });
+  const oldRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  await local.set({[constants.LOCAL_STATE_KEY]:edited});
+  for(const listener of events.onStorageChanged.listeners){
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:oldRaw,newValue:edited}},'local');
+  }
+  // Runtime messages use the same serialized queue, so this waits until the
+  // local-change publication has finished before inspecting metadata.
+  const status=await send({type:'mosaicsync:get-sync-status'});
+  meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const workItemKey=`${constants.SYNC_SPACE_PREFIX}work.item.${encodeURIComponent('work-new')}`;
+  assert.ok((await sync.get(workItemKey))[workItemKey],'ordinary Work ledger must still synchronize');
+  assert.equal(meta.syncStatus,'ready','ordinary Sync remains healthy when only the additional recovery copy cannot fit');
+  assert.equal(meta.syncProfileProtection,'limited');
+  assert.equal(meta.syncProfileProtectionReason,'quota');
+  assert.equal(meta.syncFastSnapshotFallback,true,'existing localized warning must remain visible for a Work-only mutation');
+  assert.equal(status?.recoveryProtection,'limited');
+  assert.equal(status?.recoveryProtectionReason,'quota');
+  assert.equal(status?.meta?.syncFastSnapshotFallback,true);
+  console.log(JSON.stringify({ok:true,status:meta.syncStatus,protection:meta.syncProfileProtection,reason:meta.syncProfileProtectionReason,warning:meta.syncFastSnapshotFallback}));
+}
+
+else if (scenario === 'sync-12781-profile-root-quota-rollback') {
+  websiteAccess=false;
+  const initial=stateWith({
+    personal:[shortcut('personal-a','https://personal-a.test/',100)],
+    work:[shortcut('work-a','https://work-a.test/',100)]
+  });
+  await seedLocalState(initial,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off'});
+  await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  const boot=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(boot?.ok,true);
+  const rootKey=`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`;
+  const beforeRoot=(await sync.get(rootKey))[rootKey];
+  assert.equal(beforeRoot?.profileComplete,true);
+  const beforeCommit=beforeRoot.commitId;
+  const targetSlot=beforeRoot.slot==='a'?'b':'a';
+
+  const normalSet=sync.set.bind(sync);
+  let newChunkWrites=0;
+  sync.set=async items=>{
+    const entries=Object.entries(items||{});
+    if(entries.some(([key,value])=>key===rootKey && value?.commitId!==beforeCommit)){
+      const error=new Error('simulated quota failure on profile root flip');
+      error.name='QuotaExceededError';
+      throw error;
+    }
+    if(entries.some(([key])=>key.startsWith(`${rootKey}.chunk.${targetSlot}.`))) newChunkWrites += 1;
+    return normalSet(items);
+  };
+
+  const edited=stateWith({
+    personal:[shortcut('personal-a','https://personal-a.test/',100)],
+    work:[shortcut('work-a','https://work-a.test/',100),shortcut('work-new','https://work-new.test/',500)]
+  });
+  const oldRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  await local.set({[constants.LOCAL_STATE_KEY]:edited});
+  for(const listener of events.onStorageChanged.listeners){
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:oldRaw,newValue:edited}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+
+  const afterRoot=(await sync.get(rootKey))[rootKey];
+  assert.equal(afterRoot?.commitId,beforeCommit,'failed root flip must leave the previous complete generation authoritative');
+  assert.ok(newChunkWrites>0,'test must fail after at least one target-slot chunk write');
+  const all=await sync.get(null);
+  assert.equal(Object.keys(all).some(key=>key.startsWith(`${rootKey}.chunk.${targetSlot}.`)),false,'failed target generation chunks must be cleaned up');
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(meta.syncProfileProtection,'limited');
+  assert.equal(meta.syncProfileProtectionReason,'quota');
+  assert.equal(meta.syncFastSnapshotFallback,true);
+  const workItemKey=`${constants.SYNC_SPACE_PREFIX}work.item.${encodeURIComponent('work-new')}`;
+  assert.ok(all[workItemKey],'ordinary Work ledger must retain the edit despite safety-root failure');
+  console.log(JSON.stringify({ok:true,beforeCommit,afterCommit:afterRoot.commitId,newChunkWrites,protection:meta.syncProfileProtection}));
+}
+
 else if (scenario === 'sync-same-marker-divergence') {
   websiteAccess=false;
   const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});

@@ -394,6 +394,8 @@ browser.runtime.onInstalled.addListener(details => {
         lastSyncWarning: "",
         syncSkippedAssets: 0,
         syncFastSnapshotFallback: false,
+        syncProfileProtection: "unknown",
+        syncProfileProtectionReason: "",
         onboardingCompleted: false,
         onboardingVersion: "",
         syncWaitStartedAt: 0,
@@ -626,6 +628,8 @@ browser.permissions?.onRemoved?.addListener(permissions => {
       lastSyncWarning: "",
       syncSkippedAssets: 0,
       syncFastSnapshotFallback: false,
+      syncProfileProtection: "unknown",
+      syncProfileProtectionReason: "",
       syncWaitStartedAt: 0,
       lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
@@ -3573,7 +3577,9 @@ async function getSyncStatus() {
     lastRemoteReceiptOriginDeviceId: statusMeta.lastRemoteReceiptOriginDeviceId,
     remoteCommitId: latestDevice?.commitId || (typeof snapshot.dataset?.commitId === "string" ? snapshot.dataset.commitId : ""),
     remoteOriginDeviceId: core?.originDeviceId || (typeof snapshot.dataset?.originDeviceId === "string" ? snapshot.dataset.originDeviceId : ""),
-    remoteSourceKind: sources.profile?.complete ? "complete-profile" : (core?.sourceKind || "")
+    remoteSourceKind: sources.profile?.complete ? "complete-profile" : (core?.sourceKind || ""),
+    recoveryProtection: statusMeta.syncProfileProtection || "unknown",
+    recoveryProtectionReason: statusMeta.syncProfileProtectionReason || ""
   };
 }
 
@@ -3680,7 +3686,8 @@ async function bootstrapLocal() {
   const profilePublishMeta = { ...meta, syncInitialized: true, lastAppliedWorkSyncRevision: workRevision };
   const profilePublish = await publishProfileDeviceSnapshot(state, profilePublishMeta, { force: true });
   const totalSkippedAssets = assetResult.skipped + workPublish.assetResult.skipped;
-  const warningState = syncWarningState(totalSkippedAssets, !profilePublish.written);
+  const warningState = syncWarningState(totalSkippedAssets);
+  const protectionState = profileProtectionState(profilePublish, meta);
   const refreshed = await refreshQuota({
     ...markAppliedSnapshot(meta, publishedDataset),
     lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || fastPublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
@@ -3694,6 +3701,7 @@ async function bootstrapLocal() {
     lastSyncAt: timestamp,
     lastSyncError: "",
     ...warningState,
+    ...protectionState,
     syncWaitStartedAt: 0
   });
   await writeLocalMeta(refreshed);
@@ -3835,15 +3843,14 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
   // Establish/refresh this device's complete 1.27.8 safety generation even when
   // the remote source was the old two-ledger format and there were no local edits.
   const profilePublish = await publishProfileDeviceSnapshot(mergedState, refreshed, { force: true });
-  if (profilePublish.written) {
-    refreshed = await writeLocalMeta({
-      ...refreshed,
-      lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedDeviceSnapshotRevision || "",
-      lastAppliedProfileSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedProfileSnapshotRevision || "",
-      lastProfileSnapshotPublishedAt: profilePublish.publishedAt || refreshed.lastProfileSnapshotPublishedAt || 0,
-      syncStatus: "ready"
-    });
-  }
+  refreshed = await writeLocalMeta({
+    ...refreshed,
+    lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedDeviceSnapshotRevision || "",
+    lastAppliedProfileSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedProfileSnapshotRevision || "",
+    lastProfileSnapshotPublishedAt: profilePublish.publishedAt || refreshed.lastProfileSnapshotPublishedAt || 0,
+    syncStatus: "ready",
+    ...profileProtectionState(profilePublish, refreshed)
+  });
   await clearPendingLocalSyncMutation();
   await ensureSyncWatchAlarm(refreshed);
   await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
@@ -4209,7 +4216,8 @@ async function executePendingCrossSpaceSync(entry, meta = null) {
     lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0,
     syncStatus: "ready",
     lastSyncError: "",
-    lastSyncAt: Date.now()
+    lastSyncAt: Date.now(),
+    ...profileProtectionState(profilePublish, currentMeta)
   });
   await ensureSyncWatchAlarm(currentMeta);
   return currentMeta;
@@ -4290,7 +4298,8 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
   if (gcResult.removedKeys) snapshot = await readSyncSnapshot();
   const assetResult = await uploadMissingAssets(newAssets, snapshot.assets);
 
-  const warningState = syncWarningState(assetResult.skipped, !fastPublish.written);
+  const warningState = syncWarningState(assetResult.skipped);
+  const protectionState = profileProtectionState(fastPublish, meta);
   const refreshed = await refreshQuota({
     ...(publishedDataset ? markAppliedSnapshot(meta, publishedDataset) : meta),
     lastAppliedDeviceSnapshotRevision: fastPublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
@@ -4299,7 +4308,8 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
     syncStatus: "ready",
     lastSyncAt: timestamp,
     lastSyncError: "",
-    ...warningState
+    ...warningState,
+    ...protectionState
   });
   await writeLocalMeta(refreshed);
 }
@@ -4369,7 +4379,8 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
     syncStatus: "ready",
     lastSyncAt: timestamp,
     lastSyncError: "",
-    ...syncWarningState(assetResult.skipped)
+    ...syncWarningState(assetResult.skipped),
+    ...profileProtectionState(profilePublish, meta)
   });
   await writeLocalMeta(refreshed);
   return { ok: true, meta: refreshed, dataset: publishedDataset };
@@ -4742,14 +4753,13 @@ async function reconcile(strategy = "merge") {
     if (currentMeta.syncEnabled && currentMeta.syncInitialized) {
       const { state } = await ensureLocalStorage();
       const profilePublish = await publishProfileDeviceSnapshot(state, currentMeta);
-      if (profilePublish.written || profilePublish.unchanged) {
-        currentMeta = await writeLocalMeta({
-          ...currentMeta,
-          lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedDeviceSnapshotRevision || "",
-          lastAppliedProfileSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedProfileSnapshotRevision || "",
-          lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0
-        });
-      }
+      currentMeta = await writeLocalMeta({
+        ...currentMeta,
+        lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedDeviceSnapshotRevision || "",
+        lastAppliedProfileSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedProfileSnapshotRevision || "",
+        lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0,
+        ...profileProtectionState(profilePublish, currentMeta)
+      });
       if (work?.pending && profilePublish.written) work = await reconcileWork(strategy);
     }
 
@@ -5123,6 +5133,41 @@ async function uploadMissingAssets(assets, existingAssets, spaceId = PERSONAL_SP
   return { uploaded, skipped };
 }
 
+function profileProtectionState(profilePublish, previousMeta = {}) {
+  const previousState = ["unknown", "protected", "limited"].includes(previousMeta?.syncProfileProtection)
+    ? previousMeta.syncProfileProtection
+    : "unknown";
+  const previousReason = typeof previousMeta?.syncProfileProtectionReason === "string"
+    ? previousMeta.syncProfileProtectionReason
+    : "";
+
+  if (profilePublish?.written === true || profilePublish?.unchanged === true) {
+    return {
+      syncProfileProtection: "protected",
+      syncProfileProtectionReason: "",
+      syncFastSnapshotFallback: false
+    };
+  }
+
+  const reason = String(profilePublish?.reason || "");
+  if (["too-large", "quota", "missing-device"].includes(reason)) {
+    return {
+      syncProfileProtection: "limited",
+      syncProfileProtectionReason: reason,
+      syncFastSnapshotFallback: true
+    };
+  }
+
+  // "untrusted-local-profile" is expected while a fresh device is waiting for
+  // a complete remote baseline. It must not turn a temporary bootstrap state
+  // into a permanent degraded-protection warning. Preserve the last proven state.
+  return {
+    syncProfileProtection: previousState,
+    syncProfileProtectionReason: previousReason,
+    syncFastSnapshotFallback: previousMeta?.syncFastSnapshotFallback === true
+  };
+}
+
 function syncWarningState(skipped = 0, fastSnapshotFallback = false) {
   return {
     // User-facing wording is rendered by New Tab through the localization
@@ -5303,7 +5348,6 @@ async function markSyncing(meta) {
     lastSyncError: "",
     lastSyncWarning: "",
     syncSkippedAssets: 0,
-    syncFastSnapshotFallback: false,
   });
 }
 

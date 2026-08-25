@@ -55,3 +55,19 @@ for(const browser of ['firefox','chrome']) {
     assert.equal(out.ok,true); assert.equal(out.waiting,'waiting'); assert.equal(out.final,'ready'); assert.equal(out.restored,true);
   });
 }
+
+
+for(const browser of ['firefox','chrome']) {
+  test(`1.27.8.1 production ${browser} Work-only Sync keeps recovery quota degradation observable`,()=>{
+    const out=run(browser,'sync-12781-work-quota-protection');
+    assert.equal(out.ok,true); assert.equal(out.status,'ready'); assert.equal(out.protection,'limited'); assert.equal(out.reason,'quota'); assert.equal(out.warning,true);
+  });
+}
+
+
+for(const browser of ['firefox','chrome']) {
+  test(`1.27.8.1 production ${browser} failed profile root flip preserves the previous complete generation`,()=>{
+    const out=run(browser,'sync-12781-profile-root-quota-rollback');
+    assert.equal(out.ok,true); assert.equal(out.afterCommit,out.beforeCommit); assert.ok(out.newChunkWrites>0); assert.equal(out.protection,'limited');
+  });
+}

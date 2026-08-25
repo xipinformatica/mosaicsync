@@ -801,6 +801,8 @@ export function normalizeMeta(raw) {
     syncItemCount: Number.isFinite(raw?.syncItemCount) ? raw.syncItemCount : 0,
     syncSkippedAssets: Number.isFinite(raw?.syncSkippedAssets) ? raw.syncSkippedAssets : 0,
     syncFastSnapshotFallback: raw?.syncFastSnapshotFallback === true,
+    syncProfileProtection: ["unknown", "protected", "limited"].includes(raw?.syncProfileProtection) ? raw.syncProfileProtection : "unknown",
+    syncProfileProtectionReason: ["", "too-large", "quota", "missing-device"].includes(raw?.syncProfileProtectionReason) ? raw.syncProfileProtectionReason : "",
     lastSyncWarning: typeof raw?.lastSyncWarning === "string" ? raw.lastSyncWarning : "",
     syncUsageCoreBytes: Number.isFinite(raw?.syncUsageCoreBytes) ? raw.syncUsageCoreBytes : 0,
     syncUsageShortcutBytes: Number.isFinite(raw?.syncUsageShortcutBytes) ? raw.syncUsageShortcutBytes : 0,

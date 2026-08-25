@@ -1,3 +1,12 @@
+## 1.27.8.1
+
+- Hardened the 1.27.8 complete-profile recovery layer after a dedicated multi-computer Sync audit. MosaicSync now persists a separate structured recovery-protection state (`protected`, `limited`, or `unknown`) instead of silently losing the fact that the extra full-profile safety generation could not be published. Normal Personal/Work synchronization can remain `ready` while recovery protection is explicitly marked limited.
+- Propagated full-profile snapshot outcomes consistently across authoritative bootstrap, fresh remote bootstrap, Personal-only edits, Work-only edits, cross-Space transactions and normal reconciliation. In particular, a Work-only change that hits `storage.sync` quota now keeps the existing localized recovery-snapshot warning visible instead of reporting an unqualified healthy safety state.
+- Preserved the root-last/double-buffered rollback guarantee under quota failure: if new safety chunks were written but the new root cannot be committed, the previous complete generation remains authoritative and the failed target-slot chunks are removed.
+- Added a true two-computer production-background Sync harness for both Firefox and Chrome. Two independent MosaicSync instances now share an intentionally unreliable fake `storage.sync` transport; regression coverage delivers Personal first, Work partially/out of order, creates a local Work shortcut on the waiting computer, withholds the final Work key without firing `storage.onChanged`, then verifies watchdog recovery, preservation of the local edit and eventual convergence on the first computer.
+- Added production fault-injection coverage for recovery-snapshot quota exhaustion and failed root flips in both browsers. These tests prove that the ordinary synchronized ledgers remain usable while the additional recovery layer is explicitly degraded, and that no half-written generation becomes authoritative.
+- No synchronized record/schema semantics, conflict/tombstone rules, permissions, CSP, telemetry or remote-code behavior changed. Version identity is exactly `1.27.8.1` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.8
 
 - Reworked Sync recovery around a complete Personal+Work device generation. A trusted device now publishes both Spaces together through the existing root-last, double-buffered device snapshot transport; the payload remains backward-compatible with 1.27.7 for Personal while 1.27.8 validates and restores Work from the same generation.

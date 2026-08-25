@@ -1,9 +1,17 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.27.8.1 distributed Sync validation and recovery-protection policy
+
+- `syncStatus` describes whether the ordinary Personal+Work synchronized profile is usable; complete-profile recovery protection is tracked separately as `unknown`, `protected` or `limited`. A quota/size failure of the extra safety generation must never be silently discarded.
+- Every production path that attempts `publishProfileDeviceSnapshot()` must propagate its outcome into local metadata. Work-only edits and cross-Space transactions are covered by the same rule as Personal edits/bootstrap/reconciliation.
+- A failed target generation never flips the authoritative root. If chunk writes succeed but the root write fails, target chunks are cleaned up and the previous complete generation remains valid.
+- Release-level Sync validation must include two independent production background instances sharing an emulated remote `storage.sync`, not only source-shape assertions. The harness must support partial/out-of-order delivery and missed `storage.onChanged` notifications, and convergence must be verified after the watchdog path.
+- 1.27.8.1 intentionally does not change whole-record conflict/LWW/tombstone semantics; clock-skew and per-field shortcut merging remain separate design work.
 
 ## 1.27.8 complete-profile Sync safety policy
 
@@ -235,7 +243,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
