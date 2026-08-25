@@ -359,7 +359,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let editingPreferredPosition = null;
   let toastTimer = null;
   let syncFeedbackTimer = null;
-  let lastLocalWriteUpdatedAt = 0;
   let lastSyncStatus = null;
   let settingsSyncReconcilePromise = null;
   let syncWaitNoticeTimer = null;
@@ -1576,8 +1575,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     stateMutationGeneration += 1;
     state = await writeLocalState(state, {
       baseState,
-      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized,
-      beforeWrite: finalState => { lastLocalWriteUpdatedAt = finalState.updatedAt; }
+      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
     });
     writeBaseline = createWriteBaseline(state);
     updateSpaceSwitcher();
@@ -1600,8 +1598,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     stateMutationGeneration += 1;
     state = await writeLocalState(state, {
       baseState,
-      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized,
-      beforeWrite: finalState => { lastLocalWriteUpdatedAt = finalState.updatedAt; }
+      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
     });
     writeBaseline = createWriteBaseline(state);
     applySettings();
@@ -1670,8 +1667,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     state = await writeLocalState(state, {
       baseState,
       crossSpaceSyncIntent,
-      recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent && meta?.syncEnabled && meta?.syncInitialized,
-      beforeWrite: finalState => { lastLocalWriteUpdatedAt = finalState.updatedAt; }
+      recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent && meta?.syncEnabled && meta?.syncInitialized
     });
     writeBaseline = createWriteBaseline(state);
     scheduleAppearanceHintRefresh(state.settings);
@@ -3037,10 +3033,29 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
   }
 
-  function renderDetectedFaviconChoices(candidates, sourceUrl) {
+  function renderDetectedFaviconChoices(candidates, sourceUrl, { statusText = "" } = {}) {
     if (!detectedFaviconChoices || !detectedFaviconPicker) return;
     detectedFaviconChoices.replaceChildren();
-    const safeCandidates = (Array.isArray(candidates) ? candidates : []).slice(0, 8);
+    const merged = [];
+    const seenImages = new Set();
+    const current = typeof pendingShortcutImage === "string" && pendingShortcutImage.startsWith("data:image/") &&
+      ["favicon", "firefox"].includes(pendingShortcutImageSourceKind)
+      ? {
+          image: pendingShortcutImage,
+          sourceUrl: pendingShortcutImageSourceUrl || "",
+          width: 0,
+          height: 0,
+          source: pendingShortcutImageSourceKind === "firefox" ? "browser" : "site"
+        }
+      : null;
+    if (current?.image) { merged.push(current); seenImages.add(current.image); }
+    for (const candidate of Array.isArray(candidates) ? candidates : []) {
+      if (!candidate || typeof candidate.image !== "string" || !candidate.image.startsWith("data:image/") || seenImages.has(candidate.image)) continue;
+      seenImages.add(candidate.image);
+      merged.push(candidate);
+      if (merged.length >= 8) break;
+    }
+    const safeCandidates = merged.slice(0, 8);
     for (let index = 0; index < safeCandidates.length; index += 1) {
       const candidate = safeCandidates[index];
       if (!candidate || typeof candidate.image !== "string" || !candidate.image.startsWith("data:image/")) continue;
@@ -3095,7 +3110,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
       detectedFaviconChoices.append(button);
     }
-    if (detectedFaviconStatus) detectedFaviconStatus.textContent = detectedFaviconChoices.childElementCount ? "" : t("noDetectedFavicons");
+    if (detectedFaviconStatus) detectedFaviconStatus.textContent = statusText || (detectedFaviconChoices.childElementCount ? "" : t("noDetectedFavicons"));
     detectedFaviconPicker.hidden = false;
     chooseDetectedFavicon?.setAttribute("aria-expanded", "true");
   }
@@ -3221,12 +3236,19 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         let currentUrl = "";
         try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch {}
         if (currentUrl !== sourceUrl) { resetDetectedFaviconPicker(); return; }
-        if (!result?.ok) throw new Error(result?.error === "permission" ? t("websiteAccessDenied") : t("operationFailed"));
+        if (!result?.ok) {
+          if (result?.error === "permission") throw new Error(t("websiteAccessDenied"));
+          if (result?.error === "discovery-failed") {
+            renderDetectedFaviconChoices([], sourceUrl, { statusText: t("faviconDiscoveryFailed") });
+            return;
+          }
+          throw new Error(t("operationFailed"));
+        }
         renderDetectedFaviconChoices(result.candidates, sourceUrl);
       } catch (error) {
         if (generation !== detectedFaviconGeneration) return;
         detectedFaviconChoices?.replaceChildren();
-        if (detectedFaviconStatus) detectedFaviconStatus.textContent = error.message || t("noDetectedFavicons");
+        if (detectedFaviconStatus) detectedFaviconStatus.textContent = error.message || t("operationFailed");
       } finally {
         if (requestId && detectedFaviconRequestId === requestId) detectedFaviconRequestId = "";
         if (generation === detectedFaviconGeneration) chooseDetectedFavicon.disabled = false;
@@ -5660,8 +5682,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       stateMutationGeneration += 1;
       state = importedState;
       state = await writeLocalState(state, {
-        recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized,
-        beforeWrite: finalState => { lastLocalWriteUpdatedAt = finalState.updatedAt; }
+        recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
       });
       writeBaseline = createWriteBaseline(state);
       await setLocalePreference(parsed.preferences.uiLocale || "auto");
@@ -5921,11 +5942,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     const stateChange = changes[LOCAL_STATE_KEY];
     if (stateChange?.newValue) {
-      if (Number(stateChange.newValue?.spaces?.[state.activeSpaceId]?.updatedAt) === Number(lastLocalWriteUpdatedAt) && lastLocalWriteUpdatedAt) {
-        lastLocalWriteUpdatedAt = 0;
-      } else {
-        const changeGeneration = ++persistedStateChangeGeneration;
-        void (async () => {
+      // Device-local artwork writes deliberately preserve the synchronized
+      // workspace clock. Never suppress a storage event merely because its
+      // updatedAt matches one of this page's own recent writes: a background
+      // favicon update can legitimately carry the same clock but different
+      // local artwork. The device-artwork fast path below is already cheap and
+      // safely absorbs exact own-write echoes without a full render.
+      const changeGeneration = ++persistedStateChangeGeneration;
+      void (async () => {
           try {
             // Only hydrate the currently visible Space. Inactive refs remain in
             // state and are resolved when that Space is actually selected.
@@ -5957,11 +5981,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             scheduleRenderPreviewRefresh(state, meta);
             scheduleFrequentlyVisitedRefresh();
             if (state.settings.autoSiteIcons) scheduleIdleWork(() => requestMissingSiteIcons(), 700);
-          } catch (error) {
-            console.warn(`${PRODUCT_NAME}: could not materialize local state change`, error);
-          }
-        })();
-      }
+        } catch (error) {
+          console.warn(`${PRODUCT_NAME}: could not materialize local state change`, error);
+        }
+      })();
     }
 
     const metaChange = changes[LOCAL_META_KEY];

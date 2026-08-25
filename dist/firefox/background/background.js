@@ -15,6 +15,7 @@
 import {
   ASSET_ORPHAN_GRACE_MS,
   DEVICE_SNAPSHOT_SCHEMA_VERSION,
+  PROFILE_SNAPSHOT_SCHEMA_VERSION,
   DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
   DEVICE_SNAPSHOT_CHUNK_DATA_CHARS,
   DEVICE_SNAPSHOT_RETENTION_MS,
@@ -399,6 +400,8 @@ browser.runtime.onInstalled.addListener(details => {
         lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
         lastAppliedDeviceSnapshotRevision: "",
+      lastAppliedProfileSnapshotRevision: "",
+      lastProfileSnapshotPublishedAt: 0,
         lastRemoteReceiptAt: 0,
         lastRemoteReceiptRevision: "",
         lastRemoteReceiptUpdatedAt: 0,
@@ -627,6 +630,8 @@ browser.permissions?.onRemoved?.addListener(permissions => {
       lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
       lastAppliedDeviceSnapshotRevision: "",
+      lastAppliedProfileSnapshotRevision: "",
+      lastProfileSnapshotPublishedAt: 0,
       lastRemoteReceiptAt: 0,
       lastRemoteReceiptRevision: "",
       lastRemoteReceiptUpdatedAt: 0,
@@ -1732,6 +1737,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
 
   const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt, signal });
   if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
+  const pageDiscoveryReason = String(discovered?.reason || "");
   await fetchChoiceBatches((discovered.candidates || []).slice(0, 16).map(candidate => ({
     value: candidate.url,
     options: {
@@ -1757,6 +1763,11 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
   ]);
 
   if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
+  if (!choices.length && pageDiscoveryReason) {
+    if (pageDiscoveryReason === "permission") return { ok: false, error: "permission", reason: pageDiscoveryReason, candidates: [] };
+    if (pageDiscoveryReason === "cancelled") return { ok: false, error: "cancelled", reason: pageDiscoveryReason, candidates: [] };
+    return { ok: false, error: "discovery-failed", reason: pageDiscoveryReason, candidates: [] };
+  }
   choices.sort((a, b) =>
     b.qualitySide - a.qualitySide ||
     Number(b.declared) - Number(a.declared) ||
@@ -2578,6 +2589,8 @@ async function setSyncEnabled(enabled) {
       lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
       lastAppliedDeviceSnapshotRevision: "",
+      lastAppliedProfileSnapshotRevision: "",
+      lastProfileSnapshotPublishedAt: 0,
       lastRemoteReceiptAt: 0,
       lastRemoteReceiptRevision: "",
       lastRemoteReceiptUpdatedAt: 0,
@@ -2691,8 +2704,8 @@ async function encodeDeviceSnapshotPayload(payload) {
   return { data: bytesToBase64(compressed), jsonChars: json.length, compressedBytes: compressed.length };
 }
 
-function deviceSnapshotMetadata(records, settings, deviceId, commitId, publishedAt, encoded) {
-  return {
+function deviceSnapshotMetadata(records, settings, deviceId, commitId, publishedAt, encoded, workRecords = null, workSettings = null) {
+  const metadata = {
     schemaVersion: DEVICE_SNAPSHOT_SCHEMA_VERSION,
     deviceId,
     commitId,
@@ -2705,6 +2718,15 @@ function deviceSnapshotMetadata(records, settings, deviceId, commitId, published
     compressedBytes: encoded.compressedBytes,
     jsonChars: encoded.jsonChars
   };
+  if (workRecords instanceof Map && workSettings?.kind === "settings") {
+    metadata.profileSnapshotVersion = PROFILE_SNAPSHOT_SCHEMA_VERSION;
+    metadata.profileComplete = true;
+    metadata.updatedAt = Math.max(metadata.updatedAt, datasetUpdatedAt(workRecords, workSettings, 0));
+    metadata.workLiveRecordCount = liveRecordCount(workRecords);
+    metadata.workRecordFingerprint = recordFingerprint(workRecords);
+    metadata.workSettingsModifiedAt = Number(workSettings.modifiedAt) || 0;
+  }
+  return metadata;
 }
 
 async function decodeDeviceSnapshotData(value, data) {
@@ -2721,6 +2743,8 @@ async function decodeDeviceSnapshotData(value, data) {
     const decompressed = await readBoundedStreamBytes(stream, DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES);
     if (!decompressed) return null;
     const payload = JSON.parse(new TextDecoder().decode(decompressed));
+    // Keep payload version 2 so MosaicSync 1.27.7 can continue reading the
+    // Personal half of a 1.27.8 full-profile device snapshot during rollout.
     if (!payload || payload.version !== DEVICE_SNAPSHOT_SCHEMA_VERSION || !Array.isArray(payload.records) || !payload.settings) return null;
     const records = new Map();
     for (const record of payload.records) {
@@ -2732,6 +2756,24 @@ async function decodeDeviceSnapshotData(value, data) {
     if (Number(value.liveRecordCount) !== liveRecordCount(records)) return null;
     if (value.recordFingerprint && value.recordFingerprint !== recordFingerprint(records)) return null;
     if (Number(value.settingsModifiedAt) !== Number(settings.modifiedAt || 0)) return null;
+
+    let workRecords = null;
+    let workSettings = null;
+    const profileComplete = value.profileComplete === true &&
+      Number(value.profileSnapshotVersion) === PROFILE_SNAPSHOT_SCHEMA_VERSION;
+    if (profileComplete) {
+      if (!Array.isArray(payload.workRecords) || payload.workSettings?.kind !== "settings") return null;
+      workRecords = new Map();
+      for (const record of payload.workRecords) {
+        if (!record?.id || !["shortcut", "folder", "deleted"].includes(record.kind)) continue;
+        workRecords.set(record.id, record);
+      }
+      workSettings = payload.workSettings;
+      if (Number(value.workLiveRecordCount) !== liveRecordCount(workRecords)) return null;
+      if (value.workRecordFingerprint && value.workRecordFingerprint !== recordFingerprint(workRecords)) return null;
+      if (Number(value.workSettingsModifiedAt) !== Number(workSettings.modifiedAt || 0)) return null;
+    }
+
     return {
       kind: "device-snapshot",
       deviceId: typeof value.deviceId === "string" ? value.deviceId : "",
@@ -2739,14 +2781,18 @@ async function decodeDeviceSnapshotData(value, data) {
       publishedAt: Number(value.publishedAt) || 0,
       updatedAt: Number(value.updatedAt) || 0,
       records,
-      settings
+      settings,
+      profileComplete,
+      workRecords,
+      workSettings,
+      usedPreviousGeneration: false
     };
   } catch {
     return null;
   }
 }
 
-async function decodeDeviceSnapshotPayload(value, all = null) {
+async function decodeDeviceSnapshotCurrentPayload(value, all = null) {
   if (!value || value.schemaVersion !== DEVICE_SNAPSHOT_SCHEMA_VERSION) return null;
 
   if (value.kind === "device-snapshot") {
@@ -2771,6 +2817,28 @@ async function decodeDeviceSnapshotPayload(value, all = null) {
   if (Number(value.dataChars) !== data.length) return null;
   if (value.dataFingerprint && value.dataFingerprint !== fnv1a(data)) return null;
   return decodeDeviceSnapshotData(value, data);
+}
+
+async function decodeDeviceSnapshotPayload(value, all = null) {
+  const current = await decodeDeviceSnapshotCurrentPayload(value, all);
+  if (current) return current;
+
+  // 1.27.8 retains the immediately previous complete Personal+Work generation.
+  // If Firefox exposes the new root before all of its chunks, the previous slot
+  // remains independently verifiable and can be used until delivery completes.
+  const previous = value?.previousProfile;
+  if (!previous || value?.kind !== "device-snapshot-manifest" || !all) return null;
+  const descriptor = {
+    ...previous,
+    schemaVersion: DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    kind: "device-snapshot-manifest",
+    chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+    deviceId: value.deviceId,
+    profileSnapshotVersion: PROFILE_SNAPSHOT_SCHEMA_VERSION,
+    profileComplete: true
+  };
+  const fallback = await decodeDeviceSnapshotCurrentPayload(descriptor, all);
+  return fallback ? { ...fallback, usedPreviousGeneration: true } : null;
 }
 
 function retainTombstones(target, source) {
@@ -2823,6 +2891,195 @@ function mergeDeviceSnapshots(snapshots) {
     updatedAt,
     publishedAt: latestPublishedAt,
     originDeviceId: latestOriginDeviceId
+  };
+}
+
+
+function mergeProfileDeviceSnapshots(snapshots) {
+  const complete = (Array.isArray(snapshots) ? snapshots : []).filter(snapshot =>
+    snapshot?.profileComplete === true && snapshot.workRecords instanceof Map && snapshot.workSettings?.kind === "settings"
+  );
+  if (!complete.length) return null;
+
+  let personalRecords = new Map();
+  let personalSettings = null;
+  let workRecords = new Map();
+  let workSettings = null;
+  let updatedAt = 0;
+  let latestPublishedAt = 0;
+  let latestOriginDeviceId = "";
+  const revisions = [];
+  for (const snapshot of complete) {
+    personalRecords = mergeRecordMaps(personalRecords, snapshot.records);
+    personalSettings = personalSettings ? chooseNewerRecord(personalSettings, snapshot.settings) : snapshot.settings;
+    workRecords = mergeRecordMaps(workRecords, snapshot.workRecords);
+    workSettings = workSettings ? chooseNewerRecord(workSettings, snapshot.workSettings) : snapshot.workSettings;
+    updatedAt = Math.max(updatedAt, Number(snapshot.updatedAt) || 0);
+    if (Number(snapshot.publishedAt) >= latestPublishedAt) {
+      latestPublishedAt = Number(snapshot.publishedAt) || 0;
+      latestOriginDeviceId = snapshot.deviceId || latestOriginDeviceId;
+    }
+    revisions.push(`${snapshot.deviceId}:${snapshot.commitId}:${snapshot.updatedAt}:${snapshot.usedPreviousGeneration ? "previous" : "current"}`);
+  }
+  if (!personalSettings || !workSettings) return null;
+  revisions.sort(compareStableText);
+  return {
+    personal: { records: pruneExpiredTombstones(personalRecords), settings: personalSettings, assets: new Map() },
+    work: { records: pruneExpiredTombstones(workRecords), settings: workSettings, assets: new Map() },
+    revision: `profiles:${fnv1a(revisions.join("|"))}`,
+    updatedAt,
+    publishedAt: latestPublishedAt,
+    originDeviceId: latestOriginDeviceId,
+    complete: true
+  };
+}
+
+function profilePublicationTrusted(meta) {
+  return Boolean(meta?.syncInitialized && (meta.lastAppliedWorkSyncRevision || meta.lastAppliedProfileSnapshotRevision));
+}
+
+function previousProfileDescriptor(root) {
+  if (!root || root.kind !== "device-snapshot-manifest" || root.profileComplete !== true) return null;
+  if (Number(root.profileSnapshotVersion) !== PROFILE_SNAPSHOT_SCHEMA_VERSION) return null;
+  if (!["a", "b"].includes(root.slot) || !root.commitId) return null;
+  const fields = [
+    "commitId", "publishedAt", "updatedAt", "liveRecordCount", "recordFingerprint", "settingsModifiedAt",
+    "encoding", "compressedBytes", "jsonChars", "slot", "parts", "dataChars", "dataFingerprint",
+    "workLiveRecordCount", "workRecordFingerprint", "workSettingsModifiedAt"
+  ];
+  const descriptor = {};
+  for (const field of fields) descriptor[field] = root[field];
+  return descriptor;
+}
+
+async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn, sharedPersonal, sharedWork) {
+  const personalState = workspaceStateNormalized(fullState, PERSONAL_SPACE_ID);
+  const workState = workspaceStateNormalized(fullState, WORK_SPACE_ID);
+  const personalRecords = new Map(flattenStateNormalized(personalState, meta.deviceId));
+  const workRecords = new Map(flattenStateNormalized(workState, meta.deviceId));
+  retainTombstones(personalRecords, currentOwn?.decoded?.records);
+  retainTombstones(workRecords, currentOwn?.decoded?.workRecords);
+  retainTombstones(personalRecords, sharedPersonal?.records);
+  retainTombstones(workRecords, sharedWork?.records);
+  const personalSettings = makeSettingsRecordNormalized(personalState, meta.deviceId);
+  const workSettings = makeSettingsRecordNormalized(workState, meta.deviceId);
+  const commitId = uid("profile-commit");
+  const publishedAt = Date.now();
+  const payload = {
+    // Intentionally remain payload v2 so 1.27.7 can read Personal while newer
+    // builds additionally validate/use the Work fields.
+    version: DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    records: [...personalRecords.values()],
+    settings: personalSettings,
+    workRecords: [...workRecords.values()],
+    workSettings
+  };
+  const encoded = await encodeDeviceSnapshotPayload(payload);
+  if (!encoded) return null;
+  const metadata = deviceSnapshotMetadata(
+    personalRecords, personalSettings, meta.deviceId, commitId, publishedAt, encoded,
+    workRecords, workSettings
+  );
+  const rootKey = deviceSnapshotKey(meta.deviceId);
+  const currentRoot = currentOwn?.root;
+  const slot = currentRoot?.kind === "device-snapshot-manifest" && currentRoot.slot === "a" ? "b" : "a";
+  const dataChunks = [];
+  for (let offset = 0; offset < encoded.data.length; offset += DEVICE_SNAPSHOT_CHUNK_DATA_CHARS) {
+    dataChunks.push(encoded.data.slice(offset, offset + DEVICE_SNAPSHOT_CHUNK_DATA_CHARS));
+  }
+  if (!dataChunks.length || dataChunks.length > 96) return null;
+  const chunkWrites = {};
+  dataChunks.forEach((data, index) => {
+    const key = deviceSnapshotChunkKey(meta.deviceId, slot, index);
+    chunkWrites[key] = {
+      schemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+      kind: "device-snapshot-chunk",
+      deviceId: meta.deviceId,
+      commitId,
+      slot,
+      index,
+      total: dataChunks.length,
+      data
+    };
+  });
+  for (const [key, value] of Object.entries(chunkWrites)) {
+    if (syncEntryBytes(key, value) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
+  }
+  const rootValue = {
+    ...metadata,
+    kind: "device-snapshot-manifest",
+    chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+    slot,
+    parts: dataChunks.length,
+    dataChars: encoded.data.length,
+    dataFingerprint: fnv1a(encoded.data),
+    previousProfile: previousProfileDescriptor(currentRoot)
+  };
+  if (syncEntryBytes(rootKey, rootValue) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
+  return { rootKey, rootValue, chunkWrites, targetSlot: slot };
+}
+
+async function publishProfileDeviceSnapshot(fullState, meta, { force = false } = {}) {
+  if (!meta?.deviceId) return { written: false, reason: "missing-device", setRevision: "" };
+  if (!force && !profilePublicationTrusted(meta)) {
+    // Never infer profile completeness from local Work content alone. A fresh
+    // device may legitimately receive an incomplete/blank Work Space and then
+    // get a user edit before remote delivery finishes. Only previously applied
+    // Work/profile revisions are strong enough evidence to publish a complete
+    // recovery snapshot.
+    return { written: false, reason: "untrusted-local-profile", setRevision: "" };
+  }
+  const currentOwn = await readOwnDeviceSnapshot(meta.deviceId);
+  if (!force && currentOwn.decoded?.profileComplete === true) {
+    const personalState = workspaceStateNormalized(fullState, PERSONAL_SPACE_ID);
+    const workState = workspaceStateNormalized(fullState, WORK_SPACE_ID);
+    const personalRecords = flattenStateNormalized(personalState, meta.deviceId);
+    const workRecords = flattenStateNormalized(workState, meta.deviceId);
+    const personalSettings = makeSettingsRecordNormalized(personalState, meta.deviceId);
+    const workSettings = makeSettingsRecordNormalized(workState, meta.deviceId);
+    const same = recordFingerprint(currentOwn.decoded.records) === recordFingerprint(personalRecords) &&
+      settingsRecordEqual(currentOwn.decoded.settings, personalSettings) &&
+      recordFingerprint(currentOwn.decoded.workRecords) === recordFingerprint(workRecords) &&
+      settingsRecordEqual(currentOwn.decoded.workSettings, workSettings);
+    if (same) {
+      return {
+        written: false,
+        unchanged: true,
+        reason: "unchanged",
+        setRevision: meta.lastAppliedProfileSnapshotRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+        publishedAt: Number(currentOwn.decoded.publishedAt) || meta.lastProfileSnapshotPublishedAt || 0
+      };
+    }
+  }
+  const all = await browser.storage.sync.get(null);
+  const [sharedPersonal, sharedWork] = await Promise.all([
+    readSyncSnapshot(all, { includeAssets: false }),
+    readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID })
+  ]);
+  const publication = await buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn, sharedPersonal, sharedWork);
+  if (!publication) return { written: false, reason: "too-large", setRevision: "" };
+  try {
+    // The target slot is non-authoritative until the root flips. It may contain
+    // the older backup generation, so it is safe to replace while the current
+    // slot remains readable throughout this publication.
+    const staleTarget = await browser.storage.sync.get(deviceSnapshotSlotKeys(meta.deviceId, publication.targetSlot));
+    const staleKeys = Object.keys(staleTarget || {});
+    if (staleKeys.length) await removeSyncItems(staleKeys);
+    await writeSyncItems(publication.chunkWrites, { skipPreflight: true });
+    await writeSyncItems({ [publication.rootKey]: publication.rootValue }, { skipPreflight: true });
+  } catch (error) {
+    try { await removeSyncItems(Object.keys(publication.chunkWrites)); } catch {}
+    if (isQuotaError(error)) return { written: false, reason: "quota", setRevision: "" };
+    throw error;
+  }
+  const refreshedAll = await browser.storage.sync.get(null);
+  const snapshots = await readDeviceSnapshots(refreshedAll);
+  const mergedProfile = mergeProfileDeviceSnapshots(snapshots);
+  return {
+    written: true,
+    value: publication.rootValue,
+    setRevision: mergedProfile?.revision || "",
+    publishedAt: Number(publication.rootValue.publishedAt) || Date.now()
   };
 }
 
@@ -2972,7 +3229,8 @@ async function readCoreSources(all = null, { includeAssets = true } = {}) {
     readDeviceSnapshots(values)
   ]);
   const device = mergeDeviceSnapshots(deviceSnapshots);
-  return { all: values, shared, device, deviceSnapshots };
+  const profile = mergeProfileDeviceSnapshots(deviceSnapshots);
+  return { all: values, shared, device, profile, deviceSnapshots };
 }
 
 
@@ -3058,6 +3316,43 @@ function combinedRemoteCore(shared, device) {
     revision: `core:${fnv1a(revisionParts.join("|"))}`,
     updatedAt: Math.max(device.updatedAt || 0, sharedUsable ? Number(shared.dataset?.updatedAt) || 0 : 0),
     originDeviceId: device.originDeviceId || (sharedUsable ? String(shared.dataset?.originDeviceId || "") : "")
+  };
+}
+
+function combinedWorkRemoteCore(shared, profile) {
+  const sharedUsable = isSnapshotUsable(shared);
+  const profileWork = profile?.complete === true ? profile.work : null;
+  if (!profileWork && !sharedUsable) return null;
+  if (!profileWork) {
+    return {
+      records: pruneExpiredTombstones(shared.records),
+      settings: shared.settings,
+      assets: shared.assets || new Map(),
+      sourceKind: "shared-work-ledger",
+      revision: datasetRevision(shared.dataset),
+      updatedAt: Number(shared.dataset?.updatedAt) || datasetUpdatedAt(shared.records, shared.settings, 0),
+      originDeviceId: typeof shared.dataset?.originDeviceId === "string" ? shared.dataset.originDeviceId : ""
+    };
+  }
+  let records = new Map(profileWork.records);
+  let settings = profileWork.settings;
+  // A complete profile snapshot supplies the missing baseline. Even if the old
+  // Work ledger is torn, any records/settings that *are* visible can be folded in
+  // by the existing commutative per-record clocks, preserving newer concurrent
+  // edits without treating absent keys as deletions.
+  if (shared?.records instanceof Map) records = mergeRecordMaps(records, shared.records);
+  if (shared?.settings) settings = chooseNewerRecord(settings, shared.settings);
+  const revisionParts = [profile.revision];
+  if (sharedUsable) revisionParts.push(datasetRevision(shared.dataset));
+  revisionParts.sort(compareStableText);
+  return {
+    records: pruneExpiredTombstones(records),
+    settings,
+    assets: shared.assets || new Map(),
+    sourceKind: sharedUsable ? "profile+shared-work" : "profile-snapshot",
+    revision: `work-core:${fnv1a(revisionParts.join("|"))}`,
+    updatedAt: Math.max(profile.updatedAt || 0, sharedUsable ? Number(shared.dataset?.updatedAt) || 0 : 0),
+    originDeviceId: profile.originDeviceId || (sharedUsable ? String(shared.dataset?.originDeviceId || "") : "")
   };
 }
 
@@ -3167,9 +3462,11 @@ async function reconcileIfNewCommit() {
   const deviceRevision = sources.device?.revision || "";
   const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
   const workRevision = datasetRevision(workSnapshot.dataset);
+  const profileRevision = sources.profile?.revision || "";
   const sharedUnchanged = !sharedRevision || sharedRevision === meta.lastAppliedSyncRevision;
   const devicesUnchanged = !deviceRevision || deviceRevision === meta.lastAppliedDeviceSnapshotRevision;
   const workUnchanged = !workRevision || workRevision === meta.lastAppliedWorkSyncRevision;
+  const profileUnchanged = !profileRevision || profileRevision === meta.lastAppliedProfileSnapshotRevision;
 
   // Commit markers are a fast signal, not proof that every storage.sync record
   // visible in this running browser has already been applied. Firefox can deliver
@@ -3177,7 +3474,7 @@ async function reconcileIfNewCommit() {
   // missed. Compare the actual usable remote semantic content with the current
   // local workspaces before taking the cheap "already applied" exit.
   let contentUnchanged = true;
-  if (sharedUnchanged && devicesUnchanged && workUnchanged) {
+  if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged) {
     const core = combinedRemoteCore(sources.shared, sources.device);
     const local = await ensureLocalStorage();
     if (remoteCoreUsable(core)) {
@@ -3187,15 +3484,18 @@ async function reconcileIfNewCommit() {
       contentUnchanged = recordFingerprint(core.records) === recordFingerprint(localRecords) &&
         settingsRecordEqual(core.settings, localSettings);
     }
-    if (contentUnchanged && isSnapshotUsable(workSnapshot)) {
+    const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
+    if (contentUnchanged && remoteCoreUsable(workCore)) {
       const work = workspaceStateNormalized(local.state, WORK_SPACE_ID);
       const localRecords = flattenStateNormalized(work, meta.deviceId);
       const localSettings = makeSettingsRecordNormalized(work, meta.deviceId);
-      contentUnchanged = recordFingerprint(workSnapshot.records) === recordFingerprint(localRecords) &&
-        settingsRecordEqual(workSnapshot.settings, localSettings);
+      contentUnchanged = recordFingerprint(workCore.records) === recordFingerprint(localRecords) &&
+        settingsRecordEqual(workCore.settings, localSettings);
+    } else if (contentUnchanged && (hasSnapshotData(workSnapshot) || sources.profile?.complete)) {
+      contentUnchanged = false;
     }
   }
-  if (sharedUnchanged && devicesUnchanged && workUnchanged && contentUnchanged) {
+  if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged && contentUnchanged) {
     return { ok: true, skipped: true, reason: "already-applied", meta };
   }
   return reconcile("merge");
@@ -3235,21 +3535,28 @@ async function getSyncStatus() {
   const snapshot = sources.shared;
   const core = combinedRemoteCore(snapshot, sources.device);
   const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
-  const workUsable = isSnapshotUsable(workSnapshot);
+  const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
+  const workUsable = remoteCoreUsable(workCore);
   const personalItems = remoteCoreUsable(core) ? liveRecordCount(core.records) : liveRecordCount(snapshot.records);
-  const workItems = workUsable ? liveRecordCount(workSnapshot.records) : 0;
+  const workItems = workUsable ? liveRecordCount(workCore.records) : 0;
   const remoteItems = personalItems + workItems;
   const hasRemoteSignal = hasSnapshotData(snapshot) || hasSnapshotData(workSnapshot) || sources.deviceSnapshots.length > 0 || hasDeviceSnapshotSignal;
-  const hasRemoteData = remoteCoreUsable(core);
-  const expectedItems = (hasRemoteData
+  // "complete" is now a profile-level property: Personal alone can never make
+  // Settings report a synchronized copy as complete/ready.
+  const hasRemoteData = remoteCoreUsable(core) && workUsable &&
+    (sources.profile?.complete === true || isSnapshotUsable(workSnapshot));
+  const expectedItems = (remoteCoreUsable(core)
     ? liveRecordCount(core.records)
     : (Number.isInteger(Number(snapshot.dataset?.liveRecordCount)) ? Number(snapshot.dataset.liveRecordCount) : 0)) +
-    (workUsable ? liveRecordCount(workSnapshot.records) : 0);
+    (workUsable ? liveRecordCount(workCore.records) : (Number.isInteger(Number(workSnapshot.dataset?.liveRecordCount)) ? Number(workSnapshot.dataset.liveRecordCount) : 0));
   const latestDevice = sources.deviceSnapshots.reduce((latest, candidate) =>
     !latest || Number(candidate.publishedAt) > Number(latest.publishedAt) ? candidate : latest, null);
+  const statusMeta = !exceeded && meta.syncEnabled && !hasRemoteData
+    ? { ...meta, syncStatus: "waiting", lastSyncError: "" }
+    : meta;
   return {
     ok: true,
-    meta,
+    meta: statusMeta,
     remoteItems,
     remoteExpectedItems: expectedItems,
     remoteAssets,
@@ -3259,14 +3566,14 @@ async function getSyncStatus() {
     remoteState: !hasRemoteSignal ? "none" : (hasRemoteData ? "complete" : "partial"),
     remoteUpdatedAt: Math.max(
       Number(core?.updatedAt) || (Number.isFinite(snapshot.dataset?.updatedAt) ? snapshot.dataset.updatedAt : 0),
-      Number(workSnapshot.dataset?.updatedAt) || 0
+      Number(workCore?.updatedAt) || Number(workSnapshot.dataset?.updatedAt) || 0
     ),
-    remoteReceiptAt: meta.lastRemoteReceiptAt,
-    lastRemoteReceiptUpdatedAt: meta.lastRemoteReceiptUpdatedAt,
-    lastRemoteReceiptOriginDeviceId: meta.lastRemoteReceiptOriginDeviceId,
+    remoteReceiptAt: statusMeta.lastRemoteReceiptAt,
+    lastRemoteReceiptUpdatedAt: statusMeta.lastRemoteReceiptUpdatedAt,
+    lastRemoteReceiptOriginDeviceId: statusMeta.lastRemoteReceiptOriginDeviceId,
     remoteCommitId: latestDevice?.commitId || (typeof snapshot.dataset?.commitId === "string" ? snapshot.dataset.commitId : ""),
     remoteOriginDeviceId: core?.originDeviceId || (typeof snapshot.dataset?.originDeviceId === "string" ? snapshot.dataset.originDeviceId : ""),
-    remoteSourceKind: core?.sourceKind || ""
+    remoteSourceKind: sources.profile?.complete ? "complete-profile" : (core?.sourceKind || "")
   };
 }
 
@@ -3345,7 +3652,10 @@ async function bootstrapLocal() {
   // a newer local edit with another device's older value. A receiving Firefox
   // can restore the full layout from this one atomic item instead of waiting for
   // dozens of record keys to arrive in the same Sync cycle.
-  const fastPublish = await publishDeviceSnapshot(deviceRecords, settings, meta);
+  // 1.27.8 keeps the previous complete device profile active while the two
+  // compatibility ledgers are published. The new Personal+Work snapshot is
+  // committed only after both namespaces have complete dataset markers.
+  const fastPublish = { written: true, setRevision: "" };
 
   await writeSyncItems(writes);
   const publishedDataset = datasetRecord(timestamp, records, settings, { commitId: uid("commit"), originDeviceId: meta.deviceId });
@@ -3366,12 +3676,17 @@ async function bootstrapLocal() {
   await clearAssetGcLedger();
 
   const workPublish = await publishWorkspaceAuthoritative(state, meta, WORK_SPACE_ID);
+  const workRevision = datasetRevision(workPublish.dataset);
+  const profilePublishMeta = { ...meta, syncInitialized: true, lastAppliedWorkSyncRevision: workRevision };
+  const profilePublish = await publishProfileDeviceSnapshot(state, profilePublishMeta, { force: true });
   const totalSkippedAssets = assetResult.skipped + workPublish.assetResult.skipped;
-  const warningState = syncWarningState(totalSkippedAssets, !fastPublish.written);
+  const warningState = syncWarningState(totalSkippedAssets, !profilePublish.written);
   const refreshed = await refreshQuota({
     ...markAppliedSnapshot(meta, publishedDataset),
-    lastAppliedDeviceSnapshotRevision: fastPublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
-    lastAppliedWorkSyncRevision: datasetRevision(workPublish.dataset),
+    lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || fastPublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+    lastAppliedProfileSnapshotRevision: profilePublish.setRevision || meta.lastAppliedProfileSnapshotRevision || "",
+    lastProfileSnapshotPublishedAt: profilePublish.publishedAt || meta.lastProfileSnapshotPublishedAt || 0,
+    lastAppliedWorkSyncRevision: workRevision,
     syncEnabled: true,
     syncInitialized: true,
     syncBootstrapMode: "none",
@@ -3389,17 +3704,23 @@ async function bootstrapLocal() {
 
 async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
   const { state: fullLocalState, meta } = await ensureLocalStorage();
-  const localState = workspaceStateNormalized(fullLocalState, PERSONAL_SPACE_ID);
   if (!meta.syncEnabled) {
     return { ok: false, error: "Firefox Account Sync permission is not enabled on this device.", meta };
   }
 
   const sources = await readCoreSources();
-  const core = combinedRemoteCore(sources.shared, sources.device);
-  if (!remoteCoreUsable(core)) {
-    // A manual restore on an already initialized device is read-only until a
-    // complete remote source exists. Release 1.14 can accept a single atomic
-    // device-owned snapshot even while the legacy shared ledger is still partial.
+  const personalCore = combinedRemoteCore(sources.shared, sources.device);
+  const workSnapshot = await readSyncSnapshot(sources.all, { spaceId: WORK_SPACE_ID });
+  const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
+  const profileComplete = Boolean(sources.profile?.complete && remoteCoreUsable(workCore));
+  const legacyComplete = remoteCoreUsable(personalCore) && isSnapshotUsable(workSnapshot);
+
+  // A new 1.27.8 profile never finalizes from Personal alone. Either a complete
+  // Personal+Work device generation exists, or both compatibility namespaces
+  // must independently validate. Missing/partial Work means "still arriving",
+  // not "intentionally empty". An intentional empty Work has a valid settings +
+  // dataset marker with liveRecordCount=0 and therefore passes this gate.
+  if (!remoteCoreUsable(personalCore) || (!profileComplete && !legacyComplete)) {
     const preserveInitializedDevice = force && meta.syncInitialized === true;
     const waitingMeta = await writeLocalMeta({
       ...meta,
@@ -3407,7 +3728,7 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
       syncInitialized: preserveInitializedDevice ? true : false,
       syncBootstrapMode: preserveInitializedDevice ? "none" : (waitIfMissing ? "await-remote" : "none"),
       syncStatus: waitIfMissing ? "waiting" : "error",
-      lastSyncError: waitIfMissing ? "" : snapshotArrivalMessage(sources.shared),
+      lastSyncError: waitIfMissing ? "" : snapshotArrivalMessage(!isSnapshotUsable(workSnapshot) ? workSnapshot : sources.shared),
       lastSyncWarning: "",
       syncSkippedAssets: 0,
       syncFastSnapshotFallback: false,
@@ -3424,22 +3745,69 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
   }
 
   await markSyncing(meta);
-  const restoredPersonalState = stateFromRecords(core.records, core.settings, localState, core.assets);
-  let restoredState = replaceWorkspaceNormalized(fullLocalState, PERSONAL_SPACE_ID, workspaceStateNormalized(restoredPersonalState, PERSONAL_SPACE_ID));
-  const workSnapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });
-  if (isSnapshotUsable(workSnapshot)) {
-    const localWorkState = workspaceStateNormalized(restoredState, WORK_SPACE_ID);
-    const restoredWorkState = stateFromRecords(workSnapshot.records, workSnapshot.settings, localWorkState, workSnapshot.assets);
-    restoredState = replaceWorkspaceNormalized(restoredState, WORK_SPACE_ID, workspaceStateNormalized(restoredWorkState, PERSONAL_SPACE_ID));
+
+  const remotePersonal = profileComplete && sources.profile?.personal
+    ? combinedRemoteCore(sources.shared, {
+        records: sources.profile.personal.records,
+        settings: sources.profile.personal.settings,
+        revision: sources.profile.revision,
+        updatedAt: sources.profile.updatedAt,
+        originDeviceId: sources.profile.originDeviceId
+      })
+    : personalCore;
+  const remoteWork = workCore;
+
+  // First reconstruct the exact verified remote profile. This is our baseline
+  // for publishing any edits the user made locally while the fresh profile was
+  // waiting for Firefox Sync to finish delivery.
+  const personalLocal = workspaceStateNormalized(fullLocalState, PERSONAL_SPACE_ID);
+  const remotePersonalLegacy = stateFromRecords(remotePersonal.records, remotePersonal.settings, personalLocal, remotePersonal.assets);
+  let remoteOnlyState = replaceWorkspaceNormalized(
+    fullLocalState,
+    PERSONAL_SPACE_ID,
+    workspaceStateNormalized(remotePersonalLegacy, PERSONAL_SPACE_ID)
+  );
+  const workLocalForRemote = workspaceStateNormalized(remoteOnlyState, WORK_SPACE_ID);
+  const remoteWorkLegacy = stateFromRecords(remoteWork.records, remoteWork.settings, workLocalForRemote, remoteWork.assets);
+  remoteOnlyState = replaceWorkspaceNormalized(
+    remoteOnlyState,
+    WORK_SPACE_ID,
+    workspaceStateNormalized(remoteWorkLegacy, PERSONAL_SPACE_ID)
+  );
+
+  // Merge local edits on top of the complete incoming profile instead of
+  // replacing them. Unrelated shortcuts therefore survive; same-record conflicts
+  // continue to use MosaicSync's deterministic timestamp/device rules.
+  let mergedState = remoteOnlyState;
+  for (const [spaceId, remote] of [[PERSONAL_SPACE_ID, remotePersonal], [WORK_SPACE_ID, remoteWork]]) {
+    const localWorkspace = workspaceStateNormalized(fullLocalState, spaceId);
+    const localRecords = flattenStateNormalized(localWorkspace, meta.deviceId);
+    const localSettings = makeSettingsRecordNormalized(localWorkspace, meta.deviceId);
+    const mergedRecords = pruneExpiredTombstones(mergeRecordMaps(remote.records, localRecords));
+    const mergedSettings = chooseSettings(localSettings, remote.settings, localWorkspace);
+    const mergedAssets = new Map([...(remote.assets || new Map()), ...collectLocalAssetsNormalized(localWorkspace)]);
+    const mergedLegacy = stateFromRecords(mergedRecords, mergedSettings, localWorkspace, mergedAssets);
+    mergedState = replaceWorkspaceNormalized(
+      mergedState,
+      spaceId,
+      workspaceStateNormalized(mergedLegacy, PERSONAL_SPACE_ID)
+    );
   }
-  await setLocalStateSilently(restoredState);
+  await setLocalStateSilently(mergedState);
 
   const completedWaitingOnboarding = !meta.onboardingCompleted && meta.syncBootstrapMode === "await-remote";
-  const observedMeta = observeRemoteCore(meta, core);
+  const observedMeta = observeRemoteCore(meta, remotePersonal);
   let appliedMeta = markAppliedRemoteCore(observedMeta, sources.device?.revision || "");
   if (isSnapshotUsable(sources.shared)) appliedMeta = markAppliedSnapshot(appliedMeta, sources.shared.dataset);
   if (isSnapshotUsable(workSnapshot)) appliedMeta = markAppliedWorkSnapshot(appliedMeta, workSnapshot.dataset);
-  const refreshed = await refreshQuota({
+  if (sources.profile?.revision) {
+    appliedMeta = {
+      ...appliedMeta,
+      lastAppliedProfileSnapshotRevision: sources.profile.revision,
+      lastAppliedDeviceSnapshotRevision: sources.profile.revision
+    };
+  }
+  let refreshed = await refreshQuota({
     ...appliedMeta,
     syncEnabled: true,
     syncInitialized: true,
@@ -3455,6 +3823,27 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     syncWaitStartedAt: 0
   });
   await writeLocalMeta(refreshed);
+
+  // If the user created/edited anything while the fresh profile was waiting,
+  // publish only that semantic delta after the complete remote baseline exists.
+  if (workspaceCoreSignature(remoteOnlyState, PERSONAL_SPACE_ID, refreshed.deviceId) !== workspaceCoreSignature(mergedState, PERSONAL_SPACE_ID, refreshed.deviceId) ||
+      workspaceCoreSignature(remoteOnlyState, WORK_SPACE_ID, refreshed.deviceId) !== workspaceCoreSignature(mergedState, WORK_SPACE_ID, refreshed.deviceId)) {
+    await pushLocalMutation(remoteOnlyState, mergedState, refreshed);
+    refreshed = await readLocalMeta();
+  }
+
+  // Establish/refresh this device's complete 1.27.8 safety generation even when
+  // the remote source was the old two-ledger format and there were no local edits.
+  const profilePublish = await publishProfileDeviceSnapshot(mergedState, refreshed, { force: true });
+  if (profilePublish.written) {
+    refreshed = await writeLocalMeta({
+      ...refreshed,
+      lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedDeviceSnapshotRevision || "",
+      lastAppliedProfileSnapshotRevision: profilePublish.setRevision || refreshed.lastAppliedProfileSnapshotRevision || "",
+      lastProfileSnapshotPublishedAt: profilePublish.publishedAt || refreshed.lastProfileSnapshotPublishedAt || 0,
+      syncStatus: "ready"
+    });
+  }
   await clearPendingLocalSyncMutation();
   await ensureSyncWatchAlarm(refreshed);
   await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
@@ -3463,8 +3852,8 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     meta: refreshed,
     restored: true,
     action: force ? "restored" : "bootstrapped-remote",
-    remoteUpdatedAt: Number(core.updatedAt) || 0,
-    sourceKind: core.sourceKind
+    remoteUpdatedAt: Math.max(Number(remotePersonal.updatedAt) || 0, Number(remoteWork.updatedAt) || 0),
+    sourceKind: profileComplete ? "profile-snapshot" : "complete-legacy-ledgers"
   };
 }
 
@@ -3741,18 +4130,9 @@ async function publishWorkspaceMutationPayload(payload, fullCurrentState, meta) 
     );
     await writeSyncItems({ [namespace.datasetKey]: committedDataset });
 
-    // For transactional Personal writes, publish the fast device snapshot from
-    // the ledger that has just committed, not from the current local UI state.
-    // The local state may already contain a *later queued move*. Using it here
-    // would let the fast snapshot jump ahead of the durable transaction journal.
-    if (spaceId === PERSONAL_SPACE_ID) {
-      fastPublish = await publishDeviceSnapshot(
-        committedSnapshot.records,
-        committedSettings,
-        meta,
-        { extraTombstones: new Map(Array.isArray(payload.deletionRecords) ? payload.deletionRecords : []) }
-      );
-    }
+    // Do not publish a device snapshot between the two halves of a cross-Space
+    // move. 1.27.8 publishes one complete Personal+Work generation only after
+    // destination and source commits both finish.
   }
 
   // Binary artwork is intentionally outside the durable core transaction. It is
@@ -3820,9 +4200,13 @@ async function executePendingCrossSpaceSync(entry, meta = null) {
   }
 
   currentMeta = await publishWorkspaceMutationPayload(pending.source, currentState, currentMeta);
+  const profilePublish = await publishProfileDeviceSnapshot(currentState, currentMeta);
   await clearPendingCrossSpaceSync(storageKey);
   currentMeta = await writeLocalMeta({
     ...currentMeta,
+    lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedDeviceSnapshotRevision || "",
+    lastAppliedProfileSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedProfileSnapshotRevision || "",
+    lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0,
     syncStatus: "ready",
     lastSyncError: "",
     lastSyncAt: Date.now()
@@ -3874,16 +4258,7 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
   if (!settingsRecordEqual(oldSettings, newSettings)) writes[SYNC_SETTINGS_KEY] = newSettings;
 
   let publishedDataset = null;
-  let fastPublish = { written: true };
-  if (hasOwnEnumerable(writes)) {
-    // Publish the active computer's complete core state to its own atomic key
-    // before any full-store read, GC, artwork work, or shared-ledger repair.
-    // This is the lowest-latency path MosaicSync can control; Firefox Account
-    // Sync then transports that single key on Firefox's own schedule.
-    fastPublish = await publishDeviceSnapshot(newRecords, newSettings, meta, {
-      extraTombstones: deletionRecords
-    });
-  }
+  let fastPublish = { written: true, setRevision: "", publishedAt: 0 };
 
   // The detailed shared ledger remains the compatibility/conflict/artwork
   // layer. It is deliberately maintained after the latency-critical snapshot.
@@ -3898,6 +4273,9 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
       { commitId: uid("commit"), originDeviceId: meta.deviceId }
     );
     await writeSyncItems({ [SYNC_DATASET_KEY]: publishedDataset });
+    // Publish the complete Personal+Work device generation only after the
+    // compatibility commit marker exists, so deletions/tombstones are retained.
+    fastPublish = await publishProfileDeviceSnapshot(normalizeState(newRaw), meta);
   }
 
   // Core layout data is always written before binary artwork. Images are
@@ -3916,6 +4294,8 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
   const refreshed = await refreshQuota({
     ...(publishedDataset ? markAppliedSnapshot(meta, publishedDataset) : meta),
     lastAppliedDeviceSnapshotRevision: fastPublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+    lastAppliedProfileSnapshotRevision: fastPublish.setRevision || meta.lastAppliedProfileSnapshotRevision || "",
+    lastProfileSnapshotPublishedAt: fastPublish.publishedAt || meta.lastProfileSnapshotPublishedAt || 0,
     syncStatus: "ready",
     lastSyncAt: timestamp,
     lastSyncError: "",
@@ -3971,6 +4351,9 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
     );
     await writeSyncItems({ [namespace.datasetKey]: publishedDataset });
   }
+  const profilePublish = hasOwnEnumerable(writes)
+    ? await publishProfileDeviceSnapshot(normalizeState(newRaw), meta)
+    : { written: true, setRevision: "", publishedAt: 0 };
 
   snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });
   if (explicitlyDroppedAssetIds.size) {
@@ -3980,6 +4363,9 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
   const assetResult = await uploadMissingAssets(newAssets, snapshot.assets, WORK_SPACE_ID);
   const refreshed = await refreshQuota({
     ...(publishedDataset ? markAppliedWorkSnapshot(meta, publishedDataset) : meta),
+    lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+    lastAppliedProfileSnapshotRevision: profilePublish.setRevision || meta.lastAppliedProfileSnapshotRevision || "",
+    lastProfileSnapshotPublishedAt: profilePublish.publishedAt || meta.lastProfileSnapshotPublishedAt || 0,
     syncStatus: "ready",
     lastSyncAt: timestamp,
     lastSyncError: "",
@@ -4132,7 +4518,7 @@ async function reconcilePersonal(strategy = "merge") {
   // republish an older/incomplete view and amplify Sync writes. Wait for the
   // ledger to become coherent; the periodic semantic watchdog will revisit it.
   const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot);
-  if (sharedLedgerPartial) {
+  if (sharedLedgerPartial && !sources.profile?.complete) {
     const appliedMeta = markAppliedRemoteCore(observedMeta, sources.device?.revision || "");
     const refreshed = await refreshQuota({
       ...appliedMeta,
@@ -4169,7 +4555,8 @@ async function reconcilePersonal(strategy = "merge") {
   }
 
   const hasCoreWrites = hasOwnEnumerable(syncWrites);
-  const desiredDataset = hasCoreWrites
+  const shouldCommitDataset = hasCoreWrites || sharedLedgerPartial;
+  const desiredDataset = shouldCommitDataset
     ? datasetRecord(
         datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
         mergedRecords,
@@ -4178,7 +4565,7 @@ async function reconcilePersonal(strategy = "merge") {
       )
     : snapshot.dataset;
   await writeSyncItems(syncWrites);
-  if (hasCoreWrites && desiredDataset) {
+  if (shouldCommitDataset && desiredDataset) {
     await writeSyncItems({ [SYNC_DATASET_KEY]: desiredDataset });
   }
 
@@ -4211,24 +4598,48 @@ async function reconcileWork(strategy = "merge") {
   const { state: fullLocalState, meta } = await ensureLocalStorage();
   if (!meta.syncEnabled || !meta.syncInitialized) return { ok: true, meta, skipped: true };
   const namespace = syncNamespace(WORK_SPACE_ID);
-  let snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });
+  const all = await browser.storage.sync.get(null);
+  const sources = await readCoreSources(all, { includeAssets: false });
+  let snapshot = await readSyncSnapshot(all, { spaceId: WORK_SPACE_ID });
+  let core = combinedWorkRemoteCore(snapshot, sources.profile);
 
-  // Work did not exist before Spaces. Absence is therefore a valid empty remote
-  // state during a rolling upgrade and must never block Personal restoration.
-  if (!hasSnapshotData(snapshot)) return { ok: true, meta, skipped: true, remoteMissing: true };
-  if (!isSnapshotUsable(snapshot)) return { ok: true, meta, pending: true, workPending: true };
+  // Missing/partial Work is never silently interpreted as an empty Space in
+  // 1.27.8. A complete full-profile device snapshot can bridge a torn shared
+  // ledger; otherwise keep the last trusted local Work and wait for delivery.
+  if (!remoteCoreUsable(core)) {
+    const waiting = await writeLocalMeta({
+      ...meta,
+      syncStatus: "waiting",
+      lastSyncError: "",
+      syncWaitStartedAt: meta.syncWaitStartedAt || Date.now()
+    });
+    return { ok: true, meta: waiting, pending: true, workPending: true };
+  }
 
   const localState = workspaceStateNormalized(fullLocalState, WORK_SPACE_ID);
   const localRecords = flattenStateNormalized(localState, meta.deviceId);
   const localSettings = makeSettingsRecordNormalized(localState, meta.deviceId);
   const localAssets = collectLocalAssetsNormalized(localState);
 
+  const markRemoteApplied = base => {
+    let next = base;
+    if (isSnapshotUsable(snapshot)) next = markAppliedWorkSnapshot(next, snapshot.dataset);
+    if (sources.profile?.revision) {
+      next = {
+        ...next,
+        lastAppliedProfileSnapshotRevision: sources.profile.revision,
+        lastAppliedDeviceSnapshotRevision: sources.profile.revision
+      };
+    }
+    return next;
+  };
+
   if (strategy === "remote") {
-    const restoredLegacy = stateFromRecords(snapshot.records, snapshot.settings, localState, snapshot.assets);
+    const restoredLegacy = stateFromRecords(core.records, core.settings, localState, core.assets);
     const restoredState = replaceWorkspaceNormalized(fullLocalState, WORK_SPACE_ID, workspaceStateNormalized(restoredLegacy, PERSONAL_SPACE_ID));
     await setLocalStateSilently(restoredState);
     const refreshed = await refreshQuota({
-      ...markAppliedWorkSnapshot(meta, snapshot.dataset),
+      ...markRemoteApplied(meta),
       syncStatus: "ready",
       lastSyncAt: Date.now(),
       lastSyncError: "",
@@ -4239,12 +4650,12 @@ async function reconcileWork(strategy = "merge") {
     });
     await writeLocalMeta(refreshed);
     await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
-    return { ok: true, meta: refreshed, restored: true };
+    return { ok: true, meta: refreshed, restored: true, sourceKind: core.sourceKind };
   }
 
-  let mergedRecords = pruneExpiredTombstones(mergeRecordMaps(localRecords, snapshot.records));
-  const mergedSettings = chooseSettings(localSettings, snapshot.settings, localState);
-  const combinedAssets = new Map([...snapshot.assets, ...localAssets]);
+  let mergedRecords = pruneExpiredTombstones(mergeRecordMaps(localRecords, core.records));
+  const mergedSettings = chooseSettings(localSettings, core.settings, localState);
+  const combinedAssets = new Map([...(core.assets || new Map()), ...localAssets]);
   const mergedLegacy = stateFromRecords(mergedRecords, mergedSettings, localState, combinedAssets);
   const mergedWorkspace = workspaceStateNormalized(mergedLegacy, PERSONAL_SPACE_ID);
   const mergedStateChanged = stableStringify(mergedWorkspace) !== stableStringify(localState);
@@ -4256,6 +4667,13 @@ async function reconcileWork(strategy = "merge") {
   const desiredState = workspaceStateNormalized(mergedFullState, WORK_SPACE_ID);
   const desiredRecords = flattenStateNormalized(desiredState, meta.deviceId);
   const desiredAssets = collectLocalAssetsNormalized(desiredState);
+
+  // A complete profile snapshot is the trusted baseline for repairing a torn
+  // compatibility Work ledger. Present partial records were already merged above;
+  // missing keys are restored from the full profile and the dataset marker is
+  // recommitted last.
+  const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot);
+
   const syncWrites = {};
   for (const [id, record] of desiredRecords) {
     const winner = mergedRecords.get(id);
@@ -4273,7 +4691,8 @@ async function reconcileWork(strategy = "merge") {
   }
 
   const hasCoreWrites = hasOwnEnumerable(syncWrites);
-  const desiredDataset = hasCoreWrites
+  const shouldCommitDataset = hasCoreWrites || sharedLedgerPartial;
+  const desiredDataset = shouldCommitDataset
     ? datasetRecord(
         datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
         mergedRecords,
@@ -4282,7 +4701,7 @@ async function reconcileWork(strategy = "merge") {
       )
     : snapshot.dataset;
   await writeSyncItems(syncWrites);
-  if (hasCoreWrites && desiredDataset) await writeSyncItems({ [namespace.datasetKey]: desiredDataset });
+  if (shouldCommitDataset && desiredDataset) await writeSyncItems({ [namespace.datasetKey]: desiredDataset });
 
   snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });
   const assetResult = await uploadMissingAssets(desiredAssets, snapshot.assets, WORK_SPACE_ID);
@@ -4290,7 +4709,7 @@ async function reconcileWork(strategy = "merge") {
   if (staleKeys.length) await removeSyncItems([...new Set(staleKeys)]);
 
   const refreshed = await refreshQuota({
-    ...markAppliedWorkSnapshot(meta, snapshot.dataset || desiredDataset),
+    ...markRemoteApplied(snapshot.dataset || desiredDataset ? markAppliedWorkSnapshot(meta, snapshot.dataset || desiredDataset) : meta),
     syncStatus: "ready",
     lastSyncAt: Date.now(),
     lastSyncError: "",
@@ -4299,8 +4718,9 @@ async function reconcileWork(strategy = "merge") {
   });
   await writeLocalMeta(refreshed);
   if (mergedStateChanged) await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
-  return { ok: true, meta: refreshed };
+  return { ok: true, meta: refreshed, sourceKind: core.sourceKind };
 }
+
 
 async function reconcile(strategy = "merge") {
   devMark("background:reconcile-start");
@@ -4311,13 +4731,44 @@ async function reconcile(strategy = "merge") {
     }
     const personal = await reconcilePersonal(strategy);
     if (!personal?.ok || personal?.pending) return personal;
-    const work = await reconcileWork(strategy);
-    return work?.ok ? { ...personal, meta: work.meta || personal.meta, work } : personal;
+    let work = await reconcileWork(strategy);
+
+    // A trusted 1.27.7 installation may encounter a torn Work ledger before it
+    // has ever emitted a 1.27.8 full-profile snapshot. Preserve its local Work,
+    // publish that complete Personal+Work generation, then immediately retry the
+    // Work read through the new atomic source. Fresh/half-restored profiles have
+    // no applied Work/profile revision and are therefore never allowed to do this.
+    let currentMeta = work?.meta || personal.meta || await readLocalMeta();
+    if (currentMeta.syncEnabled && currentMeta.syncInitialized) {
+      const { state } = await ensureLocalStorage();
+      const profilePublish = await publishProfileDeviceSnapshot(state, currentMeta);
+      if (profilePublish.written || profilePublish.unchanged) {
+        currentMeta = await writeLocalMeta({
+          ...currentMeta,
+          lastAppliedDeviceSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedDeviceSnapshotRevision || "",
+          lastAppliedProfileSnapshotRevision: profilePublish.setRevision || currentMeta.lastAppliedProfileSnapshotRevision || "",
+          lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0
+        });
+      }
+      if (work?.pending && profilePublish.written) work = await reconcileWork(strategy);
+    }
+
+    if (work?.pending) {
+      const waiting = await writeLocalMeta({
+        ...(work.meta || currentMeta),
+        syncStatus: "waiting",
+        lastSyncError: "",
+        syncWaitStartedAt: (work.meta || currentMeta).syncWaitStartedAt || Date.now()
+      });
+      return { ...personal, meta: waiting, work: { ...work, meta: waiting } };
+    }
+    return work?.ok ? { ...personal, meta: work.meta || currentMeta || personal.meta, work } : personal;
   } finally {
     devMark("background:reconcile-end");
     devMeasure("background:reconcile", "background:reconcile-start", "background:reconcile-end");
   }
 }
+
 
 function chooseSettings(localSettings, remoteSettings, localState) {
   if (!remoteSettings) return localSettings;
@@ -4361,6 +4812,8 @@ async function clearSyncData() {
     lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
     lastAppliedDeviceSnapshotRevision: "",
+    lastAppliedProfileSnapshotRevision: "",
+    lastProfileSnapshotPublishedAt: 0,
     lastRemoteReceiptAt: 0,
     lastRemoteReceiptRevision: "",
     lastRemoteReceiptUpdatedAt: 0,

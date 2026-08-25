@@ -367,6 +367,70 @@ else if (scenario === 'sync-partial-ledger-no-repair') {
   console.log(JSON.stringify({ok:true,sharedLedgerPending:true,syncWrites}));
 }
 
+
+else if (scenario === 'sync-1278-fresh-waits-for-work') {
+  websiteAccess=false;
+  const localWaiting=stateWith({personal:[shortcut('local-new','https://local-new.test/',300)],work:[]});
+  await seedLocalState(localWaiting,{
+    syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting',
+    lastAppliedSyncRevision:'',lastAppliedWorkSyncRevision:'',lastAppliedProfileSnapshotRevision:''
+  });
+
+  const remoteState=stateWith({
+    personal:[shortcut('home-a','https://home-a.test/',200),shortcut('home-b','https://home-b.test/',200)],
+    work:[shortcut('work-a','https://work-a.test/',200),shortcut('work-b','https://work-b.test/',200)]
+  });
+  const personal=model.workspaceStateNormalized(remoteState,'personal');
+  const work=model.workspaceStateNormalized(remoteState,'work');
+  const personalRecords=model.flattenStateNormalized(personal,'home-device');
+  const workRecords=model.flattenStateNormalized(work,'home-device');
+  const personalSettings=model.makeSettingsRecordNormalized(personal,'home-device');
+  const workSettings=model.makeSettingsRecordNormalized(work,'home-device');
+  const seed={};
+  for(const [id,record] of personalRecords) seed[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`]=record;
+  seed[constants.SYNC_SETTINGS_KEY]=personalSettings;
+  seed[constants.SYNC_DATASET_KEY]={
+    schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'dataset',updatedAt:200,liveRecordCount:personalRecords.size,
+    settingsModifiedAt:Number(personalSettings.modifiedAt)||0,commitId:'personal-complete',originDeviceId:'home-device'
+  };
+  const workPrefix=`${constants.SYNC_SPACE_PREFIX}work.`;
+  const workEntries=[...workRecords.entries()];
+  seed[`${workPrefix}settings`]=workSettings;
+  seed[`${workPrefix}item.${encodeURIComponent(workEntries[0][0])}`]=workEntries[0][1];
+  seed[`${workPrefix}dataset`]={
+    schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'dataset',updatedAt:200,liveRecordCount:workRecords.size,
+    settingsModifiedAt:Number(workSettings.modifiedAt)||0,commitId:'work-partial',originDeviceId:'home-device'
+  };
+  await sync.set(seed);
+
+  let syncWrites=0; const originalSet=sync.set.bind(sync); sync.set=async items=>{syncWrites+=1; return originalSet(items);};
+  const waiting=await send({type:'mosaicsync:wait-for-remote'});
+  const waitingMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const waitingState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(waitingMeta.syncInitialized,false,'Personal alone plus partial Work must not initialize the fresh profile');
+  assert.equal(waitingMeta.syncStatus,'waiting');
+  assert.equal(findCompactShortcut(waitingState,'local-new')?.url,'https://local-new.test/','local edit made while waiting must remain local');
+  assert.equal(findCompactShortcut(waitingState,'work-a'),null,'partial Work must not be activated');
+  assert.equal(syncWrites,0,'fresh incomplete profile must not publish its temporary local state');
+  assert.equal(waiting?.pending,true);
+
+  // Firefox finishes delivering the remaining Work record. The existing dataset
+  // marker now becomes valid without needing a user Restore/Send action.
+  await originalSet({[`${workPrefix}item.${encodeURIComponent(workEntries[1][0])}`]:workEntries[1][1]});
+  const restored=await send({type:'mosaicsync:wait-for-remote'});
+  const finalMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const finalState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  for(const id of ['home-a','home-b','local-new','work-a','work-b']) assert.ok(findCompactShortcut(finalState,id),`missing merged shortcut ${id}`);
+  assert.equal(finalMeta.syncInitialized,true);
+  assert.equal(finalMeta.syncStatus,'ready');
+  assert.ok(finalMeta.lastAppliedWorkSyncRevision,'Work revision must be recorded before ready');
+  assert.ok(finalMeta.lastAppliedProfileSnapshotRevision,'completed bootstrap must publish/record a full profile safety generation');
+  const ownRoot=(await sync.get(`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`))[`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`];
+  assert.equal(ownRoot?.profileComplete,true,'fresh device should publish a full profile only after complete bootstrap');
+  assert.ok(syncWrites>0,'after completeness is proven the merged local delta/profile may be published');
+  console.log(JSON.stringify({ok:true,waiting:waitingMeta.syncStatus,final:finalMeta.syncStatus,syncWrites,restored:restored?.ok===true}));
+}
+
 else if (scenario === 'sync-same-marker-divergence') {
   websiteAccess=false;
   const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});

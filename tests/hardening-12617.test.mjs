@@ -62,14 +62,15 @@ for (const browser of ["firefox", "chrome"]) {
     const ctx = {
       readLocalMeta: async () => ({
         syncEnabled: true, syncInitialized: true, deviceId: "dev",
-        lastAppliedSyncRevision: "commit:same", lastAppliedDeviceSnapshotRevision: "device:same", lastAppliedWorkSyncRevision: "commit:work"
+        lastAppliedSyncRevision: "commit:same", lastAppliedDeviceSnapshotRevision: "device:same", lastAppliedWorkSyncRevision: "commit:work", lastAppliedProfileSnapshotRevision: ""
       }),
       retryPendingLocalSyncMutation: async meta => meta,
       browser: { storage: { sync: { get: async () => ({}) } } },
-      readCoreSources: async () => ({ shared: { dataset: { commitId: "same" } }, device: { revision: "device:same" } }),
+      readCoreSources: async () => ({ shared: { dataset: { commitId: "same" } }, device: { revision: "device:same" }, profile: null }),
       datasetRevision: dataset => dataset?.commitId ? `commit:${dataset.commitId}` : "",
       readSyncSnapshot: async () => ({ dataset: { commitId: "work" }, records: new Map(), settings }),
       combinedRemoteCore: () => ({ records: remoteRecords, settings }),
+      combinedWorkRemoteCore: snapshot => ({ records: snapshot.records, settings: snapshot.settings }),
       remoteCoreUsable: () => true,
       ensureLocalStorage: async () => ({ state: { spaces: { personal: {}, work: {} } } }),
       workspaceStateNormalized: (_state, id) => ({ id }),

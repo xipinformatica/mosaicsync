@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.27.6";
+export const VERSION = "1.27.8";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -57,7 +57,7 @@ export const ICON_RECOVERY_ALARM = "mosaicsync-icon-recovery-v2";
 export const SYNC_WATCH_ALARM = "mosaicsync-sync-watch-v1";
 
 export const STATE_SCHEMA_VERSION = 18;
-export const META_SCHEMA_VERSION = 11;
+export const META_SCHEMA_VERSION = 12;
 export const SYNC_SCHEMA_VERSION = 10;
 
 export const SYNC_PREFIX = "mosaicsync.sync.";
@@ -68,6 +68,7 @@ export const SYNC_ITEM_PREFIX = `${SYNC_PREFIX}item.`;
 export const SYNC_ASSET_PREFIX = `${SYNC_PREFIX}asset.`;
 export const SYNC_DEVICE_SNAPSHOT_PREFIX = `${SYNC_PREFIX}device.`;
 export const DEVICE_SNAPSHOT_SCHEMA_VERSION = 2;
+export const PROFILE_SNAPSHOT_SCHEMA_VERSION = 1;
 export const DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION = 1;
 
 export const SYNC_QUOTA_BYTES = 102400;
@@ -213,6 +214,8 @@ export const DEFAULT_META = Object.freeze({
   lastAppliedSyncRevision: "",
   lastAppliedWorkSyncRevision: "",
   lastAppliedDeviceSnapshotRevision: "",
+  lastAppliedProfileSnapshotRevision: "",
+  lastProfileSnapshotPublishedAt: 0,
   lastRemoteReceiptAt: 0,
   lastRemoteReceiptRevision: "",
   lastRemoteReceiptUpdatedAt: 0,

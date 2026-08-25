@@ -812,6 +812,8 @@ export function normalizeMeta(raw) {
     lastAppliedSyncRevision: typeof raw?.lastAppliedSyncRevision === "string" ? raw.lastAppliedSyncRevision : "",
     lastAppliedWorkSyncRevision: typeof raw?.lastAppliedWorkSyncRevision === "string" ? raw.lastAppliedWorkSyncRevision : "",
     lastAppliedDeviceSnapshotRevision: typeof raw?.lastAppliedDeviceSnapshotRevision === "string" ? raw.lastAppliedDeviceSnapshotRevision : "",
+    lastAppliedProfileSnapshotRevision: typeof raw?.lastAppliedProfileSnapshotRevision === "string" ? raw.lastAppliedProfileSnapshotRevision : "",
+    lastProfileSnapshotPublishedAt: Number.isFinite(raw?.lastProfileSnapshotPublishedAt) ? raw.lastProfileSnapshotPublishedAt : 0,
     lastRemoteReceiptAt: Number.isFinite(raw?.lastRemoteReceiptAt) ? raw.lastRemoteReceiptAt : 0,
     lastRemoteReceiptRevision: typeof raw?.lastRemoteReceiptRevision === "string" ? raw.lastRemoteReceiptRevision : "",
     lastRemoteReceiptUpdatedAt: Number.isFinite(raw?.lastRemoteReceiptUpdatedAt) ? raw.lastRemoteReceiptUpdatedAt : 0,
