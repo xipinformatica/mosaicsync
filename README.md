@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.27.6**
+**Current source release: 1.27.7**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.27.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.27.7** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.27.6 is a focused visual and lifecycle-hardening follow-up. Contained shortcut artwork is reduced to roughly 70% of each tile, including bundled top-level icons, while tile dimensions, grid density, Cover mode and size-slider behavior remain unchanged. User-triggered favicon-choice discovery now uses a structured-clone-safe request-ID cancellation protocol: closing/resetting the editor cancels only that picker request and the background worker aborts its in-flight manual network fetches, while the automatic favicon resolver and its candidate/ranking behavior remain unchanged. Regression coverage now proves Website Access revocation blocks cached picker results, aggregate favicon-cache retention stays bounded, PSL behavior matches for local/IP/single-label and additional wildcard/exception edge cases, and CSS dead-selector auditing uses class-bearing references rather than arbitrary source substrings. No permissions, schemas, CSP relaxation, telemetry or remote code changed.
+1.27.7 is a favicon state/render-consistency follow-up. New Tab no longer suppresses a `storage.local` state event merely because its synchronized workspace clock matches a recent in-page write: device-local automatic favicon hydration intentionally keeps that clock unchanged, so the old heuristic could miss a real background artwork update and leave a rendered tile on its fallback letter even though the shortcut object had learned an icon. The existing device-artwork fast path now receives those events and updates the visible tile/folder artwork without changing Sync semantics. The manual **Choose detected favicon** picker also includes an already-learned automatic favicon (`favicon`/browser-native `firefox` provenance only), deduplicates it against fresh results, and distinguishes a genuine zero-result scan from a website-inspection failure. The automatic favicon resolver/ranking/winner/single-flight path remains unchanged. No permissions, schemas, CSP relaxation, telemetry or remote code changed.
 
 1.27.4 is a package-efficiency and favicon-picker lifecycle/performance release. The reviewed source remains fully readable, while the deterministic build now emits a rules-only Public Suffix List runtime artifact and compact generated locale modules that preserve all 32 catalogs exactly while removing repeated runtime key/comment bulk. A package-size baseline/report makes category growth visible and fails tests on unexpected >15% growth until the baseline is consciously updated. The manual favicon chooser now clears/invalidate candidates when the editor closes, uses at most two concurrent candidate image jobs, keeps a tiny bounded 30-second in-memory result cache for immediate repeats, and exposes localized source/dimension metadata to assistive technology/tooltips. Site-declared inline favicon support, all image/SVG bounds, and the automatic favicon resolver remain unchanged. Obsolete shortcut-editor CSS was removed. No permissions, schemas, CSP relaxation, telemetry or remote code changed.
 

@@ -87,7 +87,7 @@ async function registrableResults(pslText, browser, tag) {
   }
 }
 
-test("1.27.6 anchors the compact PSL to an independent semantic hash and rule-shape sanity checks", async () => {
+test("1.27.7 anchors the compact PSL to an independent semantic hash and rule-shape sanity checks", async () => {
   const source = await readFile("src/shared/core/public_suffix_list.dat", "utf8");
   const summary = summarizePslRules(source);
   assert.deepEqual({
@@ -119,7 +119,7 @@ test("1.27.6 anchors the compact PSL to an independent semantic hash and rule-sh
   }
 });
 
-test("1.27.6 source and compact-runtime PSLs produce identical registrable-domain behavior for exact, private, wildcard, exception and IDN rules", async () => {
+test("1.27.7 source and compact-runtime PSLs produce identical registrable-domain behavior for exact, private, wildcard, exception and IDN rules", async () => {
   const source = await readFile("src/shared/core/public_suffix_list.dat", "utf8");
   const expected = {
     "news.example.co.uk": "example.co.uk",
@@ -143,7 +143,7 @@ test("1.27.6 source and compact-runtime PSLs produce identical registrable-domai
   }
 });
 
-test("1.27.6 compact locale helper preserves source key order and hostile/special translation text exactly", async () => {
+test("1.27.7 compact locale helper preserves source key order and hostile/special translation text exactly", async () => {
   const sourceEnglish = (await import(`../src/shared/core/i18n-locales/en.js?1275-source=${Date.now()}`)).MESSAGES;
   const keys = Object.keys(sourceEnglish);
   const specials = [
@@ -168,7 +168,7 @@ test("1.27.6 compact locale helper preserves source key order and hostile/specia
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.6 ${browser} favicon-choice cache is gated by a live Website Access permission read`, async () => {
+  test(`1.27.7 ${browser} favicon-choice cache is gated by a live Website Access permission read`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     const permissionCalls = [];
@@ -184,7 +184,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(permissionCalls[0]?.refresh, true, "cache-read gate must bypass any stale permission memo");
   });
 
-  test(`1.27.6 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
+  test(`1.27.7 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helperNames = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"];
     const helpers = helperNames.map(name => extractFunction(source, name)).join("\n");
@@ -240,7 +240,7 @@ test("current shortcut artwork keeps a proportional ~70% contain footprint at ev
   }
 });
 
-test("1.27.6 New Tab CSS class audit uses class-bearing references instead of arbitrary substrings", async () => {
+test("1.27.7 New Tab CSS class audit uses class-bearing references instead of arbitrary substrings", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const base = resolve(`dist/${browser}/newtab`);
     const css = await readFile(resolve(base, "newtab.css"), "utf8");
@@ -278,12 +278,12 @@ test("1.27.6 New Tab CSS class audit uses class-bearing references instead of ar
   }
 });
 
-test("1.27.6 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
+test("1.27.7 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
   const baseline = JSON.parse(await readFile("package-size-baseline.json", "utf8"));
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.27.6");
+    assert.equal(actual.version, "1.27.7");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);
@@ -304,7 +304,7 @@ test("1.27.6 size guard detects missing categories and significant individual-fi
   }
 });
 
-test("1.27.6 JavaScript and Python package-size category classifiers remain identical", () => {
+test("1.27.7 JavaScript and Python package-size category classifiers remain identical", () => {
   const paths = [
     "core/i18n-locales/ca.js", "core/i18n-runtime-catalog.js", "core/public_suffix_list.dat",
     "assets/backgrounds/aether-flow.webp", "_locales/en/messages.json", "newtab/newtab.js",

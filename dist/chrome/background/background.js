@@ -1697,6 +1697,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
 
   const discovered = await discoverPageIconInfo(parsed.href, { deadlineAt, signal });
   if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
+  const pageDiscoveryReason = String(discovered?.reason || "");
   await fetchChoiceBatches((discovered.candidates || []).slice(0, 16).map(candidate => ({
     value: candidate.url,
     options: {
@@ -1722,6 +1723,11 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
   ]);
 
   if (signal?.aborted) return { ok: false, error: "cancelled", candidates: [] };
+  if (!choices.length && pageDiscoveryReason) {
+    if (pageDiscoveryReason === "permission") return { ok: false, error: "permission", reason: pageDiscoveryReason, candidates: [] };
+    if (pageDiscoveryReason === "cancelled") return { ok: false, error: "cancelled", reason: pageDiscoveryReason, candidates: [] };
+    return { ok: false, error: "discovery-failed", reason: pageDiscoveryReason, candidates: [] };
+  }
   choices.sort((a, b) =>
     b.qualitySide - a.qualitySide ||
     Number(b.declared) - Number(a.declared) ||

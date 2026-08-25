@@ -59,7 +59,7 @@ function backgroundHelpers(source) {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.6 ${browser} request-id cancellation aborts only the matching manual favicon discovery`, async () => {
+  test(`1.27.7 ${browser} request-id cancellation aborts only the matching manual favicon discovery`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helpers = backgroundHelpers(source);
     let observedSignal = null;
@@ -88,7 +88,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
 
-  test(`1.27.6 ${browser} caller cancellation aborts an in-flight manual favicon network fetch`, async () => {
+  test(`1.27.7 ${browser} caller cancellation aborts an in-flight manual favicon network fetch`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const linked = extractFunction(source, "linkedFetchAbortController");
     const bounded = extractFunction(source, "fetchBoundedResource");
@@ -116,7 +116,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(result.ok, false);
     assert.equal(result.reason, "cancelled");
   });
-  test(`1.27.6 ${browser} a pre-cancelled manual favicon discovery performs no permission/network work`, async () => {
+  test(`1.27.7 ${browser} a pre-cancelled manual favicon discovery performs no permission/network work`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     let permissionCalls = 0;
@@ -131,7 +131,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(permissionCalls, 0);
   });
 
-  test(`1.27.6 ${browser} favicon cache cannot be read after live Website Access revocation`, async () => {
+  test(`1.27.7 ${browser} favicon cache cannot be read after live Website Access revocation`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helpers = backgroundHelpers(source);
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
@@ -170,7 +170,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(fetchCalls, beforeRevokedRead, "revoked cache access must fail before any new fetch");
   });
 
-  test(`1.27.6 ${browser} favicon cache enforces its aggregate retained-character bound`, () => {
+  test(`1.27.7 ${browser} favicon cache enforces its aggregate retained-character bound`, () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helpers = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "rememberFaviconChoices"].map(name => extractFunction(source, name)).join("\n");
     const context = {
@@ -193,7 +193,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(context.faviconChoiceCache.has("c"), true);
   });
 
-  test(`1.27.6 ${browser} New Tab sends cancellable manual favicon requests and cancels them when picker state resets`, () => {
+  test(`1.27.7 ${browser} New Tab sends cancellable manual favicon requests and cancels them when picker state resets`, () => {
     const source = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     assert.match(source, /let detectedFaviconRequestId = "";/);
     assert.match(source, /type: "mosaicsync:discover-favicon-choices", pageUrl: sourceUrl, requestId/);
@@ -203,7 +203,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-test("1.27.6 shortcut contained artwork is about 70% of the tile while Cover remains edge-to-edge", () => {
+test("1.27.7 shortcut contained artwork is about 70% of the tile while Cover remains edge-to-edge", () => {
   for (const tileSize of [60, 76, 96]) {
     const pixels = Math.round(tileSize * 53 / 76);
     const ratio = pixels / tileSize;

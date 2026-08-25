@@ -1,3 +1,11 @@
+## 1.27.7
+
+- Fixed a general device-local favicon propagation race in New Tab. MosaicSync no longer suppresses `storage.local` state changes merely because their synchronized `updatedAt` clock matches a recent in-page write; reconstructable favicon/cache writes intentionally keep that clock unchanged, so the old heuristic could leave the in-memory shortcut updated while the already-rendered tile remained on its fallback letter. The existing device-artwork fast path now handles exact own-write echoes safely without risking a missed background favicon update.
+- Improved **Choose detected favicon** consistency without changing the automatic favicon resolver. A currently learned automatic favicon (`favicon`/browser-native `firefox` source kinds only) is now offered as an already-known detected choice, while uploads and built-in icons are never misclassified as detected favicons.
+- Distinguished a successful scan with no additional icons from a page-inspection failure. If the website head cannot be inspected because of timeout/network/HTTP/content failure and no other candidate was found, the picker reports a localized inspection error instead of incorrectly saying that no icons exist.
+- Added a regression fixture modeled on the MosaicSync website's declared inline SVG + 32×32 PNG favicon metadata and permanent coverage for declared-inline discovery, current-learned candidate deduplication and the unchanged automatic favicon resolver path.
+- Added the new inspection-failure message to all 32 locale catalogs. No new permissions or host permissions, no state/Sync/profile schema changes, no automatic favicon ranking/winner/single-flight changes, no CSP relaxation, telemetry or remote code. Version identity is exactly `1.27.7` across Firefox, Chrome, runtime/UI metadata, build output and source documentation.
+
 ## 1.27.6
 
 - Reduced contained top-level shortcut artwork from the 1.27.5 ~76–78% footprint to approximately 70% of the tile (53 px at the default 76 px tile), including bundled top-level icons. Tile dimensions, grid density, the existing fixed label reservation and Cover-mode edge-to-edge behavior are unchanged; the size slider and synchronous first paint use the same proportional ratio.

@@ -1,16 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.27.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
-## 1.27.6 artwork / cancellable picker / edge-regression policy
+## 1.27.7 favicon state/render-consistency policy
 
-Contained top-level shortcut artwork uses a proportional 53/76 ratio (about 70%) across the supported 60–96 px tile-size range; bundled top-level MosaicSync icons use 70%. Tile dimensions, the fixed label reservation, grid density and Cover-mode edge-to-edge behavior remain unchanged. The synchronous first-paint renderer and authoritative renderer must use the same ratio.
+Device-local automatic favicon/cache hydration intentionally does **not** advance synchronized workspace/core clocks. New Tab must therefore never suppress a `storage.local` state event solely because its `updatedAt`/settings clocks match a recent in-page write. Exact own-write echoes and genuine device-artwork changes are both handled through the existing Sync-signature/device-artwork fast path; a real background favicon update must be able to mutate the in-memory shortcut and patch the currently visible top-level tile, folder mosaic and open folder contents. If the fast path cannot prove the change is display-cache-only, the authoritative state/render path remains the fallback.
 
-Manual **Choose detected favicon** work may be cancelled only through a structured-clone-safe request ID sent over extension messaging. The background worker owns the corresponding `AbortController`; closing/resetting the editor sends a cancel message for the active request, and only manual picker fetches receive that signal. `AbortSignal`/`AbortController` objects must never be passed through extension messaging. Automatic `resolveFaviconForUrl()` calls continue to omit the optional signal and retain the existing ranking, single-flight, quality and fallback semantics.
+Manual **Choose detected favicon** discovery remains separate from the automatic resolver. If the shortcut already contains learned automatic artwork with provenance `favicon` or browser-native `firefox`, those exact validated pixels may be exposed as an already-known detected candidate and deduplicated against fresh discovery. Uploaded/user artwork and bundled built-in icons must never be relabeled as detected favicons. A successful page inspection that finds no candidates retains the normal empty-state message; if page-head inspection itself fails and no fallback candidate exists, the UI must report the localized inspection-failure state instead of falsely claiming that the website has no icons.
 
-Regression coverage must prove live Website Access revocation blocks cache reads, aggregate favicon-choice cache retention obeys its total bound, request-ID cancellation cannot affect another request, in-flight manual HTTP(S) fetches observe caller cancellation, local/IP/single-label and wildcard/exception PSL edge cases match between source/runtime data, and CSS dead-selector checks rely on class-bearing references rather than arbitrary substrings.
+Regression coverage must exercise the production page-icon scanner against a fixture containing declared inline SVG and PNG favicon metadata, prove current learned-candidate provenance/deduplication, prove storage-event suppression cannot hide device-local artwork changes, and keep automatic `resolveFaviconForUrl()` byte-identical to 1.27.6 unless a future release explicitly changes automatic favicon behavior. No new permission, host-permission, state/Sync/profile-schema, CSP, telemetry or remote-code behavior is introduced by this consistency fix.
 
 ## 1.27.5 tile-artwork / favicon-permission / build-integrity policy
 
@@ -224,7 +224,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
