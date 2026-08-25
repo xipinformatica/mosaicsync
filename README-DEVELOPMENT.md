@@ -1,9 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.27.8.5 first-frame CSS ownership policy
+
+- Launcher-visible New Tab components are permanently owned by `newtab-critical.css`. Deferred `newtab-secondary.css` must not re-declare their normal geometry, paint/compositor properties or launcher image-layer behavior after the first frame.
+- In particular, `.settings-button` and its normal launcher states are critical-only. Re-declaring the fixed backdrop-filtered control in the secondary sheet can make Firefox rebuild its compositor layer a couple of frames after paint even when the declarations are identical.
+- Launcher tile/folder-mosaic image rules are likewise critical-only. Combined rules that also serve secondary folder-popover tiles must be split so only `.folder-item-tile` declarations remain in the secondary stylesheet.
+- Regression tests enforce CSS ownership in both directions: secondary/editor selectors stay out of critical CSS, and launcher-visible selectors stay out of secondary CSS.
+- The historical monolithic `newtab.css` may remain as reviewed reference for legacy tests, but it is not part of the runtime loading contract. `newtab.html` must not link it and `secondary-style-bootstrap.js` must load only `newtab-secondary.css`.
+- 1.27.8.5 is intentionally a narrow visual-integrity follow-up. It does not alter the 1.27.8.4 Frequently Visited Sync migration, wallpaper preview isolation, folder hydration scheduler, storage bootstrap, hover behavior, PCP instrumentation, permissions, Sync conflict semantics or image/navigation safety.
 
 ## 1.27.8.4 New Tab performance, appearance-preview and Frequently Visited policy
 
@@ -272,7 +281,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

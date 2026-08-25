@@ -115,7 +115,7 @@ test("1.27.8.3 normal startup reuses the exact persisted compact state as the co
 });
 
 for (const browserName of ["firefox", "chrome"]) {
-  test(`1.27.8.4 ${browserName} loads critical and secondary-only styles through a CSP-safe external bootstrap`, () => {
+  test(`1.27.8.5 ${browserName} loads critical and secondary-only styles through a CSP-safe external bootstrap`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browserName}/newtab/newtab-critical.css`, "utf8");
     const full = fs.readFileSync(`dist/${browserName}/newtab/newtab.css`, "utf8");
@@ -138,7 +138,7 @@ for (const browserName of ["firefox", "chrome"]) {
       "the secondary-only sheet must be queued only after the critical launcher has had a paint opportunity");
   });
 
-  test(`1.27.8.4 ${browserName} begins authoritative local storage before the module graph consumes it`, () => {
+  test(`1.27.8.5 ${browserName} begins authoritative local storage before the module graph consumes it`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const src = fs.readFileSync(`dist/${browserName}/newtab/newtab.js`, "utf8");
     const bootstrap = fs.readFileSync(`dist/${browserName}/newtab/local-storage-bootstrap.js`, "utf8");

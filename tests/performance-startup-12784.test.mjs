@@ -61,7 +61,7 @@ function seedFolder(childCount = 20) {
   return projection;
 }
 
-test("1.27.8.4 deferred folder artwork hydrates in bounded chunks and yields between chunks", async () => {
+test("1.27.8.5 deferred folder artwork hydrates in bounded chunks and yields between chunks", async () => {
   seedFolder(20);
   const raw = await storage.readLocalStorageRaw();
   const loaded = await storage.materializeLocalStorage(raw, { hydrateAssets: "active-no-background", folderChildLimit: 4 });
@@ -80,7 +80,7 @@ test("1.27.8.4 deferred folder artwork hydrates in bounded chunks and yields bet
   assert.ok(hydrated.shortcuts[0].items.every(item => item.image), "all deferred images must eventually hydrate");
 });
 
-test("1.27.8.4 Frequently Visited is a profile preference while actual browser data remains local", () => {
+test("1.27.8.5 Frequently Visited is a profile preference while actual browser data remains local", () => {
   const personalSettings = { ...constants.DEFAULT_SETTINGS, frequentlyVisitedEnabled: true, frequentlyVisitedCount: 8 };
   const workSettings = { ...constants.DEFAULT_SETTINGS, frequentlyVisitedEnabled: false, frequentlyVisitedCount: 3 };
   const normalized = model.normalizeState({
@@ -109,7 +109,7 @@ test("1.27.8.4 Frequently Visited is a profile preference while actual browser d
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.8.4 ${browser} uses a genuinely secondary-only stylesheet`, () => {
+  test(`1.27.8.5 ${browser} uses a genuinely secondary-only stylesheet`, () => {
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
     const monolith = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
@@ -121,14 +121,14 @@ for (const browser of ["firefox", "chrome"]) {
     }
   });
 
-  test(`1.27.8.4 ${browser} pre-module storage bootstrap uses the frozen authoritative key contract`, () => {
+  test(`1.27.8.5 ${browser} pre-module storage bootstrap uses the frozen authoritative key contract`, () => {
     const js = fs.readFileSync(`dist/${browser}/newtab/local-storage-bootstrap.js`, "utf8");
     for (const key of [constants.LOCAL_STATE_KEY, constants.LOCAL_META_KEY, constants.LOCAL_ACTIVE_SPACE_KEY, constants.LOCAL_ASSET_INDEX_KEY]) {
       assert.ok(js.includes(JSON.stringify(key)), `bootstrap storage key drift: ${key}`);
     }
   });
 
-  test(`1.27.8.4 ${browser} records perceived paint and bounded long-task diagnostics locally only`, () => {
+  test(`1.27.8.5 ${browser} records perceived paint and bounded long-task diagnostics locally only`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const boot = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
     assert.match(boot, /firstLauncherPaint/);
@@ -139,7 +139,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(src, /storage\.(?:local|sync|session)\.set\([^)]*startupTiming|fetch\([^)]*startupTiming|sendMessage\([^)]*startupTiming/);
   });
 
-  test(`1.27.8.4 ${browser} keeps separate Light/Dark wallpaper preview paint isolated while Settings is open`, () => {
+  test(`1.27.8.5 ${browser} keeps separate Light/Dark wallpaper preview paint isolated while Settings is open`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const css = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     assert.match(src, /if \(settingsDialog\?\.open\) \{[\s\S]*?paintAppearancePreviewLayer\([\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
@@ -147,7 +147,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(css, /\.appearance-preview-layer::after[\s\S]*?--appearance-preview-dim/);
   });
 
-  test(`1.27.8.4 ${browser} synchronizes Frequent Show/Count intent but requests Top Sites only from a local user gesture`, () => {
+  test(`1.27.8.5 ${browser} synchronizes Frequent Show/Count intent but requests Top Sites only from a local user gesture`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     assert.match(src, /persistFrequentlyVisitedPreference\(\{ enabled: wantsEnabled \}\)/);
     assert.match(src, /const permissionPromise = wantsEnabled \? requestTopSitesPermissionFromGesture\(\) : null/);
@@ -156,7 +156,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(src, /recordSyncMutation: publishLegacyIntent && loaded\.meta\?\.syncEnabled && loaded\.meta\?\.syncInitialized/);
   });
 
-  test(`1.27.8.4 ${browser} folder-open hydration cannot overwrite a concurrent structural edit`, () => {
+  test(`1.27.8.5 ${browser} folder-open hydration cannot overwrite a concurrent structural edit`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     assert.match(src, /const mutationGeneration = stateMutationGeneration;[\s\S]*?hydrateFolderLocalAssetsNormalized[\s\S]*?stateMutationGeneration !== mutationGeneration/);
     assert.match(src, /deferredFolderHydrationGeneration \+= 1;[\s\S]*?state = hydrated;[\s\S]*?scheduleDeferredFolderHydration\(\)/);

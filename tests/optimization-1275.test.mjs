@@ -278,12 +278,12 @@ test("1.27.8 New Tab CSS class audit uses class-bearing references instead of ar
   }
 });
 
-test("1.27.8.4 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
+test("1.27.8.5 size guard detects missing categories and significant individual-file growth while preserving accurate accounting", async () => {
   const baseline = JSON.parse(await readFile("package-size-baseline.json", "utf8"));
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.27.8.4");
+    assert.equal(actual.version, "1.27.8.5");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);

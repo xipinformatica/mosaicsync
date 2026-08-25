@@ -1,3 +1,11 @@
+## 1.27.8.5
+
+- Fixed a first-frame Firefox visual regression introduced by the critical/secondary CSS split. The delayed secondary stylesheet no longer re-declares `.settings-button`, so the already-painted fixed/backdrop-filtered launcher control is not reprocessed into a transient bright rounded compositor artifact a couple of frames after New Tab opens.
+- Enforced launcher CSS ownership for artwork layers as well: `.tile img`, `.folder-mosaic-cell img` and their `.artwork-layer` placement remain critical-only, while secondary folder-popover image rules are split to `.folder-item-tile` only.
+- Added reverse CSS-partition regression coverage for Firefox and Chrome so launcher-visible selectors cannot silently reappear in `newtab-secondary.css`. The existing direction still verifies that Settings/editor/dialog-only selectors stay out of the blocking critical sheet.
+- Fenced the vestigial monolithic `newtab.css` out of the runtime loading contract with explicit tests: New Tab may link only `newtab-critical.css`, and the external deferred loader may load only `newtab-secondary.css`.
+- No permissions, Sync/profile/state schemas, conflict/tombstone behavior, Frequently Visited semantics, wallpaper behavior, hover behavior, CSP, telemetry, remote code, navigation safety or image/SVG validation changed. Version identity is exactly `1.27.8.5` across Firefox, Chrome, runtime/UI metadata, tests, documentation and build output.
+
 ## 1.27.8.4
 
 - Continued the older-CPU New Tab performance work with a genuinely two-part CSS runtime. The blocking launcher stylesheet is reduced to ~33 KB and the deferred `newtab-secondary.css` contains only secondary/dialog/editor rules, so MosaicSync no longer reparses the entire monolithic stylesheet after first paint. The reviewed monolithic `newtab.css` remains in source/runtime for auditability while the actual first-frame + secondary delivery path parses fewer total bytes.
