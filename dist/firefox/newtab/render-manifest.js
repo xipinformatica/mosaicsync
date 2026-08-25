@@ -99,7 +99,10 @@ function projectItem(item, previews) {
       id: item.id,
       title: item.title || "Folder",
       position: item.position,
-      items: (item.items || []).map(child => {
+      // A closed folder can show at most four cells. Keep the synchronous
+      // first-frame manifest proportional to what is actually visible instead of
+      // spending localStorage/JSON/preview budget on hidden children.
+      items: (item.items || []).slice(0, 4).map(child => {
         const childKey = previewIdentity(child);
         return {
           id: child.id,
@@ -209,8 +212,9 @@ export async function refreshRenderManifestPreviews(currentState, currentMeta, {
     jobs.set(key, image);
   };
   for (const item of currentState.shortcuts || []) {
-    if (item?.type === "folder") for (const child of item.items || []) visit(child);
-    else visit(item);
+    if (item?.type === "folder") {
+      for (const child of (item.items || []).slice(0, 4)) visit(child);
+    } else visit(item);
   }
   if (!jobs.size) return false;
 

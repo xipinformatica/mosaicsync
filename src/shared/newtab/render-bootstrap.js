@@ -111,6 +111,7 @@
   function appendPreviewOrFallback(target, item) {
     if (validPreview(item?.preview)) {
       const image = document.createElement("img");
+      image.decoding = "async";
       image.src = item.preview;
       image.alt = "";
       image.setAttribute("aria-hidden", "true");
@@ -182,6 +183,7 @@ ${safeUrl}`;
     if (validPreview(site.favicon)) {
       const icon = document.createElement("img");
       icon.className = "frequent-site-icon";
+      icon.decoding = "async";
       icon.src = site.favicon;
       icon.alt = "";
       icon.setAttribute("aria-hidden", "true");

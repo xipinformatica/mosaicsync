@@ -32,8 +32,8 @@ function state(personalItems = [], workItems = []) {
   return normalizeState({ activeSpaceId: "personal", spaces: { personal, work } });
 }
 
-test("1.27.8.1 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.27.8.1");
+test("1.27.8.2 release and local Sync bookkeeping schemas are explicit", () => {
+  assert.equal(VERSION, "1.27.8.2");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });

@@ -33,8 +33,8 @@ export function isLocalAssetId(value) {
   return typeof value === "string" && value.length <= LOCAL_ASSET_ID_MAX_CHARS && LOCAL_ASSET_ID_RE.test(value);
 }
 
-export function validateLocalAsset(id, dataUrl) {
-  return isLocalAssetId(id) && typeof dataUrl === "string" && Boolean(parseImageDataUrl(dataUrl)) && assetIdForDataUrl(dataUrl) === id;
+export function validateLocalAsset(id, dataUrl, memo = null) {
+  return isLocalAssetId(id) && typeof dataUrl === "string" && Boolean(parseImageDataUrl(dataUrl)) && assetIdForDataUrl(dataUrl, memo) === id;
 }
 
 function projectShortcut(item, assets, referencedIds, memo = null) {
@@ -117,13 +117,15 @@ function collectShortcutRefs(item, ids) {
   if (isLocalAssetId(item.localImageAssetId)) ids.add(item.localImageAssetId);
 }
 
-export function collectStateLocalAssetIds(state, { spaceIds = SPACE_IDS } = {}) {
+export function collectStateLocalAssetIds(state, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true } = {}) {
   const ids = new Set();
   for (const spaceId of spaceIds) {
     const workspace = state?.spaces?.[spaceId];
     if (!workspace || typeof workspace !== "object") continue;
-    for (const item of workspace.shortcuts || []) collectShortcutRefs(item, ids);
-    if (isLocalAssetId(workspace.settings?.backgroundLocalAssetId)) ids.add(workspace.settings.backgroundLocalAssetId);
+    if (includeShortcuts) {
+      for (const item of workspace.shortcuts || []) collectShortcutRefs(item, ids);
+    }
+    if (includeBackground && isLocalAssetId(workspace.settings?.backgroundLocalAssetId)) ids.add(workspace.settings.backgroundLocalAssetId);
   }
   return ids;
 }

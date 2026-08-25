@@ -14,6 +14,12 @@ bench("projectStateToLocalAssets(200)",()=>assets.projectStateToLocalAssets(norm
 bench("createWriteBaseline(200)",()=>storage.createWriteBaseline(normalized),20);
 const projected=assets.projectStateToLocalAssets(normalized);
 bench("hydrate active Space",()=>assets.hydrateStateLocalAssets(projected.state,projected.assets,{spaceIds:["personal"]}),30);
+const hydratedStartup=assets.hydrateStateLocalAssets(projected.state,projected.assets,{spaceIds:["personal"]});
+const validatedAssetMemo=new Map([...projected.assets].map(([assetId,dataUrl])=>[dataUrl,assetId]));
+bench("startup normalize without validated memo",()=>model.normalizeState(hydratedStartup),20);
+bench("startup normalize with validated memo",()=>model.normalizeState(hydratedStartup,new Map(validatedAssetMemo)),20);
+bench("startup baseline without validated memo",()=>storage.createWriteBaseline(hydratedStartup),20);
+bench("startup baseline with validated memo",()=>storage.createWriteBaseline(hydratedStartup,new Map(validatedAssetMemo)),20);
 console.log(`core JSON bytes: ${Buffer.byteLength(JSON.stringify(projected.state))}`);
 console.log(`deduplicated assets: ${projected.assets.size}`);
 const personal=model.workspaceStateNormalized(normalized,'personal');

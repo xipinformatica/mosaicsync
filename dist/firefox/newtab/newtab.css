@@ -463,6 +463,12 @@ button { color: inherit; }
 .shortcut-slot.dragging { opacity: .42; transform: scale(.97); }
 .shortcut-slot.drag-over .tile { box-shadow: 0 0 0 3px var(--accent), 0 8px 26px rgba(0,0,0,.26); transform: scale(1.035); }
 .tile img, .folder-mosaic-cell img, .folder-item-tile img { pointer-events: none; user-select: none; -moz-user-select: none; }
+/* 1.27.8.2: bootstrap-preview/full-artwork handoff. When both images are
+ * present they occupy the same grid cell, so the tiny already-decoded preview
+ * remains visually stable until the authoritative image is ready to replace it. */
+.tile > img.artwork-layer,
+.folder-mosaic-cell > img.artwork-layer,
+.folder-item-tile > img.artwork-layer { grid-area: 1 / 1; }
 
 .empty-state {
   display: grid;

@@ -145,9 +145,10 @@ async function retryPendingLocalAssetCleanup() {
   });
 }
 
-async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS } = {}) {
-  const ids = [...collectStateLocalAssetIds(rawState, { spaceIds })];
-  if (!ids.length) return { assets: new Map(), storageMs: 0 };
+async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS, includeShortcuts = true, includeBackground = true } = {}) {
+  const assetIdMemo = new Map();
+  const ids = [...collectStateLocalAssetIds(rawState, { spaceIds, includeShortcuts, includeBackground })];
+  if (!ids.length) return { assets: new Map(), storageMs: 0, assetIdMemo };
   const keys = ids.map(localAssetStorageKey);
   const startedAt = perfNow();
   const result = await browser.storage.local.get(keys);
@@ -155,14 +156,14 @@ async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS } = {}) {
   const assets = new Map();
   for (const id of ids) {
     const value = result[localAssetStorageKey(id)];
-    if (validateLocalAsset(id, value)) {
+    if (validateLocalAsset(id, value, assetIdMemo)) {
       assets.set(id, value);
       verifiedLocalAssetValues.set(id, value);
     } else {
       verifiedLocalAssetValues.delete(id);
     }
   }
-  return { assets, storageMs };
+  return { assets, storageMs, assetIdMemo };
 }
 
 export async function hydratePersistedState(rawState, { spaceIds = SPACE_IDS } = {}) {
@@ -175,6 +176,24 @@ export async function hydrateLocalAssetsForSpaceNormalized(normalizedState, spac
   const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
   const { assets } = await readAssetMapForState(normalizedState, { spaceIds: [id] });
   return hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
+}
+
+export async function hydrateBackgroundLocalAssetNormalized(normalizedState, spaceId) {
+  const id = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
+  const { assets } = await readAssetMapForState(normalizedState, {
+    spaceIds: [id],
+    includeShortcuts: false,
+    includeBackground: true
+  });
+  let hydrated = hydrateStateLocalAssets(normalizedState, assets, { spaceIds: [id] });
+  const workspace = hydrated?.spaces?.[id];
+  if (workspace?.settings?.backgroundImage) {
+    const settings = { ...workspace.settings };
+    delete settings.backgroundImageDeferred;
+    const spaces = { ...hydrated.spaces, [id]: { ...workspace, settings } };
+    hydrated = { ...hydrated, spaces };
+  }
+  return selectActiveSpaceNormalized(hydrated, hydrated?.activeSpaceId || normalizedState?.activeSpaceId);
 }
 
 export function releaseLocalAssetsForSpaceNormalized(normalizedState, spaceId) {
@@ -588,20 +607,31 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
   const requestedActiveSpaceId = rawMultipleSpacesEnabled && SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
     ? result[LOCAL_ACTIVE_SPACE_KEY]
     : "personal";
-  const hydrateSpaceIds = hydrateAssets === "active" ? [requestedActiveSpaceId] : SPACE_IDS;
+  const activeOnly = hydrateAssets === "active" || hydrateAssets === "active-no-background";
+  const hydrateSpaceIds = activeOnly ? [requestedActiveSpaceId] : SPACE_IDS;
+  const includeBackground = hydrateAssets !== "active-no-background";
 
   const assetStartedAt = perfNow();
-  const { assets, storageMs: assetStorageMs } = await readAssetMapForState(rawState, { spaceIds: hydrateSpaceIds });
+  const { assets, storageMs: assetStorageMs, assetIdMemo } = await readAssetMapForState(rawState, {
+    spaceIds: hydrateSpaceIds,
+    includeBackground
+  });
   const hydratedRawState = hydrateStateLocalAssets(rawState, assets, { spaceIds: hydrateSpaceIds });
   const assetHydrationMs = perfNow() - assetStartedAt;
 
   const normalizeStartedAt = perfNow();
-  let state = normalizeState(hydratedRawState);
+  let state = normalizeState(hydratedRawState, assetIdMemo);
   const multipleSpacesEnabled = state.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
   const storedActiveSpaceId = multipleSpacesEnabled && SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
     ? result[LOCAL_ACTIVE_SPACE_KEY]
     : "personal";
   state = selectActiveSpaceNormalized(state, storedActiveSpaceId);
+  if (!includeBackground && state.settings?.backgroundLocalAssetId && !state.settings.backgroundImage && !state.settings.backgroundPreset) {
+    // Transient render hint only: the compact state still retains the authoritative
+    // content-addressed background ID. The full wallpaper is hydrated just after
+    // the visible shortcut artwork has been allowed to paint.
+    state.settings.backgroundImageDeferred = true;
+  }
   const meta = ensureDeviceId(result[LOCAL_META_KEY] || DEFAULT_META);
   const normalizationMs = perfNow() - normalizeStartedAt;
 
@@ -644,7 +674,7 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
     await retryPendingLocalAssetCleanup();
   }
 
-  const loaded = { state, meta };
+  const loaded = { state, meta, assetIdMemo };
   if (withTimings) {
     loaded.timings = {
       storageMs: Number(rawRead?.timings?.storageMs) || 0,

@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.27.8.1**
+**Current source release: 1.27.8.2**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.27.8.1** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.27.8.2** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.27.8.1 is a focused Sync-hardening follow-up. It makes the complete-profile recovery layer's protection status explicit when quota prevents the extra safety generation from being written, fixes that warning/state propagation for Work-only and cross-Space paths, and adds real two-computer production-background simulations for Firefox and Chrome with partial/out-of-order delivery, a local edit during bootstrap, a missed Sync event, watchdog recovery and final convergence. It also fault-injects quota failure at the profile root flip to prove the previous complete generation stays authoritative. The ordinary synchronized record/conflict model is unchanged.
+1.27.8.2 is a focused New Tab startup-performance release for older/slower computers. It keeps validated 48×48 bootstrap artwork visible until matching full-resolution artwork is decodable, asks the browser for asynchronous image decode scheduling, reuses already-validated content-addressed asset identities instead of re-hashing the same image bytes during startup, trims closed-folder first-frame preview work to the four visible mosaic children, and defers the heavyweight custom wallpaper asset until after the shortcut grid has had a frame to paint. Sync behavior, security validation, navigation safety and image quality are unchanged.
 
 1.27.8 is a Sync-integrity and self-healing release. Trusted devices now publish Personal and Work together as one complete, root-last device generation while retaining the immediately previous complete generation for fallback. A fresh browser profile cannot finish initialization from Personal alone: it waits until Work is explicitly complete (including a valid zero-record Work) or a complete Personal+Work device generation is available. Local shortcuts created while waiting are merged on top of the incoming profile instead of replacing it. Complete profile snapshots can also repair a torn compatibility ledger automatically, while a half-restored device with no applied Work revision is blocked from publishing an empty Work copy. The underlying record conflict/tombstone rules remain unchanged. 1.27.8 also adds a restrained paint-only Firefox-style shortcut hover scale/brightness effect with no grid reflow. No new permissions, CSP relaxation, telemetry or remote code were added.
 

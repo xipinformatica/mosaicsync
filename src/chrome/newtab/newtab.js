@@ -3,15 +3,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-import "../core/browser-shim.js";
-import { getNativeTopSites, nativeFaviconUrl, readNativeFaviconDataUrl } from "../core/platform.js";
+import { getNativeTopSites } from "../core/platform.js";
 import {
   APPEARANCE_HINT_KEY,
   BACKGROUND_PRESETS,
   BUILTIN_SHORTCUT_ICON_KEYS,
   DEFAULT_LIGHT_BACKGROUND_COLOR,
   DEFAULT_STATE,
-  NATIVE_FAVICON_CONCURRENCY,
   FREQUENTLY_VISITED_PREF_KEY,
   FREQUENTLY_VISITED_COUNT_PREF_KEY,
   FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY,
@@ -30,6 +28,7 @@ import {
   LOCAL_STATE_KEY,
   PRODUCT_NAME,
   RENDER_MANIFEST_KEY,
+  RENDER_PREVIEW_MAX_CHARS,
   SHORTCUT_LOCAL_IMAGE_TARGET_BYTES,
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
   SUPPORT_URL,
@@ -63,7 +62,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState } from "../core/storage.js";
+import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -103,6 +102,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let imageOptimizerModulePromise = null;
   let renderManifestModulePromise = null;
   let registrableDomainModulePromise = null;
+  const bootRenderManifest = globalThis.__mosaicsyncBootGrid?.manifest || null;
+  const bootArtworkPreviews = new Map();
+  const indexBootArtwork = item => {
+    if (!item || typeof item !== "object") return;
+    if (typeof item.id === "string" && item.id && typeof item.preview === "string" && item.preview) {
+      bootArtworkPreviews.set(item.id, { imageKey: String(item.imageKey || ""), preview: item.preview });
+    }
+    if (item.type === "folder") for (const child of item.items || []) indexBootArtwork(child);
+  };
+  for (const item of bootRenderManifest?.shortcuts || []) indexBootArtwork(item);
   let bookmarksApi = null;
   const loadImporterModule = () => importerModulePromise ||= import("../core/importer.js");
   const loadProfileModule = () => profileModulePromise ||= import("../core/profile.js");
@@ -110,7 +119,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const loadRenderManifestModule = async () => {
     renderManifestModulePromise ||= import("./render-manifest.js");
     const module = await renderManifestModulePromise;
-    module.seedRenderManifest(globalThis.__mosaicsyncBootGrid?.manifest || null);
+    module.seedRenderManifest(bootRenderManifest);
     return module;
   };
   const loadRegistrableDomainModule = () => registrableDomainModulePromise ||= import("../core/registrable-domain.js");
@@ -384,7 +393,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentCandidateCache = [];
   let hiddenFrequentDomains = new Set();
   let frequentDragSite = null;
-  let frequentRenderSnapshot = globalThis.__mosaicsyncBootGrid?.manifest?.frequent || null;
+  let frequentRenderSnapshot = bootRenderManifest?.frequent || null;
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
@@ -551,6 +560,29 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 900);
   }
 
+  let deferredBackgroundHydrationGeneration = 0;
+  function scheduleDeferredBackgroundHydration() {
+    if (state?.settings?.backgroundImageDeferred !== true || !state.settings.backgroundLocalAssetId) return;
+    const generation = ++deferredBackgroundHydrationGeneration;
+    const spaceId = state.activeSpaceId;
+    const assetId = state.settings.backgroundLocalAssetId;
+    const updatedAt = Number(state.updatedAt) || 0;
+    const settingsModifiedAt = Number(state.settingsModifiedAt) || 0;
+
+    requestAnimationFrame(() => {
+      void hydrateBackgroundLocalAssetNormalized(state, spaceId).then(hydrated => {
+        if (generation !== deferredBackgroundHydrationGeneration || state.activeSpaceId !== spaceId) return;
+        if (Number(state.updatedAt) !== updatedAt || Number(state.settingsModifiedAt) !== settingsModifiedAt) return;
+        if (state.settings?.backgroundLocalAssetId !== assetId || state.settings?.backgroundImageDeferred !== true) return;
+        if (!hydrated?.settings?.backgroundImage) return;
+        state = hydrated;
+        applyPageBackgroundVisual();
+        scheduleAppearanceHintRefresh(state.settings);
+        void warmSessionRenderCache(state, meta);
+      }).catch(() => {});
+    });
+  }
+
   function paintLoadedState(loaded, diagnostics, { deferHeavyAssets = false, reuseBootGrid = false } = {}) {
     state = loaded.state;
     meta = loaded.meta;
@@ -631,7 +663,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     updateSpaceSwitcher();
 
     if (stateChanged) {
-      applySettings();
+      applySettings({ deferHeavyAssets: state.settings?.backgroundImageDeferred === true });
       scheduleAppearanceHintRefresh(state.settings);
       scheduleRenderManifestRefresh(state, meta);
     }
@@ -989,19 +1021,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         event.stopPropagation();
         void showFrequentSiteContextMenu(event, site);
       });
-      const fallback = document.createElement("span");
-      fallback.className = "frequent-site-fallback";
-      fallback.textContent = (site.title || frequentHostLabel(site.url) || "?").trim().slice(0, 1).toUpperCase();
-      fallback.setAttribute("aria-hidden", "true");
-      const icon = document.createElement("img");
-      icon.className = "frequent-site-icon";
-      icon.alt = "";
-      icon.setAttribute("aria-hidden", "true");
-      icon.src = typeof site.favicon === "string" && site.favicon.startsWith("data:image/")
-        ? site.favicon
-        : nativeFaviconUrl(site.url, 64);
-      icon.addEventListener("error", () => icon.replaceWith(fallback), { once: true });
-      card.append(icon);
+      if (typeof site.favicon === "string" && site.favicon.startsWith("data:image/")) {
+        const icon = document.createElement("img");
+        icon.className = "frequent-site-icon";
+        icon.src = site.favicon;
+        icon.alt = "";
+        icon.setAttribute("aria-hidden", "true");
+        card.append(icon);
+      } else {
+        const fallback = document.createElement("span");
+        fallback.className = "frequent-site-fallback";
+        fallback.textContent = (site.title || frequentHostLabel(site.url) || "?").trim().slice(0, 1).toUpperCase();
+        fallback.setAttribute("aria-hidden", "true");
+        card.append(fallback);
+      }
       const copy = document.createElement("span");
       copy.className = "frequent-site-copy";
       const title = document.createElement("strong");
@@ -1054,9 +1087,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     setFrequentlyVisitedPermissionActionVisible(false);
     try {
-      // Ask the browser for a broad candidate pool first, then filter. Requesting
-      // only a handful before removing explicit shortcuts could leave fewer than
-      // five suggestions even when more valid candidates are available.
+      // Ask Firefox for a broad candidate pool first, then filter. Requesting only
+      // a handful before removing explicit shortcuts could leave fewer than five
+      // suggestions even when Firefox had more valid candidates available.
       const explicitHosts = frequentExplicitHostsForState(state, stateMutationGeneration);
       const sites = await frequentCandidates();
       if (generation !== frequentRefreshGeneration) return;
@@ -1273,7 +1306,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     );
     if (sessionCache?.meta?.onboardingCompleted && !sessionDefaultMismatch) {
       diagnostics.firstSource = "session";
-      const bootManifest = globalThis.__mosaicsyncBootGrid?.manifest;
+      const bootManifest = bootRenderManifest;
       const sessionAwaitingRemote = Boolean(sessionCache.meta?.syncEnabled && !sessionCache.meta?.syncInitialized && sessionCache.meta?.syncBootstrapMode === "await-remote");
       const canReuseBootGrid = !sessionAwaitingRemote && diagnostics.bootGrid && bootManifest?.version === 2 &&
         bootManifest.activeSpaceId === sessionCache.state.activeSpaceId &&
@@ -1294,7 +1327,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       await new Promise(resolve => requestAnimationFrame(() => resolve()));
     }
 
-    const loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active" });
+    const loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background" });
     if (deviceDefaultSpace !== "last" && isMultipleSpacesEnabled(loaded.state) && loaded.state.activeSpaceId !== deviceDefaultSpace) {
       loaded.state = await hydrateLocalAssetsForSpaceNormalized(loaded.state, deviceDefaultSpace);
       loaded.state = selectActiveSpaceNormalized(loaded.state, deviceDefaultSpace);
@@ -1303,7 +1336,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         .then(() => writeActiveSpace(deviceDefaultSpace));
       void activeSpacePersistQueue.catch(error => console.warn(`${PRODUCT_NAME}: could not persist default Space`, error));
     }
-    const loadedWriteBaseline = createWriteBaseline(loaded.state);
+    const loadedWriteBaseline = createWriteBaseline(loaded.state, loaded.assetIdMemo);
     if (!writeBaseline || stateMutationGeneration === stateGenerationAtRead) writeBaseline = loadedWriteBaseline;
     diagnostics.localNormalizationMs = loaded.timings?.normalizationMs ?? null;
     diagnostics.localAssetStorageMs = loaded.timings?.assetStorageMs ?? null;
@@ -1316,7 +1349,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     if (!paintedSession) {
       diagnostics.firstSource = "local";
-      paintLoadedState(loaded, diagnostics);
+      paintLoadedState(loaded, diagnostics, { deferHeavyAssets: loaded.state.settings?.backgroundImageDeferred === true });
       // Warm only the lightweight projection after the authoritative first load.
       void warmSessionRenderCache(state, meta);
     } else {
@@ -1325,6 +1358,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       diagnostics.authoritativeReconcileMs = performance.now() - reconcileStartedAt;
       void warmSessionRenderCache(state, meta);
     }
+    scheduleDeferredBackgroundHydration();
 
     // Reconcile Automatic appearance with the browser's actual UI theme as well
     // as prefers-color-scheme. This happens after first paint, so awaiting it here
@@ -2225,7 +2259,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const tile = document.createElement("span");
     tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
     applyShortcutColorTag(tile, item);
-    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon);
+    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
 
     const label = document.createElement("span");
     label.className = "shortcut-label";
@@ -2281,7 +2315,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       const cell = document.createElement("span");
       cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
       applyShortcutColorTag(cell, child);
-      appendImageOrFallback(cell, child.image, child.title, child.builtinIcon);
+      appendImageOrFallback(cell, child.image, child.title, child.builtinIcon, child);
       mosaic.append(cell);
     }
     tile.append(mosaic);
@@ -2449,18 +2483,66 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     else delete container.dataset.colorTag;
   }
 
-  function appendImageOrFallback(container, image, title, builtinIcon = "") {
+  function validBootArtworkPreview(value) {
+    return typeof value === "string" && value.length <= RENDER_PREVIEW_MAX_CHARS &&
+      /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
+  }
+
+  function bootArtworkPreviewFor(item) {
+    if (!item?.id) return "";
+    const currentKey = String(item.localImageAssetId || item.imageAssetId || "");
+    if (!currentKey) return "";
+    const cached = bootArtworkPreviews.get(item.id);
+    if (!cached || cached.imageKey !== currentKey || !validBootArtworkPreview(cached.preview)) return "";
+    return cached.preview;
+  }
+
+  function createArtworkImage(source, { layer = false } = {}) {
+    const img = document.createElement("img");
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.draggable = false;
+    img.decoding = "async";
+    if (layer) img.classList.add("artwork-layer");
+    img.src = source;
+    return img;
+  }
+
+  function appendImageOrFallback(container, image, title, builtinIcon = "", item = null) {
+    const preview = builtinIcon ? "" : bootArtworkPreviewFor(item);
     if (image) {
-      const img = document.createElement("img");
-      img.alt = "";
-      img.referrerPolicy = "no-referrer";
-      img.draggable = false;
-      img.src = image;
+      // Keep the already-decoded tiny first-frame derivative visible until the
+      // authoritative image is actually decodable. Older CPUs therefore never
+      // regress from recognizable artwork to an empty/fallback tile while the
+      // browser works through the full data URL.
+      const previewImg = preview ? createArtworkImage(preview, { layer: true }) : null;
+      const img = createArtworkImage(image, { layer: Boolean(previewImg) });
+      if (previewImg) img.style.visibility = "hidden";
+
+      let failed = false;
+      const reveal = () => {
+        if (failed) return;
+        img.style.visibility = "";
+        previewImg?.remove();
+      };
+      img.addEventListener("load", () => {
+        if (!previewImg) return;
+        if (typeof img.decode === "function") {
+          void img.decode().then(reveal).catch(() => requestAnimationFrame(reveal));
+        } else {
+          requestAnimationFrame(reveal);
+        }
+      }, { once: true });
       img.addEventListener("error", () => {
+        failed = true;
         img.remove();
+        if (previewImg) return;
         if (!globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) container.append(createFallback(title));
       }, { once: true });
+      if (previewImg) container.append(previewImg);
       container.append(img);
+    } else if (preview) {
+      container.append(createArtworkImage(preview));
     } else if (!globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) {
       container.append(createFallback(title));
     }
@@ -2758,7 +2840,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       const tile = document.createElement("span");
       tile.className = `folder-item-tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
       applyShortcutColorTag(tile, item);
-      appendImageOrFallback(tile, item.image, item.title, item.builtinIcon);
+      appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
 
       const label = document.createElement("span");
       label.className = "folder-item-label";
@@ -3704,29 +3786,33 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       }
     }
     if (!deviceShortcuts.length) return;
+    if (!(await hasTopSitesPermission())) return;
 
-    // Chrome does not expose favicon bytes from topSites. Read them from the
-    // browser's private _favicon endpoint granted by the manifest `favicon`
-    // permission. Keep concurrency bounded so large restored profiles remain
-    // cheap at startup.
-    const faviconById = new Map();
-    let cursor = 0;
-    const workers = Array.from({ length: Math.min(NATIVE_FAVICON_CONCURRENCY, deviceShortcuts.length) }, async () => {
-      while (cursor < deviceShortcuts.length) {
-        const shortcut = deviceShortcuts[cursor++];
-        try {
-          const favicon = await readNativeFaviconDataUrl(shortcut.url, 128);
-          if (favicon) faviconById.set(shortcut.id, favicon);
-        } catch {}
-      }
+    const sites = await browser.topSites.get({
+      newtab: true,
+      includeFavicon: true,
+      limit: 100
     });
-    await Promise.all(workers);
+    if (!Array.isArray(sites) || !sites.length) return;
+
+    const faviconSites = sites.filter(site => site?.url && site?.favicon?.startsWith("data:image/"));
+    const faviconsByUrl = new Map(faviconSites.map(site => [site.url, site.favicon]));
+    const faviconsByHost = new Map();
+    for (const site of faviconSites) {
+      try {
+        const hostname = new URL(site.url).hostname.toLowerCase().replace(/^www\./, "");
+        if (hostname && !faviconsByHost.has(hostname)) faviconsByHost.set(hostname, site.favicon);
+      } catch {}
+    }
 
     let changed = false;
     const changedShortcutIds = new Set();
     const changedFolderIds = new Set();
     for (const shortcut of deviceShortcuts) {
-      let favicon = faviconById.get(shortcut.id);
+      let favicon = faviconsByUrl.get(shortcut.url);
+      if (!favicon) {
+        try { favicon = faviconsByHost.get(new URL(shortcut.url).hostname.toLowerCase().replace(/^www\./, "")); } catch {}
+      }
       if (!favicon) continue;
       // Network discovery may have completed while native-cache reads were in
       // flight. Never let a late browser fallback downgrade a site-discovered icon.
@@ -5864,7 +5950,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         const cell = document.createElement("span");
         cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
         applyShortcutColorTag(cell, child);
-        appendImageOrFallback(cell, child.image, child.title, child.builtinIcon);
+        appendImageOrFallback(cell, child.image, child.title, child.builtinIcon, child);
         fragment.append(cell);
       }
       mosaic.replaceChildren(fragment);
@@ -5881,7 +5967,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       tile.classList.toggle("cover", record.item.imageStyle === "cover");
       applyShortcutColorTag(tile, record.item);
       tile.replaceChildren();
-      appendImageOrFallback(tile, record.item.image, record.item.title, record.item.builtinIcon);
+      appendImageOrFallback(tile, record.item.image, record.item.title, record.item.builtinIcon, record.item);
     }
     for (const folderId of changedFolderIds) {
       const folder = getTopLevelItem(folderId);

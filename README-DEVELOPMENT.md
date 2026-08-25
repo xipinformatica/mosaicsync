@@ -1,9 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.27.8.2 New Tab startup-performance policy
+
+- The synchronous render manifest is a first-frame visual cache, not authoritative state. A matching preview may remain visible while the authoritative content-addressed image decodes, but only when its `imageKey` matches the shortcut's current asset identity; stale previews must fail closed to the normal built-in/fallback path.
+- Device-local image validation remains mandatory at the `storage.local` trust boundary. Once exact bytes have passed validation, their transient data-URL→asset-ID memo may be reused by normalization and write-baseline construction during the same startup instead of hashing the same bytes repeatedly. The memo is never persisted as a trust bypass.
+- Custom wallpaper bytes do not compete with visible shortcut artwork on the first authoritative asset read. The compact state keeps the content-addressed wallpaper ID authoritative, the existing tiny appearance preview remains on screen, and the full wallpaper asset is hydrated immediately after the shortcut grid gets a frame to paint.
+- A closed folder contributes only its first four children to the synchronous first-frame manifest/preview-generation workload because only four mosaic cells can be visible. The authoritative folder contents remain complete and unchanged.
+- Full and preview tile images request asynchronous browser decode scheduling. Matching bootstrap artwork remains recognizable until the full image reports itself decodable; no image quality, CSP, URL validation, Sync, schema or security rule is weakened for performance.
+- Performance regressions are tested with image-heavy startup fixtures. The benchmark must retain explicit comparisons for normalization/write-baseline work with and without a prevalidated asset memo.
 
 ## 1.27.8.1 distributed Sync validation and recovery-protection policy
 
@@ -243,7 +252,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.1` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
