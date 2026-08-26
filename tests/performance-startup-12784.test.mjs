@@ -112,7 +112,7 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.5 ${browser} uses a genuinely secondary-only stylesheet`, () => {
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
-    const monolith = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const monolith = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     assert.ok(Buffer.byteLength(critical) < 35_500, "blocking CSS should stay within the reviewed 1.27.8.8 launcher-only budget");
     assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < Buffer.byteLength(monolith), "split runtime CSS should parse fewer total bytes than the monolithic source");
     for (const selector of ["shortcut-color-picker", "settings-dialog", "builtin-icon-choice", "shortcut-order-setting-row", "folder-popover"]) {

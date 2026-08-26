@@ -87,7 +87,7 @@ button { color: inherit; }
  * while Settings is open because repainting that full-viewport surface was the
  * trigger for Firefox's disappearing-dialog compositor bug. This isolated fixed child
  * surface can change Light/Dark wallpapers immediately without invalidating the
- * modal Settings surface. It is hidden and reset as soon as the deferred real background
+ * open Settings surface. It is hidden and reset as soon as the deferred real background
  * commit runs after Settings closes.
  */
 .appearance-preview-layer {

@@ -377,7 +377,7 @@ test("1.27.2 classic first-paint Recent ordering stays equivalent to authoritati
 
 test("1.27.2 shortcut editor compact rules cover normal desktop-height viewports without removing short-screen overflow safety", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(css, /@media \(min-width: 621px\)/);
     assert.match(css, /#shortcutDialog \.dialog-card \{ padding: 18px 24px; \}/);
     assert.match(css, /#shortcutDialog \.image-preview \{ width: 80px; height: 80px; \}/);

@@ -9,6 +9,11 @@ function qualitySide(candidate){const w=Math.max(0,Number(candidate?.width)||0),
 function better(current,candidate){if(!candidate?.image)return current;if(!current?.image)return candidate;const a=qualitySide(current),b=qualitySide(candidate);if(a!==b)return b>a?candidate:current;return candidate.declared&&!current.declared?candidate:current;}
 function image(name,side,url,{declared=false}={}){return {image:`data:image/png;base64,${name}`,sourceUrl:url,reason:"",width:side,height:side,qualitySide:side,declared};}
 function resolverCode(src){return [
+  extract(src,"faviconQualitySide"),
+  extract(src,"faviconCandidateSuitability"),
+  extract(src,"faviconCandidatePreference"),
+  extract(src,"faviconCandidateIsAuthoritativelyGoodEnough"),
+  extract(src,"betterFaviconCandidate"),
   extract(src,"parentHostFaviconUrl"),
   extract(src,"probeConventionalFaviconFallbacks"),
   extract(src,"probeConventionalFaviconQualityUpgrade"),
@@ -20,7 +25,7 @@ for(const browser of ["firefox"]) test(`${browser}: fast first pass keeps favico
   const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
   const code=resolverCode(src);
   const calls=[]; let scenario={};
-  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>scenario.native||null,fetchImageDataUrlDetailed:async(url)=>{calls.push(url);return scenario.fetch?.[url]||{image:"",reason:"http-404",qualitySide:0};},discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return scenario.discovered||{candidates:[],finalPageUrl:url,reason:"http-403"};},betterFaviconCandidate:better,faviconQualitySide:qualitySide};
+  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>scenario.native||null,fetchImageDataUrlDetailed:async(url)=>{calls.push(url);return scenario.fetch?.[url]||{image:"",reason:"http-404",qualitySide:0};},discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return scenario.discovered||{candidates:[],finalPageUrl:url,reason:"http-403"};},betterFaviconCandidate:better,faviconQualitySide:qualitySide};
   vm.createContext(ctx); vm.runInContext(code,ctx);
   scenario={fetch:{"https://chat.mistral.ai/favicon.ico":{image:"",reason:"http-403",qualitySide:0},"https://mistral.ai/favicon.ico":image("M",64,"https://mistral.ai/favicon.ico")}};
   const result=await ctx.resolveFaviconForUrl("https://chat.mistral.ai/",{});
@@ -43,11 +48,11 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: quality pass prior
   const clock={now:()=>now};
   const high=image("ELPAIS_HD",180,"https://static.elpais.com/dist/resources/images/apple-touch-icon.png",{declared:true});
   const ctx={
-    console,URL,Date:clock,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,
+    console,URL,Date:clock,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,
     isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);now+=3000;return {candidates:[{url:high.sourceUrl,score:1180,sideHint:180,order:0,source:"link"}],finalPageUrl:url,reason:""};},
-    fetchImageDataUrlDetailed:async url=>{calls.push(url);if(url===high.sourceUrl){now+=1000;return high;}if(/\/(?:icon\.ico|favicon\.(?:ico|svg|png)|apple-touch-icon\.png)$/.test(url)){now+=4000;return {image:"",reason:"timeout",width:0,height:0,qualitySide:0};}return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
+    fetchImageDataUrlDetailed:async (url,options={})=>{calls.push(url);if(url===high.sourceUrl){now+=1000;return {...high,sourceKind:options.sourceKind||high.sourceKind||""};}if(/\/(?:icon\.ico|favicon\.(?:ico|svg|png)|apple-touch-icon\.png)$/.test(url)){now+=4000;return {image:"",reason:"timeout",width:0,height:0,qualitySide:0};}return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
   };
   vm.createContext(ctx);vm.runInContext(code,ctx);
   const result=await ctx.resolveFaviconForUrl("https://elpais.com/",{preferQuality:true});
@@ -66,11 +71,11 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: conventional quali
   const low=image("LOW",32,"https://example.test/favicon.ico");
   const high=image("HIGH",256,"https://example.test/icon.ico",{declared:true});
   const ctx={
-    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,
+    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,
     isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return {candidates:[],finalPageUrl:url,reason:"http-403"};},
-    fetchImageDataUrlDetailed:async(url,options)=>{calls.push(url);if(url==="https://example.test/favicon.ico")return low;if(url==="https://example.test/icon.ico")return high;return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
+    fetchImageDataUrlDetailed:async(url,options={})=>{calls.push(url);if(url==="https://example.test/favicon.ico")return {...low,sourceKind:options.sourceKind||low.sourceKind||""};if(url==="https://example.test/icon.ico")return {...high,sourceKind:options.sourceKind||high.sourceKind||""};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
   };
   vm.createContext(ctx);vm.runInContext(code,ctx);
   const result=await ctx.resolveFaviconForUrl("https://example.test/path",{preferQuality:true});
@@ -88,10 +93,10 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: authenticated deep
   const loginIcon=image("LOGIN_G",96,"https://accounts.google.com/favicon.ico",{declared:true});
   const requested="https://news.google.com/foryou?hl=en-US&gl=US&ceid=US:en";
   const ctx={
-    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,
+    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,
     isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>browser==="chrome"?{...image("GENERIC_G",0,""),native:true}:null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
-    fetchImageDataUrlDetailed:async(url)=>{calls.push(url);if(url===newsHigh.sourceUrl)return newsHigh;if(url===loginIcon.sourceUrl)return loginIcon;return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};},
+    fetchImageDataUrlDetailed:async(url,options={})=>{calls.push(url);if(url===newsHigh.sourceUrl)return {...newsHigh,sourceKind:options.sourceKind||newsHigh.sourceKind||""};if(url===loginIcon.sourceUrl)return {...loginIcon,sourceKind:options.sourceKind||loginIcon.sourceKind||""};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};},
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);if(url==="https://news.google.com/")return {candidates:[{url:newsHigh.sourceUrl,score:2112,sideHint:512,order:0,source:"link"}],finalPageUrl:url,reason:""};return {candidates:[{url:loginIcon.sourceUrl,score:696,sideHint:96,order:0,source:"link"}],finalPageUrl:"https://accounts.google.com/v3/signin/identifier?continue=...",reason:""};}
   };
   vm.createContext(ctx);vm.runInContext(code,ctx);
@@ -153,7 +158,7 @@ test("chrome: a never-visited site resolves from network metadata when Website A
   const calls=[];
   const high=image("NEW_SITE_HD",180,"https://static.example.test/apple-touch-icon.png",{declared:true});
   const ctx={
-    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,
+    console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,
     isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     fetchImageDataUrlDetailed:async url=>{calls.push(url);if(url===high.sourceUrl)return high;if(url==="https://example.test/favicon.ico")return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};},
@@ -169,7 +174,7 @@ test("chrome: local _favicon remains available without Website Access, but unkno
   const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
   const code=resolverCode(src);
   let native=image("CACHED",0,"",{declared:false});native.native=true;
-  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>false,resolveBrowserCachedFavicon:async()=>native,faviconQualitySide:qualitySide,betterFaviconCandidate:better,fetchImageDataUrlDetailed:async()=>{throw new Error("network must not run without permission");},discoverPageIconInfo:async()=>{throw new Error("HTML must not run without permission");}};
+  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,ICON_RECOVERY_HIGH_QUALITY_SIDE:128,FAVICON_AUTHORITATIVE_SUITABILITY:360,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>false,resolveBrowserCachedFavicon:async()=>native,faviconQualitySide:qualitySide,betterFaviconCandidate:better,fetchImageDataUrlDetailed:async()=>{throw new Error("network must not run without permission");},discoverPageIconInfo:async()=>{throw new Error("HTML must not run without permission");}};
   vm.createContext(ctx);vm.runInContext(code,ctx);
   const cached=await ctx.resolveFaviconForUrl("https://known.test/",{});
   assert.ok(cached.image.includes("CACHED"));

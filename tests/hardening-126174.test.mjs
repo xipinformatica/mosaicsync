@@ -87,7 +87,7 @@ test("1.26.17.4 source keeps profile restore explicitly authoritative while hard
     assert.match(section, /for \(const \[id, record\] of records\) writes\[itemKey\(id\)\] = record;/);
     assert.match(section, /if \(!records\.has\(id\) && remoteRecord\?\.kind !== "deleted"\)/);
 
-    const newtab = await readFile(resolve(`src/${browser}/newtab/newtab.js`), "utf8");
+    const newtab = await readFile(resolve(`src/shared/newtab/newtab.js`), "utf8");
     assert.match(newtab, /parseProfilePackage\(await readProfileImportText\(file\)\)/);
     assert.doesNotMatch(newtab, /parseProfilePackage\(await file\.text\(\)\)/);
   }
@@ -102,7 +102,7 @@ test("1.26.17.4 removes the obsolete current-version migration gate and contradi
     assert.doesNotMatch(background, /VERSION\s*===\s*["']1\.24\.7b["']/);
     assert.match(background, /force:\s*resolverQualityUpgrade/);
 
-    const css = await readFile(resolve(`src/${browser}/newtab/newtab.css`), "utf8");
+    const css = await readFile(resolve(`src/shared/newtab/newtab.css`), "utf8");
     assert.doesNotMatch(css, /\.frequent-site-card:nth-child\(n\+4\)\s*\{\s*display:\s*none;/);
     assert.match(css, /\.frequent-site-card:nth-child\(n\+4\)\s*\{\s*display:\s*flex;/);
   }

@@ -118,7 +118,7 @@ for (const browserName of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browserName} keeps critical CSS blocking and secondary CSS available through a CSP-safe on-demand bootstrap`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browserName}/newtab/newtab-critical.css`, "utf8");
-    const full = fs.readFileSync(`dist/${browserName}/newtab/newtab.css`, "utf8");
+    const full = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     const secondaryCss = fs.readFileSync(`dist/${browserName}/newtab/newtab-secondary.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browserName}/newtab/secondary-style-bootstrap.js`, "utf8");
     assert.match(html, /<link rel="stylesheet" href="newtab-critical\.css">/);

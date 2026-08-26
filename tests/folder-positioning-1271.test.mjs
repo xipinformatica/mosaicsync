@@ -55,7 +55,7 @@ test("1.27.1 folder anchor fails safely to the label box if Range geometry is un
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.1 ${browser} positions folders from rendered title text with a 3px gap`, () => {
-    const js = fs.readFileSync(`src/${browser}/newtab/newtab.js`, "utf8");
+    const js = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
     assert.match(js, /const gap = 3;/);
     assert.match(js, /visibleTextBottom\(labelEl\)/);
     assert.doesNotMatch(js, /labelRect\?\.bottom/);

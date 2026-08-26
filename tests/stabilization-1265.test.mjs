@@ -62,7 +62,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.9 ${browser} uses a paint-contained preview layer below canvas content`, async () => {
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(html, /<main id="page"[^>]*>\s*<div id="appearancePreviewLayer" class="appearance-preview-layer" hidden aria-hidden="true"><img id="appearancePreviewImage" class="appearance-preview-image" alt="" aria-hidden="true" hidden><\/div>/,
       `${browser}: isolated appearance preview layer must be the first page child`);
     const layer = css.match(/\.appearance-preview-layer\s*\{([\s\S]*?)\n\}/);

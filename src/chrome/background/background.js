@@ -984,16 +984,35 @@ function faviconCandidateSuitability(candidate) {
   return resolutionScore + sourceScore + geometryScore + (candidate.declared ? 5 : 0);
 }
 
+const FAVICON_AUTHORITATIVE_SUITABILITY = 360;
+
+function faviconCandidatePreference(left, right) {
+  const leftScore = faviconCandidateSuitability(left);
+  const rightScore = faviconCandidateSuitability(right);
+  if (leftScore !== rightScore) return leftScore > rightScore ? 1 : -1;
+  const leftSide = faviconQualitySide(left);
+  const rightSide = faviconQualitySide(right);
+  if (leftSide !== rightSide) return leftSide > rightSide ? 1 : -1;
+  const leftDeclared = left?.declared === true;
+  const rightDeclared = right?.declared === true;
+  if (leftDeclared !== rightDeclared) return leftDeclared ? 1 : -1;
+  const leftSource = String(left?.sourceKind || left?.source || "");
+  const rightSource = String(right?.sourceKind || right?.source || "");
+  if (leftSource === rightSource) return 0;
+  return leftSource.localeCompare(rightSource) < 0 ? 1 : -1;
+}
+
+function faviconCandidateIsAuthoritativelyGoodEnough(candidate) {
+  // Preserve bounded discovery, but stop only on artwork that is both genuinely
+  // tile-ready and semantically strong. Large manifest/touch assets no longer
+  // terminate discovery merely because their raw dimensions cross 128px.
+  return faviconCandidateSuitability(candidate) >= FAVICON_AUTHORITATIVE_SUITABILITY;
+}
+
 function betterFaviconCandidate(current, candidate) {
   if (!candidate?.image) return current;
   if (!current?.image) return candidate;
-  const currentScore = faviconCandidateSuitability(current);
-  const candidateScore = faviconCandidateSuitability(candidate);
-  if (candidateScore !== currentScore) return candidateScore > currentScore ? candidate : current;
-  const currentSide = faviconQualitySide(current);
-  const candidateSide = faviconQualitySide(candidate);
-  if (candidateSide !== currentSide) return candidateSide > currentSide ? candidate : current;
-  return candidate.declared && !current.declared ? candidate : current;
+  return faviconCandidatePreference(candidate, current) > 0 ? candidate : current;
 }
 
 async function encodeOptimizedFaviconBitmap(bitmap, { maxSide = FAVICON_LOCAL_MAX_SIDE, targetBytes = FAVICON_LOCAL_TARGET_BYTES } = {}) {
@@ -1397,7 +1416,7 @@ async function probeConventionalFaviconQualityUpgrade(origin, current, { deadlin
     const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true, sourceKind });
     if (!candidate.image) continue;
     best = betterFaviconCandidate(best, candidate);
-    if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) break;
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) break;
   }
   return best;
 }
@@ -1427,7 +1446,7 @@ async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt })
     for (const image of images) {
       if (image.image) best = betterFaviconCandidate(best, image);
     }
-    if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) break;
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) break;
   }
   return best;
 }
@@ -1468,8 +1487,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
     const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt, sourceKind: "favicon" });
     if (conventional.image) {
       best = betterFaviconCandidate(best, conventional);
-      const side = faviconQualitySide(conventional);
-      return { ...best, provisional: !side || side < ICON_RECOVERY_HIGH_QUALITY_SIDE };
+      return { ...best, provisional: !faviconCandidateIsAuthoritativelyGoodEnough(best) };
     }
     sawTimeout = sawTimeout || conventional.reason === "timeout";
   }
@@ -1495,7 +1513,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   try { discoveredFinalOrigin = new URL(discovered.finalPageUrl || pageUrl).origin; } catch {}
   if (preferQuality && initialOrigin && discoveredFinalOrigin && discoveredFinalOrigin !== initialOrigin && Date.now() < deadlineAt) {
     best = await probeOriginalOriginDeclaredIcons(initialOrigin, best, { deadlineAt });
-    if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) {
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
       return { ...best, provisional: false };
     }
   }
@@ -1515,7 +1533,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
       else if (image.reason === "timeout" || image.reason === "network") qualityUnresolved = true;
       sawTimeout = sawTimeout || image.reason === "timeout";
     }
-    if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) {
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
       return { ...best, provisional: false };
     }
   }
@@ -1527,10 +1545,10 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
     else if (conventional.reason === "timeout" || conventional.reason === "network") qualityUnresolved = true;
     sawTimeout = sawTimeout || conventional.reason === "timeout";
 
-    if (best?.image && faviconQualitySide(best) < ICON_RECOVERY_HIGH_QUALITY_SIDE && Date.now() < fallbackDeadline) {
+    if (best?.image && !faviconCandidateIsAuthoritativelyGoodEnough(best) && Date.now() < fallbackDeadline) {
       best = await probeConventionalFaviconQualityUpgrade(initialOrigin, best, { deadlineAt: fallbackDeadline });
     }
-    if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) {
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
       return { ...best, provisional: false };
     }
   }
@@ -1549,9 +1567,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   }
 
   if (best?.image) {
-    const side = faviconQualitySide(best);
-    const lowResolution = !side || side < ICON_RECOVERY_HIGH_QUALITY_SIDE;
-    return { ...best, provisional: lowResolution && qualityUnresolved };
+    return { ...best, provisional: !faviconCandidateIsAuthoritativelyGoodEnough(best) && qualityUnresolved };
   }
   return { image: "", sourceUrl: "", reason: sawTimeout ? "timeout" : "not-found", provisional: false };
 }
@@ -1772,14 +1788,10 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
     if (pageDiscoveryReason === "cancelled") return { ok: false, error: "cancelled", reason: pageDiscoveryReason, candidates: [] };
     return { ok: false, error: "discovery-failed", reason: pageDiscoveryReason, candidates: [] };
   }
-  const choiceSuitability = candidate => typeof faviconCandidateSuitability === "function"
-    ? faviconCandidateSuitability({ ...candidate, sourceKind: candidate.source })
-    : candidate.qualitySide;
-  choices.sort((a, b) =>
-    choiceSuitability(b) - choiceSuitability(a) ||
-    b.qualitySide - a.qualitySide ||
-    a.source.localeCompare(b.source)
-  );
+  choices.sort((a, b) => faviconCandidatePreference(
+    { ...b, sourceKind: b.source },
+    { ...a, sourceKind: a.source }
+  ));
   const result = { ok: true, error: "", candidates: choices.slice(0, maxChoices) };
 
   // Do not retain candidates if the optional host permission disappeared while

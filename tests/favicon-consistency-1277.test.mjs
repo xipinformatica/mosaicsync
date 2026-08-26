@@ -36,14 +36,14 @@ class FakeElement {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.7 ${browser} does not suppress local-state artwork changes by unchanged updatedAt`, () => {
-    const source = fs.readFileSync(`src/${browser}/newtab/newtab.js`, "utf8");
+    const source = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
     assert.doesNotMatch(source, /lastLocalWriteUpdatedAt/);
     assert.doesNotMatch(source, /stateChange\.newValue[\s\S]{0,250}updatedAt[\s\S]{0,150}return|updatedAt[\s\S]{0,150}lastLocalWrite/);
     assert.match(source, /tryApplyDeviceArtworkOnlyChange\(incoming, state\)/, "device-artwork fast path must remain in use");
   });
 
   test(`1.27.7 ${browser} device-artwork fast path mutates the live shortcut and requests a visible tile patch`, () => {
-    const source = fs.readFileSync(`src/${browser}/newtab/newtab.js`, "utf8");
+    const source = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
     const code = [
       "workspaceBackgroundVisualSignature", "sameBackgroundVisuals", "collectWorkspaceShortcutRecords",
       "sameShortcutCoreShape", "copyDeviceArtwork", "tryApplyDeviceArtworkOnlyChange"
@@ -126,7 +126,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.7 ${browser} exposes only already-learned automatic artwork as an existing detected choice`, () => {
-    const source = fs.readFileSync(`src/${browser}/newtab/newtab.js`, "utf8");
+    const source = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
     const renderFn = extractFunction(source, "renderDetectedFaviconChoices");
     const makeContext = sourceKind => {
       const choices = new FakeElement();

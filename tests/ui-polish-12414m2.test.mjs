@@ -4,8 +4,8 @@ import fs from "node:fs";
 
 const targets = [
   ["Welcome", "src/shared/welcome/welcome.css"],
-  ["Firefox Settings", "src/firefox/newtab/newtab.css"],
-  ["Chrome Settings", "src/chrome/newtab/newtab.css"],
+  ["Firefox Settings", "src/shared/newtab/newtab.css"],
+  ["Chrome Settings", "src/shared/newtab/newtab.css"],
 ];
 
 function selectorBlock(css, selector) {
@@ -32,7 +32,7 @@ test("1.24.14m2 donate bubbles use an inset antialiased ring instead of a physic
 
 test("1.24.14m2 light Settings donate bubbles keep a non-rasterizing inset ring", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = fs.readFileSync(`src/${browser}/newtab/newtab.css`, "utf8");
+    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     const block = selectorBlock(css, ':root[data-effective-theme="light"] .donate-mascot-bubble');
     assert.match(block, /box-shadow:\s*inset 0 0 0 1px #cfc7d8,\s*0 7px 18px rgba\(0,0,0,\.16\);/, `${browser}: light bubble inset ring missing`);
     assert.doesNotMatch(block, /border-color:/, `${browser}: light theme must not reintroduce a physical border`);

@@ -15,7 +15,7 @@ function ruleFor(css, selector) {
 
 test("1.26.17.3 localized Sync footer reserves independent non-overlapping tracks", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(css, footerTrack, `${browser} must use localization-safe footer tracks`);
     assert.doesNotMatch(css, oldUnsafeTrack, `${browser} must not restore the middle-column overflow layout`);
 

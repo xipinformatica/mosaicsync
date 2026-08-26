@@ -162,6 +162,8 @@ for (const browser of ["firefox", "chrome"]) {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const body = extractFunction(source, "discoverFaviconChoicesForUrl");
     const cacheHelpers = [
+      "faviconCandidateSuitability",
+      "faviconCandidatePreference",
       "faviconChoiceResultChars",
       "cloneFaviconChoiceResult",
       "readCachedFaviconChoices",
@@ -210,7 +212,8 @@ for (const browser of ["firefox", "chrome"]) {
     const result = await context.discoverFaviconChoicesForUrl("https://site.example/page");
     assert.equal(result.ok, true);
     assert.ok(result.candidates.length >= 3 && result.candidates.length <= 8);
-    assert.equal(result.candidates[0].image, "data:image/png;base64,BIG", "largest validated option should be presented first");
+    assert.equal(result.candidates[0].image, "data:image/png;base64,ICO", "the chooser should present the highest-suitability icon first, not simply the largest pixels");
+    assert.ok(result.candidates.some(candidate => candidate.image === "data:image/png;base64,BIG"), "large validated alternatives should remain available to the user");
     assert.equal(new Set(result.candidates.map(candidate => candidate.image)).size, result.candidates.length, "identical retrieved pixels must be deduplicated");
     assert.ok(result.candidates.every(candidate => !candidate.sourceUrl || /^https?:/.test(candidate.sourceUrl)), "only HTTP(S) source metadata may cross the message boundary");
     assert.ok(fetches.includes("https://site.example/favicon.ico"));
@@ -384,7 +387,7 @@ test("1.27.3 editor keeps short-viewport overflow safety and localized favicon c
     }
   }
   for (const browser of ["firefox", "chrome"]) {
-    const css = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(css, /\.dialog-card \{[\s\S]*?overflow: auto;/, "200% zoom/short viewport fallback must remain scrollable");
     assert.doesNotMatch(css, /#shortcutDialog\s+\.dialog-card\s*\{[^}]*overflow:\s*hidden/i, "shortcut editor must not hide localized content to suppress scrollbars");
   }

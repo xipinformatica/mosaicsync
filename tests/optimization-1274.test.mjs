@@ -136,6 +136,8 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.4 ${browser} favicon chooser uses bounded concurrency, short-lived cache and keeps declared data icons`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const helperNames = [
+      "faviconCandidateSuitability",
+      "faviconCandidatePreference",
       "faviconChoiceResultChars",
       "cloneFaviconChoiceResult",
       "readCachedFaviconChoices",
@@ -306,7 +308,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.27.4 removes the confirmed obsolete shortcut-editor CSS selectors", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.doesNotMatch(css, /\.stack-actions\b/);
     assert.doesNotMatch(css, /\.full-button\b/);
   }

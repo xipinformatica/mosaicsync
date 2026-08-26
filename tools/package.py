@@ -10,6 +10,39 @@ DIST = ROOT / "dist"
 OUT = ROOT / "artifacts"
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 
+SOURCE_EXCLUDED_DIRS = frozenset({
+    ".git", "node_modules", "artifacts", "coverage", ".nyc_output",
+    "__pycache__", "tmp", "temp", "web-ext-artifacts"
+})
+SOURCE_EXCLUDED_NAMES = frozenset({"package-size-report.json", ".DS_Store", "Thumbs.db", "Desktop.ini"})
+SOURCE_EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".log", ".tmp", ".temp", ".bak", ".swp", ".zip", ".xpi", ".crx", ".pem")
+
+def should_include_source_path(path: Path) -> bool:
+    rel = path.relative_to(ROOT)
+    if any(part in SOURCE_EXCLUDED_DIRS for part in rel.parts[:-1]):
+        return False
+    if path.name in SOURCE_EXCLUDED_NAMES:
+        return False
+    if path.name.endswith("~") or path.suffix.lower() in SOURCE_EXCLUDED_SUFFIXES:
+        return False
+    return path.is_file()
+
+def package_source(version: str) -> Path:
+    output = OUT / f"mosaicsync-{version}-github-ready.zip"
+    OUT.mkdir(exist_ok=True)
+    paths = sorted(
+        (path for path in ROOT.rglob("*") if should_include_source_path(path)),
+        key=lambda path: path.relative_to(ROOT).as_posix()
+    )
+    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+        for path in paths:
+            rel = path.relative_to(ROOT).as_posix()
+            info = ZipInfo(rel, FIXED_TIME)
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
+    return output
+
 def package(browser: str, version: str) -> Path:
     source = DIST / browser
     output = OUT / f"mosaicsync-{version}-{browser}.zip"
@@ -116,4 +149,5 @@ if __name__ == "__main__":
     outputs = {browser: package(browser, release_label) for browser in ("firefox", "chrome")}
     for browser in ("firefox", "chrome"):
         print(outputs[browser])
+    print(package_source(release_label))
     print(package_size_report(outputs, release_label))

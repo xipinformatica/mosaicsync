@@ -186,7 +186,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.27.8.8 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
-    const helperNames = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"];
+    const helperNames = ["faviconCandidateSuitability", "faviconCandidatePreference", "faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"];
     const helpers = helperNames.map(name => extractFunction(source, name)).join("\n");
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     const starts = [];
@@ -225,7 +225,7 @@ for (const browser of ["firefox", "chrome"]) {
 test("current shortcut artwork keeps a proportional ~70% contain footprint at every tile-size slider value", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(js, /Math\.round\(tileSize \* 53 \/ 76\)/);
     assert.match(css, /--shortcut-icon-size:\s*53px;/);
     assert.match(css, /\.builtin-shortcut-icon\s*\{[^}]*width:\s*70%;[^}]*height:\s*70%;/s);
@@ -243,7 +243,7 @@ test("current shortcut artwork keeps a proportional ~70% contain footprint at ev
 test("1.27.8.8 New Tab CSS class audit uses class-bearing references instead of arbitrary substrings", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const base = resolve(`dist/${browser}/newtab`);
-    const css = await readFile(resolve(base, "newtab.css"), "utf8");
+    const css = await readFile(resolve("src/shared/newtab/newtab.css"), "utf8");
     const classNames = [...new Set([...css.matchAll(/(?<![\\w-])\\.([A-Za-z_][\\w-]*)/g)].map(match => match[1]))].sort();
     const files = (await readdir(base)).filter(name => /\\.(?:js|html)$/.test(name));
     const refs = new Set();
@@ -283,7 +283,7 @@ test("1.27.8.8 size guard detects missing categories and significant individual-
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.27.8.9");
+    assert.equal(actual.version, "1.27.9");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);

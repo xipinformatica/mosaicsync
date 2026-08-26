@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.3 ${browser} colored bookmark folders use the full chosen color`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(js, /--bookmark-folder-contrast[\s\S]*?hexLuminance\(color\)/,
       `${browser}: folder colors must select a readable text contrast`);
     assert.match(css, /\.bookmark-folder-button\.has-folder-color,[\s\S]*?background:\s*var\(--bookmark-folder-color\);[\s\S]*?color:\s*var\(--bookmark-folder-contrast\);/,
@@ -16,7 +16,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.3 ${browser} separate wallpapers use visual buttons instead of native selects`, async () => {
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(html, /id="settingsLightWallpaper" class="theme-wallpaper-choice"/);
     assert.match(html, /id="settingsDarkWallpaper" class="theme-wallpaper-choice"/);
     assert.doesNotMatch(html, /<select id="settings(?:Light|Dark)Wallpaper"/,

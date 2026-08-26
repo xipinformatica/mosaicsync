@@ -1,11 +1,33 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
-## 1.27.8.9 public corrective lifecycle policy
+
+## 1.27.9 Snow Leopard maintenance policy
+
+- **Zero new features.** The release is limited to correctness, consolidation, test strengthening, package hygiene and measured low-risk optimization. No new UI surface, permission, storage/Sync/profile schema, CSP change, telemetry or remote code is allowed.
+- Open Settings has an explicit persisted-baseline + pending-local-draft model. Incoming state becomes the new baseline, untouched controls refresh from it, and only unpersisted dirty fields are overlaid back onto the working state. Dirty means pending persistence, not focus; the latest local value wins while dirty and clears only when that write succeeds.
+- The 1.27.8.9 Settings-open paint guard remains the visual lifecycle boundary. Draft merging happens before preview/reconciliation so the isolated preview reflects the merged user intent without allowing launcher/root repaint behind open Settings.
+- Favicon discovery uses one reviewed suitability/preference policy for automatic winner comparison, manual picker ordering and bounded early termination. Raw pixel size alone must never terminate quality discovery. Early exit remains bounded for network/battery efficiency but requires strong provenance, geometry and sufficient resolution.
+- `src/shared/newtab/` is the canonical maintained New Tab runtime source. The build copies its `newtab.js`, `newtab-critical.css` and `newtab-secondary.css` into Firefox and Chrome with no runtime import layer. Browser-specific background workers and overlays remain explicit.
+- The historical monolithic `src/shared/newtab/newtab.css` is retained only for reviewed legacy/full-CSS regression assertions and is excluded from runtime packages. Runtime loads only critical + on-demand secondary CSS.
+- All maintenance changes require failing-first behavioral regressions where a current correctness defect exists, plus positive preservation coverage. All 32 UI locales, both manifest locale trees, Sync safety tests, image/SVG/profile hardening and historical regression tests remain mandatory gates.
+- Migration/compatibility code is not deleted merely because it is old. Direct upgrades may skip releases; retirement requires proof that an input can no longer occur.
+
+## 1.27.8.9 corrective release policy
+
+- Scope is frozen to the mascot restoration, first-frame Light theme correctness, drag/drop localization, Settings-open render lifecycle hardening, and general favicon candidate suitability. No Sync schema, permission, CSP, profile-format or bootstrap-DOM change is part of this release.
+- Full launcher/root setting commits and grid rebuilds are deferred while Settings is open and coalesced into one authoritative commit on the animation frame after Settings closes. The model still adopts incoming storage/Sync state immediately; no own-write event is broadly ignored.
+- The isolated appearance-preview layer remains the only wallpaper surface mutated while Settings is open. Theme-button transitions keep their existing dedicated live skin path.
+- `appearance-bootstrap.js` sets `data-effective-theme` from the same disposable hint used for the first-frame background color so Light mode never starts with Dark launcher variables. Authoritative storage remains final.
+- The drag/drop choice popover refreshes Move/Create-folder headings and helper lines through `t()` every time it opens.
+- Favicon resolution uses a bounded suitability score: resolution saturates once tile-ready, while provenance and square geometry decide among sufficiently large candidates. There are no site-specific exceptions.
+- The mascot's `brand-hello-pop` and `brand-easter-wave` keyframes are critical-owned again; logo hover never activates deferred CSS.
+
+## 1.27.8.8 internal startup-style lifecycle candidate
 
 - New Tab startup must perform **zero unsolicited insertion of `newtab-secondary.css`**. `secondary-style-bootstrap.js` is an idempotent provider only; it must not schedule `requestAnimationFrame`, timers, or other automatic CSSOM mutations merely because a New Tab opened.
 - Any launcher-reachable secondary surface must await `ensureSecondaryStyles()` before becoming visible: Settings, Bookmarks, shortcut editor, folder popover, drag/drop choice menu, Frequently Visited context menu, toast feedback, and the brand hello animation. Secondary sub-surfaces opened only inside one of those already-loaded parents may rely on the parent boundary.
@@ -297,13 +319,13 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.27.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
 1.26.9 completes the 1.26.5/1.26.8 Firefox paint workaround without reopening the original disappearing-Settings failure path. While Settings is open, Light/Dark/System theme skin changes remain immediate through `applyThemeSkinVisual()`, and the matching effective wallpaper now changes immediately as well.
 
-The important invariant is that the real full-viewport `.page` background still **must not** be mutated while the modal Settings surface is painted. `applyPageBackgroundVisual()` therefore mirrors the effective color/wallpaper onto the paint-contained `#appearancePreviewLayer` while Settings is open and marks one deferred authoritative commit. The preview layer is a simple fixed child surface containing a plain `object-fit: cover` `<img>` with no CSS `background-image`, filters, or backdrop effects. After Settings closes, the existing next-frame `commitDeferredAppearanceVisual()` updates the real `.page` background through normal `applySettings()` and hides/resets the preview layer. This also protects any unrelated Settings control that calls `applySettings()` while the dialog is open: the background portion is automatically routed to the safe preview layer.
+The important invariant is that the real full-viewport `.page` background still **must not** be mutated while the open Settings surface is painted. `applyPageBackgroundVisual()` therefore mirrors the effective color/wallpaper onto the paint-contained `#appearancePreviewLayer` while Settings is open and marks one deferred authoritative commit. The preview layer is a simple fixed child surface containing a plain `object-fit: cover` `<img>` with no CSS `background-image`, filters, or backdrop effects. After Settings closes, the existing next-frame `commitDeferredAppearanceVisual()` updates the real `.page` background through normal `applySettings()` and hides/resets the preview layer. This also protects any unrelated Settings control that calls `applySettings()` while the dialog is open: the background portion is automatically routed to the safe preview layer.
 
 Do not remove the preview layer by restoring direct `page.style.backgroundImage` / `page.style.backgroundColor` writes under an open Settings dialog, and do not duplicate persistence logic for wallpaper settings. State continues through the ordinary audited writer.
 

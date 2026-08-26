@@ -429,6 +429,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let deferredAppearanceVisual = false;
   let deferredLauncherSettings = false;
   let deferredLauncherRender = false;
+  let deferredSettingsControlRefresh = false;
+  const pendingSettingsDraft = new Map();
   let wallpaperGalleryTarget = "main";
   let pendingDrop = null;
   let activeFolderId = null;
@@ -858,7 +860,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const previousFrequentCount = frequentlyVisitedCount;
     state = chosenState;
     meta = chosenMeta;
+    applyPendingSettingsDraft();
     syncFrequentlyVisitedLocalsFromState(state);
+    refreshSettingsControlsAfterExternalState();
     if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
       if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
       if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
@@ -1797,15 +1801,25 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     settingsDefaultSpace.value = deviceDefaultSpace;
   }
 
-  function refreshSpacesSettings() {
-    if (!settingsMultipleSpaces) return;
+  function refreshSpacesSettings({ preserveActive = false } = {}) {
+    if (!settingsMultipleSpaces) return false;
+    const active = preserveActive ? document.activeElement : null;
     const enabled = isMultipleSpacesEnabled();
-    settingsMultipleSpaces.checked = enabled;
-    if (settingsPersonalSpaceName) settingsPersonalSpaceName.value = displaySpaceName("personal");
-    if (settingsWorkSpaceName) settingsWorkSpaceName.value = displaySpaceName("work");
+    let deferred = false;
+    if (active === settingsMultipleSpaces) deferred = true;
+    else settingsMultipleSpaces.checked = enabled;
+    if (settingsPersonalSpaceName) {
+      if (active === settingsPersonalSpaceName) deferred = true;
+      else settingsPersonalSpaceName.value = displaySpaceName("personal");
+    }
+    if (settingsWorkSpaceName) {
+      if (active === settingsWorkSpaceName) deferred = true;
+      else settingsWorkSpaceName.value = displaySpaceName("work");
+    }
     if (settingsSpaceNames) settingsSpaceNames.hidden = !enabled;
     if (settingsWorkSpaceNameRow) settingsWorkSpaceNameRow.hidden = false;
     refreshDeviceSpaceSettings();
+    return deferred;
   }
 
   function updateShortcutSpaceChoice() {
@@ -2052,6 +2066,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent && meta?.syncEnabled && meta?.syncInitialized
     });
     writeBaseline = createWriteBaseline(state);
+    settlePersistedSettingsDraft();
     scheduleAppearanceHintRefresh(state.settings);
     scheduleRenderManifestRefresh(state, meta);
   }
@@ -2060,6 +2075,47 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const timestamp = nextMutationTime(state.settingsModifiedAt, state.updatedAt);
     state.settingsModifiedAt = timestamp;
     state.updatedAt = Math.max(Number(state.updatedAt) || 0, timestamp);
+  }
+
+  function rememberPendingSettings(keys) {
+    for (const key of keys || []) {
+      if (!Object.prototype.hasOwnProperty.call(state.settings || {}, key)) continue;
+      pendingSettingsDraft.set(key, state.settings[key]);
+    }
+  }
+
+  function applyPendingSettingsDraft() {
+    if (!pendingSettingsDraft.size || !state?.settings) return false;
+    let changed = false;
+    for (const [key, value] of pendingSettingsDraft) {
+      if (Object.is(state.settings[key], value)) continue;
+      state.settings[key] = value;
+      changed = true;
+    }
+    if (changed) markSettingsChanged();
+    return changed;
+  }
+
+  function settlePersistedSettingsDraft() {
+    if (!pendingSettingsDraft.size || !state?.settings) return;
+    for (const [key, value] of pendingSettingsDraft) {
+      if (Object.is(state.settings[key], value)) pendingSettingsDraft.delete(key);
+    }
+  }
+
+  async function saveSettingsState(options = {}) {
+    try {
+      await saveState(options);
+    } catch (error) {
+      // Keep every unsaved local intention live after a failed persistence attempt.
+      applyPendingSettingsDraft();
+      throw error;
+    }
+
+    // saveState() adopts the persisted/rebased result and settles every draft
+    // value that actually reached storage. A newer gesture may have landed while
+    // that write was in flight; re-overlay those still-dirty values now.
+    applyPendingSettingsDraft();
   }
 
   // ---------------------------------------------------------------------------
@@ -3629,6 +3685,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   shortcutDialog?.addEventListener("close", resetDetectedFaviconPicker);
 
   settingsDialog?.addEventListener("close", () => {
+    deferredSettingsControlRefresh = false;
     if (!deferredAppearanceVisual && !deferredLauncherSettings && !deferredLauncherRender) return;
     // Let Firefox fully remove the dialog's painted frame before changing root
     // styles or rebuilding the launcher. If Settings was reopened immediately,
@@ -4857,6 +4914,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           state.settings.lightBackgroundDim = initialized.lightBackgroundDim;
           state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
           stampThemeWallpaperMutation();
+          rememberPendingSettings(["lightBackgroundDim", "darkBackgroundDim"]);
           refreshThemeWallpaperControls();
           if (settingsDialog?.open) applyPageBackgroundVisual();
           else applySettings();
@@ -4876,6 +4934,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
     }
     stampThemeWallpaperMutation();
+    rememberPendingSettings(["themeWallpapersEnabled", ...(enabled ? ["lightBackgroundDim", "darkBackgroundDim"] : [])]);
     if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
     if (backgroundDimControls) backgroundDimControls.hidden = enabled;
     refreshThemeWallpaperControls();
@@ -4896,6 +4955,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     state.settings[key] = dim;
     stampThemeWallpaperMutation();
+    rememberPendingSettings([key]);
     refreshThemeWallpaperDimControl(target);
     if (effectiveThemeFor(state.settings) === target) {
       if (settingsDialog?.open) applyPageBackgroundVisual();
@@ -4915,6 +4975,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const previousDim = effectiveBackgroundDim(state.settings);
     state.settings[key] = safePresetId;
     stampThemeWallpaperMutation();
+    rememberPendingSettings([key]);
     refreshThemeWallpaperControls();
 
     applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
@@ -4975,6 +5036,86 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (needsRender) render();
   }
 
+  function controlContainsActiveElement(control) {
+    const active = document.activeElement;
+    return Boolean(control && active && (active === control || control.contains?.(active)));
+  }
+
+  function refreshGridSettingsControls({ preserveActive = false } = {}) {
+    let deferred = false;
+    const pairs = [
+      [settingsColumns, "columns"],
+      [settingsRows, "rows"],
+      [settingsTileSize, "tileSize"]
+    ];
+    for (const [control, key] of pairs) {
+      if (!control) continue;
+      if (preserveActive && controlContainsActiveElement(control)) { deferred = true; continue; }
+      control.value = String(state.settings[key]);
+    }
+    const displayedTileSize = settingsTileSize?.value || String(state.settings.tileSize);
+    if (settingsTileSizeValue) {
+      settingsTileSizeValue.value = `${displayedTileSize}px`;
+      settingsTileSizeValue.textContent = `${displayedTileSize}px`;
+    }
+    return deferred;
+  }
+
+  function refreshFrequentlyVisitedSettingsControls({ preserveActive = false } = {}) {
+    let deferred = false;
+    if (settingsFrequentlyVisited) {
+      if (preserveActive && controlContainsActiveElement(settingsFrequentlyVisited)) deferred = true;
+      else settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
+    }
+    if (settingsFrequentlyVisitedCount) {
+      if (preserveActive && controlContainsActiveElement(settingsFrequentlyVisitedCount)) deferred = true;
+      else settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
+    }
+    setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+    return deferred;
+  }
+
+  function refreshBackgroundSettingsControls({ preserveActive = false, closePicker = false } = {}) {
+    const s = state.settings;
+    let deferred = false;
+    const colorActive = preserveActive && controlContainsActiveElement(backgroundColorControl);
+    if (colorActive) {
+      deferred = true;
+    } else {
+      pendingBackgroundColorCustomized = s.backgroundColorCustomized === true;
+      setColorPickerFromHex(effectiveBackgroundColor(s));
+      if (closePicker) closeBackgroundColorPicker();
+    }
+    pendingBackgroundPreset = s.backgroundPreset || "";
+    pendingBackgroundSourceKind = s.backgroundSourceKind || "none";
+    pendingBackgroundSourceUrl = s.backgroundSourceUrl || "";
+    pendingBackgroundImage = !s.backgroundPreset && s.backgroundImage?.startsWith("data:") ? s.backgroundImage : "";
+    if (settingsBackgroundDim) {
+      if (preserveActive && controlContainsActiveElement(settingsBackgroundDim)) deferred = true;
+      else settingsBackgroundDim.value = String(s.backgroundDim);
+    }
+    renderBackgroundPresets();
+    refreshThemeWallpaperControls();
+    updateBackgroundControlLabels();
+    return deferred;
+  }
+
+  function refreshSettingsControlsAfterExternalState() {
+    if (!settingsDialog?.open) return;
+    let deferred = false;
+    deferred = refreshGridSettingsControls({ preserveActive: true }) || deferred;
+    if (controlContainsActiveElement(themeToggle)) deferred = true;
+    else updateThemeToggle();
+    deferred = refreshSpacesSettings({ preserveActive: true }) || deferred;
+    deferred = refreshFrequentlyVisitedSettingsControls({ preserveActive: true }) || deferred;
+    deferred = refreshBackgroundSettingsControls({ preserveActive: true }) || deferred;
+    if (settingsAutoSiteIcons) {
+      if (controlContainsActiveElement(settingsAutoSiteIcons)) deferred = true;
+      else settingsAutoSiteIcons.checked = state.settings.autoSiteIcons !== false;
+    }
+    deferredSettingsControlRefresh = deferred;
+  }
+
   async function openSettings() {
     closeDropChoice();
     closeFolder();
@@ -4984,12 +5125,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     await ensureSecondaryStyles();
     localizeDocument(settingsDialog);
-    const s = state.settings;
-    settingsColumns.value = String(s.columns);
-    settingsRows.value = String(s.rows);
-    settingsTileSize.value = String(s.tileSize);
-    settingsTileSizeValue.value = `${s.tileSize}px`;
-    settingsTileSizeValue.textContent = `${s.tileSize}px`;
+    deferredSettingsControlRefresh = false;
+    refreshGridSettingsControls();
     populateLanguageSelect(settingsLanguage);
     shortcutOrderMode = readShortcutOrderPreference();
     shortcutUsage = readShortcutUsage();
@@ -4999,22 +5136,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     syncFrequentlyVisitedLocalsFromState(state);
     if (settingsFrequentlyVisitedDescription) settingsFrequentlyVisitedDescription.textContent = t("frequentlyVisitedDescription");
     if (settingsFrequentlyVisitedCountLabel) settingsFrequentlyVisitedCountLabel.textContent = t("frequentCount");
-    if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
-    if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
-    setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+    refreshFrequentlyVisitedSettingsControls();
     void refreshFrequentlyVisited();
-    settingsAutoSiteIcons.checked = s.autoSiteIcons !== false;
-    pendingBackgroundColorCustomized = s.backgroundColorCustomized === true;
-    setColorPickerFromHex(effectiveBackgroundColor(s));
-    closeBackgroundColorPicker();
-    pendingBackgroundPreset = s.backgroundPreset || "";
-    pendingBackgroundSourceKind = s.backgroundSourceKind || "none";
-    pendingBackgroundSourceUrl = s.backgroundSourceUrl || "";
-    settingsBackgroundDim.value = String(s.backgroundDim);
-    pendingBackgroundImage = !s.backgroundPreset && s.backgroundImage?.startsWith("data:") ? s.backgroundImage : "";
-    renderBackgroundPresets();
-    refreshThemeWallpaperControls();
-    updateBackgroundControlLabels();
+    settingsAutoSiteIcons.checked = state.settings.autoSiteIcons !== false;
+    refreshBackgroundSettingsControls({ closePicker: true });
     settingsDialog.show();
     reconcileAndRefreshSyncStatus().catch(error => console.warn(`${PRODUCT_NAME}: sync status unavailable`, error));
     refreshWebAccessUi().catch(error => console.warn(`${PRODUCT_NAME}: website permission status unavailable`, error));
@@ -5088,15 +5213,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       backgroundPosition: "center center",
       backgroundDim: Math.min(100, Math.max(0, Number(settingsBackgroundDim.value) || 0))
     };
-    const changed = Object.entries(next).some(([key, value]) => state.settings[key] !== value);
+    const changedKeys = Object.entries(next)
+      .filter(([key, value]) => !Object.is(state.settings[key], value))
+      .map(([key]) => key);
     Object.assign(state.settings, next);
-    if (changed) markSettingsChanged();
+    if (changedKeys.length) {
+      markSettingsChanged();
+      rememberPendingSettings(changedKeys);
+    }
   }
 
   function scheduleBackgroundPersist(delay = 140) {
     clearTimeout(backgroundPersistTimer);
     backgroundPersistTimer = setTimeout(() => {
-      saveState().catch(console.error);
+      saveSettingsState().catch(console.error);
     }, delay);
   }
 
@@ -5113,25 +5243,39 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     event.preventDefault();
   });
 
-  async function applyGridLayoutControlsLive() {
-    const nextColumns = clampInt(settingsColumns.value, 6, 12, state.settings.columns);
-    const nextRows = clampInt(settingsRows.value, 2, 8, state.settings.rows);
-    if (nextColumns === state.settings.columns && nextRows === state.settings.rows) return;
+  settingsForm.addEventListener("focusout", () => {
+    if (!deferredSettingsControlRefresh) return;
+    requestAnimationFrame(() => {
+      if (!settingsDialog?.open || !deferredSettingsControlRefresh) return;
+      deferredSettingsControlRefresh = false;
+      refreshSettingsControlsAfterExternalState();
+    });
+  });
 
-    state.settings.columns = nextColumns;
-    state.settings.rows = nextRows;
+  async function applyGridLayoutControlLive(field) {
+    const isColumns = field === "columns";
+    const isRows = field === "rows";
+    if (!isColumns && !isRows) return;
+    const control = isColumns ? settingsColumns : settingsRows;
+    const next = isColumns
+      ? clampInt(control.value, 6, 12, state.settings.columns)
+      : clampInt(control.value, 2, 8, state.settings.rows);
+    if (next === state.settings[field]) return;
+
+    state.settings[field] = next;
     markSettingsChanged();
+    rememberPendingSettings([field]);
     applySettings();
     render();
     try {
-      await saveState();
+      await saveSettingsState();
     } catch (error) {
       showToast(error.message || t("operationFailed"));
     }
   }
 
-  settingsColumns?.addEventListener("change", () => { void applyGridLayoutControlsLive(); });
-  settingsRows?.addEventListener("change", () => { void applyGridLayoutControlsLive(); });
+  settingsColumns?.addEventListener("change", () => { void applyGridLayoutControlLive("columns"); });
+  settingsRows?.addEventListener("change", () => { void applyGridLayoutControlLive("rows"); });
   settingsDefaultSpace?.addEventListener("change", () => {
     writeDeviceDefaultSpacePreference(settingsDefaultSpace.value);
     refreshDeviceSpaceSettings();
@@ -5424,8 +5568,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       if (state.settings.theme === theme) return;
       state.settings.theme = theme;
       markSettingsChanged();
+      rememberPendingSettings(["theme"]);
       applyThemeTransition();
-      await saveState();
+      await saveSettingsState();
     });
   });
 
@@ -5438,12 +5583,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     state.settings.tileSize = next;
     markSettingsChanged();
+    rememberPendingSettings(["tileSize"]);
     // Rendering is immediate; persistence is debounced so dragging the slider
     // does not generate dozens of storage/sync writes.
     applySettings();
     clearTimeout(tileSizePersistTimer);
     tileSizePersistTimer = setTimeout(() => {
-      void saveState().catch(error => showToast(error.message || t("operationFailed")));
+      void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
     }, 180);
   });
 
@@ -6220,6 +6366,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       }
       importedState = selectActiveSpaceNormalized(importedState, importedState.activeSpaceId);
       stateMutationGeneration += 1;
+      pendingSettingsDraft.clear();
       state = importedState;
       state = await writeLocalState(state, {
         recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
@@ -6229,13 +6376,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Profile preferences express user intent; optional browser permission and
       // the actual browser-derived sites remain installation-local.
       syncFrequentlyVisitedLocalsFromState(state);
-      if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
-      if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
-      setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
       localizeDocument(document);
+      refreshSettingsControlsAfterExternalState();
       reconcileLauncherAfterExternalState();
       updateSpaceSwitcher();
-      refreshSpacesSettings();
       scheduleFrequentlyVisitedRefresh();
       preloadOtherSpaceBackgrounds();
       scheduleAppearanceHintRefresh(state.settings);
@@ -6509,20 +6653,22 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             }
             stateMutationGeneration += 1;
             state = incoming;
+            // The persisted incoming value becomes the concurrency baseline. Any
+            // still-unpersisted Settings draft is then overlaid as explicit local
+            // intent, so a storage echo cannot erase a debounced edit or make a
+            // stale control manufacture a false local mutation later.
+            writeBaseline = createWriteBaseline(stateChange.newValue);
+            applyPendingSettingsDraft();
             const previousFrequentEnabled = frequentlyVisitedEnabled;
             const previousFrequentCount = frequentlyVisitedCount;
             syncFrequentlyVisitedLocalsFromState(state);
-            if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
-            if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
-            setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+            refreshSettingsControlsAfterExternalState();
             if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
               frequentCandidateCacheAt = 0;
               frequentCandidateCache = [];
             }
-            writeBaseline = createWriteBaseline(stateChange.newValue);
             reconcileLauncherAfterExternalState();
             updateSpaceSwitcher();
-            if (settingsDialog.open) refreshSpacesSettings();
             scheduleAppearanceHintRefresh(state.settings);
             scheduleRenderManifestRefresh(state, meta);
             scheduleRenderPreviewRefresh(state, meta);

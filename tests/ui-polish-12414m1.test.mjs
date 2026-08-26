@@ -75,7 +75,7 @@ class FakeElement {
 
 test("1.24.14m1 localized brand greeting bubble grows with Japanese/Korean text", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
     assert.match(css, /\.brand-easter-bubble\s*\{[\s\S]*?width:\s*max-content;[\s\S]*?min-width:\s*52px;/);
     assert.match(css, /\.brand-easter-bubble-text\s*\{[\s\S]*?width:\s*auto;[\s\S]*?min-width:\s*52px;/);

@@ -105,3 +105,33 @@ test("1.24.14m1 Chrome branding remains grammatical and Firefox-free in every ne
     for (const bad of knownMalformed[locale] || []) assert.doesNotMatch(description, bad, `${locale}: malformed Chrome manifest inflection`);
   }
 });
+
+for (const browserName of ["firefox", "chrome"]) {
+  test(`1.27.9 ${browserName} live locale switching preserves catalog identity across English → Catalan → Japanese → English`, async () => {
+    const previousBrowser = globalThis.browser;
+    const previousLocalStorage = globalThis.localStorage;
+    const values = new Map();
+    globalThis.localStorage = {
+      getItem: key => values.get(String(key)) ?? null,
+      setItem: (key, value) => values.set(String(key), String(value)),
+      removeItem: key => values.delete(String(key))
+    };
+    globalThis.browser = { i18n: { getUILanguage: () => "en-US" } };
+    try {
+      const mod = await import(`../dist/${browserName}/core/i18n.js?snow-switch-${Date.now()}-${Math.random()}`);
+      assert.equal(mod.t("moveHere"), "Move here");
+      await mod.setLocalePreference("ca");
+      assert.equal(mod.t("moveHere"), "Mou aquí");
+      assert.equal(mod.t("switchPositions"), "Intercanvia les posicions");
+      await mod.setLocalePreference("ja");
+      assert.equal(mod.t("moveHere"), "ここへ移動");
+      await mod.setLocalePreference("en");
+      assert.equal(mod.t("moveHere"), "Move here");
+    } finally {
+      if (previousBrowser === undefined) delete globalThis.browser;
+      else globalThis.browser = previousBrowser;
+      if (previousLocalStorage === undefined) delete globalThis.localStorage;
+      else globalThis.localStorage = previousLocalStorage;
+    }
+  });
+}

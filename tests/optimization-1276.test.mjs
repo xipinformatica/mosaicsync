@@ -48,6 +48,8 @@ function extractFunction(source, name) {
 
 function backgroundHelpers(source) {
   return [
+    "faviconCandidateSuitability",
+    "faviconCandidatePreference",
     "normalizeFaviconChoiceRequestId",
     "cancelFaviconChoiceRequest",
     "runFaviconChoiceRequest",
@@ -211,7 +213,7 @@ test("1.27.7 shortcut contained artwork is about 70% of the tile while Cover rem
   }
   for (const browser of ["firefox", "chrome"]) {
     const js = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
+    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     assert.match(js, /Math\.round\(tileSize \* 53 \/ 76\)/);
     assert.match(css, /--shortcut-icon-size:\s*53px;/);
     assert.match(css, /\.builtin-shortcut-icon\s*\{[^}]*width:\s*70%;[^}]*height:\s*70%;/s);

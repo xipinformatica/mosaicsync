@@ -88,7 +88,9 @@ for (const browser of ["firefox", "chrome"]) {
       applyPageBackgroundVisual() { context.previewCalls += 1; context.deferredAppearanceVisual = true; },
       applySettings() { context.realApplyCalls += 1; },
       render() { context.realRenderCalls += 1; },
-      saveState: async () => { context.saveCalls += 1; },
+      pendingSettingsDraft: new Map(),
+      rememberPendingSettings() {},
+      saveSettingsState: async () => { context.saveCalls += 1; },
       showToast() {}, t: key => key,
       scheduleAppearanceHintRefresh() { context.hintCalls += 1; },
       requestAnimationFrame(fn) { context.raf.push(fn); return context.raf.length; },
@@ -101,7 +103,7 @@ for (const browser of ["firefox", "chrome"]) {
     vm.runInContext(extractFunction(source, "reconcileLauncherAfterExternalState"), context);
     vm.runInContext(extractFunction(source, "requestLauncherRenderAfterExternalState"), context);
     vm.runInContext(extractFunction(source, "commitDeferredLauncherVisual"), context);
-    vm.runInContext(extractFunction(source, "applyGridLayoutControlsLive"), context);
+    vm.runInContext(extractFunction(source, "applyGridLayoutControlLive"), context);
     vm.runInContext(extractSettingsCloseRegistration(source), context);
 
     // The storage/Sync/background reconciliation path accepts the new model but
@@ -117,9 +119,9 @@ for (const browser of ["firefox", "chrome"]) {
 
     // Positive preservation: an intentional Settings grid edit still previews
     // immediately. The lifecycle guard is not a blanket applySettings/render ban.
-    await context.applyGridLayoutControlsLive();
+    await context.applyGridLayoutControlLive("columns");
     assert.equal(context.state.settings.columns, 9);
-    assert.equal(context.state.settings.rows, 5);
+    assert.equal(context.state.settings.rows, 4);
     assert.equal(context.realApplyCalls, 1, "direct Settings layout changes remain live");
     assert.equal(context.realRenderCalls, 1, "direct Settings layout changes still rebuild the preview grid");
     assert.equal(context.saveCalls, 1);
@@ -142,7 +144,7 @@ for (const browser of ["firefox", "chrome"]) {
     // external path instead of calling an unguarded apply+render pair.
     const listenerStart = source.indexOf("browser.storage.onChanged.addListener");
     const listener = source.slice(listenerStart);
-    assert.match(listener, /writeBaseline = createWriteBaseline\(stateChange\.newValue\);\s*reconcileLauncherAfterExternalState\(\);/);
+    assert.match(listener, /writeBaseline = createWriteBaseline\(stateChange\.newValue\);[\s\S]*?applyPendingSettingsDraft\(\);[\s\S]*?refreshSettingsControlsAfterExternalState\(\);[\s\S]*?reconcileLauncherAfterExternalState\(\);/);
     assert.match(listener, /wasAwaitingRemote !== isAwaitingRemote\(meta\)\) requestLauncherRenderAfterExternalState\(\)/);
   });
 
@@ -176,7 +178,7 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.9 ${browser} favicon winner scoring values suitability over unbounded icon size`, () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const context = vm.createContext({ Math, Number, String });
-    for (const name of ["faviconQualitySide", "faviconCandidateSuitability", "betterFaviconCandidate"]) {
+    for (const name of ["faviconQualitySide", "faviconCandidateSuitability", "faviconCandidatePreference", "betterFaviconCandidate"]) {
       vm.runInContext(extractFunction(source, name), context);
     }
     const icon = (name, width, height, sourceKind, declared = true, extra = {}) => ({

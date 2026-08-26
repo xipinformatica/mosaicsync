@@ -30,7 +30,7 @@ for (const browser of ['firefox', 'chrome']) {
   });
 
   test(`1.26.11 ${browser} Frequently visited visibility helper hides and restores all dependent controls together`, () => {
-    const source = fs.readFileSync(`src/${browser}/newtab/newtab.js`, 'utf8');
+    const source = fs.readFileSync(`src/shared/newtab/newtab.js`, 'utf8');
     const fn = extractFunction(source, 'setFrequentlyVisitedOptionsVisibility');
     const frequentOptions = { hidden: false };
     const frequentCountRow = { hidden: false };

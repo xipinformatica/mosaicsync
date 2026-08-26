@@ -260,7 +260,7 @@ test("1.26.17.6 Frequently Visited explicit-host memo reuses only the same state
   assert.notEqual(replacementHosts, changed, "state identity replacement must invalidate even at the same generation");
   assert.equal(replacementHosts.has("four.example"), true);
   for (const browser of ["firefox", "chrome"]) {
-    const source = await readFile(resolve(`src/${browser}/newtab/newtab.js`), "utf8");
+    const source = await readFile(resolve(`src/shared/newtab/newtab.js`), "utf8");
     assert.match(source, /const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo\(\);/);
     assert.match(source, /frequentExplicitHostsForState\(state, stateMutationGeneration\)/);
   }
@@ -268,7 +268,7 @@ test("1.26.17.6 Frequently Visited explicit-host memo reuses only the same state
 
 test("1.26.17.6 production startup diagnostics are gated behind the existing local dev-metrics flag", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = await readFile(resolve(`src/${browser}/newtab/newtab.js`), "utf8");
+    const source = await readFile(resolve(`src/shared/newtab/newtab.js`), "utf8");
     assert.match(source, /import \{ devMark, devMeasure, devMetricsEnabled \} from "\.\.\/core\/perf\.js";/);
     assert.match(source, /if \(pageshowPersisted && devMetricsEnabled\(\)\) \{[\s\S]*?console\.debug\(`\$\{PRODUCT_NAME\} \$\{VERSION\} performance`/);
     assert.match(source, /if \(devMetricsEnabled\(\)\) console\.debug\(`\$\{PRODUCT_NAME\} \$\{VERSION\} performance`/);
