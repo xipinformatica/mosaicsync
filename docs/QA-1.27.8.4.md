@@ -1,3 +1,5 @@
+> **INTERNAL CANDIDATE — not a public MosaicSync release.** Superseded by public 1.27.8.8.
+
 # MosaicSync 1.27.8.4 QA / performance + regression checklist
 
 ## Release identity

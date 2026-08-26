@@ -48,7 +48,9 @@ body{
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
   background: var(--page-bg);
   color: var(--text);
-}.page{
+}button,
+input,
+select{ font: inherit; }button{ color: inherit; }.page{
   position: relative;
   width: 100vw;
   height: 100vh;
@@ -313,6 +315,7 @@ body{
   text-overflow: ellipsis;
   overflow-wrap: anywhere;
 }.edit-chip{
+  appearance: none;
   position: absolute;
   z-index: 5;
   top: -8px;
@@ -369,6 +372,7 @@ body{
   min-height: calc(var(--tile-size) + var(--tile-label-gap));
   margin: 0;
 }.empty-ghost-tile{
+  appearance: none;
   position: absolute;
   left: 0;
   top: 0;
@@ -555,7 +559,7 @@ body{
 }:root[data-effective-theme="light"] .secondary-button:hover,
 :root[data-effective-theme="light"] .file-button:hover{ background: rgba(0,0,0,.065); }:root[data-effective-theme="light"] .text-button{ color: #654590; }:root[data-effective-theme="light"] .text-button:hover{ background: rgba(0,0,0,.045); }:root[data-effective-theme="light"] .hint,
 :root[data-effective-theme="light"] .folder-count{ color: rgba(24,20,29,.50); }:root[data-effective-theme="light"] .folder-tile{ background: rgba(239,236,244,.96); }:root[data-effective-theme="light"] .folder-card:hover .folder-tile,
-:root[data-effective-theme="light"] .folder-card:focus-visible .folder-tile{ background: rgba(250,248,252,.99); }:root[data-effective-theme="light"] .folder-mosaic{ background: rgba(105,92,122,.10); box-shadow: inset 0 0 0 1px rgba(0,0,0,.04); }:root[data-effective-theme="light"] .folder-mosaic-cell{ background: rgba(224,219,231,.96); }.sync-pending-state{
+:root[data-effective-theme="light"] .folder-card:focus-visible .folder-tile{ background: rgba(250,248,252,.99); }:root[data-effective-theme="light"] .folder-mosaic{ background: rgba(105,92,122,.10); box-shadow: inset 0 0 0 1px rgba(0,0,0,.04); }:root[data-effective-theme="light"] .folder-mosaic-cell{ background: rgba(224,219,231,.96); }.web-access-prompt{position: fixed;z-index: 22;right: 24px;bottom: 24px;display: grid;grid-template-columns: minmax(0, 1fr) auto auto;align-items: center;gap: 10px;width: min(560px, calc(100vw - 48px));padding: 11px 12px 11px 14px;border: 1px solid rgba(139,92,246,.34);border-radius: 12px;background: rgba(28,20,39,.97);box-shadow: 0 12px 34px rgba(0,0,0,.28);color: var(--text);}.web-access-prompt[hidden]{display: none !important;}.web-access-prompt-copy{display: grid;gap: 2px;min-width: 0;}.web-access-prompt-copy strong{font-size: 12.5px;}.web-access-prompt-copy span{color: var(--muted);font-size: 11px;line-height: 1.35;}.web-access-prompt .secondary-button{white-space: nowrap;}.web-access-prompt-dismiss{width: 30px;height: 30px;border: 0;border-radius: 8px;background: transparent;color: var(--muted);cursor: pointer;font: 20px/1 system-ui, sans-serif;}.web-access-prompt-dismiss:hover{background: rgba(255,255,255,.07);color: var(--text);}:root[data-effective-theme="light"] .web-access-prompt{border-color: rgba(100,72,160,.22);background: rgba(255,255,255,.98);box-shadow: 0 12px 30px rgba(47,30,72,.16);}:root[data-effective-theme="light"] .web-access-prompt-dismiss:hover{background: rgba(55,35,82,.07);}@media (max-width: 680px){.web-access-prompt{grid-template-columns: 1fr auto;right: 14px;bottom: 14px;width: calc(100vw - 28px);}.web-access-prompt .secondary-button{grid-column: 1 / -1;justify-self: start;}.web-access-prompt-dismiss{grid-column: 2;grid-row: 1;}}.sync-pending-state{
   width: min(620px, calc(100vw - 48px));
   margin: 4px auto 22px;
   padding: 12px 14px;
@@ -854,4 +858,4 @@ body{
   background: var(--shortcut-tag-color);
   box-shadow: 0 0 0 1px rgba(0,0,0,.25);
   pointer-events: none;
-}
+}[data-color-tag="red"]{--shortcut-tag-color: #ef4444;}[data-color-tag="orange"]{--shortcut-tag-color: #f97316;}[data-color-tag="amber"]{--shortcut-tag-color: #eab308;}[data-color-tag="green"]{--shortcut-tag-color: #22c55e;}[data-color-tag="teal"]{--shortcut-tag-color: #14b8a6;}[data-color-tag="blue"]{--shortcut-tag-color: #3b82f6;}[data-color-tag="violet"]{--shortcut-tag-color: #8b5cf6;}[data-color-tag="pink"]{--shortcut-tag-color: #ec4899;}

@@ -50,7 +50,7 @@ for(const browser of ['firefox','chrome']) {
 
 
 for(const browser of ['firefox','chrome']) {
-  test(`1.27.8 production ${browser} fresh bootstrap waits for complete Work and preserves a local edit`,()=>{
+  test(`1.27.8.8 production ${browser} fresh bootstrap waits for complete Work and preserves a local edit`,()=>{
     const out=run(browser,'sync-1278-fresh-waits-for-work');
     assert.equal(out.ok,true); assert.equal(out.waiting,'waiting'); assert.equal(out.final,'ready'); assert.equal(out.restored,true);
   });

@@ -113,12 +113,16 @@ for (const browser of ["firefox", "chrome"]) {
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
     const monolith = fs.readFileSync(`dist/${browser}/newtab/newtab.css`, "utf8");
-    assert.ok(Buffer.byteLength(critical) < 35_000, "blocking CSS should stay near the safe launcher-only target");
+    assert.ok(Buffer.byteLength(critical) < 35_500, "blocking CSS should stay within the reviewed 1.27.8.8 launcher-only budget");
     assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < Buffer.byteLength(monolith), "split runtime CSS should parse fewer total bytes than the monolithic source");
-    for (const selector of ["shortcut-color-picker", "settings-dialog", "web-access-prompt", "builtin-icon-choice", "shortcut-order-setting-row", "folder-popover"]) {
+    for (const selector of ["shortcut-color-picker", "settings-dialog", "builtin-icon-choice", "shortcut-order-setting-row", "folder-popover"]) {
       assert.equal(critical.includes(selector), false, `${selector} must stay off the first-frame critical sheet`);
       assert.equal(secondary.includes(selector), true, `${selector} must remain available in secondary UI CSS`);
     }
+    assert.equal(critical.includes("web-access-prompt"), true,
+      "the automatically surfaced Website Access prompt must be critical-styled in final 1.27.8.8");
+    assert.equal(secondary.includes("web-access-prompt"), false,
+      "permission reconciliation must not require a post-startup secondary CSS insertion");
   });
 
   test(`1.27.8.5 ${browser} pre-module storage bootstrap uses the frozen authoritative key contract`, () => {

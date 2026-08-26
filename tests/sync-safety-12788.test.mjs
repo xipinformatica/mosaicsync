@@ -32,14 +32,14 @@ function state(personalItems = [], workItems = []) {
   return normalizeState({ activeSpaceId: "personal", spaces: { personal, work } });
 }
 
-test("1.27.8.6 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.27.8.6");
+test("1.27.8.8 release and local Sync bookkeeping schemas are explicit", () => {
+  assert.equal(VERSION, "1.27.8.8");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.8 ${browser} device snapshot is a backward-compatible complete Personal+Work generation`, async () => {
+  test(`1.27.8.8 ${browser} device snapshot is a backward-compatible complete Personal+Work generation`, async () => {
     const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
     assert.match(src, /version:\s*DEVICE_SNAPSHOT_SCHEMA_VERSION,[\s\S]*?records:[\s\S]*?settings:[\s\S]*?workRecords:[\s\S]*?workSettings/,
       "payload must remain v2-readable by 1.27.7 while adding Work");
@@ -52,7 +52,7 @@ for (const browser of ["firefox", "chrome"]) {
       "normal mutations must not fall back to the Personal-only publisher");
   });
 
-  test(`1.27.8 ${browser} fresh bootstrap cannot finalize from Personal alone`, async () => {
+  test(`1.27.8.8 ${browser} fresh bootstrap cannot finalize from Personal alone`, async () => {
     const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
     const start = src.indexOf("async function bootstrapRemote");
     const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
@@ -63,7 +63,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(fn, /syncStatus:\s*waitIfMissing \? "waiting" : "error"/);
   });
 
-  test(`1.27.8 ${browser} waiting-profile local edits merge and publish after complete arrival`, async () => {
+  test(`1.27.8.8 ${browser} waiting-profile local edits merge and publish after complete arrival`, async () => {
     const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
     const start = src.indexOf("async function bootstrapRemote");
     const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
@@ -73,7 +73,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(fn, /publishProfileDeviceSnapshot\(mergedState, refreshed, \{ force: true \}\)/);
   });
 
-  test(`1.27.8 ${browser} torn Work ledger is repaired from the complete profile and never treated as empty`, async () => {
+  test(`1.27.8.8 ${browser} torn Work ledger is repaired from the complete profile and never treated as empty`, async () => {
     const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
     const start = src.indexOf("async function reconcileWork");
     const end = src.indexOf("async function reconcile(strategy", start);
@@ -84,14 +84,14 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(fn, /remoteMissing:\s*true/);
   });
 
-  test(`1.27.8 ${browser} shortcut hover is restrained, paint-only and does not change grid geometry`, async () => {
+  test(`1.27.8.8 ${browser} shortcut hover is restrained, paint-only and does not change grid geometry`, async () => {
     const css = await readFile(`dist/${browser}/newtab/newtab.css`, "utf8");
     assert.match(css, /\.shortcut-card:hover \.tile\s*\{[\s\S]*?transform:\s*scale\(1\.045\);[\s\S]*?filter:\s*brightness\(1\.065\);/);
     assert.match(css, /transition:[^;]*transform 100ms ease,[^;]*filter 100ms ease/);
   });
 }
 
-test("1.27.8 complete-arrival merge keeps a shortcut created locally while remote shortcuts arrive", () => {
+test("1.27.8.8 complete-arrival merge keeps a shortcut created locally while remote shortcuts arrive", () => {
   const remoteState = state([shortcut("remote-a", 0), shortcut("remote-b", 1)], [shortcut("work-a", 0)]);
   const localWaitingState = state([shortcut("local-new", 2, t + 1000)], []);
   const remoteWorkspace = workspaceStateNormalized(remoteState, "personal");

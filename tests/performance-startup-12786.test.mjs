@@ -9,7 +9,7 @@ function cssRulesForSelector(css, selector) {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.8.6 ${browser} suppresses native widget appearance on custom launcher buttons before first paint`, () => {
+  test(`1.27.8.8 ${browser} suppresses native widget appearance on custom launcher buttons before first paint`, () => {
     const html = fs.readFileSync(`dist/${browser}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
 
@@ -31,7 +31,7 @@ for (const browser of ["firefox", "chrome"]) {
       "brand-button is not a native button and must not be treated as one by the launcher reset contract");
   });
 
-  test(`1.27.8.6 ${browser} keeps the native-appearance fix off the deferred secondary stylesheet`, () => {
+  test(`1.27.8.8 ${browser} keeps the native-appearance fix off the deferred secondary stylesheet`, () => {
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
     for (const selector of [".settings-button", ".bookmarks-button", ".space-button"]) {
       assert.equal(secondary.includes(selector), false,

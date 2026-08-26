@@ -212,6 +212,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     setTimeout(() => { void task(); }, Math.min(timeout, 250));
   }
 
+  function ensureSecondaryStyles() {
+    const ensure = globalThis.__mosaicsyncEnsureSecondaryStyles;
+    if (typeof ensure !== "function") {
+      console.error(`${PRODUCT_NAME}: secondary stylesheet loader unavailable`);
+      return Promise.resolve(false);
+    }
+    return ensure();
+  }
+
   const systemThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
   let resolvedSystemTheme = systemThemeMedia.matches ? "dark" : "light";
   const graphemeSegmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
@@ -1250,6 +1259,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const clientX = event.clientX;
     const clientY = event.clientY;
     closeFrequentContextMenu();
+    await ensureSecondaryStyles();
     try { await loadBookmarksModule(); } catch {}
     const menu = document.createElement("div");
     menu.className = "mosaicsync-context-menu";
@@ -2993,6 +3003,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       return;
     }
 
+    await ensureSecondaryStyles();
     pendingDrop = { sourceId, targetId };
     dropFolderButton.hidden = false;
     dropFolderButton.querySelector("strong").textContent = t("createFolder");
@@ -3106,8 +3117,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return fallback?.isConnected ? fallback : null;
   }
 
-  function openFolder(folder, anchorEl, focusTitle = false) {
+  async function openFolder(folder, anchorEl, focusTitle = false) {
     closeDropChoice();
+    await ensureSecondaryStyles();
     activeFolderId = folder.id;
     activeFolderAnchorId = folder.id;
     renderFolderContents(folder);
@@ -3566,7 +3578,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     chooseDetectedFavicon?.setAttribute("aria-expanded", "true");
   }
 
-  function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
+  async function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
+    await ensureSecondaryStyles();
     localizeDocument(shortcutDialog);
     closeDropChoice();
     shortcutSyncPrepareGeneration += 1;
@@ -4693,6 +4706,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       closeDialog(bookmarksDialog);
       return;
     }
+    await ensureSecondaryStyles();
     await loadBookmarksModule();
     localizeDocument(bookmarksDialog);
     bookmarksDialog.showModal();
@@ -4923,13 +4937,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     scheduleAppearanceHintRefresh(state.settings);
   }
 
-  function openSettings() {
+  async function openSettings() {
     closeDropChoice();
     closeFolder();
     if (settingsDialog.open) {
       closeDialog(settingsDialog);
       return;
     }
+    await ensureSecondaryStyles();
     localizeDocument(settingsDialog);
     const s = state.settings;
     settingsColumns.value = String(s.columns);
@@ -5865,10 +5880,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function showToast(message) {
-    toast.textContent = translateText(message);
-    toast.classList.add("visible");
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
+    void ensureSecondaryStyles().then(() => {
+      toast.textContent = translateText(message);
+      toast.classList.add("visible");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove("visible"), 2600);
+    });
   }
 
   syncPendingChooseSource?.addEventListener("click", async () => {
@@ -5936,7 +5953,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       updateShortcutSpaceChoice();
     });
   }
-  settingsButton.addEventListener("click", openSettings);
+  settingsButton.addEventListener("click", () => { void openSettings(); });
   bookmarksButton?.addEventListener("click", () => { void openBookmarks(); });
   bookmarksPermissionButton?.addEventListener("click", async () => {
     bookmarksStatus.textContent = "";

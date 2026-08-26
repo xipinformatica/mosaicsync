@@ -2748,7 +2748,7 @@ async function decodeDeviceSnapshotData(value, data) {
     if (!decompressed) return null;
     const payload = JSON.parse(new TextDecoder().decode(decompressed));
     // Keep payload version 2 so MosaicSync 1.27.7 can continue reading the
-    // Personal half of a 1.27.8 full-profile device snapshot during rollout.
+    // Personal half of a 1.27.8.8 full-profile device snapshot during rollout.
     if (!payload || payload.version !== DEVICE_SNAPSHOT_SCHEMA_VERSION || !Array.isArray(payload.records) || !payload.settings) return null;
     const records = new Map();
     for (const record of payload.records) {
@@ -2827,7 +2827,7 @@ async function decodeDeviceSnapshotPayload(value, all = null) {
   const current = await decodeDeviceSnapshotCurrentPayload(value, all);
   if (current) return current;
 
-  // 1.27.8 retains the immediately previous complete Personal+Work generation.
+  // 1.27.8.8 retains the immediately previous complete Personal+Work generation.
   // If Firefox exposes the new root before all of its chunks, the previous slot
   // remains independently verifiable and can be used until delivery completes.
   const previous = value?.previousProfile;
@@ -3658,7 +3658,7 @@ async function bootstrapLocal() {
   // a newer local edit with another device's older value. A receiving Firefox
   // can restore the full layout from this one atomic item instead of waiting for
   // dozens of record keys to arrive in the same Sync cycle.
-  // 1.27.8 keeps the previous complete device profile active while the two
+  // 1.27.8.8 keeps the previous complete device profile active while the two
   // compatibility ledgers are published. The new Personal+Work snapshot is
   // committed only after both namespaces have complete dataset markers.
   const fastPublish = { written: true, setRevision: "" };
@@ -3723,7 +3723,7 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
   const profileComplete = Boolean(sources.profile?.complete && remoteCoreUsable(workCore));
   const legacyComplete = remoteCoreUsable(personalCore) && isSnapshotUsable(workSnapshot);
 
-  // A new 1.27.8 profile never finalizes from Personal alone. Either a complete
+  // A new 1.27.8.8 profile never finalizes from Personal alone. Either a complete
   // Personal+Work device generation exists, or both compatibility namespaces
   // must independently validate. Missing/partial Work means "still arriving",
   // not "intentionally empty". An intentional empty Work has a valid settings +
@@ -3840,7 +3840,7 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     refreshed = await readLocalMeta();
   }
 
-  // Establish/refresh this device's complete 1.27.8 safety generation even when
+  // Establish/refresh this device's complete 1.27.8.8 safety generation even when
   // the remote source was the old two-ledger format and there were no local edits.
   const profilePublish = await publishProfileDeviceSnapshot(mergedState, refreshed, { force: true });
   refreshed = await writeLocalMeta({
@@ -4138,7 +4138,7 @@ async function publishWorkspaceMutationPayload(payload, fullCurrentState, meta) 
     await writeSyncItems({ [namespace.datasetKey]: committedDataset });
 
     // Do not publish a device snapshot between the two halves of a cross-Space
-    // move. 1.27.8 publishes one complete Personal+Work generation only after
+    // move. 1.27.8.8 publishes one complete Personal+Work generation only after
     // destination and source commits both finish.
   }
 
@@ -4745,7 +4745,7 @@ async function reconcile(strategy = "merge") {
     let work = await reconcileWork(strategy);
 
     // A trusted 1.27.7 installation may encounter a torn Work ledger before it
-    // has ever emitted a 1.27.8 full-profile snapshot. Preserve its local Work,
+    // has ever emitted a 1.27.8.8 full-profile snapshot. Preserve its local Work,
     // publish that complete Personal+Work generation, then immediately retry the
     // Work read through the new atomic source. Fresh/half-restored profiles have
     // no applied Work/profile revision and are therefore never allowed to do this.

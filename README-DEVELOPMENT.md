@@ -1,16 +1,25 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
-## 1.27.8.6 launcher native-appearance policy
+## 1.27.8.8 public startup-style lifecycle policy
+
+- New Tab startup must perform **zero unsolicited insertion of `newtab-secondary.css`**. `secondary-style-bootstrap.js` is an idempotent provider only; it must not schedule `requestAnimationFrame`, timers, or other automatic CSSOM mutations merely because a New Tab opened.
+- Any launcher-reachable secondary surface must await `ensureSecondaryStyles()` before becoming visible: Settings, Bookmarks, shortcut editor, folder popover, drag/drop choice menu, Frequently Visited context menu, toast feedback, and the brand hello animation. Secondary sub-surfaces opened only inside one of those already-loaded parents may rely on the parent boundary.
+- UI that can appear automatically during startup/reconciliation must not depend on the secondary sheet. The Website Access prompt therefore remains fully styled by `newtab-critical.css`.
+- Custom launcher native buttons that exist or can be inserted around first paint (`.settings-button`, `.bookmarks-button`, `.space-button`, `.add-slot`, `.edit-chip`, `.empty-ghost-tile`) explicitly use `appearance: none` in critical CSS.
+- Keep launcher DOM bootstrap/adoption architecture unchanged unless real-hardware testing proves the pill persists after this CSS lifecycle fix. Do not combine a bootstrap-structure rewrite with the stylesheet experiment without evidence.
+- The final architecture preserves strict CSP and packaged-only styles; no inline styles/scripts, remote CSS, telemetry, or page-hiding startup workaround is permitted.
+
+## Internal candidate 1.27.8.6 launcher native-appearance policy
 
 - Custom-styled launcher `<button>` controls that intentionally replace browser-native chrome must explicitly declare `appearance: none` in `newtab-critical.css`; do not rely on border/background overrides alone.
 - The current protected launcher controls are `.settings-button`, `.bookmarks-button` and `.space-button`. The brand control is a `<span>`, not a native button, and does not need this reset.
 - The reset belongs in blocking critical CSS so it is present before first paint and remains effective during later style recalculation. Do not add a late override, `!important`, or a new secondary-sheet launcher rule.
-- 1.27.8.6 intentionally leaves the delayed secondary stylesheet architecture, Sync/profile behavior, Frequently Visited migration, wallpaper isolation, folder hydration, permissions and CSP unchanged.
+- This internal candidate intentionally left the delayed secondary stylesheet architecture unchanged. Real-hardware testing showed that was insufficient; the public 1.27.8.8 policy above supersedes that loader behavior while retaining the native-appearance hardening.
 
 ## 1.27.8.5 first-frame CSS ownership policy
 
@@ -58,7 +67,7 @@ Requires Node.js 22+.
 - Release-level Sync validation must include two independent production background instances sharing an emulated remote `storage.sync`, not only source-shape assertions. The harness must support partial/out-of-order delivery and missed `storage.onChanged` notifications, and convergence must be verified after the watchdog path.
 - 1.27.8.1 intentionally does not change whole-record conflict/LWW/tombstone semantics; clock-skew and per-field shortcut merging remain separate design work.
 
-## 1.27.8 complete-profile Sync safety policy
+## Internal candidate 1.27.8 complete-profile Sync safety policy
 
 - Personal and Work are one readiness unit. A fresh profile must not become Sync-ready until both Spaces are explicitly complete.
 - The device-owned fast snapshot remains payload-version compatible with 1.27.7 for Personal, but 1.27.8 adds validated Work records/settings and marks the generation as a complete profile.
@@ -288,7 +297,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical release references remain historical.
+The current release is `1.27.8.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

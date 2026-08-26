@@ -4,30 +4,45 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Load the secondary-only New Tab stylesheet only after the critical launcher frame
- * has had a chance to paint. This stays CSP-safe: no inline script/event handler,
- * no remote resource and no change to the extension's CSP.
+ * Secondary New Tab UI styles are loaded only when secondary UI is about to
+ * become visible. Merely starting a New Tab must not mutate the CSSOM after
+ * first paint. This stays CSP-safe: packaged external CSS only, no inline
+ * handlers/styles and no remote resource.
  */
 (() => {
-  const load = () => {
-    if (document.getElementById("mosaicsyncSecondaryStyles")) return;
-    const link = document.createElement("link");
-    link.id = "mosaicsyncSecondaryStyles";
-    link.rel = "stylesheet";
-    link.href = "newtab-secondary.css";
-    link.addEventListener("load", () => {
-      const timing = globalThis.__mosaicsyncStartupTiming;
-      if (timing?.phases) timing.phases.secondaryCssReady = (globalThis.performance?.now?.() ?? Date.now());
-    }, { once: true });
-    document.head.append(link);
+  let secondaryStylesPromise = null;
+
+  globalThis.__mosaicsyncEnsureSecondaryStyles = function ensureSecondaryStyles() {
+    if (secondaryStylesPromise) return secondaryStylesPromise;
+
+    const existing = document.getElementById("mosaicsyncSecondaryStyles");
+    if (existing?.dataset?.mosaicsyncLoaded === "true" || existing?.sheet) {
+      secondaryStylesPromise = Promise.resolve(true);
+      return secondaryStylesPromise;
+    }
+
+    secondaryStylesPromise = new Promise(resolve => {
+      const link = existing || document.createElement("link");
+      if (!existing) {
+        link.id = "mosaicsyncSecondaryStyles";
+        link.rel = "stylesheet";
+        link.href = "newtab-secondary.css";
+      }
+
+      link.addEventListener("load", () => {
+        if (link.dataset) link.dataset.mosaicsyncLoaded = "true";
+        const timing = globalThis.__mosaicsyncStartupTiming;
+        if (timing?.phases) timing.phases.secondaryCssReady = (globalThis.performance?.now?.() ?? Date.now());
+        resolve(true);
+      }, { once: true });
+      link.addEventListener("error", () => {
+        console.error("MosaicSync: packaged secondary New Tab stylesheet failed to load.");
+        resolve(false);
+      }, { once: true });
+
+      if (!existing) document.head.append(link);
+    });
+
+    return secondaryStylesPromise;
   };
-  if (typeof requestAnimationFrame === "function") {
-    // Two frames are intentional: the first callback is still before the first
-    // paint. Queueing the stylesheet from the second callback guarantees the
-    // critical launcher CSS gets a rendering opportunity before the complete
-    // secondary UI sheet joins the document.
-    requestAnimationFrame(() => requestAnimationFrame(load));
-  } else {
-    setTimeout(() => setTimeout(load, 0), 0);
-  }
 })();

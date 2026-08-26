@@ -1,3 +1,5 @@
+> **INTERNAL CANDIDATE — not a public MosaicSync release.** Superseded by public 1.27.8.8.
+
 # MosaicSync 1.27.8.2 publication notes
 
 ## Mozilla Developer Hub — concise changelog

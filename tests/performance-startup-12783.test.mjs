@@ -115,7 +115,7 @@ test("1.27.8.3 normal startup reuses the exact persisted compact state as the co
 });
 
 for (const browserName of ["firefox", "chrome"]) {
-  test(`1.27.8.5 ${browserName} loads critical and secondary-only styles through a CSP-safe external bootstrap`, () => {
+  test(`1.27.8.8 ${browserName} keeps critical CSS blocking and secondary CSS available through a CSP-safe on-demand bootstrap`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browserName}/newtab/newtab-critical.css`, "utf8");
     const full = fs.readFileSync(`dist/${browserName}/newtab/newtab.css`, "utf8");
@@ -134,8 +134,10 @@ for (const browserName of ["firefox", "chrome"]) {
     assert.doesNotMatch(secondary, /onload\s*=/i, "secondary CSS loader must not depend on an inline event-handler CSP exception");
     assert.match(secondary, /document\.createElement\("link"\)/);
     assert.match(secondary, /link\.href = "newtab-secondary\.css"/);
-    assert.match(secondary, /requestAnimationFrame\(\(\) => requestAnimationFrame\(load\)\)/,
-      "the secondary-only sheet must be queued only after the critical launcher has had a paint opportunity");
+    assert.match(secondary, /__mosaicsyncEnsureSecondaryStyles/,
+      "the secondary-only sheet must expose an explicit on-demand loader");
+    assert.doesNotMatch(secondary, /requestAnimationFrame|setTimeout/,
+      "merely starting New Tab must not schedule a secondary stylesheet insertion");
   });
 
   test(`1.27.8.5 ${browserName} begins authoritative local storage before the module graph consumes it`, () => {
