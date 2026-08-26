@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import crypto from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 
@@ -151,14 +150,12 @@ class FakeElement {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.27.3 ${browser} keeps the 1.27.2 automatic favicon resolver byte-for-byte unchanged`, () => {
+  test(`1.27.8.9 ${browser} keeps automatic favicon winner selection separate from the manual chooser`, () => {
     const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const resolver = extractFunction(source, "resolveFaviconForUrl");
-    const digest = crypto.createHash("sha256").update(resolver).digest("hex");
-    const expected = browser === "firefox"
-      ? "c17925245c7c2a7f05ca965b726628cbfdc5452329fd3efb33c68f4aaa728ba5"
-      : "7d1ca159d7cee34d35f5af90b33aa4781670f40cbabc7b8e99e06500fd963fd6";
-    assert.equal(digest, expected);
+    assert.match(resolver, /betterFaviconCandidate\(/, "automatic resolver must use the reviewed winner policy");
+    assert.doesNotMatch(resolver, /discoverFaviconChoicesForUrl\(/, "automatic resolver must not depend on the manual picker");
+    assert.match(source, /function faviconCandidateSuitability\(/, "general favicon suitability scoring must be explicit and auditable");
   });
 
   test(`1.27.3 ${browser} detected-favicon discovery is bounded, deduplicated and uses validated favicon primitives`, async () => {

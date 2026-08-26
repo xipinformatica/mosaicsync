@@ -41,6 +41,11 @@
       const effectiveTheme = configuredTheme === "system"
         ? (cachedEffectiveTheme || (globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light"))
         : configuredTheme;
+      // First-frame launcher variables are keyed by this attribute in critical CSS.
+      // Set it from the same disposable appearance hint already trusted for the
+      // page color so Light mode never paints one Dark-tile frame before the main
+      // module reconciles authoritative browser.storage.local state.
+      root.dataset.effectiveTheme = effectiveTheme;
       root.style.setProperty("--page-bg", customized
         ? color
         : (effectiveTheme === "light" ? DEFAULT_LIGHT_BACKGROUND : DEFAULT_DARK_BACKGROUND));

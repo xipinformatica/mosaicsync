@@ -1,3 +1,5 @@
+> **INTERNAL CANDIDATE — not a public MosaicSync release.** Superseded by public 1.27.8.9.
+
 # MosaicSync 1.27.8.8 publication notes
 
 ## Mozilla Developer Hub — concise changelog
@@ -52,7 +54,7 @@ Improves Personal + Work Sync recovery and New Tab startup reliability. Also har
 
 ## GitHub commit description
 
-Public 1.27.8.8 release. Includes complete Personal+Work Sync recovery/fallback work, New Tab critical-path performance improvements, wallpaper/Frequently Visited/hover refinements, and the final Firefox one-time white-pill correction. Internal 1.27.8 through 1.27.8.7 were unpublished candidates. The 1.27.8.8 rendering fix removes the logo's unnecessary secondary-CSS activation and makes deferred CSS launcher-isolated without changing the bootstrap DOM contract. No new permissions, telemetry, remote code or CSP relaxation.
+Internal 1.27.8.8 candidate. Includes complete Personal+Work Sync recovery/fallback work, New Tab critical-path performance improvements, wallpaper/Frequently Visited/hover refinements, and the final Firefox one-time white-pill correction. Internal 1.27.8 through 1.27.8.7 were unpublished candidates. The 1.27.8.8 rendering fix removes the logo's unnecessary secondary-CSS activation and makes deferred CSS launcher-isolated without changing the bootstrap DOM contract. No new permissions, telemetry, remote code or CSP relaxation.
 
 ## GitHub release title
 
@@ -60,4 +62,4 @@ Public 1.27.8.8 release. Includes complete Personal+Work Sync recovery/fallback 
 
 ## GitHub release description
 
-MosaicSync 1.27.8.8 is the public successor to 1.27.7. It ships the complete-profile Personal+Work Sync recovery work and the 1.27.8 New Tab performance architecture, plus a final Firefox render-lifecycle correction validated by real-hardware behavior: the transient white pill moved from startup to the exact first logo hover that attached secondary CSS. The logo no longer loads that sheet, and deferred CSS can no longer alter already-painted launcher controls through global form rules, edit-chip/color-tag ownership, brand keyframes or an unscoped Sync-tooltip rule. The bootstrap DOM contract is unchanged. No new permissions.
+MosaicSync 1.27.8.8 was an internal candidate toward public 1.27.8.9. It ships the complete-profile Personal+Work Sync recovery work and the 1.27.8 New Tab performance architecture, plus a final Firefox render-lifecycle correction validated by real-hardware behavior: the transient white pill moved from startup to the exact first logo hover that attached secondary CSS. The logo no longer loads that sheet, and deferred CSS can no longer alter already-painted launcher controls through global form rules, edit-chip/color-tag ownership, brand keyframes or an unscoped Sync-tooltip rule. The bootstrap DOM contract is unchanged. No new permissions.

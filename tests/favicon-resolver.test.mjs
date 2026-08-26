@@ -143,7 +143,7 @@ test("first provisional favicon schedules its quality pass immediately without c
 
 test("chrome: native _favicon output size is treated as unknown source quality", ()=>{
   const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
-  assert.match(src,/return \{ image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, native: true \};/);
+  assert.match(src,/return \{ image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, sourceKind: "browser", native: true \};/);
   assert.doesNotMatch(src,/width: 128, height: 128, qualitySide: 128, declared: false, native: true/);
 });
 
@@ -184,6 +184,6 @@ test("chrome: quality-upgrade queue accepts browser-native artwork as replaceabl
   const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
   assert.match(src,/\["favicon", "firefox"\]\.includes\(shortcut\.imageSourceKind\)/,
     "Chrome-native legacy source kind must be eligible for a direct quality upgrade");
-  assert.match(src,/qualitySide: 0, declared: false, native: true/,
+  assert.match(src,/qualitySide: 0, declared: false, sourceKind: "browser", native: true/,
     "Chrome native cache must remain provisional quality metadata");
 });

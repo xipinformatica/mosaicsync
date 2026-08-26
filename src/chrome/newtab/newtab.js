@@ -427,6 +427,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let suppressFolderClickUntil = 0;
   let backgroundPersistTimer = null;
   let deferredAppearanceVisual = false;
+  let deferredLauncherSettings = false;
+  let deferredLauncherRender = false;
   let wallpaperGalleryTarget = "main";
   let pendingDrop = null;
   let activeFolderId = null;
@@ -1059,7 +1061,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     clearTimeout(recentOrderRenderTimer);
     recentOrderRenderTimer = setTimeout(() => {
       if (shortcutOrderMode !== "recent" || isAwaitingRemote()) return;
-      render();
+      requestLauncherRenderAfterExternalState();
     }, 0);
   }
 
@@ -2250,14 +2252,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const deferCustomBackground = deferHeavyAssets && settings.backgroundImageDeferred === true && !effectivePresetId;
 
     // The 1.26.5 Firefox fix proved that mutating the real full-viewport .page
-    // background while the modal Settings surface is painted can make the dialog
+    // background while the Settings surface is painted can make the dialog
     // descendants disappear even though JavaScript continues running. Keep that
     // real surface frozen, but mirror the effective wallpaper onto an isolated
     // fixed child layer so Light/Dark and day/night wallpaper changes still preview
     // immediately in both Firefox and Chrome.
     if (settingsDialog?.open) {
       // Firefox has a compositor failure mode where changing paint-affecting root
-      // variables behind an open modal can blank the dialog descendants while JS
+      // variables behind open Settings can blank the dialog descendants while JS
       // keeps running. While Settings is open, mutate only this isolated preview
       // layer. The real root/page dim, canvas-text and wallpaper commit after the
       // dialog has fully closed on the next animation frame.
@@ -3005,6 +3007,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     await ensureSecondaryStyles();
     pendingDrop = { sourceId, targetId };
+    dropMoveButton.querySelector("strong").textContent = t("moveHere");
+    dropMoveButton.querySelector("small").textContent = t("switchPositions");
     dropFolderButton.hidden = false;
     dropFolderButton.querySelector("strong").textContent = t("createFolder");
     dropFolderButton.querySelector("small").textContent = t("putTogether");
@@ -3625,11 +3629,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   shortcutDialog?.addEventListener("close", resetDetectedFaviconPicker);
 
   settingsDialog?.addEventListener("close", () => {
-    if (!deferredAppearanceVisual) return;
+    if (!deferredAppearanceVisual && !deferredLauncherSettings && !deferredLauncherRender) return;
     // Let Firefox fully remove the dialog's painted frame before changing root
-    // theme/wallpaper styles. If Settings was reopened immediately, keep deferring.
+    // styles or rebuilding the launcher. If Settings was reopened immediately,
+    // keep all pending work deferred for the later close.
     requestAnimationFrame(() => {
-      if (!settingsDialog?.open) commitDeferredAppearanceVisual();
+      if (!settingsDialog?.open) commitDeferredLauncherVisual();
     });
   });
 
@@ -4930,11 +4935,44 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     scheduleAppearanceHintRefresh(state.settings);
   }
 
-  function commitDeferredAppearanceVisual() {
-    if (!deferredAppearanceVisual || settingsDialog?.open) return;
+  function reconcileLauncherAfterExternalState({ deferHeavyAssets = false, renderGrid = true } = {}) {
+    // Storage/Sync/background callbacks may adopt newer state while Settings is
+    // open. Keep the model current, but do not reconstruct the launcher or change
+    // its root paint/layout behind the open Settings surface. Direct Settings
+    // gestures still use the ordinary live applySettings()/render() paths.
+    if (settingsDialog?.open) {
+      applyPageBackgroundVisual({ deferHeavyAssets });
+      deferredLauncherSettings = true;
+      if (renderGrid) deferredLauncherRender = true;
+      return false;
+    }
+    applySettings({ deferHeavyAssets });
+    if (renderGrid) render();
+    return true;
+  }
+
+  function requestLauncherRenderAfterExternalState() {
+    if (settingsDialog?.open) {
+      deferredLauncherRender = true;
+      return false;
+    }
+    render();
+    return true;
+  }
+
+  function commitDeferredLauncherVisual() {
+    if (settingsDialog?.open) return;
+    const needsSettings = deferredAppearanceVisual || deferredLauncherSettings;
+    const needsRender = deferredLauncherRender;
+    if (!needsSettings && !needsRender) return;
     deferredAppearanceVisual = false;
-    applySettings();
-    scheduleAppearanceHintRefresh(state.settings);
+    deferredLauncherSettings = false;
+    deferredLauncherRender = false;
+    if (needsSettings) {
+      applySettings();
+      scheduleAppearanceHintRefresh(state.settings);
+    }
+    if (needsRender) render();
   }
 
   async function openSettings() {
@@ -6002,13 +6040,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       shortcutOrderMode = readShortcutOrderPreference();
       if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
       updateFrequentDragAvailability();
-      if (!isAwaitingRemote()) render();
+      if (!isAwaitingRemote()) requestLauncherRenderAfterExternalState();
       scheduleRenderManifestRefresh(state, meta);
       return;
     }
     if (event.key === SHORTCUT_USAGE_PREF_KEY) {
       shortcutUsage = readShortcutUsage();
-      if (shortcutOrderMode === "recent" && !isAwaitingRemote()) render();
+      if (shortcutOrderMode === "recent" && !isAwaitingRemote()) requestLauncherRenderAfterExternalState();
     }
   });
   let brandHelloTimer = 0;
@@ -6195,8 +6233,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
       setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
       localizeDocument(document);
-      applySettings();
-      render();
+      reconcileLauncherAfterExternalState();
       updateSpaceSwitcher();
       refreshSpacesSettings();
       scheduleFrequentlyVisitedRefresh();
@@ -6483,8 +6520,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
               frequentCandidateCache = [];
             }
             writeBaseline = createWriteBaseline(stateChange.newValue);
-            applySettings();
-            render();
+            reconcileLauncherAfterExternalState();
             updateSpaceSwitcher();
             if (settingsDialog.open) refreshSpacesSettings();
             scheduleAppearanceHintRefresh(state.settings);
@@ -6508,7 +6544,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       else { try { localStorage.removeItem(RENDER_MANIFEST_KEY); } catch {} }
       // Sync status/quota updates are frequent and do not normally affect the
       // shortcut grid. Re-render only when entering/leaving the remote-wait UI.
-      if (wasAwaitingRemote !== isAwaitingRemote(meta)) render();
+      if (wasAwaitingRemote !== isAwaitingRemote(meta)) requestLauncherRenderAfterExternalState();
       if (meta.syncEnabled && settingsDialog.open) refreshSyncStatus().catch(() => {});
     }
   });

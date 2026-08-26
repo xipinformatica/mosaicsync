@@ -192,6 +192,13 @@ select{ font: inherit; }button{ color: inherit; }.page{
   transform-box: fill-box;
 }.brand-button.brand-hello-active .brand-easter-wave{
   animation: brand-easter-wave 700ms ease-in-out 120ms 2 alternate;
+}@keyframes brand-hello-pop{
+  0%{opacity:0;transform:scale(.95);}
+  8%,88%{opacity:1;transform:scale(1);}
+  100%{opacity:0;transform:scale(.98);}
+}@keyframes brand-easter-wave{
+  from{transform:rotate(-8deg);}
+  to{transform:rotate(8deg);}
 }.space-switcher{
   position: fixed;
   z-index: 10;

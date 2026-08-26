@@ -954,14 +954,45 @@ function faviconQualitySide(candidate) {
   return Math.max(0, Number(candidate?.qualitySide) || 0, width, height);
 }
 
+function faviconCandidateSuitability(candidate) {
+  if (!candidate?.image) return -1;
+  const side = faviconQualitySide(candidate);
+  // Resolution is valuable only until it is comfortably tile-ready. A 512px
+  // manifest/touch asset must not beat a crisp conventional favicon merely
+  // because it is larger; provenance and geometry matter once quality is enough.
+  const resolutionScore = side >= 128 ? 230 : side >= 64 ? 220 : side >= 32 ? 200 : side >= 16 ? 150 : Math.min(120, side * 6);
+  const sourceKind = String(candidate.sourceKind || (candidate.native ? "browser" : ""));
+  const sourceScore = ({
+    link: 130,
+    favicon: 120,
+    browser: 115,
+    touch: 65,
+    manifest: 60,
+    conventional: 55,
+    tile: 40,
+    parent: 30,
+    redirect: 30,
+    mask: 10
+  })[sourceKind] ?? (candidate.declared ? 55 : 45);
+  const width = Math.max(0, Number(candidate.width) || 0);
+  const height = Math.max(0, Number(candidate.height) || 0);
+  let geometryScore = 0;
+  if (width && height) {
+    const ratio = Math.max(width, height) / Math.max(1, Math.min(width, height));
+    geometryScore = ratio <= 1.08 ? 20 : ratio <= 1.20 ? 5 : -40;
+  }
+  return resolutionScore + sourceScore + geometryScore + (candidate.declared ? 5 : 0);
+}
+
 function betterFaviconCandidate(current, candidate) {
   if (!candidate?.image) return current;
   if (!current?.image) return candidate;
+  const currentScore = faviconCandidateSuitability(current);
+  const candidateScore = faviconCandidateSuitability(candidate);
+  if (candidateScore !== currentScore) return candidateScore > currentScore ? candidate : current;
   const currentSide = faviconQualitySide(current);
   const candidateSide = faviconQualitySide(candidate);
   if (candidateSide !== currentSide) return candidateSide > currentSide ? candidate : current;
-  // Prefer page-declared artwork when measured quality is tied. It is more
-  // likely to be the site's intentional modern asset than a legacy favicon.ico.
   return candidate.declared && !current.declared ? candidate : current;
 }
 
@@ -1071,25 +1102,25 @@ async function rasterizeSafeSvg(bytes) {
   }
 }
 
-async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, declared = false, qualityHint = 0, signal = null } = {}) {
+async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, declared = false, qualityHint = 0, sourceKind = "", signal = null } = {}) {
   const inline = typeof value === "string" && /^data:/i.test(value);
-  if (inline && !declared) return { image: "", sourceUrl: "", reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
+  if (inline && !declared) return { image: "", sourceUrl: "", reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared, sourceKind };
   const resource = inline
     ? decodeInlineFaviconResource(value)
     : await fetchBoundedResource(value, { maxBytes: REMOTE_IMAGE_MAX_BYTES, deadlineAt, signal });
   const sourceUrl = inline ? "" : (resource.url || value);
-  if (!resource.ok) return { image: "", sourceUrl, reason: resource.reason, width: 0, height: 0, qualitySide: 0, declared };
+  if (!resource.ok) return { image: "", sourceUrl, reason: resource.reason, width: 0, height: 0, qualitySide: 0, declared, sourceKind };
   const type = inline ? resource.type : sniffImageMime(resource.bytes, resource.type);
-  if (!type) return { image: "", sourceUrl, reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared };
+  if (!type) return { image: "", sourceUrl, reason: "unsupported-image", width: 0, height: 0, qualitySide: 0, declared, sourceKind };
   if (type === "image/svg+xml") {
     const raster = await rasterizeSafeSvg(resource.bytes);
     return raster.image
-      ? { ...raster, qualitySide: Math.min(raster.width, raster.height), sourceUrl, reason: "", declared }
-      : { image: "", sourceUrl, reason: "unsupported-svg", width: 0, height: 0, qualitySide: 0, declared };
+      ? { ...raster, qualitySide: Math.min(raster.width, raster.height), sourceUrl, reason: "", declared, sourceKind }
+      : { image: "", sourceUrl, reason: "unsupported-svg", width: 0, height: 0, qualitySide: 0, declared, sourceKind };
   }
   const dimensions = imageDimensionsFromBytes(resource.bytes, type);
   if (!imageDimensionsSafeForRemoteDecode(dimensions)) {
-    return { image: "", sourceUrl, reason: "image-too-large", width: 0, height: 0, qualitySide: 0, declared };
+    return { image: "", sourceUrl, reason: "image-too-large", width: 0, height: 0, qualitySide: 0, declared, sourceKind };
   }
   const optimized = await optimizedFaviconFromBytes(resource.bytes, type, dimensions);
   const width = optimized?.width || dimensions.width;
@@ -1101,7 +1132,8 @@ async function fetchImageDataUrlDetailed(value, { deadlineAt = Date.now() + ICON
     width,
     height,
     qualitySide: dimensions.width && dimensions.height ? Math.min(dimensions.width, dimensions.height) : Math.max(0, Number(qualityHint) || 0),
-    declared
+    declared,
+    sourceKind
   };
 }
 
@@ -1320,7 +1352,7 @@ async function resolveBrowserCachedFavicon(pageUrl, { signal = null } = {}) {
       // quality of the cached source. A 16/32px favicon may simply be enlarged
       // to 128px, so keep native pixels as a fast provisional fallback but do
       // not let the requested canvas size block declared-site quality recovery.
-      return { image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, native: true };
+      return { image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, sourceKind: "browser", native: true };
     }
   } catch {}
   return null;
@@ -1346,7 +1378,8 @@ async function probeConventionalFaviconFallbacks(origin, { deadlineAt }) {
   // SPA shell or anti-bot page cannot be fetched from an extension context.
   for (const path of ["/favicon.svg", "/favicon.png", "/apple-touch-icon.png"]) {
     if (Date.now() >= deadlineAt) break;
-    const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true });
+    const sourceKind = path.includes("apple-touch") ? "touch" : (path.includes("favicon") || path.endsWith(".ico") ? "favicon" : "conventional");
+    const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true, sourceKind });
     if (candidate.image) return candidate;
   }
   return null;
@@ -1360,7 +1393,8 @@ async function probeConventionalFaviconQualityUpgrade(origin, current, { deadlin
   // can never consume the authoritative discovery budget.
   for (const path of ["/icon.ico", "/favicon.svg", "/favicon.png", "/apple-touch-icon.png"]) {
     if (Date.now() >= deadlineAt) break;
-    const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true });
+    const sourceKind = path.includes("apple-touch") ? "touch" : (path.includes("favicon") || path.endsWith(".ico") ? "favicon" : "conventional");
+    const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true, sourceKind });
     if (!candidate.image) continue;
     best = betterFaviconCandidate(best, candidate);
     if (faviconQualitySide(best) >= ICON_RECOVERY_HIGH_QUALITY_SIDE) break;
@@ -1387,7 +1421,8 @@ async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt })
     const images = await Promise.all(batch.map(candidate => fetchImageDataUrlDetailed(candidate.url, {
       deadlineAt,
       declared: true,
-      qualityHint: candidate.sideHint
+      qualityHint: candidate.sideHint,
+      sourceKind: candidate.source || "declared"
     })));
     for (const image of images) {
       if (image.image) best = betterFaviconCandidate(best, image);
@@ -1430,7 +1465,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   // quickly. Quality retries deliberately skip this re-fetch until after the
   // site's declared metadata has had the first chance to provide better art.
   if (!preferQuality && initialOrigin) {
-    const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt });
+    const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt, sourceKind: "favicon" });
     if (conventional.image) {
       best = betterFaviconCandidate(best, conventional);
       const side = faviconQualitySide(conventional);
@@ -1443,7 +1478,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
     const parentUrl = parentHostFaviconUrl(pageUrl);
     if (parentUrl) {
       const parentDeadline = Math.min(deadlineAt, Date.now() + 2_500);
-      const parent = await fetchImageDataUrlDetailed(parentUrl, { deadlineAt: parentDeadline, declared: true });
+      const parent = await fetchImageDataUrlDetailed(parentUrl, { deadlineAt: parentDeadline, declared: true, sourceKind: "parent" });
       if (parent.image) return { ...parent, provisional: true };
       if (parent.reason === "timeout") sawTimeout = true;
     }
@@ -1472,7 +1507,8 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
     const images = await Promise.all(batch.map(candidate => fetchImageDataUrlDetailed(candidate.url, {
       deadlineAt,
       declared: true,
-      qualityHint: candidate.sideHint
+      qualityHint: candidate.sideHint,
+      sourceKind: candidate.source || "declared"
     })));
     for (const image of images) {
       if (image.image) best = betterFaviconCandidate(best, image);
@@ -1486,7 +1522,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
 
   if (preferQuality && initialOrigin && Date.now() < deadlineAt) {
     const fallbackDeadline = Math.min(deadlineAt, Date.now() + 1_500);
-    const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt: fallbackDeadline });
+    const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt: fallbackDeadline, sourceKind: "favicon" });
     if (conventional.image) best = betterFaviconCandidate(best, conventional);
     else if (conventional.reason === "timeout" || conventional.reason === "network") qualityUnresolved = true;
     sawTimeout = sawTimeout || conventional.reason === "timeout";
@@ -1501,7 +1537,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
 
   const finalOrigin = discoveredFinalOrigin;
   if (finalOrigin && finalOrigin !== initialOrigin && Date.now() < deadlineAt) {
-    const redirected = await fetchImageDataUrlDetailed(`${finalOrigin}/favicon.ico`, { deadlineAt });
+    const redirected = await fetchImageDataUrlDetailed(`${finalOrigin}/favicon.ico`, { deadlineAt, sourceKind: "redirect" });
     if (redirected.image) best = betterFaviconCandidate(best, redirected);
     else if (redirected.reason === "timeout" || redirected.reason === "network") qualityUnresolved = true;
     sawTimeout = sawTimeout || redirected.reason === "timeout";
@@ -1667,7 +1703,7 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
   const fetchChoice = async (value, { declared = false, qualityHint = 0, source = "site" } = {}) => {
     const resourceKey = prepareResource(value, { declared });
     if (!resourceKey) return null;
-    const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint, signal });
+    const candidate = await fetchImageDataUrlDetailed(resourceKey, { deadlineAt, declared, qualityHint, sourceKind: source, signal });
     return candidate?.image ? { candidate, source } : null;
   };
 
@@ -1723,7 +1759,10 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
       : []),
     ...["/favicon.svg", "/favicon.png", "/apple-touch-icon.png", "/icon.ico"].map(path => ({
       value: `${initialOrigin}${path}`,
-      options: { declared: true, source: "conventional" }
+      options: {
+        declared: true,
+        source: path.includes("apple-touch") ? "touch" : (path.includes("favicon") || path.endsWith(".ico") ? "favicon" : "conventional")
+      }
     }))
   ]);
 
@@ -1733,9 +1772,12 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
     if (pageDiscoveryReason === "cancelled") return { ok: false, error: "cancelled", reason: pageDiscoveryReason, candidates: [] };
     return { ok: false, error: "discovery-failed", reason: pageDiscoveryReason, candidates: [] };
   }
+  const choiceSuitability = candidate => typeof faviconCandidateSuitability === "function"
+    ? faviconCandidateSuitability({ ...candidate, sourceKind: candidate.source })
+    : candidate.qualitySide;
   choices.sort((a, b) =>
+    choiceSuitability(b) - choiceSuitability(a) ||
     b.qualitySide - a.qualitySide ||
-    Number(b.declared) - Number(a.declared) ||
     a.source.localeCompare(b.source)
   );
   const result = { ok: true, error: "", candidates: choices.slice(0, maxChoices) };

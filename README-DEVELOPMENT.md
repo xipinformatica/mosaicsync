@@ -1,11 +1,11 @@
 # MosaicSync development
 
-> **Current release: 1.27.8.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.27.8.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
-## 1.27.8.8 public startup-style lifecycle policy
+## 1.27.8.9 public corrective lifecycle policy
 
 - New Tab startup must perform **zero unsolicited insertion of `newtab-secondary.css`**. `secondary-style-bootstrap.js` is an idempotent provider only; it must not schedule `requestAnimationFrame`, timers, or other automatic CSSOM mutations merely because a New Tab opened.
 - Any launcher-reachable secondary surface must await `ensureSecondaryStyles()` before becoming visible: Settings, Bookmarks, shortcut editor, folder popover, drag/drop choice menu, Frequently Visited context menu, toast feedback, and the brand hello animation. Secondary sub-surfaces opened only inside one of those already-loaded parents may rely on the parent boundary.
@@ -19,7 +19,7 @@ Requires Node.js 22+.
 - Custom-styled launcher `<button>` controls that intentionally replace browser-native chrome must explicitly declare `appearance: none` in `newtab-critical.css`; do not rely on border/background overrides alone.
 - The current protected launcher controls are `.settings-button`, `.bookmarks-button` and `.space-button`. The brand control is a `<span>`, not a native button, and does not need this reset.
 - The reset belongs in blocking critical CSS so it is present before first paint and remains effective during later style recalculation. Do not add a late override, `!important`, or a new secondary-sheet launcher rule.
-- This internal candidate intentionally left the delayed secondary stylesheet architecture unchanged. Real-hardware testing showed that was insufficient; the public 1.27.8.8 policy above supersedes that loader behavior while retaining the native-appearance hardening.
+- This internal candidate intentionally left the delayed secondary stylesheet architecture unchanged. Real-hardware testing showed that was insufficient; the public 1.27.8.9 policy above supersedes that loader behavior while retaining the native-appearance hardening.
 
 ## 1.27.8.5 first-frame CSS ownership policy
 
@@ -297,7 +297,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.8.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.27.8.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

@@ -15,7 +15,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(skin[1], /backgroundImage|backgroundColor|--page-bg|applySettings\s*\(/,
       `${browser}: theme-skin helper must remain independent from wallpaper painting`);
 
-    const transition = js.match(/function applyThemeTransition\(\)\s*\{([\s\S]*?)\n  \}\n\n  function commitDeferredAppearanceVisual/);
+    const transition = js.match(/function applyThemeTransition\(\)\s*\{([\s\S]*?)\n  \}\n\n  function commitDeferredLauncherVisual/);
     assert.ok(transition, `${browser}: appearance transition helper missing`);
     assert.match(transition[1], /if \(settingsDialog\?\.open\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\);[\s\S]*?return;/,
       `${browser}: open Settings must receive both live theme skin and isolated wallpaper preview`);
@@ -84,14 +84,14 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.9 ${browser} applies the deferred authoritative appearance only after Settings closes and a frame boundary`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    assert.match(js, /settingsDialog\?\.addEventListener\("close", \(\) => \{[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?!settingsDialog\?\.open\) commitDeferredAppearanceVisual\(\);/,
+    assert.match(js, /settingsDialog\?\.addEventListener\("close", \(\) => \{[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?!settingsDialog\?\.open\) commitDeferredLauncherVisual\(\);/,
       `${browser}: deferred appearance must commit from the Settings close event on the next frame`);
-    assert.match(js, /function commitDeferredAppearanceVisual\(\)[\s\S]*?if \(!deferredAppearanceVisual \|\| settingsDialog\?\.open\) return;[\s\S]*?deferredAppearanceVisual = false;[\s\S]*?applySettings\(\);/,
+    assert.match(js, /function commitDeferredLauncherVisual\(\)[\s\S]*?if \(settingsDialog\?\.open\) return;[\s\S]*?deferredAppearanceVisual = false;[\s\S]*?if \(needsSettings\) \{[\s\S]*?applySettings\(\);/,
       `${browser}: deferred commit must refuse to repaint while Settings is still open`);
 
     const closeHelper = js.match(/function closeDialog\(dialog\)\s*\{([\s\S]*?)\n  \}/);
     assert.ok(closeHelper, `${browser}: closeDialog helper missing`);
-    assert.doesNotMatch(closeHelper[1], /applySettings|commitDeferredAppearanceVisual/,
+    assert.doesNotMatch(closeHelper[1], /applySettings|commitDeferredLauncherVisual/,
       `${browser}: closeDialog itself must not repaint in the same call/frame`);
   });
 

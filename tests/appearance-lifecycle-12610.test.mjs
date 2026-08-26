@@ -97,7 +97,7 @@ for (const browser of ["firefox", "chrome"]) {
       requestAnimationFrame(fn) { raf.push(fn); return raf.length; },
       console
     });
-    vm.runInContext("var deferredAppearanceVisual = false;", context);
+    vm.runInContext("var deferredAppearanceVisual = false; var deferredLauncherSettings = false; var deferredLauncherRender = false;", context);
 
     for (const name of [
       "paintAppearancePreviewLayer",
@@ -105,7 +105,7 @@ for (const browser of ["firefox", "chrome"]) {
       "applyPageBackgroundVisual",
       "applyThemeSkinVisual",
       "applyThemeTransition",
-      "commitDeferredAppearanceVisual"
+      "commitDeferredLauncherVisual"
     ]) {
       vm.runInContext(extractFunction(source, name), context);
     }
@@ -162,9 +162,9 @@ for (const browser of ["firefox", "chrome"]) {
     const context = vm.createContext({
       settingsDialog,
       requestAnimationFrame(fn) { raf.push(fn); return raf.length; },
-      commitDeferredAppearanceVisual() { commits += 1; }
+      commitDeferredLauncherVisual() { commits += 1; }
     });
-    vm.runInContext("var deferredAppearanceVisual = true;", context);
+    vm.runInContext("var deferredAppearanceVisual = true; var deferredLauncherSettings = false; var deferredLauncherRender = false;", context);
 
     vm.runInContext(extractSettingsCloseRegistration(source), context);
     settingsDialog.open = false;
