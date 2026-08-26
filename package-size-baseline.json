@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.27.8.5",
-      "rawBytes": 2029774,
-      "deflatedBytes": 594382,
+      "version": "1.27.8.6",
+      "rawBytes": 2029834,
+      "deflatedBytes": 594384,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1754,
-          "deflatedBytes": 675
+          "deflatedBytes": 674
         },
         "manifest-localization": {
           "files": 32,
@@ -33,8 +33,8 @@
         },
         "newtab-css": {
           "files": 3,
-          "rawBytes": 245965,
-          "deflatedBytes": 43243
+          "rawBytes": 246025,
+          "deflatedBytes": 43246
         },
         "newtab-html": {
           "files": 1,
@@ -142,8 +142,8 @@
         {
           "path": "newtab/newtab-critical.css",
           "category": "newtab-css",
-          "rawBytes": 32992,
-          "deflatedBytes": 6802
+          "rawBytes": 33052,
+          "deflatedBytes": 6805
         },
         {
           "path": "core/i18n-locales/hu.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.27.8.5",
-      "rawBytes": 2051186,
-      "deflatedBytes": 609252,
+      "version": "1.27.8.6",
+      "rawBytes": 2051246,
+      "deflatedBytes": 609254,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1331,
-          "deflatedBytes": 545
+          "deflatedBytes": 544
         },
         "manifest-localization": {
           "files": 32,
@@ -287,8 +287,8 @@
         },
         "newtab-css": {
           "files": 3,
-          "rawBytes": 245965,
-          "deflatedBytes": 43243
+          "rawBytes": 246025,
+          "deflatedBytes": 43246
         },
         "newtab-html": {
           "files": 1,
@@ -396,8 +396,8 @@
         {
           "path": "newtab/newtab-critical.css",
           "category": "newtab-css",
-          "rawBytes": 32992,
-          "deflatedBytes": 6802
+          "rawBytes": 33052,
+          "deflatedBytes": 6805
         },
         {
           "path": "core/i18n-locales/hu.js",

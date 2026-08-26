@@ -12,7 +12,7 @@
 - [x] `newtab-secondary.css` contains no `.settings-button` selector.
 - [x] `newtab-secondary.css` contains no `.tile img`, `.folder-mosaic-cell img`, `.tile > img.artwork-layer` or `.folder-mosaic-cell > img.artwork-layer` selectors.
 - [x] Secondary folder-popover artwork keeps `.folder-item-tile img` and `.folder-item-tile > img.artwork-layer` behavior.
-- [x] Firefox New Tab no longer flashes a bright rounded Settings-button compositor artifact after the deferred stylesheet arrives.
+- [ ] Real-hardware post-release testing showed the bright rounded startup artifact could still occur; 1.27.8.6 carries the follow-up native-control reset.
 - [x] Settings/Bookmarks buttons, Spaces, shortcut geometry, labels, folder mosaics and Frequently Visited do not move/restyle when secondary CSS loads.
 
 ## Runtime stylesheet contract

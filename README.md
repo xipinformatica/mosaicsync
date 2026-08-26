@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.27.8.5**
+**Current source release: 1.27.8.6**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.27.8.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.27.8.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.27.8.5 is a focused first-frame visual-integrity follow-up to the 1.27.8.4 performance release. Launcher-visible CSS is now owned exclusively by the blocking critical stylesheet: the deferred secondary sheet no longer re-declares the fixed Settings button or launcher tile/folder-mosaic image rules, preventing Firefox from rebuilding those compositor/style layers a couple of frames after New Tab paint. Reverse CSS-ownership regressions now enforce that launcher selectors stay out of secondary CSS, and the vestigial monolithic stylesheet is explicitly fenced out of the runtime loading contract. No feature, permission, Sync/profile schema, CSP, telemetry, artwork-quality or navigation behavior changes are introduced.
+1.27.8.6 is a narrow Firefox first-frame native-control hardening follow-up. The custom-styled launcher Settings, Bookmarks and Space buttons now explicitly suppress browser-native widget appearance in the blocking critical stylesheet, to prevent a native rounded control surface from being exposed during post-paint style recalculation. Regression coverage verifies the reset on both browser builds. No Sync/profile schema, permission, CSP, navigation, wallpaper, Frequently Visited, folder-hydration or secondary-style loading behavior changes are introduced.
 
 1.27.8 is a Sync-integrity and self-healing release. Trusted devices now publish Personal and Work together as one complete, root-last device generation while retaining the immediately previous complete generation for fallback. A fresh browser profile cannot finish initialization from Personal alone: it waits until Work is explicitly complete (including a valid zero-record Work) or a complete Personal+Work device generation is available. Local shortcuts created while waiting are merged on top of the incoming profile instead of replacing it. Complete profile snapshots can also repair a torn compatibility ledger automatically, while a half-restored device with no applied Work revision is blocked from publishing an empty Work copy. The underlying record conflict/tombstone rules remain unchanged. 1.27.8 also adds a restrained paint-only Firefox-style shortcut hover scale/brightness effect with no grid reflow. No new permissions, CSP relaxation, telemetry or remote code were added.
 

@@ -1,6 +1,13 @@
+## 1.27.8.6
+
+- Hardened the custom-styled launcher controls against Firefox native-widget flashes during post-paint style recalculation. `.settings-button`, `.bookmarks-button` and `.space-button` now declare `appearance: none` in the blocking `newtab-critical.css`, so browser-native button chrome cannot become visible while the deferred secondary stylesheet is parsed/applied.
+- Added dedicated Firefox/Chrome regressions proving those launcher controls are real `<button>` elements, receive the native-appearance reset before first paint, and remain exclusively owned by critical CSS rather than being patched in the delayed secondary sheet. The MosaicSync brand control is explicitly verified as a `<span>` and is not given a meaningless button reset.
+- Kept the 1.27.8.5 CSS ownership split unchanged: launcher Settings/artwork selectors remain out of `newtab-secondary.css`, the vestigial monolithic stylesheet remains fenced out of runtime loading, and the secondary loader architecture is not changed in this narrow diagnostic/fix release.
+- No permissions, Sync/profile/state schemas, conflict/tombstone behavior, Frequently Visited semantics, Light/Dark wallpaper isolation, folder hydration, hover behavior, CSP, telemetry, remote code, navigation safety or image/SVG validation changed. Version identity is exactly `1.27.8.6` across Firefox, Chrome, runtime/UI metadata, tests, documentation and build output.
+
 ## 1.27.8.5
 
-- Fixed a first-frame Firefox visual regression introduced by the critical/secondary CSS split. The delayed secondary stylesheet no longer re-declares `.settings-button`, so the already-painted fixed/backdrop-filtered launcher control is not reprocessed into a transient bright rounded compositor artifact a couple of frames after New Tab opens.
+- Removed the delayed secondary stylesheet's duplicate `.settings-button` declarations as a first-frame CSS-ownership correction. Subsequent real-hardware testing showed the separate rounded startup artifact could still occur, so 1.27.8.6 follows with explicit native-button appearance suppression rather than treating this cleanup as the complete root-cause fix.
 - Enforced launcher CSS ownership for artwork layers as well: `.tile img`, `.folder-mosaic-cell img` and their `.artwork-layer` placement remain critical-only, while secondary folder-popover image rules are split to `.folder-item-tile` only.
 - Added reverse CSS-partition regression coverage for Firefox and Chrome so launcher-visible selectors cannot silently reappear in `newtab-secondary.css`. The existing direction still verifies that Settings/editor/dialog-only selectors stay out of the blocking critical sheet.
 - Fenced the vestigial monolithic `newtab.css` out of the runtime loading contract with explicit tests: New Tab may link only `newtab-critical.css`, and the external deferred loader may load only `newtab-secondary.css`.

@@ -206,6 +206,7 @@ body{
   backdrop-filter: blur(12px);
   transform: translateX(-50%);
 }.space-switcher[hidden]{ display: none !important; }.space-button{
+  appearance: none;
   min-width: 92px;
   height: 32px;
   padding: 0 15px;
@@ -420,6 +421,7 @@ body{
   grid-column: 1 / -1;
   margin-top: 4px;
 }.empty-actions .text-button{ color: var(--canvas-muted); }.settings-button{
+  appearance: none;
   position: fixed;
   z-index: 10;
   right: 22px;
@@ -712,6 +714,7 @@ body{
   color: #25190b !important;
   border-color: rgba(127,83,7,.35) !important;
 }.bookmarks-button{
+  appearance: none;
   position: fixed;
   z-index: 10;
   right: 68px;
