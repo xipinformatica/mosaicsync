@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.4**
+**Current source release: 1.30.5**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.4 is a zero-new-features **Snow Leopard** Settings-stability refinement and direct public-history successor to 1.30.2. Real Windows and Linux Firefox testing disproved the native-dialog-only hypothesis from the unpublished 1.30.3 candidate and narrowed the white/blank-panel failure to dynamic layout changes inside the long-lived Settings form scroll surface. The outer fixed Settings surface is now the only vertical scroll owner; the inner form stays in normal flow with no independent viewport `max-height`/overflow frame. The validated unpublished 1.30.3 ownership/cancellation, System-theme, favicon timeout/recovery-queue, final-persistence and color-drag hardening is retained. No permissions, synchronized/profile schemas, CSP, telemetry, remote code or feature surface changed.
+1.30.5 is a zero-new-features **Snow Leopard** Settings-stability refinement on top of 1.30.4. It preserves the 1.30.4 single-scroll-owner rendering experiment unchanged, while correcting the one concrete follow-up found independently by two audits: locale-driven Settings relocalization now saves and restores the outer `settingsDialog.scrollTop`, which is the real scroll owner, instead of the normal-flow `settingsForm`. New regression coverage stress-toggles Separate Light/Dark Wallpapers and Frequently Visited 100 times through their visibility-only paths and protects the outer-scroll-owner lifecycle. No permissions, synchronized/profile schemas, CSP, telemetry, remote code, feature surface, `hidden` strategy, preview timing or permission flow changed.
 
 The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 

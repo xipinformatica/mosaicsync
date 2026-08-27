@@ -5222,7 +5222,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function refreshLocalizedUi() {
-    const settingsScrollTop = settingsForm?.scrollTop || 0;
+    const settingsScrollTop = settingsDialog?.scrollTop || 0;
 
     // Static labels/attributes retain their semantic translation keys inside
     // core/i18n.js, so the same DOM can be translated repeatedly without reload.
@@ -5255,7 +5255,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // Translating longer/shorter labels may change layout height, but the user's
     // current place in the open Settings panel should remain stable.
     requestAnimationFrame(() => {
-      if (isSettingsOpen() && settingsForm) settingsForm.scrollTop = settingsScrollTop;
+      if (isSettingsOpen() && settingsDialog) settingsDialog.scrollTop = settingsScrollTop;
     });
   }
 

@@ -1,10 +1,14 @@
 # MosaicSync development
 
-> **Current release: 1.30.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.5 Settings scroll-lifecycle refinement policy
+
+1.30.5 remains strictly zero-new-features maintenance and deliberately preserves the 1.30.4 rendering experiment: `.settings-dialog` is the sole vertical scroll owner and `.settings-dialog .dialog-card` remains normal-flow content with `max-height:none` and `overflow:visible`. The only runtime follow-up is to align locale-change scroll preservation with that architecture by saving/restoring `settingsDialog.scrollTop` instead of the now-non-scrollable `settingsForm`. Regression coverage stress-toggles Separate Light/Dark Wallpapers and Frequently Visited through their visibility-only paths and protects the scroll-owner contract. Do not change `hidden`/`display:none`, wallpaper preview timing, permission flow, native-dialog/container choice, scroll anchoring or overscroll behavior in this release; hardware results must still isolate the 1.30.4 scroll-frame hypothesis.
 
 ## 1.30.4 Settings single-scroll-owner isolation policy
 
@@ -336,7 +340,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

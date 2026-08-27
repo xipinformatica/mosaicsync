@@ -1,3 +1,10 @@
+## 1.30.5
+
+- Preserved the 1.30.4 single-scroll-owner Settings architecture unchanged while fixing the concrete scroll-lifecycle follow-up found independently in two audits: locale-driven relocalization now saves and restores `settingsDialog.scrollTop`, the actual outer Settings scroller, instead of the normal-flow `settingsForm`.
+- Added targeted regression coverage that executes the real locale-refresh function against the outer scroll owner, stress-toggles Separate Light/Dark Wallpapers 100 times without preview repaint, stress-toggles Frequently Visited 100 times through its single visibility owner, and keeps the 1.30.4 one-scroll-owner CSS invariant protected.
+- Deliberately did not change the current `hidden`/`display:none` strategy, wallpaper preview painting, Frequently Visited permission flow, native-dialog/container choice, scroll anchoring, overscroll behavior, Sync/storage semantics or any feature surface. The reproduced Firefox white/blank-panel hardware symptom remains a real-machine acceptance gate for the retained 1.30.4 rendering hypothesis.
+- No new permissions or host permissions, synchronized/profile schema changes, CSP relaxation, telemetry, remote code or user-facing features. Release packaging continues to emit exactly `mosaicsync-1.30.5-firefox.zip`, `mosaicsync-1.30.5-chrome.zip`, and `mosaicsync-1.30.5-github-ready.zip`.
+
 ## 1.30.4
 
 - Zero-new-features Settings-stability refinement and direct public-history successor to 1.30.2; the failed 1.30.3 Settings-container experiment was not published. No permission, synchronized/storage/profile schema, CSP, telemetry, remote-code or security-boundary changes.
