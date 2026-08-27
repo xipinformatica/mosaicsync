@@ -1,10 +1,14 @@
 # MosaicSync development
 
-> **Current release: 1.30.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.7 zero-feature performance/refinement policy
+
+1.30.7 keeps the complete 1.30.6 correctness/privacy model and removes redundant work rather than changing product behavior. Trusted internal Cross-Space operations use normalized fast paths after a single trust-boundary normalization; storage writes may carry an exact compact persisted baseline through the transaction instead of rebuilding it from hydrated image-heavy state; favicon commits reuse the compact baseline already returned by local materialization. Simultaneous foreground Sync freshness requests are coalesced only while one background check is queued/running—there is deliberately no completed-result freshness cache that could hide a missed `storage.onChanged` delivery. Foreground interval throttling uses monotonic `performance.now()`, while persisted diagnostics retain wall-clock timestamps. Normal publication still rebases against the delivered remote ledger and still constructs commit markers from the authoritative post-write ledger. Equal workspace clocks continue to fall back to exact semantic signatures; only obviously changed clocks take the positive fast path. Expected own Sync echoes do not replace useful remote-delivery forensic evidence. Settings remains a single-scroll-owner surface. No new features, permissions, transport, telemetry, backend, schema or visual behavior are introduced.
 
 ## 1.30.6 Sync delivery resilience policy
 
@@ -344,7 +348,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

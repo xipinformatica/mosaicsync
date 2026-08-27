@@ -95,8 +95,8 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(context.pendingSettingsDraft.size, 0, "dirty value clears only after successful persistence");
     assert.match(source, /tileSizePersistTimer\s*=\s*setTimeout\([\s\S]*?saveSettingsState\(\)/,
       "Tile Size debounce must persist through the settings-draft-aware writer");
-    assert.match(source, /writeBaseline\s*=\s*createWriteBaseline\(state\);\s*settlePersistedSettingsDraft\(\);/,
-      "any successful local-state write must settle Settings draft values that actually reached storage");
+    assert.match(source, /writeBaseline\s*=\s*persisted\.compactBaseline;\s*settlePersistedSettingsDraft\(\);/,
+      "any successful local-state write must advance the exact compact baseline and settle Settings draft values that reached storage");
   });
 
   test(`1.27.9 ${browser} background draft refresh preserves external wallpaper when user changes only dim`, () => {

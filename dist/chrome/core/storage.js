@@ -571,17 +571,25 @@ async function persistNormalizedState(normalized, {
         // of silently leaking storage forever after one failed remove().
       }
     }
-    return { state: finalState, rebased };
+    return { state: finalState, rebased, compactBaseline: cloneCompactJson(projection.state) };
   });
 }
 
-export async function writeLocalState(state, { beforeWrite, crossSpaceSyncIntent = null, recordSyncMutation = false, baseState = null } = {}) {
+async function writeLocalStateResult(state, {
+  beforeWrite,
+  crossSpaceSyncIntent = null,
+  recordSyncMutation = false,
+  baseState = null,
+  baseStateIsCompact = false
+} = {}) {
   // One short-lived memo spans validation and local-asset projection for this
   // transaction only. It never survives the write or weakens content identity:
   // identical bytes still resolve through assetIdForDataUrl's exact pure result.
   const assetIdMemo = new Map();
   const normalized = normalizeState(state || DEFAULT_STATE, assetIdMemo);
-  const baseline = baseState ? createWriteBaseline(baseState, assetIdMemo) : null;
+  const baseline = baseState
+    ? (baseStateIsCompact ? cloneCompactJson(baseState) : createWriteBaseline(baseState, assetIdMemo))
+    : null;
   let persisted;
   try {
     persisted = await persistNormalizedState(normalized, {
@@ -605,7 +613,15 @@ export async function writeLocalState(state, { beforeWrite, crossSpaceSyncIntent
     finalState = selectActiveSpaceNormalized(finalState, finalState.activeSpaceId);
   }
   await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: createRenderSnapshot(finalState) });
-  return finalState;
+  return { state: finalState, compactBaseline: persisted.compactBaseline };
+}
+
+export async function writeLocalState(state, options = {}) {
+  return (await writeLocalStateResult(state, options)).state;
+}
+
+export async function writeLocalStateWithBaseline(state, options = {}) {
+  return writeLocalStateResult(state, options);
 }
 
 

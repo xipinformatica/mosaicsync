@@ -22,9 +22,12 @@ function makeEvent() {
 
 function makeStorageArea(initial = {}) {
   const data = new Map(Object.entries(clone(initial)));
+  const stats = { getCalls: 0, getAllCalls: 0, setCalls: 0, removeCalls: 0 };
   return {
-    data,
+    data, stats,
     async get(keys = null) {
+      stats.getCalls += 1;
+      if (keys === null || keys === undefined) stats.getAllCalls += 1;
       if (keys === null || keys === undefined) return Object.fromEntries([...data].map(([k,v]) => [k, clone(v)]));
       if (typeof keys === 'string') return data.has(keys) ? { [keys]: clone(data.get(keys)) } : {};
       if (Array.isArray(keys)) {
@@ -35,8 +38,8 @@ function makeStorageArea(initial = {}) {
       }
       return {};
     },
-    async set(items) { for (const [k,v] of Object.entries(items || {})) data.set(k, clone(v)); },
-    async remove(keys) { for (const k of (Array.isArray(keys)?keys:[keys])) data.delete(k); },
+    async set(items) { stats.setCalls += 1; for (const [k,v] of Object.entries(items || {})) data.set(k, clone(v)); },
+    async remove(keys) { stats.removeCalls += 1; for (const k of (Array.isArray(keys)?keys:[keys])) data.delete(k); },
     async clear() { data.clear(); },
     async getBytesInUse(keys = null) {
       const obj = await this.get(keys);
@@ -574,6 +577,20 @@ else if (scenario === 'sync-12781-profile-root-quota-rollback') {
   console.log(JSON.stringify({ok:true,beforeCommit,afterCommit:afterRoot.commitId,newChunkWrites,protection:meta.syncProfileProtection}));
 }
 
+else if (scenario === 'sync-1307-foreground-single-flight') {
+  const localState = stateWith({ personal:[shortcut('local','https://local.test/')] });
+  await seedLocalState(localState, {
+    syncEnabled:true, syncInitialized:true, syncStatus:'ready',
+    lastAppliedSyncRevision:'', lastAppliedWorkSyncRevision:'',
+    lastAppliedDeviceSnapshotRevision:'', lastAppliedProfileSnapshotRevision:''
+  });
+  const before = sync.stats.getAllCalls;
+  const results = await Promise.all(Array.from({ length: 20 }, () => send({ type:'mosaicsync:reconcile-if-needed', reason:'foreground' })));
+  const reads = sync.stats.getAllCalls - before;
+  assert.equal(reads, 1, 'simultaneous foreground requests must share one background freshness read');
+  assert.ok(results.every(result => result?.ok !== false));
+  console.log(JSON.stringify({ok:true, requests:results.length, syncGetAllCalls:reads}));
+}
 else if (scenario === 'sync-1306-foreground-recovery') {
   websiteAccess=false;
   const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});

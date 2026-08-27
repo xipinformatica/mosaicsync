@@ -702,18 +702,33 @@ export function moveShortcutOutOfFolder(state, { shortcutId, spaceId = "", posit
 }
 
 
-export function moveShortcutBetweenSpaces(state, { shortcutId, fromSpaceId, toSpaceId, position = null, targetFolderId = "" } = {}) {
-  const normalized = normalizeState(state);
+function cloneWorkspaceForMutationNormalized(workspace) {
+  const source = workspace && typeof workspace === "object" ? workspace : normalizeWorkspace(null);
+  return {
+    ...source,
+    shortcuts: Array.isArray(source.shortcuts)
+      ? source.shortcuts.map(item => item?.type === "folder"
+          ? { ...item, items: Array.isArray(item.items) ? item.items.map(child => ({ ...child })) : [] }
+          : { ...item })
+      : [],
+    settings: { ...(source.settings || DEFAULT_SETTINGS) }
+  };
+}
+
+export function moveShortcutBetweenSpacesNormalized(normalized, { shortcutId, fromSpaceId, toSpaceId, position = null, targetFolderId = "" } = {}) {
+  const sourceState = normalized && typeof normalized === "object" && normalized.spaces && typeof normalized.spaces === "object"
+    ? normalized
+    : normalizeState(normalized);
   if (!SPACE_IDS.includes(fromSpaceId) || !SPACE_IDS.includes(toSpaceId) || fromSpaceId === toSpaceId || typeof shortcutId !== "string" || !shortcutId) {
-    return normalized;
+    return sourceState;
   }
 
-  const source = normalizeWorkspace(normalized.spaces[fromSpaceId]);
-  const destination = normalizeWorkspace(normalized.spaces[toSpaceId]);
+  const source = cloneWorkspaceForMutationNormalized(sourceState.spaces[fromSpaceId]);
+  const destination = cloneWorkspaceForMutationNormalized(sourceState.spaces[toSpaceId]);
   const destinationAlreadyHasId = destination.shortcuts.some(item =>
     item?.id === shortcutId || (item?.type === "folder" && item.items.some(child => child?.id === shortcutId))
   );
-  if (destinationAlreadyHasId) return normalized;
+  if (destinationAlreadyHasId) return sourceState;
   let moved = null;
   let sourceFolder = null;
   let sourceFolderIndex = -1;
@@ -734,7 +749,7 @@ export function moveShortcutBetweenSpaces(state, { shortcutId, fromSpaceId, toSp
     }
   }
 
-  if (!moved || moved.type !== "shortcut") return normalized;
+  if (!moved || moved.type !== "shortcut") return sourceState;
 
   const timestamp = nextMutationTime(moved.modifiedAt, source.updatedAt, destination.updatedAt);
 
@@ -774,7 +789,7 @@ export function moveShortcutBetweenSpaces(state, { shortcutId, fromSpaceId, toSp
       const capacity = destination.settings.columns * destination.settings.rows;
       let displacedPosition = 0;
       while (displacedPosition < capacity && (occupied.has(displacedPosition) || displacedPosition === desiredPosition)) displacedPosition += 1;
-      if (displacedPosition >= capacity) return normalized;
+      if (displacedPosition >= capacity) return sourceState;
       occupant.position = displacedPosition;
       occupant.modifiedAt = timestamp;
     }
@@ -789,14 +804,14 @@ export function moveShortcutBetweenSpaces(state, { shortcutId, fromSpaceId, toSp
   destination.updatedAt = timestamp;
 
   const spaces = {
-    ...normalized.spaces,
-    [fromSpaceId]: normalizeWorkspace(source),
-    [toSpaceId]: normalizeWorkspace(destination)
+    ...sourceState.spaces,
+    [fromSpaceId]: source,
+    [toSpaceId]: destination
   };
   const activeSpaceId = toSpaceId;
   const active = spaces[activeSpaceId];
   return {
-    ...normalized,
+    ...sourceState,
     activeSpaceId,
     spaces,
     shortcuts: active.shortcuts,
@@ -804,6 +819,10 @@ export function moveShortcutBetweenSpaces(state, { shortcutId, fromSpaceId, toSp
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
+}
+
+export function moveShortcutBetweenSpaces(state, options = {}) {
+  return moveShortcutBetweenSpacesNormalized(normalizeState(state), options);
 }
 
 export function normalizeMeta(raw) {
@@ -1348,7 +1367,7 @@ export function settingsRecordEqual(a, b) {
   return jsonSemanticEqual(a, b, true);
 }
 
-export function createCrossSpaceSyncIntent(oldFullState, newFullState, {
+export function createCrossSpaceSyncIntentNormalized(oldState, newState, {
   fromSpaceId,
   toSpaceId,
   shortcutIds = [],
@@ -1356,14 +1375,18 @@ export function createCrossSpaceSyncIntent(oldFullState, newFullState, {
   timestamp = now()
 } = {}) {
   if (!SPACE_IDS.includes(fromSpaceId) || !SPACE_IDS.includes(toSpaceId) || fromSpaceId === toSpaceId) return null;
-  const oldState = normalizeState(oldFullState);
-  const newState = normalizeState(newFullState);
+  const oldNormalized = oldState && typeof oldState === "object" && oldState.spaces && typeof oldState.spaces === "object"
+    ? oldState
+    : normalizeState(oldState);
+  const newNormalized = newState && typeof newState === "object" && newState.spaces && typeof newState.spaces === "object"
+    ? newState
+    : normalizeState(newState);
 
   const build = spaceId => {
-    const oldWorkspace = workspaceState(oldState, spaceId);
-    const newWorkspace = workspaceState(newState, spaceId);
-    const oldRecords = flattenState(oldWorkspace, deviceId);
-    const newRecords = flattenState(newWorkspace, deviceId);
+    const oldWorkspace = workspaceStateNormalized(oldNormalized, spaceId);
+    const newWorkspace = workspaceStateNormalized(newNormalized, spaceId);
+    const oldRecords = flattenStateNormalized(oldWorkspace, deviceId);
+    const newRecords = flattenStateNormalized(newWorkspace, deviceId);
     const upserts = [];
     const deletes = [];
     for (const [id, record] of newRecords) {
@@ -1373,8 +1396,8 @@ export function createCrossSpaceSyncIntent(oldFullState, newFullState, {
     for (const id of oldRecords.keys()) {
       if (!newRecords.has(id)) deletes.push(id);
     }
-    const oldSettings = makeSettingsRecord(oldWorkspace, deviceId);
-    const newSettings = makeSettingsRecord(newWorkspace, deviceId);
+    const oldSettings = makeSettingsRecordNormalized(oldWorkspace, deviceId);
+    const newSettings = makeSettingsRecordNormalized(newWorkspace, deviceId);
     return {
       spaceId,
       upserts,
@@ -1408,6 +1431,10 @@ export function createCrossSpaceSyncIntent(oldFullState, newFullState, {
     destination,
     source
   };
+}
+
+export function createCrossSpaceSyncIntent(oldFullState, newFullState, options = {}) {
+  return createCrossSpaceSyncIntentNormalized(normalizeState(oldFullState), normalizeState(newFullState), options);
 }
 
 export function localStateSyncClockSignature(state) {

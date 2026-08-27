@@ -44,3 +44,21 @@ const folderHeavyCompact={spaces:{personal:{shortcuts:Array.from({length:5},(_,f
 const allFolderAssets=assets.collectStateLocalAssetIds(folderHeavyCompact,{spaceIds:["personal"],includeBackground:false});
 const visibleFolderAssets=assets.collectStateLocalAssetIds(folderHeavyCompact,{spaceIds:["personal"],includeBackground:false,folderChildLimit:4});
 console.log(`closed-folder startup artwork IDs: ${allFolderAssets.size} full -> ${visibleFolderAssets.size} first-frame visible`);
+const crossSpaceShortcutId = normalized.spaces.personal.shortcuts.find(item => item.type === "shortcut")?.id ||
+  normalized.spaces.personal.shortcuts.find(item => item.type === "folder")?.items?.[0]?.id || "";
+if (crossSpaceShortcutId) {
+  bench("cross-Space normalized move+intent(200)", () => {
+    const moved = model.moveShortcutBetweenSpacesNormalized(normalized, {
+      shortcutId: crossSpaceShortcutId,
+      fromSpaceId: "personal",
+      toSpaceId: "work"
+    });
+    model.createCrossSpaceSyncIntentNormalized(normalized, moved, {
+      fromSpaceId: "personal",
+      toSpaceId: "work",
+      shortcutIds: [crossSpaceShortcutId],
+      deviceId: "bench-device",
+      timestamp: 123
+    });
+  }, 20);
+}

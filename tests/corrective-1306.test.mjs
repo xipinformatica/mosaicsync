@@ -60,7 +60,7 @@ test("1.30.6 foreground/resume Sync hooks are throttled and reuse the existing r
     lastForegroundSyncRequestAt: 0,
     foregroundSyncRequestInFlight: false,
     SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS: 60_000,
-    Date: { now: () => now },
+    performance: { now: () => now },
     sendSyncMessage: async (type, payload) => { calls.push({ type, payload }); return { ok: true }; }
   };
   vm.createContext(ctx);

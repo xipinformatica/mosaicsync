@@ -1,3 +1,15 @@
+## 1.30.7
+
+- Zero-new-features performance/refinement release on top of 1.30.6. Preserves browser-native Sync, deterministic merge/tombstone rules, the authoritative post-write Sync ledger, five-minute semantic watchdog, privacy/security boundaries and the 1.30.5 Settings single-scroll-owner architecture.
+- Added trusted normalized Cross-Space fast paths. Internal moves and Sync-intent construction no longer repeatedly re-normalize the same already-normalized image-heavy state; defensive public wrappers remain for untrusted/raw callers.
+- Local persistence can now carry forward the exact compact baseline produced by the storage transaction. New Tab write paths and automatic favicon commits reuse known compact persisted baselines instead of rebuilding them from hydrated state, reducing repeated image hashing/projection work while preserving optimistic-concurrency semantics.
+- Simultaneous foreground freshness requests from multiple open New Tabs now share one in-flight background reconciliation. There is deliberately no completed-result freshness cache, so a newly delivered Sync change can still be discovered immediately after the current check finishes. Foreground interval throttling now uses monotonic `performance.now()`.
+- Reduced Sync publication overhead without changing conflict behavior: remote-winning records skip redundant deterministic serialization, and workspace clock changes provide a positive fast path while equal clocks still fall back to the exact semantic signature. Foreground watchdog self-healing now reuses the reconciliation function's existing meta read.
+- Expected own `storage.sync` echoes no longer replace the useful last-unexpected-delivery diagnostic evidence; five-minute watchdog diagnostics remain intact for forensic value while delayed browser Sync delivery is still under investigation.
+- Avoided repeated root geometry CSS-variable writes when columns/tile size are unchanged, and removed proven-dead Settings `<aside>` backdrop/obsolete inner-scroll declarations while keeping the one-scroll-owner computed contract unchanged.
+- Added regression coverage for normalized Cross-Space equivalence, compact baseline reuse, 20-request foreground single-flight, monotonic throttling, remote-winner serialization skipping, workspace-clock semantic fallback, own-echo diagnostics, geometry write avoidance and Settings CSS invariants. The performance benchmark now includes the normalized Cross-Space move+intent path.
+- No new permissions or host permissions, synchronized/profile schema changes, MosaicSync backend, heartbeat/pulse, polling-frequency increase, CSP relaxation, telemetry, remote code, visual behavior or user-facing features.
+
 ## 1.30.6
 
 - Added a throttled foreground/resume Sync freshness check for already-open New Tabs. Visible/focus/bfcache recovery reuses the existing `mosaicsync:reconcile-if-needed` message, the serialized background queue and the unchanged five-minute semantic watchdog; it does not poll a MosaicSync server or claim to force browser-account delivery.

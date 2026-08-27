@@ -100,7 +100,6 @@ import {
   workspaceStateNormalized
 } from "../core/model.js";
 import {
-  createWriteBaseline,
   ensureLocalStorage,
   readLocalMeta,
   writeLocalMeta,
@@ -112,6 +111,7 @@ import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
 
 let queue = Promise.resolve();
+let foregroundReconcileInFlight = null;
 const ignoredLocalStateSignatures = new Map();
 const expectedSyncChanges = new Map();
 const REMOVED = Symbol("removed");
@@ -341,6 +341,17 @@ function enqueue(task, { persistSyncError = true } = {}) {
     }
   });
   return run.catch(error => ({ ok: false, error: error?.message || String(error) }));
+}
+
+async function enqueueForegroundReconcile() {
+  if (foregroundReconcileInFlight) return foregroundReconcileInFlight;
+  const run = enqueue(() => reconcileIfNewCommit("foreground"));
+  foregroundReconcileInFlight = run;
+  void run.then(
+    () => { if (foregroundReconcileInFlight === run) foregroundReconcileInFlight = null; },
+    () => { if (foregroundReconcileInFlight === run) foregroundReconcileInFlight = null; }
+  );
+  return run;
 }
 
 async function openMosaicHomeTab() {
@@ -595,14 +606,13 @@ browser.storage.onChanged.addListener((changes, areaName) => {
     if (!consumeSyncChange(key, actual)) unresolvedChanges.push([key, actual]);
   }
 
-  const storageEventAt = Date.now();
-  const diagnosticWrite = noteSyncDiagnostic({
-    lastSyncStorageChangeEventAt: storageEventAt,
-    lastSyncStorageChangeRelevantCount: relevant.length,
-    lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length
-  });
-
   if (unresolvedChanges.length) {
+    const storageEventAt = Date.now();
+    const diagnosticWrite = noteSyncDiagnostic({
+      lastSyncStorageChangeEventAt: storageEventAt,
+      lastSyncStorageChangeRelevantCount: relevant.length,
+      lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length
+    });
     enqueue(async () => {
       await diagnosticWrite;
       if (!(await consumeDurableSyncChanges(unresolvedChanges))) return;
@@ -629,8 +639,6 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         });
       }
     });
-  } else {
-    void diagnosticWrite;
   }
 });
 
@@ -676,7 +684,7 @@ browser.alarms?.onAlarm?.addListener(alarm => {
       // commit-marker comparison. If currently usable remote records/settings
       // differ from local state, reconcileIfNewCommit() falls through to the
       // same full merge used at startup without paying that cost on every tick.
-      await reconcileIfNewCommit("alarm");
+      await reconcileIfNewCommit("alarm", meta);
       meta = await readLocalMeta();
       await maybeGarbageCollectStaleDeviceSnapshots(meta);
     }
@@ -2047,7 +2055,7 @@ async function applyProactiveFaviconResults(results) {
   const unchangedIds = new Set();
   if (!results.length) return { appliedIds, unchangedIds };
   const loaded = await ensureLocalStorage();
-  const writeBaseline = createWriteBaseline(loaded.state);
+  const writeBaseline = loaded.compactBaseline;
   for (const result of results) {
     // Network recovery is intentionally Space-agnostic while in flight. Resolve
     // ownership again at commit time so a Personal→Work move neither discards
@@ -2080,7 +2088,7 @@ async function applyProactiveFaviconResults(results) {
   // Persist the whole network batch once. This avoids three independent
   // normalize/write/session-cache/storage-event cycles when three favicon
   // recoveries complete together. Core Sync clocks remain untouched.
-  await writeLocalState(loaded.state, { baseState: writeBaseline });
+  await writeLocalState(loaded.state, { baseState: writeBaseline, baseStateIsCompact: Boolean(writeBaseline) });
   return { appliedIds, unchangedIds };
 }
 
@@ -2601,7 +2609,7 @@ async function applyLearnedFavicon(loaded, targets, { image, sourceKind, sourceU
   if (!image) return false;
   image = await normalizeLocalFaviconDataUrl(image);
   if (!image) return false;
-  const writeBaseline = createWriteBaseline(loaded.state);
+  const writeBaseline = loaded.compactBaseline;
   let changed = false;
   for (const shortcut of targets) {
     const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
@@ -2626,7 +2634,7 @@ async function applyLearnedFavicon(loaded, targets, { image, sourceKind, sourceU
     }
     changed = true;
   }
-  if (changed) await writeLocalState(loaded.state, { baseState: writeBaseline });
+  if (changed) await writeLocalState(loaded.state, { baseState: writeBaseline, baseStateIsCompact: Boolean(writeBaseline) });
   return changed;
 }
 
@@ -2824,15 +2832,12 @@ browser.runtime.onMessage.addListener((message, sender) => {
       return enqueue(() => bootstrapRemote({ waitIfMissing: false }));
     case "mosaicsync:wait-for-remote":
       return enqueue(() => bootstrapRemote({ waitIfMissing: true }));
-    case "mosaicsync:reconcile-if-needed":
-      return enqueue(async () => {
-        const reason = syncCheckReason(message.reason);
-        if (reason === "foreground") {
-          const meta = await readLocalMeta();
-          await ensureSyncWatchAlarm(meta);
-        }
-        return reconcileIfNewCommit(reason);
-      });
+    case "mosaicsync:reconcile-if-needed": {
+      const reason = syncCheckReason(message.reason);
+      return reason === "foreground"
+        ? enqueueForegroundReconcile()
+        : enqueue(() => reconcileIfNewCommit(reason));
+    }
     case "mosaicsync:reconcile-now":
       return enqueue(() => reconcile("merge"));
     case "mosaicsync:restore-from-sync":
@@ -3594,11 +3599,12 @@ function markAppliedRemoteCore(meta, deviceRevision = "") {
   return { ...meta, lastAppliedDeviceSnapshotRevision: deviceRevision };
 }
 
-async function reconcileIfNewCommit(reason = "message") {
+async function reconcileIfNewCommit(reason = "message", providedMeta = null) {
   const checkReason = syncCheckReason(reason);
-  let meta = await readLocalMeta();
+  const checkedAt = Date.now();
+  let meta = providedMeta || await readLocalMeta();
+  if (checkReason === "foreground") await ensureSyncWatchAlarm(meta);
   if (!meta.syncEnabled) {
-    const checkedAt = Date.now();
     await noteSyncDiagnostic({
       ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
       ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -3612,7 +3618,6 @@ async function reconcileIfNewCommit(reason = "message") {
     let result;
     if (meta.syncBootstrapMode === "await-remote") result = await bootstrapRemote({ waitIfMissing: true });
     else result = { ok: true, skipped: true, reason: "sync-not-ready", meta };
-    const checkedAt = Date.now();
     await noteSyncDiagnostic({
       ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
       ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -3670,7 +3675,6 @@ async function reconcileIfNewCommit(reason = "message") {
     }
   }
   if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged && contentUnchanged) {
-    const checkedAt = Date.now();
     await noteSyncDiagnostic({
       ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
       ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -3682,7 +3686,6 @@ async function reconcileIfNewCommit(reason = "message") {
     return { ok: true, skipped: true, reason: "already-applied", meta };
   }
   const result = await reconcile("merge");
-  const checkedAt = Date.now();
   const outcome = result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled");
   await noteSyncDiagnostic({
     ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
@@ -4434,13 +4437,15 @@ function rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, spaceId = PE
     if (key === namespace.settingsKey) {
       const remote = snapshot?.settings;
       const winner = remote ? chooseNewerRecord(candidate, remote) : candidate;
-      if (!remote || stableStringify(remote) !== stableStringify(winner)) rebased[key] = winner;
+      if (winner === remote) continue;
+      rebased[key] = winner;
       continue;
     }
     const id = typeof candidate.id === "string" ? candidate.id : "";
     const remote = id && snapshot?.records instanceof Map ? snapshot.records.get(id) : null;
     const winner = remote ? chooseNewerRecord(candidate, remote) : candidate;
-    if (!remote || stableStringify(remote) !== stableStringify(winner)) rebased[key] = winner;
+    if (winner === remote) continue;
+    rebased[key] = winner;
   }
   return rebased;
 }
@@ -4621,13 +4626,23 @@ function pendingMatchesMove(pending, move) {
   return move.shortcutIds.every(id => pendingIds.has(id));
 }
 
+function workspaceCoreChanged(oldState, newState, spaceId, deviceId = "") {
+  const oldWorkspace = oldState?.spaces?.[spaceId];
+  const newWorkspace = newState?.spaces?.[spaceId];
+  if (Number(oldWorkspace?.updatedAt) !== Number(newWorkspace?.updatedAt) ||
+      Number(oldWorkspace?.settingsModifiedAt) !== Number(newWorkspace?.settingsModifiedAt)) return true;
+  // Equal clocks are not proof of equality: legacy clients and device-local
+  // artwork paths can preserve clocks. Keep the exact semantic signature as the
+  // defensive fallback for that uncommon case.
+  return workspaceCoreSignature(oldState, spaceId, deviceId) !==
+    workspaceCoreSignature(newState, spaceId, deviceId);
+}
+
 async function pushLocalMutation(oldRaw, newRaw, meta) {
   const oldState = normalizeState(oldRaw);
   const newState = normalizeState(newRaw);
-  const personalChanged = workspaceCoreSignature(oldState, PERSONAL_SPACE_ID, meta.deviceId) !==
-    workspaceCoreSignature(newState, PERSONAL_SPACE_ID, meta.deviceId);
-  const workChanged = workspaceCoreSignature(oldState, WORK_SPACE_ID, meta.deviceId) !==
-    workspaceCoreSignature(newState, WORK_SPACE_ID, meta.deviceId);
+  const personalChanged = workspaceCoreChanged(oldState, newState, PERSONAL_SPACE_ID, meta.deviceId);
+  const workChanged = workspaceCoreChanged(oldState, newState, WORK_SPACE_ID, meta.deviceId);
   if (!personalChanged && !workChanged) return;
 
   // Never begin a second cross-namespace publication while an earlier one is

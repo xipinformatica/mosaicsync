@@ -41,7 +41,7 @@ import {
 import {
   classifyImage,
   clampInt,
-  createCrossSpaceSyncIntent,
+  createCrossSpaceSyncIntentNormalized,
   effectiveBackgroundDimForTheme,
   initializeThemeWallpaperDims,
   hexLuminance,
@@ -50,7 +50,7 @@ import {
   localStateSyncRawSignature,
   normalizeMeta,
   normalizeState,
-  moveShortcutBetweenSpaces,
+  moveShortcutBetweenSpacesNormalized,
   moveShortcutOutOfFolder,
   nextMutationTime,
   replaceWorkspace,
@@ -63,7 +63,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState } from "../core/storage.js";
+import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -498,7 +498,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function maybeForegroundSyncReconcile() {
     if (document.visibilityState !== "visible" || !meta?.syncEnabled || !meta?.syncInitialized) return false;
-    const requestedAt = Date.now();
+    const requestedAt = performance.now();
     if (foregroundSyncRequestInFlight || requestedAt - lastForegroundSyncRequestAt < SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS) return false;
     lastForegroundSyncRequestAt = requestedAt;
     foregroundSyncRequestInFlight = true;
@@ -992,11 +992,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     state = next;
     stateMutationGeneration += 1;
-    state = await writeLocalState(state, {
+    const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
+      baseStateIsCompact: Boolean(baseState),
       recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
     });
-    writeBaseline = createWriteBaseline(state);
+    state = persisted.state;
+    writeBaseline = persisted.compactBaseline;
     syncFrequentlyVisitedLocalsFromState(state);
     scheduleRenderManifestRefresh(state, meta);
     void warmSessionRenderCache(state, meta);
@@ -1036,11 +1038,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
     }
     migrated = selectActiveSpaceNormalized(migrated, normalized.activeSpaceId);
-    const written = await writeLocalState(migrated, {
+    const persisted = await writeLocalStateWithBaseline(migrated, {
       baseState: loaded.compactBaseline,
+      baseStateIsCompact: Boolean(loaded.compactBaseline),
       recordSyncMutation: publishLegacyIntent && loaded.meta?.syncEnabled && loaded.meta?.syncInitialized
     });
-    const compactBaseline = createWriteBaseline(written);
+    const written = persisted.state;
+    const compactBaseline = persisted.compactBaseline;
     syncFrequentlyVisitedLocalsFromState(written);
     return { ...loaded, state: written, compactBaseline };
   }
@@ -1934,8 +1938,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const targetSpaceId = state.activeSpaceId;
     if (targetSpaceId === drag.sourceSpaceId) return false;
 
-    const beforeMove = normalizeState(state);
-    const next = moveShortcutBetweenSpaces(beforeMove, {
+    const beforeMove = state;
+    const next = moveShortcutBetweenSpacesNormalized(beforeMove, {
       shortcutId: drag.shortcutId,
       fromSpaceId: drag.sourceSpaceId,
       toSpaceId: targetSpaceId,
@@ -1943,7 +1947,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       targetFolderId
     });
     const crossSpaceSyncIntent = meta.syncEnabled && meta.syncInitialized
-      ? createCrossSpaceSyncIntent(beforeMove, next, {
+      ? createCrossSpaceSyncIntentNormalized(beforeMove, next, {
           fromSpaceId: drag.sourceSpaceId,
           toSpaceId: targetSpaceId,
           shortcutIds: [drag.shortcutId],
@@ -1993,11 +1997,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const updatedWorkspace = { ...workspace, settings: { ...workspace.settings, [key]: value }, settingsModifiedAt: timestamp, updatedAt: Math.max(Number(workspace.updatedAt) || 0, timestamp) };
     state = replaceWorkspace(normalized, spaceId, updatedWorkspace);
     stateMutationGeneration += 1;
-    state = await writeLocalState(state, {
+    const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
+      baseStateIsCompact: Boolean(baseState),
       recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
     });
-    writeBaseline = createWriteBaseline(state);
+    state = persisted.state;
+    writeBaseline = persisted.compactBaseline;
     updateSpaceSwitcher();
     refreshSpacesSettings();
     scheduleRenderManifestRefresh(state, meta);
@@ -2016,11 +2022,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       await writeActiveSpace("personal");
     }
     stateMutationGeneration += 1;
-    state = await writeLocalState(state, {
+    const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
+      baseStateIsCompact: Boolean(baseState),
       recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
     });
-    writeBaseline = createWriteBaseline(state);
+    state = persisted.state;
+    writeBaseline = persisted.compactBaseline;
     applySettings();
     render();
     updateSpaceSwitcher();
@@ -2089,12 +2097,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       state.shortcuts = repairTopLevelPositions(state.shortcuts);
     }
     stateMutationGeneration += 1;
-    state = await writeLocalState(state, {
+    const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
+      baseStateIsCompact: Boolean(baseState),
       crossSpaceSyncIntent,
       recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent && meta?.syncEnabled && meta?.syncInitialized
     });
-    writeBaseline = createWriteBaseline(state);
+    state = persisted.state;
+    writeBaseline = persisted.compactBaseline;
     settlePersistedSettingsDraft();
     scheduleAppearanceHintRefresh(state.settings);
     scheduleRenderManifestRefresh(state, meta);
@@ -2275,22 +2285,27 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return effectiveTheme() === "dark" ? "light" : "dark";
   }
 
+  let lastAppliedGeometryKey = "";
   function applySettings({ deferHeavyAssets = false } = {}) {
     const settings = state.settings;
-    document.documentElement.style.setProperty("--columns", String(settings.columns));
     const tileSize = clampInt(settings.tileSize, 60, 96, 76);
-    const iconSize = Math.round(tileSize * 53 / 76);
-    const scale = tileSize / 76;
-    document.documentElement.style.setProperty("--tile-size", `${tileSize}px`);
-    document.documentElement.style.setProperty("--shortcut-icon-size", `${iconSize}px`);
-    document.documentElement.style.setProperty("--folder-mosaic-cell-size", `${Math.max(20, Math.round(25 * scale))}px`);
-    document.documentElement.style.setProperty("--folder-mosaic-icon-size", `${Math.max(15, Math.round(19 * scale))}px`);
-    document.documentElement.style.setProperty("--folder-mosaic-gap", `${Math.max(3, Math.round(4 * scale))}px`);
-    document.documentElement.style.setProperty("--folder-mosaic-padding", `${Math.max(5, Math.round(7 * scale))}px`);
-    document.documentElement.style.setProperty("--folder-item-tile-size", `${Math.max(44, Math.round(54 * scale))}px`);
-    document.documentElement.style.setProperty("--folder-item-icon-size", `${Math.max(30, Math.round(36 * scale))}px`);
-    document.documentElement.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
-    document.documentElement.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
+    const geometryKey = `${settings.columns}:${tileSize}`;
+    if (geometryKey !== lastAppliedGeometryKey) {
+      lastAppliedGeometryKey = geometryKey;
+      const iconSize = Math.round(tileSize * 53 / 76);
+      const scale = tileSize / 76;
+      document.documentElement.style.setProperty("--columns", String(settings.columns));
+      document.documentElement.style.setProperty("--tile-size", `${tileSize}px`);
+      document.documentElement.style.setProperty("--shortcut-icon-size", `${iconSize}px`);
+      document.documentElement.style.setProperty("--folder-mosaic-cell-size", `${Math.max(20, Math.round(25 * scale))}px`);
+      document.documentElement.style.setProperty("--folder-mosaic-icon-size", `${Math.max(15, Math.round(19 * scale))}px`);
+      document.documentElement.style.setProperty("--folder-mosaic-gap", `${Math.max(3, Math.round(4 * scale))}px`);
+      document.documentElement.style.setProperty("--folder-mosaic-padding", `${Math.max(5, Math.round(7 * scale))}px`);
+      document.documentElement.style.setProperty("--folder-item-tile-size", `${Math.max(44, Math.round(54 * scale))}px`);
+      document.documentElement.style.setProperty("--folder-item-icon-size", `${Math.max(30, Math.round(36 * scale))}px`);
+      document.documentElement.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
+      document.documentElement.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
+    }
     // applyPageBackgroundVisual establishes the dim before the authoritative
     // wallpaper when Settings is closed. While Settings is open it intentionally
     // leaves every full-viewport paint layer untouched, avoiding Firefox/Linux
@@ -4080,14 +4095,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       const movedAcrossSpaces = destinationSpaceId !== editingSourceSpaceId;
       let crossSpaceSyncIntent = null;
       if (movedAcrossSpaces) {
-        const beforeMove = normalizeState(state);
-        const movedState = moveShortcutBetweenSpaces(beforeMove, {
+        const beforeMove = state;
+        const movedState = moveShortcutBetweenSpacesNormalized(beforeMove, {
           shortcutId: savedShortcutId,
           fromSpaceId: editingSourceSpaceId,
           toSpaceId: destinationSpaceId
         });
         crossSpaceSyncIntent = meta.syncEnabled && meta.syncInitialized
-          ? createCrossSpaceSyncIntent(beforeMove, movedState, {
+          ? createCrossSpaceSyncIntentNormalized(beforeMove, movedState, {
               fromSpaceId: editingSourceSpaceId,
               toSpaceId: destinationSpaceId,
               shortcutIds: [savedShortcutId],
@@ -6504,10 +6519,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       stateMutationGeneration += 1;
       pendingSettingsDraft.clear();
       state = importedState;
-      state = await writeLocalState(state, {
+      const persisted = await writeLocalStateWithBaseline(state, {
         recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
       });
-      writeBaseline = createWriteBaseline(state);
+      state = persisted.state;
+      writeBaseline = persisted.compactBaseline;
       await setLocalePreference(parsed.preferences.uiLocale || "auto");
       // Profile preferences express user intent; optional browser permission and
       // the actual browser-derived sites remain installation-local.
