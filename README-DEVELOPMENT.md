@@ -1,10 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.30.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.8 Sync same-key concurrency hardening policy
+
+1.30.8 is a zero-new-features correctness release on top of 1.30.7. Preserve all 1.30.7 normalized fast paths, compact-baseline reuse, foreground single-flight, workspace-clock fallback, post-write authoritative ledger and five-minute semantic watchdog. The new invariant is that an unexpected synchronized core value actually delivered by the browser must not be forgotten merely because a nearly simultaneous local publication overwrites the same `storage.sync` key before the queued reconcile reads it. Background `storage.onChanged` therefore keeps a short-lived, bounded in-memory evidence set for valid Personal/Work record/settings values, including a deterministically newer `oldValue` displaced by an expected own write. Before semantic freshness checks/reconciliation and before Personal/Work commit-marker construction, MosaicSync repairs the current shared key through the existing `chooseNewerRecord()` rule. The evidence layer is short-lived worker-local state only: it is never synchronized, never exported and never changes the public schema. It protects values observed by the currently running background context; normal durable `storage.sync` and device/profile snapshots remain the reconstruction sources after a worker restart. No new permissions, transport, telemetry, backend, heartbeat, feature or visual change is allowed.
+
+### Deferred optimization: device-snapshot generation decode cache
+
+Do **not** implement this cache as part of 1.30.8. Revisit it in a later zero-feature performance release only after the new Sync concurrency path has accumulated stable hardware/cross-device evidence. The intended design is a very small worker-local cache of **successfully decoded and fingerprint-verified complete device/profile generations**, keyed by immutable generation identity (device/commit/slot/data fingerprint). It must be bounded, disposable on MV3 worker restart, and must never cache incomplete, malformed, fingerprint-failing or partially delivered generations. Measure real decode frequency and snapshot sizes first; suggest this optimization again when Sync correctness is stable and a performance-focused release is appropriate.
 
 ## 1.30.7 zero-feature performance/refinement policy
 
@@ -348,7 +356,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

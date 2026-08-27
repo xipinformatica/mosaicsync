@@ -1,3 +1,12 @@
+## 1.30.8
+
+- Zero-new-features Sync concurrency hardening on top of 1.30.7. Preserved every 1.30.7 performance fast path, permission/security boundary, merge/tombstone rule, five-minute watchdog and user-visible behavior.
+- Closed a narrow same-key `storage.sync` publication race found by adversarial fault injection: if Firefox/Chrome delivers a deterministically newer Personal/Work record or settings value after MosaicSync's pre-write ledger read but before its own write, the browser change event's delivered value—and, critically, a newer `oldValue` displaced by an expected own write—is retained as short-lived bounded core evidence. MosaicSync repairs that exact key through the existing `chooseNewerRecord()` rule before authoritative commit-marker/reconciliation reads, so the newer value cannot disappear merely because the final storage read occurs after it was overwritten.
+- The evidence layer is core-only (Personal/Work record/settings keys), bounded by the existing expectation limit, time-limited and in-memory/device-local only; it is never synchronized or exported. It protects delivery values observed in the current background lifetime while durable Sync/device snapshots remain the restart reconstruction path. It does not alter the synchronized/profile schema or conflict policy.
+- Added production fault-injection coverage for the same-key race in both Personal and Work on Firefox and Chrome, plus regressions proving failed foreground single-flight checks cannot poison later checks, a settled single-flight is never a completed-result freshness cache, and normalized Cross-Space helpers do not mutate deeply frozen trusted input.
+- Kept device-snapshot generation decode caching deliberately deferred for a later measured performance release. Any future cache must store only complete fingerprint-verified generations, remain tightly bounded/disposable, and never cache incomplete delivery.
+- No new permissions, host permissions, backend, heartbeat/pulse, telemetry, remote code, CSP relaxation, feature or visual change. Release packaging emits exactly `mosaicsync-1.30.8-firefox.zip`, `mosaicsync-1.30.8-chrome.zip`, and `mosaicsync-1.30.8-github-ready.zip`.
+
 ## 1.30.7
 
 - Zero-new-features performance/refinement release on top of 1.30.6. Preserves browser-native Sync, deterministic merge/tombstone rules, the authoritative post-write Sync ledger, five-minute semantic watchdog, privacy/security boundaries and the 1.30.5 Settings single-scroll-owner architecture.

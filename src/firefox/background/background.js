@@ -113,7 +113,9 @@ let queue = Promise.resolve();
 let foregroundReconcileInFlight = null;
 const ignoredLocalStateSignatures = new Map();
 const expectedSyncChanges = new Map();
+const deliveredCoreEvidence = new Map();
 const REMOVED = Symbol("removed");
+const DELIVERED_CORE_EVIDENCE_TTL_MS = Math.max(EXPECTATION_TTL_MS, 10 * 60 * 1000);
 const ASSET_GC_MIN_OBSERVATION_GAP_MS = 12 * 60 * 60 * 1000;
 const ASSET_GC_LEDGER_VERSION = 1;
 const pendingShortcutNavigations = new Map();
@@ -206,6 +208,96 @@ function consumeSyncChange(key, signature) {
   const expected = expectedSyncChanges.get(key);
   expectedSyncChanges.delete(key);
   return Boolean(expected && expected.expiresAt >= Date.now() && expected.signature === signature);
+}
+
+function coreEvidenceDescriptor(key, value) {
+  if (!key || !value || typeof value !== "object") return null;
+  for (const spaceId of [PERSONAL_SPACE_ID, WORK_SPACE_ID]) {
+    const namespace = syncNamespace(spaceId);
+    if (key === namespace.settingsKey) {
+      return value.kind === "settings" ? { spaceId, key, value } : null;
+    }
+    if (!key.startsWith(namespace.itemPrefix) || typeof value.id !== "string" || !value.id) continue;
+    if (!["shortcut", "folder", "deleted"].includes(value.kind)) return null;
+    if (key !== itemKey(value.id, spaceId)) return null;
+    return { spaceId, key, value };
+  }
+  return null;
+}
+
+function pruneDeliveredCoreEvidence(now = Date.now()) {
+  for (const [key, entry] of deliveredCoreEvidence) {
+    if (!entry || entry.expiresAt < now) deliveredCoreEvidence.delete(key);
+  }
+  while (deliveredCoreEvidence.size > MAX_EXPECTATIONS) {
+    deliveredCoreEvidence.delete(deliveredCoreEvidence.keys().next().value);
+  }
+}
+
+function clearDeliveredCoreEvidence() {
+  deliveredCoreEvidence.clear();
+}
+
+function rememberDeliveredCoreEvidence(key, value) {
+  const descriptor = coreEvidenceDescriptor(key, value);
+  if (!descriptor) return false;
+  pruneDeliveredCoreEvidence();
+  const existing = deliveredCoreEvidence.get(key);
+  const winner = existing?.value ? chooseNewerRecord(existing.value, descriptor.value) : descriptor.value;
+  deliveredCoreEvidence.set(key, {
+    spaceId: descriptor.spaceId,
+    value: structuredClone(winner),
+    expiresAt: Date.now() + DELIVERED_CORE_EVIDENCE_TTL_MS
+  });
+  pruneDeliveredCoreEvidence();
+  return true;
+}
+
+function rememberOverwrittenCoreEvidence(key, oldValue, newValue) {
+  const oldDescriptor = coreEvidenceDescriptor(key, oldValue);
+  const newDescriptor = coreEvidenceDescriptor(key, newValue);
+  if (!oldDescriptor || !newDescriptor || oldDescriptor.spaceId !== newDescriptor.spaceId) return false;
+  if (stableStringify(oldValue) === stableStringify(newValue)) return false;
+  return chooseNewerRecord(newValue, oldValue) === oldValue
+    ? rememberDeliveredCoreEvidence(key, oldValue)
+    : false;
+}
+
+async function repairDeliveredCoreEvidence(spaceId = PERSONAL_SPACE_ID) {
+  pruneDeliveredCoreEvidence();
+  const evidence = [...deliveredCoreEvidence.entries()].filter(([, entry]) => entry?.spaceId === spaceId);
+  if (!evidence.length) return { repaired: 0, resolved: 0 };
+
+  const keys = evidence.map(([key]) => key);
+  const current = await browser.storage.sync.get(keys);
+  const writes = {};
+  const resolved = new Set();
+  const writeTokens = new Map();
+
+  for (const [key, entry] of evidence) {
+    const currentValue = current?.[key];
+    const currentDescriptor = coreEvidenceDescriptor(key, currentValue);
+    if (!currentDescriptor) {
+      writes[key] = entry.value;
+      writeTokens.set(key, entry);
+      continue;
+    }
+    const winner = chooseNewerRecord(currentValue, entry.value);
+    if (winner === entry.value && stableStringify(currentValue) !== stableStringify(entry.value)) {
+      writes[key] = entry.value;
+      writeTokens.set(key, entry);
+    } else {
+      resolved.add(key);
+    }
+  }
+
+  if (hasOwnEnumerable(writes)) await writeSyncItems(writes);
+
+  for (const [key, entry] of evidence) {
+    if (!resolved.has(key) && !writeTokens.has(key)) continue;
+    if (deliveredCoreEvidence.get(key) === entry) deliveredCoreEvidence.delete(key);
+  }
+  return { repaired: writeTokens.size, resolved: resolved.size };
 }
 
 async function rememberDurableSyncChanges(entries) {
@@ -600,23 +692,38 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (!relevant.length) return;
 
   const unresolvedChanges = [];
+  let overwrittenEvidenceCount = 0;
   for (const [key, change] of relevant) {
+    // storage.onChanged carries both sides of the write. If our expected write
+    // replaced a deterministically newer value that Firefox had delivered in
+    // the tiny read->set publication window, oldValue is the last evidence of
+    // that winner. Preserve it before the queued reconciliation reads storage.
+    if (rememberOverwrittenCoreEvidence(key, change.oldValue, change.newValue)) overwrittenEvidenceCount += 1;
     const actual = change.newValue === undefined ? REMOVED : stableStringify(change.newValue);
-    if (!consumeSyncChange(key, actual)) unresolvedChanges.push([key, actual]);
+    if (!consumeSyncChange(key, actual)) {
+      if (change.newValue !== undefined) rememberDeliveredCoreEvidence(key, change.newValue);
+      unresolvedChanges.push([key, actual]);
+    }
   }
 
-  if (unresolvedChanges.length) {
+  if (unresolvedChanges.length || overwrittenEvidenceCount) {
     const storageEventAt = Date.now();
     const diagnosticWrite = noteSyncDiagnostic({
       lastSyncStorageChangeEventAt: storageEventAt,
       lastSyncStorageChangeRelevantCount: relevant.length,
-      lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length
+      lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length + overwrittenEvidenceCount
     });
     enqueue(async () => {
       await diagnosticWrite;
-      if (!(await consumeDurableSyncChanges(unresolvedChanges))) return;
+      const durableExternalChange = unresolvedChanges.length
+        ? await consumeDurableSyncChanges(unresolvedChanges)
+        : false;
+      if (!durableExternalChange && !overwrittenEvidenceCount) return;
       const meta = await readLocalMeta();
-      if (!meta.syncEnabled) return;
+      if (!meta.syncEnabled) {
+        clearDeliveredCoreEvidence();
+        return;
+      }
       // A new computer can wait safely for Firefox itself to download the
       // extension's storage.sync data. As soon as it arrives, restore it.
       if (!meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
@@ -3638,6 +3745,7 @@ async function reconcileIfNewCommit(reason = "message", providedMeta = null) {
   let meta = providedMeta || await readLocalMeta();
   if (checkReason === "foreground") await ensureSyncWatchAlarm(meta);
   if (!meta.syncEnabled) {
+    clearDeliveredCoreEvidence();
     await noteSyncDiagnostic({
       ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
       ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -3662,6 +3770,8 @@ async function reconcileIfNewCommit(reason = "message", providedMeta = null) {
   }
 
   meta = await retryPendingLocalSyncMutation(meta);
+  await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
+  await repairDeliveredCoreEvidence(WORK_SPACE_ID);
   const all = await browser.storage.sync.get(null);
   const sources = await readCoreSources(all, { includeAssets: false });
   const sharedRevision = datasetRevision(sources.shared.dataset);
@@ -4525,6 +4635,7 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
   const rebasedWrites = rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, PERSONAL_SPACE_ID);
   if (hasOwnEnumerable(rebasedWrites)) {
     await writeSyncItems(rebasedWrites);
+    await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
     // Dataset is a commit marker and is intentionally written last. Build it
     // from the ledger that actually exists after our idempotent record writes,
     // not only from this tab's pre-mutation snapshot. A remote record that was
@@ -4613,6 +4724,7 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
   const rebasedWrites = rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, WORK_SPACE_ID);
   if (hasOwnEnumerable(rebasedWrites)) {
     await writeSyncItems(rebasedWrites);
+    await repairDeliveredCoreEvidence(WORK_SPACE_ID);
     // Preserve concurrently delivered Work records in the commit marker for
     // the same reason as Personal: the post-write ledger is authoritative for
     // record count/fingerprint, even if its storage event was missed locally.
@@ -5012,6 +5124,8 @@ async function reconcile(strategy = "merge") {
   devMark("background:reconcile-start");
   try {
     if (strategy === "merge") {
+      await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
+      await repairDeliveredCoreEvidence(WORK_SPACE_ID);
       const meta = await readLocalMeta();
       if (meta.syncEnabled && meta.syncInitialized) await retryPendingCrossSpaceSync(meta);
     }

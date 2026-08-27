@@ -703,6 +703,139 @@ else if (scenario === 'sync-1306-multi-trigger-idempotent') {
   console.log(JSON.stringify({ok:true,idempotent:true,count:ids.filter(id=>id==='race-new').length,lastReason:diag.lastCheckReason}));
 }
 
+else if (scenario === 'sync-1308-personal-mid-publication-evidence') {
+  websiteAccess=false;
+  const originalLocal=stateWith({personal:[shortcut('shared','https://local-old.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:initial'});
+  const initialRemote=stateWith({personal:[shortcut('shared','https://remote-old.test/',100)]});
+  await sync.set(remotePersonalEntries(initialRemote,'initial-1308'));
+
+  const targetKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('shared')}`;
+  const newerRemoteState=stateWith({personal:[shortcut('shared','https://remote-newer.test/',500)]});
+  const newerRemoteRecord=remotePersonalEntries(newerRemoteState,'foreign-1308')[targetKey];
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && Number(targetValue.modifiedAt) < 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(newerRemoteRecord));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(newerRemoteRecord)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const editedLocal=stateWith({personal:[shortcut('shared','https://local-mid.test/',200),shortcut('local-new','https://local-new.test/',300)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalShared=(await sync.get(targetKey))[targetKey];
+  const localNewKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('local-new')}`;
+  const finalLocalNew=(await sync.get(localNewKey))[localNewKey];
+  const dataset=(await sync.get(constants.SYNC_DATASET_KEY))[constants.SYNC_DATASET_KEY];
+  assert.equal(injected,true,'fixture must inject a newer same-key remote record between read and write');
+  assert.equal(finalShared?.url,'https://remote-newer.test/','newer delivered same-key evidence must survive the racing local publication');
+  assert.ok(finalLocalNew,'unrelated local record must still publish');
+  assert.equal(Number(dataset?.liveRecordCount),2,'commit marker must describe the repaired post-write ledger');
+  console.log(JSON.stringify({ok:true,injected,remoteWinner:finalShared?.url,localPublished:Boolean(finalLocalNew),liveRecordCount:dataset?.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1308-work-mid-publication-evidence') {
+  websiteAccess=false;
+  const originalLocal=stateWith({work:[shortcut('work-shared','https://work-local-old.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:personal',lastAppliedWorkSyncRevision:'commit:work-initial'});
+  const initialRemote=stateWith({work:[shortcut('work-shared','https://work-remote-old.test/',100)]});
+  await sync.set(remoteWorkEntries(initialRemote,'work-initial-1308'));
+
+  const prefix=`${constants.SYNC_SPACE_PREFIX}work.`;
+  const targetKey=`${prefix}item.${encodeURIComponent('work-shared')}`;
+  const newerRemoteState=stateWith({work:[shortcut('work-shared','https://work-remote-newer.test/',500)]});
+  const newerRemoteRecord=remoteWorkEntries(newerRemoteState,'work-foreign-1308')[targetKey];
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && Number(targetValue.modifiedAt) < 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(newerRemoteRecord));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(newerRemoteRecord)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const editedLocal=stateWith({work:[shortcut('work-shared','https://work-local-mid.test/',200),shortcut('work-local-new','https://work-local-new.test/',300)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalShared=(await sync.get(targetKey))[targetKey];
+  const localNewKey=`${prefix}item.${encodeURIComponent('work-local-new')}`;
+  const finalLocalNew=(await sync.get(localNewKey))[localNewKey];
+  const dataset=(await sync.get(`${prefix}dataset`))[`${prefix}dataset`];
+  assert.equal(injected,true,'fixture must inject a newer Work same-key remote record between read and write');
+  assert.equal(finalShared?.url,'https://work-remote-newer.test/','newer delivered Work evidence must survive the racing local publication');
+  assert.ok(finalLocalNew,'unrelated local Work record must still publish');
+  assert.equal(Number(dataset?.liveRecordCount),2,'Work commit marker must describe the repaired post-write ledger');
+  console.log(JSON.stringify({ok:true,injected,remoteWinner:finalShared?.url,localPublished:Boolean(finalLocalNew),liveRecordCount:dataset?.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1308-single-flight-failure-recovery') {
+  const localState=stateWith({personal:[shortcut('local','https://local.test/',100)]});
+  await seedLocalState(localState,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready'});
+  const originalGet=sync.get.bind(sync);
+  let failOnce=true;
+  sync.get=async keys => {
+    if ((keys === null || keys === undefined) && failOnce) {
+      failOnce=false;
+      throw new Error('forced sync read failure');
+    }
+    return originalGet(keys);
+  };
+  const first=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const beforeSecond=sync.stats.getAllCalls;
+  const second=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(first?.ok,false,'first forced freshness check should fail through the serialized queue result');
+  assert.notEqual(second?.ok,false,'a failed shared request must clear single-flight state so the next request can execute');
+  assert.ok(sync.stats.getAllCalls > beforeSecond,'second request must perform a fresh storage.sync read');
+  console.log(JSON.stringify({ok:true,firstFailed:first?.ok===false,secondRecovered:second?.ok!==false}));
+}
+
+else if (scenario === 'sync-1308-post-single-flight-freshness') {
+  const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
+  await seedLocalState(localState,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready'});
+  const firstBatch=await Promise.all(Array.from({length:20},()=>send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'})));
+  assert.ok(firstBatch.every(result=>result?.ok!==false));
+  const readsAfterBatch=sync.stats.getAllCalls;
+  const remoteState=stateWith({personal:[shortcut('shared','https://fresh-after-flight.test/',500)]});
+  await sync.set(remotePersonalEntries(remoteState,'after-flight-1308'));
+  const second=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.ok(sync.stats.getAllCalls > readsAfterBatch,'request after settled single-flight must perform a new freshness read');
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://fresh-after-flight.test/','newly delivered data after the shared request must be discoverable immediately');
+  console.log(JSON.stringify({ok:true,firstRequests:firstBatch.length,newRead:true,recovered:second?.ok!==false}));
+}
+
 else if (scenario === 'sync-same-marker-divergence') {
   websiteAccess=false;
   const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});

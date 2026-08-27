@@ -144,7 +144,7 @@ test("1.30.7 expected own Sync echoes do not overwrite remote-delivery forensic 
     const onChangedAt = source.indexOf("browser.storage.onChanged.addListener");
     const alarmAt = source.indexOf("browser.alarms?.onAlarm?.addListener", onChangedAt);
     const block = source.slice(onChangedAt, alarmAt);
-    assert.match(block, /if \(unresolvedChanges\.length\) \{\s*const storageEventAt = Date\.now\(\)/);
+    assert.match(block, /if \(unresolvedChanges\.length \|\| overwrittenEvidenceCount\) \{\s*const storageEventAt = Date\.now\(\)/);
     assert.doesNotMatch(block, /else \{\s*void diagnosticWrite/);
   }
 });

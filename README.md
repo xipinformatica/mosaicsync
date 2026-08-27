@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.7**
+**Current source release: 1.30.8**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.7** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.8** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.7 is a zero-new-features **Snow Leopard** performance/refinement release on top of 1.30.6. It preserves the 1.30.6 Sync-delivery correctness model while removing redundant trusted-state normalization and baseline reconstruction from hot write/Cross-Space paths, coalescing simultaneous foreground freshness requests into one in-flight background reconciliation, reusing exact compact storage baselines for favicon commits, and avoiding several unnecessary serialization/style/storage operations. The five-minute semantic watchdog, post-write authoritative Sync ledger, deterministic conflict rules, privacy model, Settings single-scroll-owner architecture, permissions and user-visible behavior remain unchanged.
+1.30.8 is a zero-new-features **Sync concurrency hardening** release on top of 1.30.7. It preserves all 1.30.7 performance fast paths while closing a narrow same-key publication race: when Firefox/Chrome actually exposes a newer Personal/Work record or settings value and a nearly simultaneous local `storage.sync.set()` would otherwise overwrite that value before queued reconciliation can read it, MosaicSync retains bounded temporary delivery evidence and re-applies the existing deterministic winner before authoritative commit/reconcile work continues. The evidence is worker-local only, never synchronized/exported, and does not change schemas or permissions. Additional adversarial tests protect failed foreground single-flight recovery, immediate post-flight freshness, frozen normalized inputs and Personal/Work mid-publication same-key delivery. The five-minute semantic watchdog, browser-native Sync transport, privacy model, Settings architecture and user-visible behavior remain unchanged.
 
 The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 

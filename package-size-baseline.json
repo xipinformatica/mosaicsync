@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.7",
-      "rawBytes": 1957305,
-      "deflatedBytes": 586399,
+      "version": "1.30.8",
+      "rawBytes": 1962060,
+      "deflatedBytes": 587504,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,8 +13,8 @@
         },
         "background": {
           "files": 2,
-          "rawBytes": 260619,
-          "deflatedBytes": 59037
+          "rawBytes": 265374,
+          "deflatedBytes": 60142
         },
         "localization": {
           "files": 34,
@@ -88,8 +88,8 @@
         {
           "path": "background/background.js",
           "category": "background",
-          "rawBytes": 258134,
-          "deflatedBytes": 58111
+          "rawBytes": 262889,
+          "deflatedBytes": 59216
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.7",
-      "rawBytes": 1977821,
-      "deflatedBytes": 601006,
+      "version": "1.30.8",
+      "rawBytes": 1982583,
+      "deflatedBytes": 602125,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,8 +267,8 @@
         },
         "background": {
           "files": 2,
-          "rawBytes": 258772,
-          "deflatedBytes": 58735
+          "rawBytes": 263534,
+          "deflatedBytes": 59854
         },
         "localization": {
           "files": 34,
@@ -342,8 +342,8 @@
         {
           "path": "background/background.js",
           "category": "background",
-          "rawBytes": 256287,
-          "deflatedBytes": 57809
+          "rawBytes": 261049,
+          "deflatedBytes": 58928
         },
         {
           "path": "core/public_suffix_list.dat",

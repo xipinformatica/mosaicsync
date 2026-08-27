@@ -67,6 +67,7 @@ for (const browser of ["firefox", "chrome"]) {
         lastAppliedSyncRevision: "commit:same", lastAppliedDeviceSnapshotRevision: "device:same", lastAppliedWorkSyncRevision: "commit:work", lastAppliedProfileSnapshotRevision: ""
       }),
       retryPendingLocalSyncMutation: async meta => meta,
+      repairDeliveredCoreEvidence: async () => ({ repaired: 0, resolved: 0 }),
       browser: { storage: { sync: { get: async () => ({}) } } },
       readCoreSources: async () => ({ shared: { dataset: { commitId: "same" } }, device: { revision: "device:same" }, profile: null }),
       datasetRevision: dataset => dataset?.commitId ? `commit:${dataset.commitId}` : "",
