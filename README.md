@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.5**
+**Current source release: 1.30.6**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.5 is a zero-new-features **Snow Leopard** Settings-stability refinement on top of 1.30.4. It preserves the 1.30.4 single-scroll-owner rendering experiment unchanged, while correcting the one concrete follow-up found independently by two audits: locale-driven Settings relocalization now saves and restores the outer `settingsDialog.scrollTop`, which is the real scroll owner, instead of the normal-flow `settingsForm`. New regression coverage stress-toggles Separate Light/Dark Wallpapers and Frequently Visited 100 times through their visibility-only paths and protects the outer-scroll-owner lifecycle. No permissions, synchronized/profile schemas, CSP, telemetry, remote code, feature surface, `hidden` strategy, preview timing or permission flow changed.
+1.30.6 is a zero-new-features **Snow Leopard** Sync-delivery resilience refinement on top of 1.30.5. Existing browser-native Sync remains authoritative and the five-minute semantic watchdog is unchanged, but an already-open MosaicSync New Tab now performs one throttled freshness reconciliation when it becomes visible/focused again or returns from bfcache. That foreground path self-heals the existing Sync-watch alarm and still funnels through the same serialized background queue. A dedicated device-local diagnostics record tracks watchdog/foreground/storage-event timing and the locally observed Sync revisions without telemetry or synchronized user data. During regression testing, a concrete concurrent-delivery defect was found and fixed: ordinary Personal/Work publications now rebase changed records/settings against the currently delivered remote ledger and build commit markers from the post-write ledger, so a missed `storage.onChanged` event plus a local edit cannot mask a newer remote record. No new permissions, Sync/profile schema, server, heartbeat/pulse, CSP, telemetry, remote code or user-facing feature was added.
 
 The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 

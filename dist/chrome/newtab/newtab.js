@@ -33,6 +33,7 @@ import {
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
   SUPPORT_URL,
   SYNC_QUOTA_BYTES,
+  SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS,
   TIPS_URL,
   VERSION,
   WALLPAPER_LOCAL_IMAGE_TARGET_BYTES
@@ -492,9 +493,30 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const startupStartedAt = performance.now();
   let pageshowPersisted = false;
   let renderReadyScheduled = false;
+  let lastForegroundSyncRequestAt = 0;
+  let foregroundSyncRequestInFlight = false;
 
+  function maybeForegroundSyncReconcile() {
+    if (document.visibilityState !== "visible" || !meta?.syncEnabled || !meta?.syncInitialized) return false;
+    const requestedAt = Date.now();
+    if (foregroundSyncRequestInFlight || requestedAt - lastForegroundSyncRequestAt < SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS) return false;
+    lastForegroundSyncRequestAt = requestedAt;
+    foregroundSyncRequestInFlight = true;
+    void sendSyncMessage("mosaicsync:reconcile-if-needed", { reason: "foreground" })
+      .catch(() => {})
+      .finally(() => { foregroundSyncRequestInFlight = false; });
+    return true;
+  }
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") maybeForegroundSyncReconcile();
+  });
+  window.addEventListener("focus", () => {
+    maybeForegroundSyncReconcile();
+  });
   window.addEventListener("pageshow", event => {
     pageshowPersisted = event.persisted === true;
+    if (pageshowPersisted) maybeForegroundSyncReconcile();
     if (pageshowPersisted && devMetricsEnabled()) {
       console.debug(`${PRODUCT_NAME} ${VERSION} performance`, {
         event: "bfcache-restore",
@@ -1544,7 +1566,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // gives us a self-healing path if a remote event was delayed or missed. The
     // full Sync snapshot is read only when the commit marker is actually new.
     if (meta.syncEnabled && meta.syncInitialized) {
-      scheduleIdleWork(() => sendSyncMessage("mosaicsync:reconcile-if-needed").catch(() => {}), 1200);
+      scheduleIdleWork(() => sendSyncMessage("mosaicsync:reconcile-if-needed", { reason: "newtab-startup" }).catch(() => {}), 1200);
     }
 
     // Remaining cache repair and legacy-asset maintenance stays well off the
@@ -5890,7 +5912,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // new reconciliations.
     if (meta?.syncEnabled && meta?.syncInitialized) {
       if (!settingsSyncReconcilePromise) {
-        settingsSyncReconcilePromise = sendSyncMessage("mosaicsync:reconcile-if-needed")
+        settingsSyncReconcilePromise = sendSyncMessage("mosaicsync:reconcile-if-needed", { reason: "settings" })
           .catch(() => {})
           .finally(() => { settingsSyncReconcilePromise = null; });
       }

@@ -46,6 +46,7 @@ import {
   LOCAL_ICON_RECOVERY_QUEUE_KEY,
   LOCAL_ICON_RECOVERY_STATUS_KEY,
   LOCAL_MAINTENANCE_MIGRATIONS_KEY,
+  LOCAL_SYNC_DIAGNOSTICS_KEY,
   LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX,
   LOCAL_PENDING_SYNC_MUTATION_KEY,
   LOCAL_PRE_SPACES_BACKUP_KEY,
@@ -128,6 +129,7 @@ const textDecoder = new TextDecoder();
 let webAccessCacheValue = null;
 let webAccessCacheAt = 0;
 let faviconQualityAuditWriteQueue = Promise.resolve();
+let syncDiagnosticsWriteQueue = Promise.resolve();
 
 const PERSONAL_SPACE_ID = "personal";
 const WORK_SPACE_ID = "work";
@@ -349,6 +351,62 @@ async function openMosaicHomeTab() {
   }
 }
 
+const SYNC_DIAGNOSTICS_VERSION = 1;
+const SYNC_DIAGNOSTIC_REASONS = new Set(["alarm", "foreground", "message", "newtab-startup", "settings", "startup", "storage-event"]);
+
+function finiteDiagnosticTime(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+}
+
+function normalizeSyncDiagnostics(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const text = key => typeof source[key] === "string" ? source[key].slice(0, 160) : "";
+  const count = key => {
+    const value = Number(source[key]);
+    return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 0;
+  };
+  return {
+    version: SYNC_DIAGNOSTICS_VERSION,
+    lastSyncWatchCheckAt: finiteDiagnosticTime(source.lastSyncWatchCheckAt),
+    lastForegroundSyncCheckAt: finiteDiagnosticTime(source.lastForegroundSyncCheckAt),
+    lastSyncStorageChangeEventAt: finiteDiagnosticTime(source.lastSyncStorageChangeEventAt),
+    lastSyncStorageChangeRelevantCount: count("lastSyncStorageChangeRelevantCount"),
+    lastSyncStorageChangeUnresolvedCount: count("lastSyncStorageChangeUnresolvedCount"),
+    lastCheckAt: finiteDiagnosticTime(source.lastCheckAt),
+    lastCheckReason: SYNC_DIAGNOSTIC_REASONS.has(source.lastCheckReason) ? source.lastCheckReason : "",
+    lastCheckOutcome: text("lastCheckOutcome"),
+    lastObservedSharedRevision: text("lastObservedSharedRevision"),
+    lastObservedDeviceRevision: text("lastObservedDeviceRevision"),
+    lastObservedWorkRevision: text("lastObservedWorkRevision"),
+    lastObservedProfileRevision: text("lastObservedProfileRevision"),
+    lastReconcileAt: finiteDiagnosticTime(source.lastReconcileAt),
+    lastReconcileReason: SYNC_DIAGNOSTIC_REASONS.has(source.lastReconcileReason) ? source.lastReconcileReason : "",
+    lastReconcileOutcome: text("lastReconcileOutcome")
+  };
+}
+
+function mutateSyncDiagnostics(mutator) {
+  const run = syncDiagnosticsWriteQueue.then(async () => {
+    const stored = await browser.storage.local.get(LOCAL_SYNC_DIAGNOSTICS_KEY);
+    const current = normalizeSyncDiagnostics(stored?.[LOCAL_SYNC_DIAGNOSTICS_KEY]);
+    const candidate = typeof mutator === "function" ? mutator(current) : { ...current, ...(mutator || {}) };
+    const next = normalizeSyncDiagnostics(candidate);
+    await browser.storage.local.set({ [LOCAL_SYNC_DIAGNOSTICS_KEY]: next });
+    return next;
+  });
+  syncDiagnosticsWriteQueue = run.catch(() => {});
+  return run.catch(() => null);
+}
+
+function noteSyncDiagnostic(patch) {
+  return mutateSyncDiagnostics(current => ({ ...current, ...(patch || {}) }));
+}
+
+function syncCheckReason(value) {
+  return SYNC_DIAGNOSTIC_REASONS.has(value) ? value : "message";
+}
+
 async function ensureSyncWatchAlarm(meta) {
   if (!browser.alarms?.create || !browser.alarms?.clear) return;
   try {
@@ -464,9 +522,19 @@ browser.runtime.onStartup.addListener(() => {
     if (meta.syncEnabled && meta.syncInitialized) {
       meta = await retryPendingLocalSyncMutation(meta);
       // reconcile("merge") replays any durable cross-Space transactions first.
-      await reconcile("merge");
+      const result = await reconcile("merge");
+      await noteSyncDiagnostic({
+        lastReconcileAt: Date.now(),
+        lastReconcileReason: "startup",
+        lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
+      });
     } else if (meta.syncEnabled && meta.syncBootstrapMode === "await-remote") {
-      await reconcile("merge");
+      const result = await reconcile("merge");
+      await noteSyncDiagnostic({
+        lastReconcileAt: Date.now(),
+        lastReconcileReason: "startup",
+        lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
+      });
     }
     return readLocalMeta();
   });
@@ -527,22 +595,42 @@ browser.storage.onChanged.addListener((changes, areaName) => {
     if (!consumeSyncChange(key, actual)) unresolvedChanges.push([key, actual]);
   }
 
+  const storageEventAt = Date.now();
+  const diagnosticWrite = noteSyncDiagnostic({
+    lastSyncStorageChangeEventAt: storageEventAt,
+    lastSyncStorageChangeRelevantCount: relevant.length,
+    lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length
+  });
+
   if (unresolvedChanges.length) {
     enqueue(async () => {
+      await diagnosticWrite;
       if (!(await consumeDurableSyncChanges(unresolvedChanges))) return;
       const meta = await readLocalMeta();
       if (!meta.syncEnabled) return;
       // A new computer can wait safely for Firefox itself to download the
       // extension's storage.sync data. As soon as it arrives, restore it.
       if (!meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
-        await bootstrapRemote({ waitIfMissing: true });
+        const result = await bootstrapRemote({ waitIfMissing: true });
+        await noteSyncDiagnostic({
+          lastReconcileAt: Date.now(),
+          lastReconcileReason: "storage-event",
+          lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
+        });
         return;
       }
       if (meta.syncInitialized) {
         // reconcile("merge") replays any durable cross-Space transactions first.
-        await reconcile("merge");
+        const result = await reconcile("merge");
+        await noteSyncDiagnostic({
+          lastReconcileAt: Date.now(),
+          lastReconcileReason: "storage-event",
+          lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
+        });
       }
     });
+  } else {
+    void diagnosticWrite;
   }
 });
 
@@ -562,10 +650,23 @@ browser.alarms?.onAlarm?.addListener(alarm => {
     let meta = await readLocalMeta();
     if (!meta.syncEnabled) {
       await ensureSyncWatchAlarm(meta);
+      await noteSyncDiagnostic({
+        lastSyncWatchCheckAt: Date.now(),
+        lastCheckAt: Date.now(),
+        lastCheckReason: "alarm",
+        lastCheckOutcome: "sync-off"
+      });
       return;
     }
     if (!meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
-      await bootstrapRemote({ waitIfMissing: true });
+      const result = await bootstrapRemote({ waitIfMissing: true });
+      const checkedAt = Date.now();
+      await noteSyncDiagnostic({
+        lastSyncWatchCheckAt: checkedAt,
+        lastCheckAt: checkedAt,
+        lastCheckReason: "alarm",
+        lastCheckOutcome: result?.pending ? "waiting-remote" : (result?.ok === false ? "error" : "bootstrapped")
+      });
       return;
     }
     if (meta.syncInitialized) {
@@ -575,7 +676,7 @@ browser.alarms?.onAlarm?.addListener(alarm => {
       // commit-marker comparison. If currently usable remote records/settings
       // differ from local state, reconcileIfNewCommit() falls through to the
       // same full merge used at startup without paying that cost on every tick.
-      await reconcileIfNewCommit();
+      await reconcileIfNewCommit("alarm");
       meta = await readLocalMeta();
       await maybeGarbageCollectStaleDeviceSnapshots(meta);
     }
@@ -2724,7 +2825,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
     case "mosaicsync:wait-for-remote":
       return enqueue(() => bootstrapRemote({ waitIfMissing: true }));
     case "mosaicsync:reconcile-if-needed":
-      return enqueue(reconcileIfNewCommit);
+      return enqueue(async () => {
+        const reason = syncCheckReason(message.reason);
+        if (reason === "foreground") {
+          const meta = await readLocalMeta();
+          await ensureSyncWatchAlarm(meta);
+        }
+        return reconcileIfNewCommit(reason);
+      });
     case "mosaicsync:reconcile-now":
       return enqueue(() => reconcile("merge"));
     case "mosaicsync:restore-from-sync":
@@ -3486,12 +3594,33 @@ function markAppliedRemoteCore(meta, deviceRevision = "") {
   return { ...meta, lastAppliedDeviceSnapshotRevision: deviceRevision };
 }
 
-async function reconcileIfNewCommit() {
+async function reconcileIfNewCommit(reason = "message") {
+  const checkReason = syncCheckReason(reason);
   let meta = await readLocalMeta();
-  if (!meta.syncEnabled) return { ok: true, skipped: true, reason: "sync-off", meta };
+  if (!meta.syncEnabled) {
+    const checkedAt = Date.now();
+    await noteSyncDiagnostic({
+      ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
+      ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
+      lastCheckAt: checkedAt,
+      lastCheckReason: checkReason,
+      lastCheckOutcome: "sync-off"
+    });
+    return { ok: true, skipped: true, reason: "sync-off", meta };
+  }
   if (!meta.syncInitialized) {
-    if (meta.syncBootstrapMode === "await-remote") return bootstrapRemote({ waitIfMissing: true });
-    return { ok: true, skipped: true, reason: "sync-not-ready", meta };
+    let result;
+    if (meta.syncBootstrapMode === "await-remote") result = await bootstrapRemote({ waitIfMissing: true });
+    else result = { ok: true, skipped: true, reason: "sync-not-ready", meta };
+    const checkedAt = Date.now();
+    await noteSyncDiagnostic({
+      ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
+      ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
+      lastCheckAt: checkedAt,
+      lastCheckReason: checkReason,
+      lastCheckOutcome: result?.pending ? "waiting-remote" : (result?.ok === false ? "error" : (result?.reason || "bootstrapped"))
+    });
+    return result;
   }
 
   meta = await retryPendingLocalSyncMutation(meta);
@@ -3502,6 +3631,12 @@ async function reconcileIfNewCommit() {
   const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
   const workRevision = datasetRevision(workSnapshot.dataset);
   const profileRevision = sources.profile?.revision || "";
+  const diagnosticObservation = {
+    lastObservedSharedRevision: sharedRevision,
+    lastObservedDeviceRevision: deviceRevision,
+    lastObservedWorkRevision: workRevision,
+    lastObservedProfileRevision: profileRevision
+  };
   const sharedUnchanged = !sharedRevision || sharedRevision === meta.lastAppliedSyncRevision;
   const devicesUnchanged = !deviceRevision || deviceRevision === meta.lastAppliedDeviceSnapshotRevision;
   const workUnchanged = !workRevision || workRevision === meta.lastAppliedWorkSyncRevision;
@@ -3535,9 +3670,32 @@ async function reconcileIfNewCommit() {
     }
   }
   if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged && contentUnchanged) {
+    const checkedAt = Date.now();
+    await noteSyncDiagnostic({
+      ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
+      ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
+      lastCheckAt: checkedAt,
+      lastCheckReason: checkReason,
+      lastCheckOutcome: "already-applied",
+      ...diagnosticObservation
+    });
     return { ok: true, skipped: true, reason: "already-applied", meta };
   }
-  return reconcile("merge");
+  const result = await reconcile("merge");
+  const checkedAt = Date.now();
+  const outcome = result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled");
+  await noteSyncDiagnostic({
+    ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
+    ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
+    lastCheckAt: checkedAt,
+    lastCheckReason: checkReason,
+    lastCheckOutcome: outcome,
+    ...diagnosticObservation,
+    lastReconcileAt: checkedAt,
+    lastReconcileReason: checkReason,
+    lastReconcileOutcome: outcome
+  });
+  return result;
 }
 
 async function getSyncStatus() {
@@ -4267,6 +4425,26 @@ async function retryPendingCrossSpaceSync(meta = null) {
   return currentMeta;
 }
 
+function rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, spaceId = PERSONAL_SPACE_ID) {
+  if (!writes || typeof writes !== "object") return {};
+  const namespace = syncNamespace(spaceId);
+  const rebased = {};
+  for (const [key, candidate] of Object.entries(writes)) {
+    if (!candidate || typeof candidate !== "object") continue;
+    if (key === namespace.settingsKey) {
+      const remote = snapshot?.settings;
+      const winner = remote ? chooseNewerRecord(candidate, remote) : candidate;
+      if (!remote || stableStringify(remote) !== stableStringify(winner)) rebased[key] = winner;
+      continue;
+    }
+    const id = typeof candidate.id === "string" ? candidate.id : "";
+    const remote = id && snapshot?.records instanceof Map ? snapshot.records.get(id) : null;
+    const winner = remote ? chooseNewerRecord(candidate, remote) : candidate;
+    if (!remote || stableStringify(remote) !== stableStringify(winner)) rebased[key] = winner;
+  }
+  return rebased;
+}
+
 async function pushPersonalMutation(oldRaw, newRaw, meta) {
   const oldState = workspaceStateNormalized(oldRaw, PERSONAL_SPACE_ID);
   const newState = workspaceStateNormalized(newRaw, PERSONAL_SPACE_ID);
@@ -4306,13 +4484,21 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
   // The detailed shared ledger remains the compatibility/conflict/artwork
   // layer. It is deliberately maintained after the latency-critical snapshot.
   let snapshot = await prepareSyncSnapshot();
-  if (hasOwnEnumerable(writes)) {
-    await writeSyncItems(writes);
-    // Dataset is a commit marker and is intentionally written last.
+  const rebasedWrites = rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, PERSONAL_SPACE_ID);
+  if (hasOwnEnumerable(rebasedWrites)) {
+    await writeSyncItems(rebasedWrites);
+    // Dataset is a commit marker and is intentionally written last. Build it
+    // from the ledger that actually exists after our idempotent record writes,
+    // not only from this tab's pre-mutation snapshot. A remote record that was
+    // already delivered locally but whose storage.onChanged event was missed
+    // must remain part of the committed generation rather than being hidden by
+    // a too-small liveRecordCount/fingerprint.
+    const committedSnapshot = await readSyncSnapshot(null, { includeAssets: false });
+    const committedSettings = committedSnapshot.settings || newSettings;
     publishedDataset = datasetRecord(
-      datasetUpdatedAt(newRecords, newSettings, timestamp),
-      newRecords,
-      newSettings,
+      datasetUpdatedAt(committedSnapshot.records, committedSettings, timestamp),
+      committedSnapshot.records,
+      committedSettings,
       { commitId: uid("commit"), originDeviceId: meta.deviceId }
     );
     await writeSyncItems({ [SYNC_DATASET_KEY]: publishedDataset });
@@ -4386,17 +4572,23 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
 
   let snapshot = await prepareSyncSnapshot(WORK_SPACE_ID);
   let publishedDataset = null;
-  if (hasOwnEnumerable(writes)) {
-    await writeSyncItems(writes);
+  const rebasedWrites = rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, WORK_SPACE_ID);
+  if (hasOwnEnumerable(rebasedWrites)) {
+    await writeSyncItems(rebasedWrites);
+    // Preserve concurrently delivered Work records in the commit marker for
+    // the same reason as Personal: the post-write ledger is authoritative for
+    // record count/fingerprint, even if its storage event was missed locally.
+    const committedSnapshot = await readSyncSnapshot(null, { includeAssets: false, spaceId: WORK_SPACE_ID });
+    const committedSettings = committedSnapshot.settings || newSettings;
     publishedDataset = datasetRecord(
-      datasetUpdatedAt(newRecords, newSettings, timestamp),
-      newRecords,
-      newSettings,
+      datasetUpdatedAt(committedSnapshot.records, committedSettings, timestamp),
+      committedSnapshot.records,
+      committedSettings,
       { commitId: uid("commit"), originDeviceId: meta.deviceId }
     );
     await writeSyncItems({ [namespace.datasetKey]: publishedDataset });
   }
-  const profilePublish = hasOwnEnumerable(writes)
+  const profilePublish = hasOwnEnumerable(rebasedWrites)
     ? await publishProfileDeviceSnapshot(normalizeState(newRaw), meta)
     : { written: true, setRevision: "", publishedAt: 0 };
 

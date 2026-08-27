@@ -22,6 +22,7 @@ const persistedLiterals = [
   "mosaicsync.icon-recovery-queue.v2",
   "mosaicsync.icon-recovery-status.v2",
   "mosaicsync.maintenance-migrations.v1",
+  "mosaicsync.sync-diagnostics.v1",
   "mosaicsync.local-assets.write.v1"
 ];
 

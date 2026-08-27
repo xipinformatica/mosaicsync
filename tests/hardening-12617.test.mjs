@@ -60,6 +60,8 @@ for (const browser of ["firefox", "chrome"]) {
     const localRecords = new Map([["local", { id: "local", kind: "shortcut", url: "https://local.test/" }]]);
     const settings = { kind: "settings", modifiedAt: 1 };
     const ctx = {
+      syncCheckReason: reason => typeof reason === "string" ? reason : "message",
+      noteSyncDiagnostic: async () => null,
       readLocalMeta: async () => ({
         syncEnabled: true, syncInitialized: true, deviceId: "dev",
         lastAppliedSyncRevision: "commit:same", lastAppliedDeviceSnapshotRevision: "device:same", lastAppliedWorkSyncRevision: "commit:work", lastAppliedProfileSnapshotRevision: ""
@@ -96,7 +98,7 @@ for (const browser of ["firefox", "chrome"]) {
     const permissionAt = src.indexOf("browser.permissions?.onAdded", alarmAt);
     const block = src.slice(alarmAt, permissionAt);
     assert.match(block, /if \(alarm\?\.name !== SYNC_WATCH_ALARM\) return;/);
-    assert.match(block, /await reconcileIfNewCommit\(\);/);
+    assert.match(block, /await reconcileIfNewCommit\("alarm"\);/);
   });
 }
 

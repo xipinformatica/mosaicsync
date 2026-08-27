@@ -1,10 +1,14 @@
 # MosaicSync development
 
-> **Current release: 1.30.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.6 Sync delivery resilience policy
+
+1.30.6 remains strictly zero-new-features maintenance. Firefox/Chromium `storage.sync` remains the only synchronization transport; MosaicSync does not introduce a server, heartbeat/pulse key or shorter polling interval and cannot claim to force browser-account delivery. An already-open New Tab may request one throttled foreground freshness check when it becomes visible/focused or returns from bfcache; this must reuse the existing `mosaicsync:reconcile-if-needed` background message, the serialized `enqueue()` queue and the existing five-minute semantic watchdog. The foreground path may self-heal the existing watchdog alarm but must not create another timer. Sync forensics live under a dedicated `storage.local` diagnostics key, never normal meta and never `storage.sync`, and contain only timestamps/outcomes/revision identifiers needed to distinguish browser delivery delay from MosaicSync reconciliation failure. Normal Personal/Work publication must rebase candidate records/settings against the currently delivered remote snapshot before writing and must construct its dataset marker from the post-write ledger, preventing a missed Sync event plus a local edit from overwriting/masking a newer remote record. Preserve all 1.30.5 Settings scroll behavior and all existing merge/tombstone/cross-Space/profile safety rules.
 
 ## 1.30.5 Settings scroll-lifecycle refinement policy
 
@@ -340,7 +344,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

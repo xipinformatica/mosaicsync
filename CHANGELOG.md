@@ -1,3 +1,12 @@
+## 1.30.6
+
+- Added a throttled foreground/resume Sync freshness check for already-open New Tabs. Visible/focus/bfcache recovery reuses the existing `mosaicsync:reconcile-if-needed` message, the serialized background queue and the unchanged five-minute semantic watchdog; it does not poll a MosaicSync server or claim to force browser-account delivery.
+- Foreground recovery now verifies/recreates the existing Sync-watch alarm when needed, closing a long-lived-session recovery gap without adding another timer or shortening the watchdog period.
+- Added a dedicated device-local Sync diagnostics record with watchdog/foreground/storage-event timestamps, outcomes and opaque observed revision identifiers. It is stored only in `storage.local`, is ignored by normal UI/state reconciliation, never enters `storage.sync`, and contains no shortcut titles/URLs or telemetry.
+- Fixed a concrete concurrent-delivery publication race found by the new regression tests: normal Personal/Work candidate writes are rebased against records/settings already visible in `storage.sync` before writing, so an older local record cannot overwrite a newer delivered remote record merely because its `storage.onChanged` event was missed. Dataset commit markers are built from the actual post-write ledger, preserving concurrently delivered records in count/fingerprint metadata.
+- Added production-harness coverage for foreground missed-event recovery, watchdog recovery, alarm self-healing, 60-second foreground coalescing, overlapping event/alarm/foreground idempotence, local-edit/foreground races, Work publication rebasing, and local-only diagnostics.
+- No new permissions or host permissions, synchronized/profile schema changes, MosaicSync backend, heartbeat/pulse, CSP relaxation, telemetry, remote code or user-facing features. Release packaging emits exactly `mosaicsync-1.30.6-firefox.zip`, `mosaicsync-1.30.6-chrome.zip`, and `mosaicsync-1.30.6-github-ready.zip`.
+
 ## 1.30.5
 
 - Preserved the 1.30.4 single-scroll-owner Settings architecture unchanged while fixing the concrete scroll-lifecycle follow-up found independently in two audits: locale-driven relocalization now saves and restores `settingsDialog.scrollTop`, the actual outer Settings scroller, instead of the normal-flow `settingsForm`.

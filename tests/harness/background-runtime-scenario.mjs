@@ -175,6 +175,45 @@ await import(`${pathToFileURL(resolve(root, `dist/${browserName}/background/back
 assert.equal(events.onMessage.listeners.length, 1, 'production background should install one runtime message listener');
 const send = message => events.onMessage.listeners[0](message, { id: runtimeId });
 
+function remotePersonalEntries(remoteState, commitId, originDeviceId = "remote-device") {
+  const personal = model.workspaceStateNormalized(remoteState, "personal");
+  const records = model.flattenStateNormalized(personal, originDeviceId);
+  const settings = model.makeSettingsRecordNormalized(personal, originDeviceId);
+  const entries = {};
+  for (const [id, record] of records) entries[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`] = record;
+  entries[constants.SYNC_SETTINGS_KEY] = settings;
+  entries[constants.SYNC_DATASET_KEY] = {
+    schemaVersion: constants.SYNC_SCHEMA_VERSION,
+    kind: "dataset",
+    updatedAt: 500,
+    liveRecordCount: records.size,
+    settingsModifiedAt: Number(settings.modifiedAt) || 0,
+    commitId,
+    originDeviceId
+  };
+  return entries;
+}
+
+function remoteWorkEntries(remoteState, commitId, originDeviceId = "remote-device") {
+  const work = model.workspaceStateNormalized(remoteState, "work");
+  const records = model.flattenStateNormalized(work, originDeviceId);
+  const settings = model.makeSettingsRecordNormalized(work, originDeviceId);
+  const prefix = `${constants.SYNC_SPACE_PREFIX}work.`;
+  const entries = {};
+  for (const [id, record] of records) entries[`${prefix}item.${encodeURIComponent(id)}`] = record;
+  entries[`${prefix}settings`] = settings;
+  entries[`${prefix}dataset`] = {
+    schemaVersion: constants.SYNC_SCHEMA_VERSION,
+    kind: "dataset",
+    updatedAt: 500,
+    liveRecordCount: records.size,
+    settingsModifiedAt: Number(settings.modifiedAt) || 0,
+    commitId,
+    originDeviceId
+  };
+  return entries;
+}
+
 function findCompactShortcut(rawState, id) {
   for (const spaceId of ['personal','work']) {
     for (const item of rawState?.spaces?.[spaceId]?.shortcuts || []) {
@@ -533,6 +572,118 @@ else if (scenario === 'sync-12781-profile-root-quota-rollback') {
   const workItemKey=`${constants.SYNC_SPACE_PREFIX}work.item.${encodeURIComponent('work-new')}`;
   assert.ok(all[workItemKey],'ordinary Work ledger must retain the edit despite safety-root failure');
   console.log(JSON.stringify({ok:true,beforeCommit,afterCommit:afterRoot.commitId,newChunkWrites,protection:meta.syncProfileProtection}));
+}
+
+else if (scenario === 'sync-1306-foreground-recovery') {
+  websiteAccess=false;
+  const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
+  await seedLocalState(localState,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:old'});
+  const remoteState=stateWith({personal:[shortcut('shared','https://remote.test/',500),shortcut('remote-new','https://remote-new.test/',500)]});
+  await sync.set(remotePersonalEntries(remoteState,'remote-1306-foreground'));
+  assert.equal(alarms.has(constants.SYNC_WATCH_ALARM),false,'fixture starts with no Sync watchdog alarm');
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://remote.test/');
+  assert.ok(findCompactShortcut(raw,'remote-new'),'foreground recovery must apply remote data even without storage.onChanged');
+  const alarm=alarms.get(constants.SYNC_WATCH_ALARM);
+  assert.equal(Number(alarm?.periodInMinutes),constants.SYNC_WATCH_PERIOD_MINUTES,'foreground recovery must self-heal the existing watchdog');
+  const diag=(await local.get(constants.LOCAL_SYNC_DIAGNOSTICS_KEY))[constants.LOCAL_SYNC_DIAGNOSTICS_KEY];
+  assert.equal(diag?.lastCheckReason,'foreground');
+  assert.ok(Number(diag?.lastForegroundSyncCheckAt)>0);
+  assert.equal(diag?.lastObservedSharedRevision,'commit:remote-1306-foreground');
+  assert.equal((await sync.get(constants.LOCAL_SYNC_DIAGNOSTICS_KEY))[constants.LOCAL_SYNC_DIAGNOSTICS_KEY],undefined,'diagnostics must remain device-local');
+  console.log(JSON.stringify({ok:true,recovered:true,alarmPeriod:alarm.periodInMinutes,reason:diag.lastCheckReason,outcome:diag.lastCheckOutcome,resultOk:result?.ok===true}));
+}
+
+else if (scenario === 'sync-1306-alarm-recovery') {
+  websiteAccess=false;
+  const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
+  await seedLocalState(localState,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:old'});
+  const remoteState=stateWith({personal:[shortcut('shared','https://alarm-remote.test/',500),shortcut('alarm-new','https://alarm-new.test/',500)]});
+  await sync.set(remotePersonalEntries(remoteState,'remote-1306-alarm'));
+  for(const listener of events.onAlarm.listeners) listener({name:constants.SYNC_WATCH_ALARM});
+  await send({type:'mosaicsync:get-sync-status'}); // waits behind the alarm's serialized task
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://alarm-remote.test/');
+  assert.ok(findCompactShortcut(raw,'alarm-new'),'watchdog must recover remote data without a storage event');
+  const diag=(await local.get(constants.LOCAL_SYNC_DIAGNOSTICS_KEY))[constants.LOCAL_SYNC_DIAGNOSTICS_KEY];
+  assert.equal(diag?.lastCheckReason,'alarm');
+  assert.ok(Number(diag?.lastSyncWatchCheckAt)>0);
+  assert.equal(diag?.lastObservedSharedRevision,'commit:remote-1306-alarm');
+  console.log(JSON.stringify({ok:true,recovered:true,reason:diag.lastCheckReason,outcome:diag.lastCheckOutcome}));
+}
+
+else if (scenario === 'sync-1306-local-edit-foreground-race') {
+  websiteAccess=false;
+  const originalLocal=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:old'});
+  const remoteState=stateWith({personal:[shortcut('shared','https://remote-race.test/',500),shortcut('remote-new','https://remote-new.test/',500)]});
+  await sync.set(remotePersonalEntries(remoteState,'remote-1306-local-race'));
+
+  const editedLocal=stateWith({personal:[shortcut('shared','https://local.test/',100),shortcut('local-new','https://local-new.test/',600)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  const foreground=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.ok(findCompactShortcut(raw,'local-new'),'local edit racing foreground recovery must survive');
+  assert.ok(findCompactShortcut(raw,'remote-new'),'remote edit must still arrive');
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://remote-race.test/','newer remote winner should still converge deterministically');
+  console.log(JSON.stringify({ok:true,localSurvived:true,remoteArrived:true,resultOk:foreground?.ok===true}));
+}
+
+else if (scenario === 'sync-1306-work-publication-rebase') {
+  websiteAccess=false;
+  const originalLocal=stateWith({work:[shortcut('work-shared','https://work-local.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:personal-old',lastAppliedWorkSyncRevision:'commit:work-old'});
+  const remoteState=stateWith({work:[shortcut('work-shared','https://work-remote.test/',500),shortcut('work-remote-new','https://work-remote-new.test/',500)]});
+  await sync.set(remoteWorkEntries(remoteState,'remote-1306-work'));
+
+  const editedLocal=stateWith({work:[shortcut('work-shared','https://work-local.test/',100),shortcut('work-local-new','https://work-local-new.test/',600)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const prefix=`${constants.SYNC_SPACE_PREFIX}work.`;
+  const remoteShared=(await sync.get(`${prefix}item.${encodeURIComponent('work-shared')}`))[`${prefix}item.${encodeURIComponent('work-shared')}`];
+  const localNew=(await sync.get(`${prefix}item.${encodeURIComponent('work-local-new')}`))[`${prefix}item.${encodeURIComponent('work-local-new')}`];
+  const dataset=(await sync.get(`${prefix}dataset`))[`${prefix}dataset`];
+  assert.equal(remoteShared?.url,'https://work-remote.test/','normal Work publication must not overwrite a newer delivered remote record');
+  assert.ok(localNew,'the unrelated local Work addition must still publish');
+  assert.equal(Number(dataset?.liveRecordCount),3,'Work commit marker must describe the post-write ledger including delivered remote records');
+  console.log(JSON.stringify({ok:true,remotePreserved:true,localPublished:true,liveRecordCount:dataset.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1306-multi-trigger-idempotent') {
+  websiteAccess=false;
+  const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
+  await seedLocalState(localState,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:old'});
+  const remoteState=stateWith({personal:[shortcut('shared','https://race-remote.test/',500),shortcut('race-new','https://race-new.test/',500)]});
+  const entries=remotePersonalEntries(remoteState,'remote-1306-race');
+  await sync.set(entries);
+  for(const listener of events.onAlarm.listeners) listener({name:constants.SYNC_WATCH_ALARM});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.SYNC_DATASET_KEY]:{oldValue:undefined,newValue:entries[constants.SYNC_DATASET_KEY]}},'sync');
+  }
+  const foreground=send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await foreground;
+  await send({type:'mosaicsync:get-sync-status'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://race-remote.test/');
+  const ids=[];
+  for(const item of raw?.spaces?.personal?.shortcuts||[]) {
+    if(item?.type==='shortcut') ids.push(item.id);
+    else if(item?.type==='folder') for(const child of item.items||[]) ids.push(child?.id);
+  }
+  assert.equal(ids.filter(id=>id==='race-new').length,1,'overlapping recovery triggers must not duplicate shortcuts');
+  const diag=(await local.get(constants.LOCAL_SYNC_DIAGNOSTICS_KEY))[constants.LOCAL_SYNC_DIAGNOSTICS_KEY];
+  assert.ok(Number(diag?.lastSyncStorageChangeEventAt)>0,'storage event must be recorded');
+  assert.ok(Number(diag?.lastForegroundSyncCheckAt)>0,'foreground check must be recorded');
+  assert.ok(Number(diag?.lastSyncWatchCheckAt)>0,'alarm check must be recorded');
+  assert.equal((await sync.get(constants.LOCAL_SYNC_DIAGNOSTICS_KEY))[constants.LOCAL_SYNC_DIAGNOSTICS_KEY],undefined);
+  console.log(JSON.stringify({ok:true,idempotent:true,count:ids.filter(id=>id==='race-new').length,lastReason:diag.lastCheckReason}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {
