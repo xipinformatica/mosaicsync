@@ -225,7 +225,7 @@ for (const browser of ["firefox", "chrome"]) {
 test("current shortcut artwork keeps a proportional ~70% contain footprint at every tile-size slider value", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     assert.match(js, /Math\.round\(tileSize \* 53 \/ 76\)/);
     assert.match(css, /--shortcut-icon-size:\s*53px;/);
     assert.match(css, /\.builtin-shortcut-icon\s*\{[^}]*width:\s*70%;[^}]*height:\s*70%;/s);
@@ -243,7 +243,7 @@ test("current shortcut artwork keeps a proportional ~70% contain footprint at ev
 test("1.27.8.8 New Tab CSS class audit uses class-bearing references instead of arbitrary substrings", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const base = resolve(`dist/${browser}/newtab`);
-    const css = await readFile(resolve("src/shared/newtab/newtab.css"), "utf8");
+    const css = [(await readFile(resolve("src/shared/newtab/newtab-critical.css"), "utf8")), (await readFile(resolve("src/shared/newtab/newtab-secondary.css"), "utf8"))].join("\n");
     const classNames = [...new Set([...css.matchAll(/(?<![\\w-])\\.([A-Za-z_][\\w-]*)/g)].map(match => match[1]))].sort();
     const files = (await readdir(base)).filter(name => /\\.(?:js|html)$/.test(name));
     const refs = new Set();
@@ -283,7 +283,7 @@ test("1.27.8.8 size guard detects missing categories and significant individual-
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.27.9");
+    assert.equal(actual.version, "1.30");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);
@@ -308,7 +308,7 @@ test("1.27.8.8 JavaScript and Python package-size category classifiers remain id
   const paths = [
     "core/i18n-locales/ca.js", "core/i18n-runtime-catalog.js", "core/public_suffix_list.dat",
     "assets/backgrounds/aether-flow.webp", "_locales/en/messages.json", "newtab/newtab.js",
-    "newtab/newtab.css", "newtab/newtab.html", "background/background.js", "core/model.js",
+    "newtab/newtab-secondary.css", "newtab/newtab.html", "background/background.js", "core/model.js",
     "welcome/welcome.js", "assets/icon-128.png", "manifest.json", "misc.bin"
   ];
   const python = `import importlib.util, json\nspec=importlib.util.spec_from_file_location('pkg','tools/package.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\npaths=${JSON.stringify(paths)}\nprint(json.dumps({p:m.size_category(p) for p in paths}))`;

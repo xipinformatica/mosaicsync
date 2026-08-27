@@ -118,16 +118,16 @@ for (const browserName of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browserName} keeps critical CSS blocking and secondary CSS available through a CSP-safe on-demand bootstrap`, () => {
     const html = fs.readFileSync(`dist/${browserName}/newtab/newtab.html`, "utf8");
     const critical = fs.readFileSync(`dist/${browserName}/newtab/newtab-critical.css`, "utf8");
-    const full = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     const secondaryCss = fs.readFileSync(`dist/${browserName}/newtab/newtab-secondary.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browserName}/newtab/secondary-style-bootstrap.js`, "utf8");
     assert.match(html, /<link rel="stylesheet" href="newtab-critical\.css">/);
     assert.doesNotMatch(html, /<link rel="stylesheet" href="newtab\.css">/, "128 KB full sheet must no longer block the bootstrap frame");
     assert.match(html, /<script src="secondary-style-bootstrap\.js"><\/script>/);
-    assert.ok(Buffer.byteLength(critical) < Buffer.byteLength(full) * 0.30,
-      "critical sheet should cut at least 70% of blocking CSS source bytes");
-    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondaryCss) < Buffer.byteLength(full),
-      "critical + secondary-only CSS should parse fewer total bytes than the old monolithic sheet");
+    const runtimeCssBytes = Buffer.byteLength(critical) + Buffer.byteLength(secondaryCss);
+    assert.ok(Buffer.byteLength(critical) < runtimeCssBytes * 0.35,
+      "critical sheet should remain a small launcher-only fraction of runtime CSS");
+    assert.equal(fs.existsSync("src/shared/newtab/newtab.css"), false,
+      "the obsolete monolithic source sheet must not return");
     for (const selector of [".shortcut-grid", ".shortcut-card", ".tile", ".folder-mosaic", ".frequent-sites", ".sync-pending-state", ".settings-button", ".bookmarks-button"]) {
       assert.ok(critical.includes(selector), `${browserName}: critical CSS must include ${selector}`);
     }

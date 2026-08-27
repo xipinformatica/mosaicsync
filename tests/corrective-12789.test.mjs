@@ -85,7 +85,7 @@ for (const browser of ["firefox", "chrome"]) {
       settingsRows: { value: "5" },
       clampInt(value, min, max, fallback) { const n = Number(value); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback; },
       markSettingsChanged() { context.markCalls += 1; },
-      applyPageBackgroundVisual() { context.previewCalls += 1; context.deferredAppearanceVisual = true; },
+      applyPageBackgroundVisual() { context.previewCalls += 1; },
       applySettings() { context.realApplyCalls += 1; },
       render() { context.realRenderCalls += 1; },
       pendingSettingsDraft: new Map(),
@@ -109,7 +109,7 @@ for (const browser of ["firefox", "chrome"]) {
     // The storage/Sync/background reconciliation path accepts the new model but
     // never rebuilds or repaints the launcher behind an open Settings surface.
     assert.equal(context.reconcileLauncherAfterExternalState(), false);
-    assert.equal(context.previewCalls, 1);
+    assert.equal(context.previewCalls, 0);
     assert.equal(context.realApplyCalls, 0);
     assert.equal(context.realRenderCalls, 0);
     assert.equal(context.deferredLauncherSettings, true);
@@ -204,7 +204,7 @@ for (const browser of ["firefox", "chrome"]) {
 test("1.27.8.9 every supported locale defines the complete drag-choice text set", async () => {
   const { readdir } = await import("node:fs/promises");
   const files = (await readdir("src/shared/core/i18n-locales")).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 32, "all supported UI locale catalogs must be present");
+  assert.equal(files.length, 33, "all supported UI locale catalogs must be present");
   for (const file of files) {
     const { MESSAGES } = await import(`../src/shared/core/i18n-locales/${file}?drag12789=${Date.now()}-${file}`);
     for (const key of ["moveHere", "switchPositions", "createFolder", "putTogether"]) {

@@ -5,7 +5,7 @@ import { readFile } from "node:fs/promises";
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.3 ${browser} bookmark color menu stays inside the active modal before entering top layer`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     const match = js.match(/function showBookmarkFolderColorMenu\(event, folder\)\s*\{([\s\S]*?)\n  \}\n\n  function createBookmarkFolderButton/);
     assert.ok(match, `${browser}: bookmark color menu implementation missing`);
     const body = match[1];
@@ -24,7 +24,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.3 ${browser} light/dark wallpaper panel retains stable Settings spacing`, async () => {
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     assert.match(css, /\.theme-wallpaper-settings\s*\{[\s\S]*?margin-bottom:\s*10px;/,
       `${browser}: wallpaper panel must remain separated from the action row`);
   });

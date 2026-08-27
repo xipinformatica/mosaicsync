@@ -112,9 +112,11 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.5 ${browser} uses a genuinely secondary-only stylesheet`, () => {
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
-    const monolith = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
     assert.ok(Buffer.byteLength(critical) < 35_500, "blocking CSS should stay within the reviewed 1.27.8.8 launcher-only budget");
-    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < Buffer.byteLength(monolith), "split runtime CSS should parse fewer total bytes than the monolithic source");
+    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < 125_000,
+      "runtime CSS must stay within the reviewed post-monolith budget");
+    assert.equal(fs.existsSync("src/shared/newtab/newtab.css"), false,
+      "the obsolete monolithic source sheet must stay deleted");
     for (const selector of ["shortcut-color-picker", "settings-dialog", "builtin-icon-choice", "shortcut-order-setting-row", "folder-popover"]) {
       assert.equal(critical.includes(selector), false, `${selector} must stay off the first-frame critical sheet`);
       assert.equal(secondary.includes(selector), true, `${selector} must remain available in secondary UI CSS`);
@@ -143,12 +145,14 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(src, /storage\.(?:local|sync|session)\.set\([^)]*startupTiming|fetch\([^)]*startupTiming|sendMessage\([^)]*startupTiming/);
   });
 
-  test(`1.27.8.5 ${browser} keeps separate Light/Dark wallpaper preview paint isolated while Settings is open`, () => {
+  test(`1.30 ${browser} keeps full-viewport wallpaper paint completely frozen while Settings is open`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
-    assert.match(src, /if \(settingsDialog\?\.open\) \{[\s\S]*?paintAppearancePreviewLayer\([\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
-    assert.match(src, /appearancePreviewLayer\.style\.setProperty\("--appearance-preview-dim"/);
-    assert.match(css, /\.appearance-preview-layer::after[\s\S]*?--appearance-preview-dim/);
+    const html = fs.readFileSync(`dist/${browser}/newtab/newtab.html`, "utf8");
+    const css = [fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8"), fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8")].join("\n");
+    assert.match(src, /if \(settingsDialog\?\.open\) \{[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
+    assert.doesNotMatch(src, /paintAppearancePreviewLayer|appearancePreviewLayer|appearancePreviewImage/);
+    assert.doesNotMatch(html, /appearancePreviewLayer|appearancePreviewImage/);
+    assert.doesNotMatch(css, /appearance-preview-layer|appearance-preview-image/);
   });
 
   test(`1.27.8.5 ${browser} synchronizes Frequent Show/Count intent but requests Top Sites only from a local user gesture`, () => {

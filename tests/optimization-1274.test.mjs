@@ -113,10 +113,10 @@ test("1.27.4 runtime PSL removes non-semantic bulk while preserving every rule e
   }
 });
 
-test("1.27.4 compact runtime locales are bit-for-text equivalent to all 32 reviewed source catalogs", async () => {
+test("1.27.4 compact runtime locales are bit-for-text equivalent to all 33 reviewed source catalogs", async () => {
   const sourceDir = resolve("src/shared/core/i18n-locales");
   const files = (await readdir(sourceDir)).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 32);
+  assert.equal(files.length, 33);
   let sourceBytes = 0;
   for (const file of files) sourceBytes += fs.statSync(resolve(sourceDir, file)).size;
 
@@ -308,7 +308,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.27.4 removes the confirmed obsolete shortcut-editor CSS selectors", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     assert.doesNotMatch(css, /\.stack-actions\b/);
     assert.doesNotMatch(css, /\.full-button\b/);
   }

@@ -127,3 +127,70 @@ for(const browser of ['firefox','chrome']){
     for(const id of ['personal:home-a','personal:home-b','work:work-a','work:work-b']) assert.ok(aSnap.ids.includes(id),`A lost ${id}`);
   },{timeout:30000});
 }
+
+for(const browser of ['firefox','chrome']){
+  test(`1.30 ${browser} Sync timestamps distinguish this-device publication from foreign receipt`,async t=>{
+    const remote=new RemoteSync();
+    const a=spawnDevice(browser,'timestamp-a','a',remote);
+    const b=spawnDevice(browser,'timestamp-b','b',remote);
+    t.after(()=>{a.close();b.close();});
+    await Promise.all([a.ready,b.ready]);
+
+    await a.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    const aPublish=await a.command('call',{message:{type:'mosaicsync:bootstrap-local'}});
+    assert.equal(aPublish?.ok,true);
+    const aSnap=await a.command('snapshot');
+    assert.ok(Number(aSnap.meta.lastSyncAt)>0,'local publication records a local Sync timestamp');
+    assert.equal(Number(aSnap.meta.lastRemoteReceiptAt)||0,0,'self-publication must not masquerade as a foreign receipt');
+
+    await b.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    await b.command('call',{message:{type:'mosaicsync:wait-for-remote'}});
+    remote.deliver('timestamp-b',remote.keys());
+    await b.command('alarm',{name:'mosaicsync-sync-watch-v1'});
+    const received=await b.command('snapshot');
+    assert.ok(Number(received.meta.lastRemoteReceiptAt)>0,'receiving A must record a foreign receipt timestamp');
+    assert.equal(received.meta.lastRemoteReceiptOriginDeviceId,'timestamp-a');
+    const receiptAt=received.meta.lastRemoteReceiptAt;
+
+    const bPublish=await b.command('call',{message:{type:'mosaicsync:bootstrap-local'}});
+    assert.equal(bPublish?.ok,true);
+    const afterSelfPublish=await b.command('snapshot');
+    assert.ok(Number(afterSelfPublish.meta.lastSyncAt)>0);
+    assert.equal(afterSelfPublish.meta.lastRemoteReceiptAt,receiptAt,'self-publication must leave the last foreign-receipt timestamp unchanged');
+    assert.equal(afterSelfPublish.meta.lastRemoteReceiptOriginDeviceId,'timestamp-a');
+  },{timeout:30000});
+
+  test(`1.30 ${browser} explicit local bootstrap is authoritative when a newer remote copy is delivered but not reconciled`,async t=>{
+    const remote=new RemoteSync();
+    const a=spawnDevice(browser,'source-a','a',remote);
+    const b=spawnDevice(browser,'source-b','b',remote);
+    t.after(()=>{a.close();b.close();});
+    await Promise.all([a.ready,b.ready]);
+
+    await a.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    await a.command('call',{message:{type:'mosaicsync:bootstrap-local'}});
+    await b.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    await b.command('call',{message:{type:'mosaicsync:wait-for-remote'}});
+    remote.deliver('source-b',remote.keys());
+    await b.command('alarm',{name:'mosaicsync-sync-watch-v1'});
+    let bSnap=await b.command('snapshot');
+    assert.equal(bSnap.meta.syncInitialized,true);
+
+    await a.command('add-work-shortcut',{id:'newer-on-a',url:'https://newer-on-a.test/',modifiedAt:900});
+    assert.ok(remote.keys().some(key=>key.includes(encodeURIComponent('newer-on-a'))),'A must publish its newer Work record');
+
+    // Firefox has delivered the newer synchronized data into B's local storage.sync
+    // cache, but B has not processed an onChanged event or watchdog reconciliation.
+    // The explicit bootstrap-local command is deliberately authoritative: it uses
+    // B's current local layout as the source rather than performing an implicit merge.
+    remote.deliver('source-b',remote.keys());
+    bSnap=await b.command('snapshot');
+    assert.equal(bSnap.ids.includes('work:newer-on-a'),false,'B local layout is intentionally stale before authoritative republish');
+    const republish=await b.command('call',{message:{type:'mosaicsync:bootstrap-local'}});
+    assert.equal(republish?.ok,true);
+    const staleKey=remote.keys().find(key=>key.includes(encodeURIComponent('newer-on-a')));
+    assert.ok(staleKey,'authoritative publication retains a deletion record for deterministic convergence');
+    assert.equal(remote.cloud.get(staleKey)?.kind,'deleted',
+      'authoritative republish tombstones a newer delivered remote record absent from the chosen local source');
+  },{timeout:30000});
+}

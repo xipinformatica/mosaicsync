@@ -387,8 +387,8 @@ test("1.27.3 editor keeps short-viewport overflow safety and localized favicon c
     }
   }
   for (const browser of ["firefox", "chrome"]) {
-    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
-    assert.match(css, /\.dialog-card \{[\s\S]*?overflow: auto;/, "200% zoom/short viewport fallback must remain scrollable");
+    const css = [fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8"), fs.readFileSync("src/shared/newtab/newtab-secondary.css", "utf8")].join("\n");
+    assert.match(css, /\.dialog-card\s*\{[\s\S]*?overflow:\s*(?:auto|[^;}]*;[\s\S]*?overflow-y:\s*auto);/, "200% zoom/short viewport fallback must remain scrollable");
     assert.doesNotMatch(css, /#shortcutDialog\s+\.dialog-card\s*\{[^}]*overflow:\s*hidden/i, "shortcut editor must not hide localized content to suppress scrollbars");
   }
 });

@@ -10,7 +10,7 @@ for (const browser of ['firefox','chrome']) {
   });
 
   test(`1.26.7 ${browser} theme wallpaper card styling distinguishes light and dark cards`, async () => {
-    const css = await readFile(new URL(`../src/shared/newtab/newtab.css`, import.meta.url), 'utf8');
+    const css = [(await readFile(new URL('../src/shared/newtab/newtab-critical.css', import.meta.url), 'utf8')), (await readFile(new URL('../src/shared/newtab/newtab-secondary.css', import.meta.url), 'utf8'))].join('\n');
     assert.match(css, /\.theme-wallpaper-choice\[data-appearance="light"\]\s*\{/);
     assert.match(css, /\.theme-wallpaper-choice\[data-appearance="dark"\]\s*\{/);
     assert.match(css, /\.theme-wallpaper-choice\[data-appearance="light"\] \.theme-wallpaper-choice-preview\s*\{/);

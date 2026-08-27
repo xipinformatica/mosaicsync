@@ -67,8 +67,8 @@ function stateWith(items) {
   });
 }
 
-test("1.27.9 release identity and additive shortcut schemas are unified", () => {
-  assert.equal(VERSION, "1.27.9");
+test("1.30 release identity and additive shortcut schemas are unified", () => {
+  assert.equal(VERSION, "1.30");
   assert.equal(STATE_SCHEMA_VERSION, 18);
   assert.equal(SYNC_SCHEMA_VERSION, 10);
   assert.ok(BUILTIN_SHORTCUT_ICON_KEYS.includes("code"));
@@ -200,7 +200,7 @@ for (const browser of ["firefox", "chrome"]) {
     const [js, html, css, background, icons] = await Promise.all([
       readFile(`dist/${browser}/newtab/newtab.js`, "utf8"),
       readFile(`dist/${browser}/newtab/newtab.html`, "utf8"),
-      readFile(`src/shared/newtab/newtab.css`, "utf8"),
+      Promise.all([readFile("src/shared/newtab/newtab-critical.css", "utf8"), readFile("src/shared/newtab/newtab-secondary.css", "utf8")]).then(parts => parts.join("\n")),
       readFile(`dist/${browser}/background/background.js`, "utf8"),
       readFile(`dist/${browser}/newtab/builtin-icons.js`, "utf8")
     ]);

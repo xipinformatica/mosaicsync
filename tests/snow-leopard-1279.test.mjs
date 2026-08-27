@@ -180,7 +180,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.ok(constantMatch);
     context.FAVICON_AUTHORITATIVE_SUITABILITY = Number(constantMatch[1]);
     for (const name of ["faviconQualitySide", "faviconCandidateSuitability", "faviconCandidateIsAuthoritativelyGoodEnough"]) vm.runInContext(extractFunction(source, name), context);
-    assert.equal(context.faviconCandidateIsAuthoritativelyGoodEnough({ image: "x", width: 64, height: 64, sourceKind: "favicon", declared: true }), true);
+    assert.equal(context.faviconCandidateIsAuthoritativelyGoodEnough({ image: "x", width: 64, height: 64, sourceKind: "link", declared: true }), true);
     assert.equal(context.faviconCandidateIsAuthoritativelyGoodEnough({ image: "x", width: 512, height: 512, sourceKind: "manifest", declared: true }), false,
       "raw size alone must never satisfy the early-stop policy");
     assert.equal(context.faviconCandidateIsAuthoritativelyGoodEnough({ image: "x", width: 128, height: 64, sourceKind: "favicon", declared: true }), false,

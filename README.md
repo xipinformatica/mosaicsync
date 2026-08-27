@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.27.9**
+**Current source release: 1.30**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,15 +65,15 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.27.9** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.27.9 is a zero-feature **Snow Leopard** maintenance release. It preserves the complete Personal+Work Sync/recovery architecture and New Tab first-paint behavior of 1.27.8.9 while simplifying and hardening the engine underneath. Settings now separates incoming authoritative state from unpersisted user edits so cross-tab/storage events cannot make stale controls overwrite newer values or erase a debounced edit. Favicon discovery uses one provenance/geometry-aware suitability policy for winner choice, manual ordering and bounded early termination, so a merely huge manifest icon cannot stop the search before a better favicon is considered.
+1.30 continues the **Snow Leopard** maintenance cycle. It hardens Settings rendering on Firefox/Linux by keeping full-viewport appearance paint frozen while Settings is open, improves automatic favicon quality follow-up, clarifies authoritative Sync publication versus foreign-device receipt, strengthens complete Personal+Work recovery tests, removes obsolete Sync/CSS baggage, and corrects localization drift. Galician is added as the 33rd supported locale; Arabic remains intentionally deferred until a dedicated RTL pass.
 
-The Firefox and Chrome New Tab runtime now comes from one canonical shared source at build time, preventing browser drift without adding runtime imports. The reviewed monolithic `newtab.css` remains only as a source/reference artifact and is deliberately excluded from extension packages; runtime continues to use launcher-critical CSS plus idempotent on-demand secondary CSS. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
+The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 
-All 32 UI locales and both browsers' 32 manifest locale sets remain part of the release. No new permissions, storage/Sync/profile schema changes, CSP relaxation, telemetry, remote code or security-boundary reductions are introduced.
+All 33 UI locales and both browsers' 33 manifest locale sets are validated for exact key/placeholder parity and runtime loading. No new permissions, storage/Sync/profile schema changes, CSP relaxation, telemetry, remote code or security-boundary reductions are introduced.
 
 1.27.4 is a package-efficiency and favicon-picker lifecycle/performance release. The reviewed source remains fully readable, while the deterministic build now emits a rules-only Public Suffix List runtime artifact and compact generated locale modules that preserve all 32 catalogs exactly while removing repeated runtime key/comment bulk. A package-size baseline/report makes category growth visible and fails tests on unexpected >15% growth until the baseline is consciously updated. The manual favicon chooser now clears/invalidate candidates when the editor closes, uses at most two concurrent candidate image jobs, keeps a tiny bounded 30-second in-memory result cache for immediate repeats, and exposes localized source/dimension metadata to assistive technology/tooltips. Site-declared inline favicon support, all image/SVG bounds, and the automatic favicon resolver remain unchanged. Obsolete shortcut-editor CSS was removed. No permissions, schemas, CSP relaxation, telemetry or remote code changed.
 

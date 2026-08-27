@@ -377,11 +377,11 @@ test("1.27.2 classic first-paint Recent ordering stays equivalent to authoritati
 
 test("1.27.2 shortcut editor compact rules cover normal desktop-height viewports without removing short-screen overflow safety", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const css = fs.readFileSync(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8"), fs.readFileSync("src/shared/newtab/newtab-secondary.css", "utf8")].join("\n");
     assert.match(css, /@media \(min-width: 621px\)/);
-    assert.match(css, /#shortcutDialog \.dialog-card \{ padding: 18px 24px; \}/);
-    assert.match(css, /#shortcutDialog \.image-preview \{ width: 80px; height: 80px; \}/);
-    assert.match(css, /#shortcutDialog \.dialog-actions \{ margin-top: 11px; \}/);
-    assert.match(css, /\.dialog-card \{[\s\S]*?overflow: auto;/, "generic dialog overflow fallback must remain available on genuinely short viewports");
+    assert.match(css, /#shortcutDialog\s+\.dialog-card\s*\{\s*padding:\s*18px 24px;/);
+    assert.match(css, /#shortcutDialog\s+\.image-preview\s*\{\s*width:\s*80px;\s*height:\s*80px;/);
+    assert.match(css, /#shortcutDialog\s+\.dialog-actions\s*\{\s*margin-top:\s*11px;/);
+    assert.match(css, /\.dialog-card\s*\{[\s\S]*?overflow:\s*(?:auto|[^;}]*;[\s\S]*?overflow-y:\s*auto);/, "generic dialog overflow fallback must remain available on genuinely short viewports");
   }
 });

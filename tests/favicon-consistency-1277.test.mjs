@@ -172,7 +172,7 @@ test("1.27.7 MosaicSync-style inline favicon fixture contains both declared SVG 
 
 test("1.27.7 source locales include the favicon inspection failure key in every catalog", async () => {
   const files = fs.readdirSync("src/shared/core/i18n-locales").filter(name => name.endsWith(".js"));
-  assert.equal(files.length, 32);
+  assert.equal(files.length, 33);
   for (const file of files) {
     const mod = await import(`../src/shared/core/i18n-locales/${file}?1277=${Date.now()}-${file}`);
     assert.equal(typeof mod.MESSAGES.faviconDiscoveryFailed, "string", file);

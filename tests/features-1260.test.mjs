@@ -40,8 +40,8 @@ const themedState = () => {
   });
 };
 
-test("1.27.9 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.27.9");
+test("1.30 public version and schema changes are unified", () => {
+  assert.equal(VERSION, "1.30");
   assert.equal(STATE_SCHEMA_VERSION, 18);
   assert.equal(SYNC_SCHEMA_VERSION, 10);
 });
@@ -126,7 +126,7 @@ test("1.26.0 New Tab interaction code implements requested mouse, Space and freq
   }
 });
 
-test("new 1.26.0 labels are localized in all 32 UI catalogs and are not hardcoded into the new HTML controls", async () => {
+test("new 1.26.0 labels are localized in all 33 UI catalogs and are not hardcoded into the new HTML controls", async () => {
   const required = [
     "openSpaceOnThisDevice", "lastUsed", "spaceKeyboardHint", "frequentCount",
     "lightDarkWallpapers", "themeWallpapersDescription", "useCurrentBackground",
@@ -135,7 +135,7 @@ test("new 1.26.0 labels are localized in all 32 UI catalogs and are not hardcode
   for (const browser of ["firefox", "chrome"]) {
     const localeDir = `dist/${browser}/core/i18n-locales`;
     const files = (await readdir(localeDir)).filter(name => name.endsWith(".js"));
-    assert.equal(files.length, 32);
+    assert.equal(files.length, 33);
     for (const file of files) {
       const { MESSAGES } = await import(`../${localeDir}/${file}?feature126-${Date.now()}-${file}`);
       for (const key of required) assert.ok(String(MESSAGES[key] || "").trim(), `${browser}/${file}: missing ${key}`);

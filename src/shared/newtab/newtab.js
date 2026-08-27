@@ -225,8 +225,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let resolvedSystemTheme = systemThemeMedia.matches ? "dark" : "light";
   const graphemeSegmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
   const page = document.getElementById("page");
-  const appearancePreviewLayer = document.getElementById("appearancePreviewLayer");
-  const appearancePreviewImage = document.getElementById("appearancePreviewImage");
   const grid = document.getElementById("shortcutGrid");
   const emptyState = document.getElementById("emptyState");
   const syncPendingState = document.getElementById("syncPendingState");
@@ -2262,41 +2260,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     document.documentElement.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
     // applyPageBackgroundVisual establishes the dim before the authoritative
     // wallpaper when Settings is closed. While Settings is open it intentionally
-    // leaves every paint-affecting root/page value untouched and updates only the
-    // isolated preview layer, avoiding Firefox's disappearing-dialog compositor bug.
+    // leaves every full-viewport paint layer untouched, avoiding Firefox/Linux
+    // compositor invalidation that can blank the dialog descendants.
     applyPageBackgroundVisual({ deferHeavyAssets });
 
     applyThemeSkinVisual();
 
     brand.hidden = !settings.brandVisible;
-  }
-
-  function paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground = false } = {}) {
-    if (!appearancePreviewLayer || !appearancePreviewImage) return false;
-    appearancePreviewLayer.style.backgroundColor = renderedBackgroundColor;
-    appearancePreviewLayer.style.setProperty("--appearance-preview-dim", String(effectiveBackgroundDim(state.settings) / 100));
-    if (!deferCustomBackground) {
-      if (resolvedBackground) {
-        appearancePreviewImage.src = resolvedBackground;
-        appearancePreviewImage.hidden = false;
-      } else {
-        appearancePreviewImage.hidden = true;
-        appearancePreviewImage.removeAttribute("src");
-      }
-    }
-    appearancePreviewLayer.hidden = false;
-    return true;
-  }
-
-  function clearAppearancePreviewLayer() {
-    if (!appearancePreviewLayer) return;
-    appearancePreviewLayer.hidden = true;
-    appearancePreviewLayer.style.backgroundColor = "";
-    appearancePreviewLayer.style.removeProperty("--appearance-preview-dim");
-    if (appearancePreviewImage) {
-      appearancePreviewImage.hidden = true;
-      appearancePreviewImage.removeAttribute("src");
-    }
   }
 
   function applyPageBackgroundVisual({ deferHeavyAssets = false } = {}) {
@@ -2307,19 +2277,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const resolvedBackground = resolveBackgroundImage(effectivePresetId, effectiveImage);
     const deferCustomBackground = deferHeavyAssets && settings.backgroundImageDeferred === true && !effectivePresetId;
 
-    // The 1.26.5 Firefox fix proved that mutating the real full-viewport .page
-    // background while the Settings surface is painted can make the dialog
-    // descendants disappear even though JavaScript continues running. Keep that
-    // real surface frozen, but mirror the effective wallpaper onto an isolated
-    // fixed child layer so Light/Dark and day/night wallpaper changes still preview
-    // immediately in both Firefox and Chrome.
+    // Firefox/Linux can lose the painted descendants of the open Settings surface
+    // when any full-viewport layer underneath it is mutated. Keep the real page and
+    // every full-screen background layer completely frozen while Settings is open.
+    // The small wallpaper controls provide the in-dialog preview; one authoritative
+    // page/background commit happens after Settings has fully closed.
     if (settingsDialog?.open) {
-      // Firefox has a compositor failure mode where changing paint-affecting root
-      // variables behind open Settings can blank the dialog descendants while JS
-      // keeps running. While Settings is open, mutate only this isolated preview
-      // layer. The real root/page dim, canvas-text and wallpaper commit after the
-      // dialog has fully closed on the next animation frame.
-      paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground });
       deferredAppearanceVisual = true;
       return;
     }
@@ -2336,7 +2299,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       document.documentElement.style.removeProperty("--boot-background-image");
     }
     document.documentElement.dataset.canvasText = effectiveCanvasText();
-    clearAppearancePreviewLayer();
   }
 
   function applyThemeSkinVisual() {
@@ -4875,10 +4837,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (!themeWallpaperVisualChanged(previousPresetId, previousImageValue, previousDim)) return;
 
     if (settingsDialog?.open) {
-      // Preview on the isolated layer instead of touching the real .page surface.
-      // This preserves the 1.26.5 Firefox paint fix while restoring immediate
-      // Light/Dark wallpaper feedback inside Settings.
-      applyPageBackgroundVisual();
+      deferredAppearanceVisual = true;
       return;
     }
 
@@ -4916,7 +4875,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           stampThemeWallpaperMutation();
           rememberPendingSettings(["lightBackgroundDim", "darkBackgroundDim"]);
           refreshThemeWallpaperControls();
-          if (settingsDialog?.open) applyPageBackgroundVisual();
+          if (settingsDialog?.open) deferredAppearanceVisual = true;
           else applySettings();
           queueThemeWallpaperPersistence();
         }
@@ -4958,7 +4917,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     rememberPendingSettings([key]);
     refreshThemeWallpaperDimControl(target);
     if (effectiveThemeFor(state.settings) === target) {
-      if (settingsDialog?.open) applyPageBackgroundVisual();
+      if (settingsDialog?.open) deferredAppearanceVisual = true;
       else applySettings();
     }
     queueThemeWallpaperPersistence();
@@ -4984,12 +4943,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function applyThemeTransition() {
     if (settingsDialog?.open) {
-      // Theme colors are safe to switch live. The wallpaper follows immediately
-      // on the isolated preview layer, while the real .page background stays frozen
-      // until Settings closes so Firefox never re-enters the disappearing-dialog
-      // compositor path fixed in 1.26.5.
+      // Theme chrome may update live, but full-page wallpaper/background painting is
+      // deferred until Settings closes to avoid compositor invalidation underneath
+      // the open dialog.
       applyThemeSkinVisual();
-      applyPageBackgroundVisual();
+      deferredAppearanceVisual = true;
       return;
     }
     applySettings();
@@ -5002,7 +4960,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // its root paint/layout behind the open Settings surface. Direct Settings
     // gestures still use the ordinary live applySettings()/render() paths.
     if (settingsDialog?.open) {
-      applyPageBackgroundVisual({ deferHeavyAssets });
       deferredLauncherSettings = true;
       if (renderGrid) deferredLauncherRender = true;
       return false;
@@ -5796,6 +5753,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return requestSyncConsentFromGesture();
   }
 
+  async function confirmAuthoritativeLocalPublish() {
+    const status = await refreshSyncStatus();
+    if (!status.hasRemoteSignal) return { confirmed: true, status };
+    const warning = status.hasRemoteData ? t("completeCopyAvailable") : t("partialCopyWarning");
+    const confirmed = window.confirm(`${warning}\n\n${t("publishAutomaticallyTitle")}`);
+    return { confirmed, status };
+  }
+
   async function cacheRemoteImageSource(shortcut) {
     if (shortcut.image || !["remote", "favicon"].includes(shortcut.imageSourceKind) || !shortcut.imageSourceUrl) return false;
     if (!webAccessGranted && !(await hasWebAccess())) return false;
@@ -5953,11 +5918,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   useThisDeviceButton?.addEventListener("click", async () => {
     try {
-      const status = await refreshSyncStatus();
-      if (status.hasRemoteSignal) {
-        const confirmed = window.confirm(`${status.hasRemoteData ? t("completeCopyAvailable") : t("partialCopyWarning")}\n\n${t("publishAutomaticallyTitle")}`);
-        if (!confirmed) return;
-      }
+      const { confirmed, status } = await confirmAuthoritativeLocalPublish();
+      if (!confirmed) return;
       updateSyncUi({ ...meta, syncStatus: "syncing" }, status);
       await optimizeExistingLocalAssetsForSync();
       const response = await sendSyncMessage("mosaicsync:bootstrap-local");
@@ -5988,10 +5950,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   sendToSyncButton?.addEventListener("click", async () => {
     sendToSyncButton.disabled = true;
-    showSyncFeedback(t("sendingLayoutToSync"));
     try {
+      const { confirmed, status: statusBefore } = await confirmAuthoritativeLocalPublish();
+      if (!confirmed) return;
+      showSyncFeedback(t("sendingLayoutToSync"));
       await optimizeExistingLocalAssetsForSync();
-      updateSyncUi({ ...meta, syncStatus: "syncing" }, lastSyncStatus);
+      updateSyncUi({ ...meta, syncStatus: "syncing" }, statusBefore);
       const response = await sendSyncMessage("mosaicsync:bootstrap-local");
       const status = await sendSyncMessage("mosaicsync:get-sync-status");
       updateSyncUi(response.meta, status);

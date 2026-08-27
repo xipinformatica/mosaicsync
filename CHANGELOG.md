@@ -1,3 +1,15 @@
+## 1.30
+
+- Snow Leopard maintenance release and direct successor to 1.27.9. No permission, storage/Sync/profile schema, CSP, telemetry, remote-code or security-boundary changes.
+- Hardened Settings rendering for Firefox/Linux: while Settings is open, MosaicSync no longer mutates a full-viewport wallpaper/background layer underneath the panel. Frequently Visited state changes cannot accidentally invoke appearance painting; full page appearance is committed once Settings closes.
+- Improved automatic favicon recovery so a merely adequate fast icon receives a bounded quality follow-up and can be replaced by a materially better detected favicon. The manual chooser and automatic pipeline keep the same reviewed suitability/safety rules and network work remains bounded.
+- Clarified Sync semantics: the foreign-receipt timestamp is labeled as received from another device, the authoritative publication action is labeled as using this device as the Sync source, and delayed-delivery wording now correctly states the five-minute watchdog interval.
+- Expanded Sync behavioral coverage for complete Personal+Work publication fallback, self-publish versus foreign-receipt timestamps, authoritative local bootstrap, fresh-device waiting/recovery and no-event watchdog behavior. The complete-profile recovery architecture and legacy readers remain unchanged.
+- Removed obsolete baggage: the unused monolithic `newtab.css` source/reference file is gone after historical tests were moved to the real critical/secondary runtime CSS, and the obsolete Personal-only snapshot writer was removed after its fault-injection coverage was transferred to the current complete-profile publisher. Legacy snapshot readers remain for direct-upgrade compatibility.
+- Refined the empty-Space helper geometry so the arrow tail starts at the vertical center of the instruction bubble while the tip stays centered on the add tile in both Personal and Work.
+- Corrected proven stale localization copy across the existing catalogs and added Galician, bringing MosaicSync to 33 UI/manifest locales. Arabic remains intentionally deferred pending a dedicated RTL pass.
+- Retained the 1.27.9 shared New Tab build-time canonical source, Settings draft model, favicon suitability policy, package hygiene and all existing security/safety invariants.
+
 ## 1.27.9
 
 - Snow Leopard maintenance release: no new features, UI surfaces, permissions, storage/Sync/profile schemas, CSP changes, telemetry or remote code. Public predecessor is 1.27.8.9.

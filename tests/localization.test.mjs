@@ -43,24 +43,24 @@ for (const browser of ["firefox", "chrome"]) {
 
 const NEW_EU_LOCALES = Object.freeze(["bg","hr","et","el","hu","lv","lt","mt","ro","sk","sl"]);
 const ALL_UI_LOCALES = Object.freeze([
-  "bg","ca","cs","da","de","et","el","en","es","eu","fr","ga","hr","it","lv","lt","hu","mt","nap","nl","nb","pl","pt","ro","sk","sl","fi","sv","ja","zh-CN","zh-TW","ko"
+  "bg","ca","cs","da","de","et","el","en","es","eu","fr","ga","gl","hr","it","lv","lt","hu","mt","nap","nl","nb","pl","pt","ro","sk","sl","fi","sv","ja","zh-CN","zh-TW","ko"
 ]);
 const EU_OFFICIAL_LOCALES = Object.freeze([
   "bg","hr","cs","da","nl","en","et","fi","fr","de","el","hu","ga","it","lv","lt","mt","pl","pt","ro","sk","sl","es","sv"
 ]);
 
-test("1.24.14m1 exposes all 32 MosaicSync UI locales and all 24 official EU languages", async () => {
+test("1.30 exposes all 33 MosaicSync UI locales and all 24 official EU languages", async () => {
   const mod = await import(`../dist/firefox/core/i18n.js?locale-set-${Date.now()}`);
   const ids = mod.SUPPORTED_LOCALES.map(locale => locale.id);
-  assert.equal(ids.length, 32);
+  assert.equal(ids.length, 33);
   assert.deepEqual(new Set(ids), new Set(ALL_UI_LOCALES));
   for (const id of EU_OFFICIAL_LOCALES) assert.ok(ids.includes(id), `missing EU official language ${id}`);
   assert.equal(new Set(EU_OFFICIAL_LOCALES).size, 24);
   for (const browser of ["firefox", "chrome"]) {
     const uiFiles = (await readdir(resolve(`dist/${browser}/core/i18n-locales`))).filter(name => name.endsWith(".js"));
     const manifestDirs = await readdir(resolve(`dist/${browser}/_locales`), { withFileTypes: true });
-    assert.equal(uiFiles.length, 32, `${browser}: UI catalog count`);
-    assert.equal(manifestDirs.filter(entry => entry.isDirectory()).length, 32, `${browser}: manifest locale count`);
+    assert.equal(uiFiles.length, 33, `${browser}: UI catalog count`);
+    assert.equal(manifestDirs.filter(entry => entry.isDirectory()).length, 33, `${browser}: manifest locale count`);
     for (const id of NEW_EU_LOCALES) {
       assert.ok(uiFiles.includes(`${id}.js`), `${browser}: missing ${id} UI catalog`);
       assert.ok(manifestDirs.some(entry => entry.isDirectory() && entry.name === id), `${browser}: missing ${id} manifest locale`);
@@ -68,8 +68,8 @@ test("1.24.14m1 exposes all 32 MosaicSync UI locales and all 24 official EU lang
   }
 });
 
-test("1.24.14m1 browser-language auto detection recognizes every newly added EU locale", async () => {
-  const samples = Object.freeze({bg:"bg-BG",hr:"hr-HR",et:"et-EE",el:"el-GR",hu:"hu-HU",lv:"lv-LV",lt:"lt-LT",mt:"mt-MT",ro:"ro-RO",sk:"sk-SK",sl:"sl-SI"});
+test("1.30 browser-language auto detection recognizes every supported newly added locale", async () => {
+  const samples = Object.freeze({gl:"gl-ES",bg:"bg-BG",hr:"hr-HR",et:"et-EE",el:"el-GR",hu:"hu-HU",lv:"lv-LV",lt:"lt-LT",mt:"mt-MT",ro:"ro-RO",sk:"sk-SK",sl:"sl-SI"});
   const previousBrowser = globalThis.browser;
   try {
     for (const [expected, browserLocale] of Object.entries(samples)) {
@@ -107,7 +107,7 @@ test("1.24.14m1 Chrome branding remains grammatical and Firefox-free in every ne
 });
 
 for (const browserName of ["firefox", "chrome"]) {
-  test(`1.27.9 ${browserName} live locale switching preserves catalog identity across English → Catalan → Japanese → English`, async () => {
+  test(`1.30 ${browserName} live locale switching preserves catalog identity across English → Catalan → Galician → Japanese → English`, async () => {
     const previousBrowser = globalThis.browser;
     const previousLocalStorage = globalThis.localStorage;
     const values = new Map();
@@ -123,6 +123,9 @@ for (const browserName of ["firefox", "chrome"]) {
       await mod.setLocalePreference("ca");
       assert.equal(mod.t("moveHere"), "Mou aquí");
       assert.equal(mod.t("switchPositions"), "Intercanvia les posicions");
+      await mod.setLocalePreference("gl");
+      assert.equal(mod.t("moveHere"), "Mover aquí");
+      assert.equal(mod.t("folder"), "Cartafol");
       await mod.setLocalePreference("ja");
       assert.equal(mod.t("moveHere"), "ここへ移動");
       await mod.setLocalePreference("en");
@@ -135,3 +138,15 @@ for (const browserName of ["firefox", "chrome"]) {
     }
   });
 }
+
+test("1.30 Galician Chrome branding is localized and Firefox-free", async () => {
+  const { platformizeUiText } = await import(`../dist/chrome/core/i18n-platform.js?branding-gl-${Date.now()}`);
+  const { MESSAGES } = await import(`../dist/chrome/core/i18n-locales/gl.js?branding-gl-${Date.now()}`);
+  for (const [key, value] of Object.entries(MESSAGES)) {
+    const rendered = platformizeUiText(value, "gl", key);
+    assert.doesNotMatch(rendered, /Firefox|Mozilla/i, `gl:${key} retained Firefox/Mozilla branding: ${rendered}`);
+  }
+  const manifest = JSON.parse(await readFile(resolve("dist/chrome/_locales/gl/messages.json"), "utf8"));
+  assert.match(manifest.extensionDescription.message, /Chrome/);
+  assert.doesNotMatch(manifest.extensionDescription.message, /Firefox|Mozilla/i);
+});

@@ -984,7 +984,7 @@ function faviconCandidateSuitability(candidate) {
   return resolutionScore + sourceScore + geometryScore + (candidate.declared ? 5 : 0);
 }
 
-const FAVICON_AUTHORITATIVE_SUITABILITY = 360;
+const FAVICON_AUTHORITATIVE_SUITABILITY = 375;
 
 function faviconCandidatePreference(left, right) {
   const leftScore = faviconCandidateSuitability(left);
@@ -1539,7 +1539,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   }
 
   if (preferQuality && initialOrigin && Date.now() < deadlineAt) {
-    const fallbackDeadline = Math.min(deadlineAt, Date.now() + 1_500);
+    const fallbackDeadline = Math.min(deadlineAt, Date.now() + 2_500);
     const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt: fallbackDeadline, sourceKind: "favicon" });
     if (conventional.image) best = betterFaviconCandidate(best, conventional);
     else if (conventional.reason === "timeout" || conventional.reason === "network") qualityUnresolved = true;
@@ -2675,14 +2675,6 @@ function deviceSnapshotSlotKeys(deviceId, slot) {
   return Array.from({ length: 96 }, (_, index) => deviceSnapshotChunkKey(deviceId, slot, index));
 }
 
-function obsoleteOwnDeviceSnapshotChunkKeys(all, deviceId, publication) {
-  const prefix = `${deviceSnapshotKey(deviceId)}.chunk.`;
-  const keep = publication?.mode === "chunked"
-    ? new Set(Object.keys(publication.chunkWrites || {}))
-    : new Set();
-  return Object.keys(all || {}).filter(key => key.startsWith(prefix) && !keep.has(key));
-}
-
 function isDeviceSnapshotKey(key) {
   return typeof key === "string" && key.startsWith(SYNC_DEVICE_SNAPSHOT_PREFIX);
 }
@@ -3120,63 +3112,6 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
   };
 }
 
-async function buildDeviceSnapshotPublication(records, settings, deviceId, currentRoot = null, { commitId = uid("device-commit"), publishedAt = Date.now() } = {}) {
-  const payload = {
-    version: DEVICE_SNAPSHOT_SCHEMA_VERSION,
-    records: [...records.values()],
-    settings
-  };
-  const encoded = await encodeDeviceSnapshotPayload(payload);
-  if (!encoded) return null;
-  const metadata = deviceSnapshotMetadata(records, settings, deviceId, commitId, publishedAt, encoded);
-  const atomic = {
-    ...metadata,
-    kind: "device-snapshot",
-    data: encoded.data
-  };
-  const rootKey = deviceSnapshotKey(deviceId);
-  if (syncEntryBytes(rootKey, atomic) <= SYNC_QUOTA_BYTES_PER_ITEM) {
-    return { mode: "atomic", rootKey, rootValue: atomic, chunkWrites: {} };
-  }
-
-  const slot = currentRoot?.kind === "device-snapshot-manifest" && currentRoot.slot === "a" ? "b" : "a";
-  const dataChunks = [];
-  for (let offset = 0; offset < encoded.data.length; offset += DEVICE_SNAPSHOT_CHUNK_DATA_CHARS) {
-    dataChunks.push(encoded.data.slice(offset, offset + DEVICE_SNAPSHOT_CHUNK_DATA_CHARS));
-  }
-  if (!dataChunks.length || dataChunks.length > 96) return null;
-
-  const chunkWrites = {};
-  dataChunks.forEach((data, index) => {
-    const key = deviceSnapshotChunkKey(deviceId, slot, index);
-    chunkWrites[key] = {
-      schemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-      kind: "device-snapshot-chunk",
-      deviceId,
-      commitId,
-      slot,
-      index,
-      total: dataChunks.length,
-      data
-    };
-  });
-  for (const [key, value] of Object.entries(chunkWrites)) {
-    if (syncEntryBytes(key, value) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
-  }
-
-  const manifest = {
-    ...metadata,
-    kind: "device-snapshot-manifest",
-    chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-    slot,
-    parts: dataChunks.length,
-    dataChars: encoded.data.length,
-    dataFingerprint: fnv1a(encoded.data)
-  };
-  if (syncEntryBytes(rootKey, manifest) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
-  return { mode: "chunked", rootKey, rootValue: manifest, chunkWrites };
-}
-
 async function readOwnDeviceSnapshot(deviceId) {
   const rootKey = deviceSnapshotKey(deviceId);
   const rootRead = await browser.storage.sync.get(rootKey);
@@ -3191,73 +3126,6 @@ async function readOwnDeviceSnapshot(deviceId) {
   const chunks = await browser.storage.sync.get(keys);
   return { root, decoded: await decodeDeviceSnapshotPayload(root, { ...rootRead, ...chunks }) };
 }
-
-async function publishDeviceSnapshot(records, settings, meta, { previousRecords = null, extraTombstones = null } = {}) {
-  if (!meta?.deviceId) return { written: false, reason: "missing-device" };
-
-  // The active computer owns its snapshot namespace. For chunked snapshots we
-  // double-buffer two fixed chunk slots: write the inactive slot completely,
-  // then switch the tiny root manifest last. A receiver therefore never accepts
-  // a torn generation, while repeated edits do not leak a new set of chunk keys.
-  const currentOwn = await readOwnDeviceSnapshot(meta.deviceId);
-  const snapshotRecords = new Map(records);
-  retainTombstones(snapshotRecords, currentOwn.decoded?.records);
-  retainTombstones(snapshotRecords, previousRecords);
-  retainTombstones(snapshotRecords, extraTombstones);
-
-  const publication = await buildDeviceSnapshotPublication(snapshotRecords, settings, meta.deviceId, currentOwn.root);
-  if (!publication) return { written: false, reason: "too-large", setRevision: "" };
-
-  try {
-    if (publication.mode === "chunked") {
-      // The target slot is inactive, so stale chunks from an older generation in
-      // that slot are non-authoritative and safe to reclaim before writing. This
-      // prevents historical large snapshots from consuming quota forever after a
-      // profile shrinks, while the currently active slot remains untouched.
-      try {
-        const targetSlot = publication.rootValue.slot;
-        const oldInactive = await browser.storage.sync.get(deviceSnapshotSlotKeys(meta.deviceId, targetSlot));
-        const obsoleteInactiveKeys = Object.keys(oldInactive || {});
-        if (obsoleteInactiveKeys.length) await removeSyncItems(obsoleteInactiveKeys);
-      } catch {}
-
-      // Chunks first, root manifest last. Firefox can deliver keys in any order;
-      // decodeDeviceSnapshotPayload refuses the new generation until every chunk
-      // named by the manifest is present and matches its commit ID/fingerprint.
-      await writeSyncItems(publication.chunkWrites, { skipPreflight: true });
-    }
-    await writeSyncItems({ [publication.rootKey]: publication.rootValue }, { skipPreflight: true });
-  } catch (error) {
-    if (publication.mode === "chunked") {
-      // If the manifest was never committed, these inactive-slot chunks are not
-      // authoritative. Best-effort removal prevents quota leaks after failures.
-      try { await removeSyncItems(Object.keys(publication.chunkWrites)); } catch {}
-    }
-    if (isQuotaError(error)) return { written: false, reason: "quota", setRevision: "" };
-    throw error;
-  }
-
-  // Revision bookkeeping is intentionally after the latency-critical write.
-  const all = await browser.storage.sync.get(null);
-  // Once the root has committed, only the chunks named by that root can ever be
-  // authoritative. Reclaim the opposite slot and any stale tail chunks left by
-  // an older, larger generation. Failure is harmless and retried by a later publish.
-  const obsoleteChunks = obsoleteOwnDeviceSnapshotChunkKeys(all, meta.deviceId, publication);
-  if (obsoleteChunks.length) {
-    try {
-      await removeSyncItems(obsoleteChunks);
-      for (const key of obsoleteChunks) delete all[key];
-    } catch {}
-  }
-  const knownDeviceSnapshots = await readDeviceSnapshots(all);
-  return {
-    written: true,
-    mode: publication.mode,
-    value: publication.rootValue,
-    setRevision: mergeDeviceSnapshots(knownDeviceSnapshots)?.revision || ""
-  };
-}
-
 
 async function readCoreSources(all = null, { includeAssets = true } = {}) {
   const values = all && typeof all === "object" ? all : await browser.storage.sync.get(null);

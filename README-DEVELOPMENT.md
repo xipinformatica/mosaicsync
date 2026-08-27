@@ -1,10 +1,14 @@
 # MosaicSync development
 
-> **Current release: 1.27.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30 Snow Leopard maintenance policy
+
+1.30 is a maintenance-first release. Keep the 1.27.9 persisted-state/draft separation, complete Personal+Work Sync recovery model, build-time canonical New Tab source, favicon safety/suitability policy and security boundaries. While Settings is open, never mutate a full-viewport wallpaper/background layer beneath the panel; apply the final full-page appearance only after close. Sync UI must distinguish an authoritative local publication from a foreign-device receipt. Automatic favicon quality follow-up remains bounded and may upgrade a merely adequate fast candidate when a materially better safe candidate is discoverable. The obsolete monolithic CSS and Personal-only snapshot writer are removed only after their useful tests are transferred to current runtime paths. Galician is supported; Arabic remains deferred pending dedicated RTL engineering.
 
 ## 1.27.9 Snow Leopard maintenance policy
 
@@ -319,7 +323,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.27.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

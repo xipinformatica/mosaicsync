@@ -32,8 +32,8 @@ function state(personalItems = [], workItems = []) {
   return normalizeState({ activeSpaceId: "personal", spaces: { personal, work } });
 }
 
-test("1.27.9 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.27.9");
+test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
+  assert.equal(VERSION, "1.30");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -85,7 +85,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.8 ${browser} shortcut hover is restrained, paint-only and does not change grid geometry`, async () => {
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     assert.match(css, /\.shortcut-card:hover \.tile\s*\{[\s\S]*?transform:\s*scale\(1\.045\);[\s\S]*?filter:\s*brightness\(1\.065\);/);
     assert.match(css, /transition:[^;]*transform 100ms ease,[^;]*filter 100ms ease/);
   });

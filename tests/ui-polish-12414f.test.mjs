@@ -42,7 +42,7 @@ test("1.24.14f: Ko-fi is the live donate target and stale preparation UI is gone
   for (const browser of ["firefox", "chrome"]) {
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const css = await readFile(`src/shared/newtab/newtab.css`, "utf8");
+    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
     assert.equal(html.includes(PREPARING_COPY), false, `${browser}: stale donation preparation hint`);
     assert.equal(js.includes('t("donationSoon")'), false, `${browser}: obsolete donation fallback`);
     assert.match(js, /installViewportTooltips\(document, \{ wrapperSelector: "\.sync-help-wrap"/);

@@ -100,8 +100,10 @@ for (const browser of ["firefox", "chrome"]) {
   await mkdir(target, { recursive: true });
   await cp(sharedSource, target, { recursive: true });
   await cp(resolve(root, `src/${browser}`), target, { recursive: true, force: true });
-  // newtab.css is retained once in shared source as a reviewed historical/reference
-  // sheet for regression tests. Runtime owns the split critical + secondary pair.
+  // Runtime owns only the reviewed split critical + secondary pair. The obsolete
+  // monolithic newtab.css source was retired in 1.30 after historical tests were
+  // migrated to the actual runtime stylesheets. Keep a defensive remove here so
+  // a stale local/generated copy can never leak into a package.
   await rm(join(target, "newtab/newtab.css"), { force: true });
   // Keep the reviewed GitHub source human-readable while generating smaller,
   // deterministic runtime-only representations for bulky data that is parsed

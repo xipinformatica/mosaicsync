@@ -102,8 +102,8 @@ test("1.26.17.4 removes the obsolete current-version migration gate and contradi
     assert.doesNotMatch(background, /VERSION\s*===\s*["']1\.24\.7b["']/);
     assert.match(background, /force:\s*resolverQualityUpgrade/);
 
-    const css = await readFile(resolve(`src/shared/newtab/newtab.css`), "utf8");
-    assert.doesNotMatch(css, /\.frequent-site-card:nth-child\(n\+4\)\s*\{\s*display:\s*none;/);
-    assert.match(css, /\.frequent-site-card:nth-child\(n\+4\)\s*\{\s*display:\s*flex;/);
+    const css = [(await readFile(resolve("src/shared/newtab/newtab-critical.css"), "utf8")), (await readFile(resolve("src/shared/newtab/newtab-secondary.css"), "utf8"))].join("\n");
+    assert.doesNotMatch(css, /\.frequent-site-card:nth-child\(n(?:\/\*\*\/)?\+4\)\s*\{\s*display:\s*none;/);
+    assert.match(css, /\.frequent-site-card:nth-child\(n(?:\/\*\*\/)?\+4\)\s*\{\s*display:\s*flex;/);
   }
 });
