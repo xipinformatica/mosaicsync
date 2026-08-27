@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.30 ${browser} applies theme skin live while deferring full-viewport wallpaper paint until Settings closes`, async () => {
+  test(`1.30.2 ${browser} applies theme skin and selected Light/Dark wallpaper live without invoking the broad renderer`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
 
     const skin = js.match(/function applyThemeSkinVisual\(\)\s*\{([\s\S]*?)\n  \}/);
@@ -17,10 +17,8 @@ for (const browser of ["firefox", "chrome"]) {
 
     const transition = js.match(/function applyThemeTransition\(\)\s*\{([\s\S]*?)\n  \}\n\n  function commitDeferredLauncherVisual/);
     assert.ok(transition, `${browser}: appearance transition helper missing`);
-    assert.match(transition[1], /if \(settingsDialog\?\.open\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/,
-      `${browser}: open Settings may switch theme chrome live but must defer the wallpaper commit`);
-    assert.doesNotMatch(transition[1].split("return;")[0], /applyPageBackgroundVisual\(/,
-      `${browser}: open Settings must not mutate a full-viewport background layer`);
+    assert.match(transition[1], /if \(settingsDialog\?\.open\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\{ allowWhileSettingsOpen: true \}\);[\s\S]*?return;/,
+      `${browser}: explicit Light/Dark selection must paint the matching wallpaper immediately`);
     const openBranch = transition[1].split("return;")[0];
     assert.doesNotMatch(openBranch, /applySettings\s*\(/,
       `${browser}: live theme switching must not call the full renderer under Settings`);
@@ -41,10 +39,10 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.9 ${browser} background helper isolates Settings-open painting from .page`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const helper = js.match(/function applyPageBackgroundVisual\(\{ deferHeavyAssets = false \} = \{\}\)\s*\{([\s\S]*?)\n  \}\n\n  function applyThemeSkinVisual/);
+    const helper = js.match(/function applyPageBackgroundVisual\(\{ deferHeavyAssets = false, allowWhileSettingsOpen = false \} = \{\}\)\s*\{([\s\S]*?)\n  \}\n\n  function applyThemeSkinVisual/);
     assert.ok(helper, `${browser}: safe page-background helper missing`);
     const body = helper[1];
-    const openStart = body.indexOf("if (settingsDialog?.open)");
+    const openStart = body.indexOf("if (settingsDialog?.open && !allowWhileSettingsOpen)");
     const openReturn = body.indexOf("return;", openStart);
     assert.ok(openStart >= 0 && openReturn > openStart, `${browser}: Settings-open isolation branch missing`);
     const openBranch = body.slice(openStart, openReturn);

@@ -31,14 +31,19 @@ function ensureManifestCache() {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed?.version === 2 && Array.isArray(parsed.shortcuts)) manifestCache = parsed;
+    if (parsed?.version === 2 && Array.isArray(parsed.shortcuts)) {
+      manifestCache = parsed;
+      lastSerialized = raw;
+    }
   } catch {}
   return manifestCache;
 }
 
 export function seedRenderManifest(manifest) {
-  if (!manifestCache && manifest?.version === 2) manifestCache = manifest;
-  else ensureManifestCache();
+  if (!manifestCache && manifest?.version === 2) {
+    manifestCache = manifest;
+    lastSerialized = JSON.stringify(manifest);
+  } else ensureManifestCache();
 }
 
 function previewIdentity(item) {

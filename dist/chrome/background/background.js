@@ -127,6 +127,7 @@ const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 let webAccessCacheValue = null;
 let webAccessCacheAt = 0;
+let faviconQualityAuditWriteQueue = Promise.resolve();
 
 const PERSONAL_SPACE_ID = "personal";
 const WORK_SPACE_ID = "work";
@@ -1425,20 +1426,40 @@ async function probeConventionalFaviconQualityUpgrade(origin, current, { deadlin
 }
 
 async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt }) {
-  if (!origin || Date.now() >= deadlineAt) return current;
+  if (!origin || Date.now() >= deadlineAt) {
+    return { best: current, complete: false, qualityUnresolved: true, sawTimeout: true };
+  }
   const rootUrl = `${origin}/`;
   const discovered = await discoverPageIconInfo(rootUrl, { deadlineAt });
+  const discoveryReason = String(discovered?.reason || "");
+  const discoveryUnresolved = discoveryReason === "timeout" || discoveryReason === "network" || /^http-/.test(discoveryReason);
   let finalOrigin = "";
   try { finalOrigin = new URL(discovered.finalPageUrl || rootUrl).origin; } catch {}
   // Only trust this recovery pass when the public root stayed on the original
   // site. If it also redirects to an account/login provider, its icons describe
-  // that provider rather than the shortcut site.
-  if (finalOrigin !== origin) return current;
+  // that provider rather than the shortcut site. A deterministic redirect is not
+  // itself a transient quality failure, but it cannot justify the early return.
+  if (finalOrigin !== origin || discoveryReason) {
+    return {
+      best: current,
+      complete: false,
+      qualityUnresolved: discoveryUnresolved,
+      sawTimeout: discoveryReason === "timeout"
+    };
+  }
 
   let best = current;
+  let complete = true;
+  let qualityUnresolved = false;
+  let sawTimeout = false;
   const candidates = (discovered.candidates || []).slice(0, 16);
   for (let index = 0; index < candidates.length; index += 2) {
-    if (Date.now() >= deadlineAt) break;
+    if (Date.now() >= deadlineAt) {
+      complete = false;
+      qualityUnresolved = true;
+      sawTimeout = true;
+      break;
+    }
     const batch = candidates.slice(index, index + 2);
     const images = await Promise.all(batch.map(candidate => fetchImageDataUrlDetailed(candidate.url, {
       deadlineAt,
@@ -1448,9 +1469,14 @@ async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt })
     })));
     for (const image of images) {
       if (image.image) best = betterFaviconCandidate(best, image);
+      else if (image.reason === "timeout" || image.reason === "network") {
+        complete = false;
+        qualityUnresolved = true;
+        sawTimeout = sawTimeout || image.reason === "timeout";
+      }
     }
   }
-  return best;
+  return { best, complete, qualityUnresolved, sawTimeout };
 }
 
 async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_TIMEOUT_MS, preferQuality = false } = {}) {
@@ -1514,11 +1540,14 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   let discoveredFinalOrigin = "";
   try { discoveredFinalOrigin = new URL(discovered.finalPageUrl || pageUrl).origin; } catch {}
   if (preferQuality && initialOrigin && discoveredFinalOrigin && discoveredFinalOrigin !== initialOrigin && Date.now() < deadlineAt) {
-    best = await probeOriginalOriginDeclaredIcons(initialOrigin, best, { deadlineAt });
+    const originalOriginScan = await probeOriginalOriginDeclaredIcons(initialOrigin, best, { deadlineAt });
+    best = originalOriginScan.best;
+    qualityUnresolved = qualityUnresolved || originalOriginScan.qualityUnresolved === true;
+    sawTimeout = sawTimeout || originalOriginScan.sawTimeout === true;
     // This return is safe only after the original site's complete bounded declared
     // candidate set has been inspected. It avoids replacing the site's own strong
     // identity with artwork from an anonymous login-provider redirect.
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best) && !qualityUnresolved) {
+    if (originalOriginScan.complete && faviconCandidateIsAuthoritativelyGoodEnough(best) && !qualityUnresolved) {
       return { ...best, qualityComplete: true, provisional: false };
     }
   }
@@ -1943,9 +1972,10 @@ function normalizeFaviconQualityAuditLedger(raw) {
       if (!/^https?:$/.test(parsed.protocol)) continue;
       url = parsed.href;
     } catch { continue; }
-    const checkedAt = Math.max(0, Number(item?.checkedAt) || 0);
-    const policyVersion = Math.max(0, Number(item?.policyVersion) || 0);
-    if (!checkedAt || !policyVersion) continue;
+    const checkedAt = Number(item?.checkedAt);
+    const policyVersion = Number(item?.policyVersion);
+    if (!Number.isFinite(checkedAt) || checkedAt <= 0 ||
+        !Number.isFinite(policyVersion) || policyVersion <= 0) continue;
     const previous = byUrl.get(url);
     if (!previous || checkedAt > previous.checkedAt) byUrl.set(url, { url, checkedAt, policyVersion });
   }
@@ -1975,17 +2005,21 @@ function faviconQualityAuditNeeded(ledger, value, now = Date.now()) {
 async function markFaviconQualityAuditsComplete(urls) {
   const values = [...new Set((urls || []).filter(value => /^https?:/i.test(String(value || ""))))];
   if (!values.length) return;
-  const ledger = await readFaviconQualityAuditLedger();
-  const byUrl = new Map((ledger.items || []).map(item => [item.url, item]));
-  const checkedAt = Date.now();
-  for (const value of values) {
-    try {
-      const url = new URL(String(value)).href;
-      byUrl.set(url, { url, checkedAt, policyVersion: FAVICON_QUALITY_AUDIT_POLICY_VERSION });
-    } catch {}
-  }
-  const normalized = normalizeFaviconQualityAuditLedger({ items: [...byUrl.values()] });
-  try { await browser.storage.local.set({ [LOCAL_FAVICON_QUALITY_AUDIT_KEY]: normalized }); } catch {}
+  const run = faviconQualityAuditWriteQueue.catch(() => {}).then(async () => {
+    const ledger = await readFaviconQualityAuditLedger();
+    const byUrl = new Map((ledger.items || []).map(item => [item.url, item]));
+    const checkedAt = Date.now();
+    for (const value of values) {
+      try {
+        const url = new URL(String(value)).href;
+        byUrl.set(url, { url, checkedAt, policyVersion: FAVICON_QUALITY_AUDIT_POLICY_VERSION });
+      } catch {}
+    }
+    const normalized = normalizeFaviconQualityAuditLedger({ items: [...byUrl.values()] });
+    try { await browser.storage.local.set({ [LOCAL_FAVICON_QUALITY_AUDIT_KEY]: normalized }); } catch {}
+  });
+  faviconQualityAuditWriteQueue = run.catch(() => {});
+  return run;
 }
 
 function normalizeIconRecoveryQueue(raw) {

@@ -107,7 +107,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   };
   try {
     const supported = globalThis.PerformanceObserver?.supportedEntryTypes || [];
-    if (supported.includes("longtask")) {
+    if (devMetricsEnabled() && supported.includes("longtask")) {
       startupTiming.longTasks ||= { count: 0, totalMs: 0, maxMs: 0 };
       const observer = new PerformanceObserver(list => {
         for (const entry of list.getEntries()) {
@@ -2271,7 +2271,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     brand.hidden = !settings.brandVisible;
   }
 
-  function applyPageBackgroundVisual({ deferHeavyAssets = false } = {}) {
+  function applyPageBackgroundVisual({ deferHeavyAssets = false, allowWhileSettingsOpen = false } = {}) {
     const settings = state.settings;
     const renderedBackgroundColor = effectiveBackgroundColor(settings);
     const effectivePresetId = effectiveBackgroundPresetId(settings);
@@ -2280,11 +2280,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const deferCustomBackground = deferHeavyAssets && settings.backgroundImageDeferred === true && !effectivePresetId;
 
     // Firefox/Linux can lose the painted descendants of the open Settings surface
-    // when any full-viewport layer underneath it is mutated. Keep the real page and
-    // every full-screen background layer completely frozen while Settings is open.
-    // The small wallpaper controls provide the in-dialog preview; one authoritative
-    // page/background commit happens after Settings has fully closed.
-    if (settingsDialog?.open) {
+    // when unrelated full-viewport work churns underneath it. Keep ordinary
+    // appearance/background commits frozen while Settings is open, but allow the
+    // explicit Light/Dark selector to paint only the already-existing page visual
+    // immediately so the visible wallpaper always matches the selected theme.
+    if (settingsDialog?.open && !allowWhileSettingsOpen) {
       deferredAppearanceVisual = true;
       return;
     }
@@ -3717,6 +3717,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           state.settings.webAccessPrompted = true;
           await saveState({ localCacheOnly: true });
         }
+        // The editor may have closed or its URL may have changed while the
+        // one-time prompt marker was being persisted. Do not launch obsolete
+        // favicon discovery work after that await boundary.
+        if (generation !== detectedFaviconGeneration || sourceUrl !== detectedFaviconPickerUrl) return;
         if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
         requestId = globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${generation}-${Math.random().toString(36).slice(2)}`;
         detectedFaviconRequestId = requestId;
@@ -4945,11 +4949,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function applyThemeTransition() {
     if (settingsDialog?.open) {
-      // Theme chrome may update live, but full-page wallpaper/background painting is
-      // deferred until Settings closes to avoid compositor invalidation underneath
-      // the open dialog.
+      // The explicit appearance selector is a direct user gesture: update the
+      // lightweight theme chrome and the current page wallpaper together. Do not
+      // run the broad Settings/grid renderer here; unrelated background mutations
+      // remain deferred until close through applyPageBackgroundVisual's default.
       applyThemeSkinVisual();
-      deferredAppearanceVisual = true;
+      applyPageBackgroundVisual({ allowWhileSettingsOpen: true });
       return;
     }
     applySettings();

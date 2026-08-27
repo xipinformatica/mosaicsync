@@ -1,3 +1,14 @@
+## 1.30.2
+
+- Zero-new-features Snow Leopard refinement release on top of 1.30.1. No permission, storage/Sync/profile schema, CSP, telemetry, remote-code or security-boundary changes.
+- Fixed the separate Light/Dark wallpaper selector so changing the active appearance while Settings is open immediately paints that appearance's configured wallpaper, background color and darkness. The fix is deliberately narrow: it does not call the broad Settings/grid renderer, while unrelated full-page appearance work remains deferred until Settings closes.
+- Corrected redirected-origin favicon quality completion. Original-site recovery now reports whether its bounded declared-candidate scan actually completed and propagates timeout/network uncertainty to the outer resolver, so a partial scan cannot be recorded as fully audited for the 30-day quality-ledger window.
+- Serialized device-local favicon quality-ledger read/modify/write operations so tab-learning and recovery-queue completions cannot overwrite one another, and hardened ledger normalization to reject non-finite timestamps or policy versions.
+- Added the missing post-await cancellation checkpoint to the user-invoked detected-favicon chooser, preventing obsolete discovery/network work from starting after the editor closes or its URL changes while the one-time Website Access prompt marker is being saved.
+- Eliminated a redundant disposable render-manifest write by seeding the module's serialized snapshot whenever an already-valid manifest is loaded or supplied by the synchronous bootstrap.
+- Gated the short-lived Long Task `PerformanceObserver` behind MosaicSync's explicit developer-metrics switch so normal production New Tabs do not install diagnostic observation work.
+- Strengthened regression fidelity: Settings refresh-domain tests now consume the production key definition instead of a divergent hand-written mock; legacy installations with no quality ledger are explicitly verified to reopen automatic favicons for the one-time audit; concurrent ledger writes, non-finite metadata, redirected-origin timeouts, live Light/Dark wallpaper selection, stale favicon-chooser cancellation and render-manifest no-op persistence are covered.
+
 ## 1.30.1
 
 - Snow Leopard corrective maintenance release and direct public successor to 1.27.9. The unpublished 1.30 release candidate is folded into this release rather than appearing as a separate public-history entry. No permission, storage/Sync/profile schema, CSP, telemetry, remote-code or security-boundary changes.

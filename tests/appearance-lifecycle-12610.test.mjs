@@ -53,7 +53,7 @@ function extractSettingsCloseRegistration(source) {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.26.11 ${browser} live appearance lifecycle keeps the real page frozen until Settings closes`, async () => {
+  test(`1.30.2 ${browser} Light/Dark selector paints its matching wallpaper immediately while ordinary Settings background work stays deferred`, async () => {
     const source = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
     const settingsDialog = makeDialog();
     const page = {
@@ -117,26 +117,32 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(documentElement.dataset.effectiveTheme, "light", "theme skin should switch immediately");
     assert.equal(documentElement.style.colorScheme, "light");
     assert.equal(toggleCalls, 1);
-    assert.equal(page.style.backgroundColor, "#222222", "real page color must remain frozen under Settings");
-    assert.equal(page.style.backgroundImage, 'url("old-wallpaper.webp")', "real page wallpaper must remain frozen under Settings");
-    assert.equal(documentElement.style["--page-bg"], "#222222");
-    assert.equal(documentElement.style["--background-dim"], "0.3", "real page darkness must remain frozen while Settings is open");
+    assert.equal(page.style.backgroundColor, "#f7f3fb", "selected theme color must update immediately");
+    assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")', "selected theme wallpaper must update immediately");
+    assert.equal(documentElement.style["--page-bg"], "#f7f3fb");
+    assert.equal(documentElement.style["--background-dim"], "0.05", "selected theme darkness must update immediately");
+    assert.equal(vm.runInContext("deferredAppearanceVisual", context), false);
+    assert.equal(applySettingsCalls, 0, "theme selection must not invoke the broad Settings/grid renderer");
+
+    // Ordinary/non-selector full-page work is still protected while Settings is open.
+    context.state.settings.theme = "dark";
+    context.applyPageBackgroundVisual();
+    assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")', "ordinary background work remains frozen under Settings");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
-    assert.equal(applySettingsCalls, 0, "open-Settings live switching must not invoke the full renderer");
 
     // Register and execute the actual production close listener, then flush its rAF.
     vm.runInContext(extractSettingsCloseRegistration(source), context);
     settingsDialog.open = false;
     settingsDialog.listeners.get("close")();
-    assert.equal(raf.length, 1, "close should defer authoritative repaint by one frame");
+    assert.equal(raf.length, 1, "deferred ordinary work should commit on the next frame after close");
     raf.shift()();
 
-    assert.equal(applySettingsCalls, 1, "authoritative appearance should commit exactly once after close");
+    assert.equal(applySettingsCalls, 1, "deferred ordinary appearance should commit exactly once after close");
     assert.equal(hintRefreshCalls, 1);
-    assert.equal(page.style.backgroundColor, "#f7f3fb");
-    assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")');
-    assert.equal(documentElement.style["--page-bg"], "#f7f3fb");
-    assert.equal(documentElement.style["--background-dim"], "0.05", "authoritative wallpaper darkness commits after Settings closes");
+    assert.equal(page.style.backgroundColor, "#15101d");
+    assert.equal(page.style.backgroundImage, 'url("extension:///dark-wallpaper.webp")');
+    assert.equal(documentElement.style["--page-bg"], "#15101d");
+    assert.equal(documentElement.style["--background-dim"], "0.3");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), false);
   });
 

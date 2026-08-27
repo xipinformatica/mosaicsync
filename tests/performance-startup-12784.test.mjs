@@ -139,7 +139,7 @@ for (const browser of ["firefox", "chrome"]) {
     const boot = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
     assert.match(boot, /firstLauncherPaint/);
     assert.match(src, /schedulePaintPhase\("perceivedCompletePaint"\)/);
-    assert.match(src, /PerformanceObserver[\s\S]*?longtask/);
+    assert.match(src, /devMetricsEnabled\(\) && supported\.includes\("longtask"\)[\s\S]*?PerformanceObserver/);
     assert.match(src, /observer\.disconnect\(\)/, "long-task observer must not run for the lifetime of every New Tab");
     assert.match(src, /longTaskWindowEnd/);
     assert.doesNotMatch(src, /storage\.(?:local|sync|session)\.set\([^)]*startupTiming|fetch\([^)]*startupTiming|sendMessage\([^)]*startupTiming/);

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.1",
-      "rawBytes": 1935396,
-      "deflatedBytes": 582093,
+      "version": "1.30.2",
+      "rawBytes": 1937551,
+      "deflatedBytes": 582625,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,8 +13,8 @@
         },
         "background": {
           "files": 2,
-          "rawBytes": 248319,
-          "deflatedBytes": 56662
+          "rawBytes": 249822,
+          "deflatedBytes": 56973
         },
         "localization": {
           "files": 34,
@@ -39,12 +39,12 @@
         "newtab-html": {
           "files": 1,
           "rawBytes": 43596,
-          "deflatedBytes": 9435
+          "deflatedBytes": 9436
         },
         "newtab-js": {
           "files": 9,
-          "rawBytes": 340589,
-          "deflatedBytes": 80184
+          "rawBytes": 341241,
+          "deflatedBytes": 80404
         },
         "other": {
           "files": 1,
@@ -82,14 +82,14 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 299333,
-          "deflatedBytes": 65347
+          "rawBytes": 299888,
+          "deflatedBytes": 65554
         },
         {
           "path": "background/background.js",
           "category": "background",
-          "rawBytes": 245834,
-          "deflatedBytes": 55736
+          "rawBytes": 247337,
+          "deflatedBytes": 56047
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -113,7 +113,7 @@
           "path": "newtab/newtab.html",
           "category": "newtab-html",
           "rawBytes": 43596,
-          "deflatedBytes": 9435
+          "deflatedBytes": 9436
         },
         {
           "path": "core/storage.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.1",
-      "rawBytes": 1956695,
-      "deflatedBytes": 596968,
+      "version": "1.30.2",
+      "rawBytes": 1958850,
+      "deflatedBytes": 597495,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,8 +267,8 @@
         },
         "background": {
           "files": 2,
-          "rawBytes": 247255,
-          "deflatedBytes": 56628
+          "rawBytes": 248758,
+          "deflatedBytes": 56935
         },
         "localization": {
           "files": 34,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 9,
-          "rawBytes": 340589,
-          "deflatedBytes": 80184
+          "rawBytes": 341241,
+          "deflatedBytes": 80404
         },
         "other": {
           "files": 1,
@@ -336,14 +336,14 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 299333,
-          "deflatedBytes": 65347
+          "rawBytes": 299888,
+          "deflatedBytes": 65554
         },
         {
           "path": "background/background.js",
           "category": "background",
-          "rawBytes": 244770,
-          "deflatedBytes": 55702
+          "rawBytes": 246273,
+          "deflatedBytes": 56009
         },
         {
           "path": "core/public_suffix_list.dat",
