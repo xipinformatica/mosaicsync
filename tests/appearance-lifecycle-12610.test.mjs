@@ -35,21 +35,11 @@ function makeImage() {
 }
 
 function makeDialog() {
-  const listeners = new Map();
   return {
-    open: true,
-    listeners,
-    addEventListener(type, fn) { listeners.set(type, fn); }
+    hidden: false,
+    attrs: new Map(),
+    setAttribute(name, value) { this.attrs.set(name, String(value)); }
   };
-}
-
-function extractSettingsCloseRegistration(source) {
-  const start = source.indexOf('settingsDialog?.addEventListener("close", () => {');
-  assert.ok(start >= 0, "Settings close listener missing");
-  const endMarker = "\n  });";
-  const end = source.indexOf(endMarker, start);
-  assert.ok(end > start, "Settings close listener terminator missing");
-  return source.slice(start, end + endMarker.length);
 }
 
 for (const browser of ["firefox", "chrome"]) {
@@ -78,6 +68,8 @@ for (const browser of ["firefox", "chrome"]) {
         }
       },
       settingsDialog,
+      settingsButton: { setAttribute() {} },
+      closeBackgroundColorPicker() {},
       page,
       document: { documentElement },
       effectiveBackgroundColor(settings) { return settings.theme === "light" ? "#f7f3fb" : "#15101d"; },
@@ -93,13 +85,15 @@ for (const browser of ["firefox", "chrome"]) {
       requestAnimationFrame(fn) { raf.push(fn); return raf.length; },
       console
     });
-    vm.runInContext("var deferredAppearanceVisual = false; var deferredLauncherSettings = false; var deferredLauncherRender = false;", context);
+    vm.runInContext("var deferredAppearanceVisual = false; var deferredLauncherSettings = false; var deferredLauncherRender = false; var deferredSettingsControlRefresh = false; var backgroundUploadGeneration = 0;", context);
 
     for (const name of [
+      "isSettingsOpen",
       "applyPageBackgroundVisual",
       "applyThemeSkinVisual",
       "applyThemeTransition",
-      "commitDeferredLauncherVisual"
+      "commitDeferredLauncherVisual",
+      "closeSettingsPanel"
     ]) {
       vm.runInContext(extractFunction(source, name), context);
     }
@@ -130,10 +124,8 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")', "ordinary background work remains frozen under Settings");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
 
-    // Register and execute the actual production close listener, then flush its rAF.
-    vm.runInContext(extractSettingsCloseRegistration(source), context);
-    settingsDialog.open = false;
-    settingsDialog.listeners.get("close")();
+    // Execute the actual production Settings close path, then flush its rAF.
+    context.closeSettingsPanel();
     assert.equal(raf.length, 1, "deferred ordinary work should commit on the next frame after close");
     raf.shift()();
 
@@ -153,24 +145,25 @@ for (const browser of ["firefox", "chrome"]) {
     let commits = 0;
     const context = vm.createContext({
       settingsDialog,
+      settingsButton: { setAttribute() {} },
+      closeBackgroundColorPicker() {},
       requestAnimationFrame(fn) { raf.push(fn); return raf.length; },
       commitDeferredLauncherVisual() { commits += 1; }
     });
-    vm.runInContext("var deferredAppearanceVisual = true; var deferredLauncherSettings = false; var deferredLauncherRender = false;", context);
+    vm.runInContext("var deferredAppearanceVisual = true; var deferredLauncherSettings = false; var deferredLauncherRender = false; var deferredSettingsControlRefresh = false; var backgroundUploadGeneration = 0;", context);
+    vm.runInContext(extractFunction(source, "isSettingsOpen"), context);
+    vm.runInContext(extractFunction(source, "closeSettingsPanel"), context);
 
-    vm.runInContext(extractSettingsCloseRegistration(source), context);
-    settingsDialog.open = false;
-    settingsDialog.listeners.get("close")();
+    context.closeSettingsPanel();
     assert.equal(raf.length, 1);
 
     // User reopens Settings before Firefox reaches the deferred paint frame.
-    settingsDialog.open = true;
+    settingsDialog.hidden = false;
     raf.shift()();
     assert.equal(commits, 0, "reopen-before-rAF must suppress the stale authoritative commit");
 
     // A later close may commit normally.
-    settingsDialog.open = false;
-    settingsDialog.listeners.get("close")();
+    context.closeSettingsPanel();
     raf.shift()();
     assert.equal(commits, 1);
   });

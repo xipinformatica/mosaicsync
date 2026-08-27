@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.4 Settings single-scroll-owner isolation policy
+
+1.30.4 remains strictly zero-new-features maintenance. The reproduced Firefox blank Settings failure survived the unpublished 1.30.3 native-dialog removal, so the next diagnostic variable is scroll ownership only: `.settings-dialog` owns vertical scrolling and `.settings-dialog .dialog-card` must remain normal-flow content with `max-height:none` and `overflow:visible`. Do not simultaneously change the Settings container primitive, `hidden` strategy, preview painting, storage-echo behavior or timing; the hardware result must prove or disprove the scroll-frame hypothesis cleanly. All validated 1.30.3 Space ownership, async cancellation, System-theme ordering, favicon timeout/recovery-queue, final-persistence and pointer-lifecycle fixes remain mandatory. 1.30.3 is an unpublished diagnostic candidate, not a public-history release.
+
+
+## 1.30.3 Settings stability and async-ownership policy
+
+1.30.3 remains strictly zero-new-features maintenance. The Settings surface must not use a native modeless `<dialog>`: real Firefox hardware reproduced freezes when Separate Light/Dark Wallpapers expanded on Linux and Windows and when Frequently Visited expanded on Linux. Settings remains a fixed, programmatically named ARIA dialog surface with explicit open/close/Escape/outside-click lifecycle; Separate Wallpapers must expand already-prepared controls without repainting both wallpaper previews in the checkbox gesture, and Frequently Visited has one parent visibility owner. A Space cannot switch while Settings is open. Async shortcut artwork and custom-wallpaper jobs must prove generation, owning editor/Space and live-surface identity after awaits before mutating state. System-theme reconciliation is generation-controlled and must resolve browser/media signals before painting. Every favicon quality subscan propagates completeness/timeouts; durable recovery-queue read-modify-write mutations rebase through a short serialized queue and reject non-finite timestamps. Continuous sliders may debounce persistence, but their final interaction persists immediately. No permission, synchronized/storage/profile schema, CSP or user-facing feature changes are allowed.
 
 ## 1.30.2 Snow Leopard refinement policy
 
@@ -327,7 +336,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

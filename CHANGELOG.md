@@ -1,3 +1,12 @@
+## 1.30.4
+
+- Zero-new-features Settings-stability refinement and direct public-history successor to 1.30.2; the failed 1.30.3 Settings-container experiment was not published. No permission, synchronized/storage/profile schema, CSP, telemetry, remote-code or security-boundary changes.
+- Narrowed the reproduced Firefox Settings white/blank-panel failure to the long-lived Settings form scroll surface. The outer fixed Settings surface is now the **only vertical scroll owner**; `#settingsForm.dialog-card` stays in normal flow with no viewport `max-height` and no independent overflow scroll frame. This is intentionally the only rendering variable changed for the hardware isolation test, preserving the 1.30.3 fixed ARIA container temporarily so the result can prove or disprove scroll-frame invalidation cleanly.
+- Retained the reduced-toggle work from the unpublished 1.30.3 candidate: Separate Light/Dark Wallpapers expands/collapses already-prepared controls without repainting both preview images during the checkbox gesture, and Frequently Visited uses one parent visibility owner.
+- Retained the confirmed correctness hardening from the unpublished 1.30.3 candidate: Space switching is blocked while Settings is open; stale shortcut-image and custom-wallpaper async jobs are generation/owner guarded; System-theme reconciliation is last-result-wins; conventional favicon fallback timeouts remain provisional; durable favicon-recovery queue mutations are serialized/rebased and reject non-finite retry timestamps; final slider interactions persist immediately; color-plane drag geometry is cached and lost pointer capture is handled.
+- Added dedicated regression coverage proving the single-scroll-owner Settings contract in shared source and both generated browser trees while deliberately preserving the 1.30.3 outer Settings container for diagnostic isolation.
+- Release packaging emits exactly three deterministic archives with explicit browser naming: `mosaicsync-1.30.4-firefox.zip`, `mosaicsync-1.30.4-chrome.zip`, and `mosaicsync-1.30.4-github-ready.zip`.
+
 ## 1.30.2
 
 - Zero-new-features Snow Leopard refinement release on top of 1.30.1. No permission, storage/Sync/profile schema, CSP, telemetry, remote-code or security-boundary changes.

@@ -40,8 +40,19 @@ function stateWithSpaces({ activeSpaceId = "personal", personal = [], work = [],
   return { activeSpaceId, spaces, shortcuts: active.shortcuts, settings: active.settings };
 }
 
+function installQueueMutationStub(ctx) {
+  if (ctx.mutateIconRecoveryQueue || !ctx.readIconRecoveryQueue || !ctx.writeIconRecoveryQueue) return;
+  ctx.mutateIconRecoveryQueue = async mutator => {
+    const current = await ctx.readIconRecoveryQueue();
+    const next = await mutator(current);
+    if (!next || next === current) return current;
+    return ctx.writeIconRecoveryQueue(next);
+  };
+}
+
 function runFunctions(src, names, context, prelude = "") {
   const ctx = { console, ...context };
+  installQueueMutationStub(ctx);
   vm.createContext(ctx);
   const body = names.map(name => extract(src, name)).join("\n\n");
   vm.runInContext(`${prelude}\n${body}`, ctx);
@@ -199,7 +210,9 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryStatus: async value => { status = structuredClone(value); },
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
-    vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
+    installQueueMutationStub(ctx);
+    installQueueMutationStub(ctx);
+  vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
     const summary = await ctx.processIconRecoveryQueue();
     assert.equal(reads >= 2, true, "the durable queue must be re-read after the network batch");
@@ -237,7 +250,9 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryStatus: async () => {},
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
-    vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
+    installQueueMutationStub(ctx);
+    installQueueMutationStub(ctx);
+  vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
     const summary = await ctx.processIconRecoveryQueue();
     assert.equal(summary.attempted, 1);
@@ -305,6 +320,7 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
     writeIconRecoveryStatus: async () => {},
     scheduleImmediateIconRecoveryContinuation: () => {}
   });
+  installQueueMutationStub(ctx);
   vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
   const summary = await ctx.processIconRecoveryQueue();
@@ -346,6 +362,7 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryStatus: async value => { status = structuredClone(value); },
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
+    installQueueMutationStub(ctx);
     vm.runInContext(
       `let queue = Promise.resolve();\nlet iconRecoveryRun = null;\n${extract(src, "enqueue")}\n${extract(src, "nextIconRecoveryFailure")}\n${extract(src, "nextIconRecoveryQualityRetry")}\n${extract(src, "processIconRecoveryQueue")}`,
       ctx

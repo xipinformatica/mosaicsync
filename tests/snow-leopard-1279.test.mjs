@@ -158,8 +158,8 @@ for (const browser of ["firefox", "chrome"]) {
         if (String(url).endsWith("/favicon.ico")) return { image: "favicon32", sourceUrl: String(url), width: 32, height: 32, qualitySide: 32, declared: false, sourceKind: options.sourceKind || "favicon", reason: "" };
         return { image: "", sourceUrl: String(url), width: 0, height: 0, qualitySide: 0, declared: false, sourceKind: options.sourceKind || "", reason: "not-found" };
       },
-      probeOriginalOriginDeclaredIcons: async (_origin, current) => current,
-      probeConventionalFaviconQualityUpgrade: async (_origin, current) => current,
+      probeOriginalOriginDeclaredIcons: async (_origin, current) => ({ best: current, complete: true, qualityUnresolved: false, sawTimeout: false }),
+      probeConventionalFaviconQualityUpgrade: async (_origin, current) => ({ best: current, complete: true, qualityUnresolved: false, sawTimeout: false }),
       probeConventionalFaviconFallbacks: async () => null,
       console
     });

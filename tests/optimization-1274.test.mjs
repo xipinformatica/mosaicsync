@@ -269,7 +269,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(picker.hidden, true);
     assert.equal(button.disabled, false);
     assert.equal(button.getAttribute("aria-expanded"), "false");
-    assert.match(source, /shortcutDialog\?\.addEventListener\("close", resetDetectedFaviconPicker\)/, "dialog close must invoke the reset path");
+    assert.match(source, /shortcutDialog\?\.addEventListener\("close", \(\) => \{[\s\S]*?shortcutSyncPrepareGeneration \+= 1;[\s\S]*?resetDetectedFaviconPicker\(\);[\s\S]*?\}\);/, "dialog close must invalidate artwork work and invoke the reset path");
     assert.match(source, /shortcutUrl\.addEventListener\("input", \(\) => \{\s*if \(detectedFaviconPickerUrl\) resetDetectedFaviconPicker\(\)/, "URL edits must invalidate old candidate results");
   });
 

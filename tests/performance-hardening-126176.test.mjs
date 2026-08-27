@@ -34,6 +34,16 @@ function extract(src, name) {
   throw new Error(`unterminated ${name}`);
 }
 
+function installQueueMutationStub(ctx) {
+  if (ctx.mutateIconRecoveryQueue || !ctx.readIconRecoveryQueue || !ctx.writeIconRecoveryQueue) return;
+  ctx.mutateIconRecoveryQueue = async mutator => {
+    const current = await ctx.readIconRecoveryQueue();
+    const next = await mutator(current);
+    if (!next || next === current) return current;
+    return ctx.writeIconRecoveryQueue(next);
+  };
+}
+
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17.6 ${browser} favicon recovery single-flights exact URL + quality work without merging distinct pages`, async () => {
     const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
@@ -81,6 +91,7 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryStatus: async () => {},
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
+    installQueueMutationStub(ctx);
     vm.runInContext(`
       let iconRecoveryRun = null;
       ${extract(src, "processIconRecoveryQueue")}
@@ -129,6 +140,7 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryQueue: async value => { finalQueue = structuredClone(value); return value; },
       writeIconRecoveryStatus: async () => {}, scheduleImmediateIconRecoveryContinuation: () => {}
     });
+    installQueueMutationStub(ctx);
     vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
     const summary = await ctx.processIconRecoveryQueue();
     assert.equal(resolverCalls, 1, "the identical failed resolver job must still be single-flighted");
@@ -217,6 +229,7 @@ for (const browser of ["firefox", "chrome"]) {
       writeIconRecoveryStatus: async () => {},
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
+    installQueueMutationStub(ctx);
     vm.runInContext(`
       let iconRecoveryRun = null;
       ${extract(src, "applyProactiveFaviconResults")}

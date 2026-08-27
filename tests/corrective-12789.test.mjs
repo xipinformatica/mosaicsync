@@ -29,13 +29,6 @@ function extractFunction(source, name) {
   throw new Error(`${name} unterminated`);
 }
 
-function extractSettingsCloseRegistration(source) {
-  const start = source.indexOf('settingsDialog?.addEventListener("close", () => {');
-  assert.ok(start >= 0, "Settings close listener missing");
-  const end = source.indexOf("\n  });", start);
-  assert.ok(end > start, "Settings close listener terminator missing");
-  return source.slice(start, end + 6);
-}
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.9 ${browser} mascot animation is complete in critical CSS and logo hover stays secondary-CSS-free`, () => {
@@ -79,7 +72,9 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.9 ${browser} external Settings-open state commits defer safely while direct Settings controls stay live`, async () => {
     const source = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const context = vm.createContext({
-      settingsDialog: { open: true, listeners: new Map(), addEventListener(type, fn) { this.listeners.set(type, fn); } },
+      settingsDialog: { hidden: false, setAttribute() {} },
+      settingsButton: { setAttribute() {} },
+      closeBackgroundColorPicker() {},
       state: { settings: { columns: 8, rows: 4 } },
       settingsColumns: { value: "9" },
       settingsRows: { value: "5" },
@@ -100,11 +95,14 @@ for (const browser of ["firefox", "chrome"]) {
     context.deferredAppearanceVisual = false;
     context.deferredLauncherSettings = false;
     context.deferredLauncherRender = false;
+    context.deferredSettingsControlRefresh = false;
+    context.backgroundUploadGeneration = 0;
+    vm.runInContext(extractFunction(source, "isSettingsOpen"), context);
     vm.runInContext(extractFunction(source, "reconcileLauncherAfterExternalState"), context);
     vm.runInContext(extractFunction(source, "requestLauncherRenderAfterExternalState"), context);
     vm.runInContext(extractFunction(source, "commitDeferredLauncherVisual"), context);
     vm.runInContext(extractFunction(source, "applyGridLayoutControlLive"), context);
-    vm.runInContext(extractSettingsCloseRegistration(source), context);
+    vm.runInContext(extractFunction(source, "closeSettingsPanel"), context);
 
     // The storage/Sync/background reconciliation path accepts the new model but
     // never rebuilds or repaints the launcher behind an open Settings surface.
@@ -130,8 +128,7 @@ for (const browser of ["firefox", "chrome"]) {
     // authoritative settings commit + one render after the dialog is gone.
     context.realApplyCalls = 0;
     context.realRenderCalls = 0;
-    context.settingsDialog.open = false;
-    context.settingsDialog.listeners.get("close")();
+    context.closeSettingsPanel();
     assert.equal(context.raf.length, 1);
     context.raf.shift()();
     assert.equal(context.realApplyCalls, 1);

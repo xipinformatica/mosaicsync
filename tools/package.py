@@ -45,7 +45,9 @@ def package_source(version: str) -> Path:
 
 def package(browser: str, version: str) -> Path:
     source = DIST / browser
-    output = OUT / f"mosaicsync-{version}-{browser}.zip"
+    # Public release artifacts deliberately use exactly three ZIP names:
+    # browser-labelled Firefox, browser-labelled Chrome, and GitHub-ready source.
+    output = OUT / (f"mosaicsync-{version}-firefox.zip" if browser == "firefox" else f"mosaicsync-{version}-chrome.zip")
     OUT.mkdir(exist_ok=True)
     with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
         for path in sorted(p for p in source.rglob("*") if p.is_file()):

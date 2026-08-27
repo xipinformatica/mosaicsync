@@ -104,7 +104,7 @@
       <span>Bookmarks</span>
     </button>
 
-    <button id="settingsButton" class="settings-button" type="button" aria-label="MosaicSync settings" title="MosaicSync settings" aria-haspopup="dialog" aria-controls="settingsDialog">
+    <button id="settingsButton" class="settings-button" type="button" aria-label="MosaicSync settings" title="MosaicSync settings" aria-haspopup="dialog" aria-controls="settingsDialog" aria-expanded="false">
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/>
         <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.1 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.7 1.7 0 0 0 8.5 4.1a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 8.5c.15.37.38.7.7 1 .3.25.7.4 1.1.4h.09a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.8 1.1Z"/>
@@ -248,11 +248,11 @@
     </form>
   </dialog>
 
-  <dialog id="settingsDialog" class="dialog settings-dialog" aria-labelledby="settingsDialogTitle">
+  <aside id="settingsDialog" class="dialog settings-dialog" role="dialog" aria-modal="false" aria-labelledby="settingsDialogTitle" aria-hidden="true" hidden>
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.30.2</p>
+          <p class="eyebrow">MosaicSync · 1.30.4</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -662,7 +662,7 @@
         <span>Made in the EU</span>
       </div>
     </form>
-  </dialog>
+  </aside>
 
   <dialog id="wallpaperGalleryDialog" class="dialog wallpaper-gallery-dialog" aria-labelledby="wallpaperGalleryTitle">
     <div class="dialog-card wallpaper-gallery-card">

@@ -23,6 +23,15 @@ function extract(src, name) {
   throw new Error(`unterminated ${name}`);
 }
 
+function installQueueMutationStub(ctx) {
+  ctx.mutateIconRecoveryQueue = async mutator => {
+    const current = await ctx.readIconRecoveryQueue();
+    const next = await mutator(current);
+    if (!next || next === current) return current;
+    return ctx.writeIconRecoveryQueue(next);
+  };
+}
+
 for (const browserName of ["firefox", "chrome"]) {
   test(`1.26.17 ${browserName} targeted iconless-shortcut recovery reaches commit without a site visit`, async () => {
     const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
@@ -92,6 +101,7 @@ for (const browserName of ["firefox", "chrome"]) {
       scheduleImmediateIconRecoveryContinuation: () => {},
       browser: { alarms: { clear: async () => {} } }
     };
+    installQueueMutationStub(ctx);
     vm.createContext(ctx);
     for (const name of ["seedIconRecoveryQueue", "processIconRecoveryQueue", "requestMissingShortcutIconHydration"]) {
       vm.runInContext(extract(src, name), ctx);
@@ -131,6 +141,7 @@ test("1.26.17 Chrome native fallback is attempted without Website Access and doe
     scheduleImmediateIconRecoveryContinuation: () => {},
     browser: { alarms: { clear: async () => {} } }
   };
+  installQueueMutationStub(ctx);
   vm.createContext(ctx);
   vm.runInContext(extract(src, "processIconRecoveryQueue"), ctx);
   const result = await ctx.processIconRecoveryQueue();

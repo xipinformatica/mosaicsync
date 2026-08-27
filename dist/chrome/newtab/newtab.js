@@ -408,6 +408,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let pendingShortcutColorTag = "";
   let shortcutArtworkEdited = false;
   let shortcutSyncPrepareGeneration = 0;
+  let backgroundUploadGeneration = 0;
+  let systemThemeResolutionGeneration = 0;
   let detectedFaviconGeneration = 0;
   let detectedFaviconPickerUrl = "";
   let detectedFaviconRequestId = "";
@@ -450,6 +452,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let colorPickerSaturation = 1;
   let colorPickerValue = 0.31;
   let colorPlaneDragging = false;
+  let colorPlaneRect = null;
   let stateMutationGeneration = 0;
   let metaMutationGeneration = 0;
   let persistedStateChangeGeneration = 0;
@@ -1360,10 +1363,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function setFrequentlyVisitedOptionsVisibility(enabled) {
-    const visible = enabled === true;
-    if (frequentOptions) frequentOptions.hidden = !visible;
-    // Keep the row state aligned as a defensive fallback for older markup/tests.
-    if (frequentCountRow) frequentCountRow.hidden = !visible;
+    // One element owns expansion/collapse. Mutating both the parent and a child
+    // made Firefox perform redundant layout work inside the live Settings panel.
+    if (frequentOptions) frequentOptions.hidden = enabled !== true;
   }
 
   function setFrequentlyVisitedStatus(key) {
@@ -2007,6 +2009,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   async function switchActiveSpace(spaceId) {
+    // Settings drafts belong to the Space that was active when the panel opened.
+    // Do not let mouse clicks bypass the same lifecycle guard already used by
+    // keyboard Space switching; otherwise a pending draft can be overlaid onto
+    // the newly selected Space and broad rendering can occur behind Settings.
+    if (isSettingsOpen()) return;
     if (!isMultipleSpacesEnabled() || !SPACE_IDS.includes(spaceId) || spaceId === state.activeSpaceId) return;
     devMark("newtab:space-switch:start");
     const generation = ++spaceSwitchGeneration;
@@ -2160,6 +2167,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   async function refreshResolvedSystemTheme() {
+    const generation = ++systemThemeResolutionGeneration;
     const mediaDark = systemThemeMedia.matches;
     let firefoxDark = null;
     try {
@@ -2168,10 +2176,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Theme introspection is only a reliability hint. prefers-color-scheme
       // remains the standards-based fallback if Firefox exposes no theme data.
     }
+    if (generation !== systemThemeResolutionGeneration) return;
 
-    // Firefox can expose a light content color-scheme override even while its UI
-    // and the operating system are dark. Treat either trustworthy dark signal as
-    // dark so MosaicSync's Automatic mode does not unexpectedly flash/switch light.
+    // Resolve both theme signals before painting. A speculative media-only paint
+    // could briefly show the wrong wallpaper, and only the newest overlapping
+    // async resolver is allowed to commit.
     const next = mediaDark || firefoxDark === true ? "dark" : "light";
     if (next === resolvedSystemTheme) return;
     resolvedSystemTheme = next;
@@ -2284,7 +2293,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // appearance/background commits frozen while Settings is open, but allow the
     // explicit Light/Dark selector to paint only the already-existing page visual
     // immediately so the visible wallpaper always matches the selected theme.
-    if (settingsDialog?.open && !allowWhileSettingsOpen) {
+    if (isSettingsOpen() && !allowWhileSettingsOpen) {
       deferredAppearanceVisual = true;
       return;
     }
@@ -2426,7 +2435,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function updateColorPlaneFromPointer(event) {
     if (!backgroundColorPlane) return;
-    const rect = backgroundColorPlane.getBoundingClientRect();
+    const rect = colorPlaneRect || backgroundColorPlane.getBoundingClientRect();
     if (!rect.width || !rect.height) return;
     colorPickerSaturation = clampUnit((event.clientX - rect.left) / rect.width);
     colorPickerValue = clampUnit(1 - ((event.clientY - rect.top) / rect.height));
@@ -3629,6 +3638,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     pendingShortcutColorTag = SHORTCUT_COLOR_TAG_KEYS.includes(item?.colorTag) ? item.colorTag : "";
     shortcutImageUrl.value = pendingShortcutImageSourceKind === "remote" ? pendingShortcutImageSourceUrl : "";
     shortcutSyncImage.checked = pendingShortcutImageKind === "sync" || pendingShortcutImageKind === "local";
+    if (useShortcutImageUrl) useShortcutImageUrl.disabled = false;
     shortcutArtworkEdited = false;
     deleteShortcutButton.hidden = !item;
     if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.hidden = true;
@@ -3641,22 +3651,39 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     queueMicrotask(() => shortcutTitle.focus());
   }
 
-  function closeDialog(dialog) {
-    if (dialog === settingsDialog) closeBackgroundColorPicker();
-    if (dialog.open) dialog.close();
+  function isSettingsOpen() {
+    return Boolean(settingsDialog && settingsDialog.hidden !== true);
   }
 
-  shortcutDialog?.addEventListener("close", resetDetectedFaviconPicker);
-
-  settingsDialog?.addEventListener("close", () => {
+  function closeSettingsPanel() {
+    closeBackgroundColorPicker();
+    if (!isSettingsOpen()) return;
+    settingsDialog.hidden = true;
+    backgroundUploadGeneration += 1;
+    settingsDialog.setAttribute("aria-hidden", "true");
+    settingsButton?.setAttribute("aria-expanded", "false");
     deferredSettingsControlRefresh = false;
     if (!deferredAppearanceVisual && !deferredLauncherSettings && !deferredLauncherRender) return;
-    // Let Firefox fully remove the dialog's painted frame before changing root
-    // styles or rebuilding the launcher. If Settings was reopened immediately,
-    // keep all pending work deferred for the later close.
+    // Settings is a normal fixed panel rather than a modeless native <dialog>.
+    // Firefox repeatedly froze the native dialog surface when large sections
+    // changed visibility. Commit deferred launcher work only after the panel is
+    // outside the render tree.
     requestAnimationFrame(() => {
-      if (!settingsDialog?.open) commitDeferredLauncherVisual();
+      if (!isSettingsOpen()) commitDeferredLauncherVisual();
     });
+  }
+
+  function closeDialog(dialog) {
+    if (dialog === settingsDialog) {
+      closeSettingsPanel();
+      return;
+    }
+    if (dialog?.open) dialog.close();
+  }
+
+  shortcutDialog?.addEventListener("close", () => {
+    shortcutSyncPrepareGeneration += 1;
+    resetDetectedFaviconPicker();
   });
 
   function updateImagePreview() {
@@ -3773,10 +3800,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   shortcutImageFile.addEventListener("change", async () => {
     const file = shortcutImageFile.files?.[0];
     if (!file) return;
-    shortcutSyncPrepareGeneration += 1;
+    const generation = ++shortcutSyncPrepareGeneration;
+    const editorShortcutId = shortcutId.value;
     try {
-      pendingShortcutBuiltinIcon = "";
-      pendingShortcutImage = await optimizeImageFile(file, {
+      const optimized = await optimizeImageFile(file, {
         maxWidth: 384,
         maxHeight: 384,
         minWidth: 96,
@@ -3785,6 +3812,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         initialQuality: 0.95,
         maxInputBytes: 20_000_000
       });
+      if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
+      pendingShortcutBuiltinIcon = "";
+      pendingShortcutImage = optimized;
       pendingShortcutSyncData = "";
       pendingShortcutImageKind = "device";
       pendingShortcutImageSourceKind = "upload";
@@ -3795,7 +3825,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       updateBuiltinShortcutIconSelection();
       updateImagePreview();
     } catch (error) {
-      showToast(error.message || t("operationFailed"));
+      if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
+        showToast(error.message || t("operationFailed"));
+      }
     } finally {
       shortcutImageFile.value = "";
     }
@@ -3818,7 +3850,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
   useShortcutImageUrl?.addEventListener("click", () => {
-    shortcutSyncPrepareGeneration += 1;
+    const generation = ++shortcutSyncPrepareGeneration;
+    const editorShortcutId = shortcutId.value;
     const source = String(shortcutImageUrl.value || "").trim();
     let parsed;
     try {
@@ -3835,6 +3868,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       useShortcutImageUrl.disabled = true;
       try {
         const granted = await permissionPromise;
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         // Remember the decision either way. A denied web-image request must not
         // cause the next ordinary shortcut click to show the same all-sites
         // permission prompt again. The user can explicitly retry in Advanced.
@@ -3842,16 +3876,21 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         if (!state.settings.webAccessPrompted) {
           state.settings.webAccessPrompted = true;
           await saveState({ localCacheOnly: true });
+          if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         }
         if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
         const response = await fetch(parsed.href, { credentials: "omit", cache: "force-cache", referrerPolicy: "no-referrer" });
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         if (!response.ok) throw new Error(t("operationFailed"));
         const declaredLength = Number(response.headers.get("content-length")) || 0;
         if (declaredLength > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
         const blob = await response.blob();
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         if (blob.size > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
+        const image = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         pendingShortcutBuiltinIcon = "";
-        pendingShortcutImage = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
+        pendingShortcutImage = image;
         pendingShortcutSyncData = "";
         pendingShortcutImageKind = "device";
         pendingShortcutImageSourceKind = "remote";
@@ -3863,9 +3902,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         updateImagePreview();
         showToast(t("webImageCached"));
       } catch (error) {
-        showToast(error.message || t("operationFailed"));
+        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
+          showToast(error.message || t("operationFailed"));
+        }
       } finally {
-        useShortcutImageUrl.disabled = false;
+        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
+          useShortcutImageUrl.disabled = false;
+        }
       }
     })();
   });
@@ -4267,6 +4310,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function selectPlainColorBackground({ closeGallery = false } = {}) {
+    backgroundUploadGeneration += 1;
     pendingBackgroundImage = "";
     pendingBackgroundSourceKind = "none";
     pendingBackgroundSourceUrl = "";
@@ -4307,6 +4351,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         selectPlainColorBackground({ closeGallery });
         return;
       }
+      backgroundUploadGeneration += 1;
       pendingBackgroundPreset = id;
       pendingBackgroundImage = "";
       pendingBackgroundSourceKind = "none";
@@ -4806,13 +4851,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (preview) preview.style.setProperty("--theme-preview-dim", String(dim / 100));
   }
 
-  function refreshThemeWallpaperControls() {
+  function refreshThemeWallpaperControls({ refreshChoices = true } = {}) {
     if (settingsThemeWallpapersLabel) settingsThemeWallpapersLabel.textContent = t("lightDarkWallpapers");
     if (settingsThemeWallpapersDescription) settingsThemeWallpapersDescription.textContent = t("themeWallpapersDescription");
     const enabled = state.settings.themeWallpapersEnabled === true;
     if (settingsThemeWallpapers) settingsThemeWallpapers.checked = enabled;
     if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
     if (backgroundDimControls) backgroundDimControls.hidden = enabled;
+    // Settings open already prepares both cards while hidden. The checkbox itself
+    // only needs to expand/collapse the prepared section, not repaint two image
+    // previews in the same event that changes panel height.
+    if (!refreshChoices) return;
     refreshThemeWallpaperChoice(
       settingsLightWallpaper,
       settingsLightWallpaperLabel,
@@ -4842,7 +4891,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim) {
     if (!themeWallpaperVisualChanged(previousPresetId, previousImageValue, previousDim)) return;
 
-    if (settingsDialog?.open) {
+    if (isSettingsOpen()) {
       deferredAppearanceVisual = true;
       return;
     }
@@ -4880,10 +4929,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           state.settings.darkBackgroundDim = initialized.darkBackgroundDim;
           stampThemeWallpaperMutation();
           rememberPendingSettings(["lightBackgroundDim", "darkBackgroundDim"]);
-          refreshThemeWallpaperControls();
-          if (settingsDialog?.open) deferredAppearanceVisual = true;
+          refreshThemeWallpaperControls({ refreshChoices: false });
+          if (isSettingsOpen()) deferredAppearanceVisual = true;
           else applySettings();
-          queueThemeWallpaperPersistence();
+          scheduleBackgroundPersist(0);
         }
       }
       return;
@@ -4900,12 +4949,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     stampThemeWallpaperMutation();
     rememberPendingSettings(["themeWallpapersEnabled", ...(enabled ? ["lightBackgroundDim", "darkBackgroundDim"] : [])]);
-    // One control refresh owns visibility + both previews. Avoid touching the
-    // same layout state twice in one checkbox gesture.
-    refreshThemeWallpaperControls();
+    // The cards were prepared when Settings opened. During the checkbox gesture
+    // only change visibility; do not combine section expansion with preview paints.
+    refreshThemeWallpaperControls({ refreshChoices: false });
 
     applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
-    queueThemeWallpaperPersistence();
+    scheduleBackgroundPersist(0);
   }
 
   function applyThemeWallpaperDimLive(target) {
@@ -4923,7 +4972,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     rememberPendingSettings([key]);
     refreshThemeWallpaperDimControl(target);
     if (effectiveThemeFor(state.settings) === target) {
-      if (settingsDialog?.open) deferredAppearanceVisual = true;
+      if (isSettingsOpen()) deferredAppearanceVisual = true;
       else applySettings();
     }
     queueThemeWallpaperPersistence();
@@ -4944,11 +4993,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     refreshThemeWallpaperControls();
 
     applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
-    queueThemeWallpaperPersistence();
+    scheduleBackgroundPersist(0);
   }
 
   function applyThemeTransition() {
-    if (settingsDialog?.open) {
+    if (isSettingsOpen()) {
       // The explicit appearance selector is a direct user gesture: update the
       // lightweight theme chrome and the current page wallpaper together. Do not
       // run the broad Settings/grid renderer here; unrelated background mutations
@@ -4966,7 +5015,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // open. Keep the model current, but do not reconstruct the launcher or change
     // its root paint/layout behind the open Settings surface. Direct Settings
     // gestures still use the ordinary live applySettings()/render() paths.
-    if (settingsDialog?.open) {
+    if (isSettingsOpen()) {
       deferredLauncherSettings = true;
       if (renderGrid) deferredLauncherRender = true;
       return false;
@@ -4977,7 +5026,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function requestLauncherRenderAfterExternalState() {
-    if (settingsDialog?.open) {
+    if (isSettingsOpen()) {
       deferredLauncherRender = true;
       return false;
     }
@@ -4986,7 +5035,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function commitDeferredLauncherVisual() {
-    if (settingsDialog?.open) return;
+    if (isSettingsOpen()) return;
     const needsSettings = deferredAppearanceVisual || deferredLauncherSettings;
     const needsRender = deferredLauncherRender;
     if (!needsSettings && !needsRender) return;
@@ -5112,7 +5161,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function refreshSettingsControlsAfterExternalState(previousState = null) {
-    if (!settingsDialog?.open) return new Set();
+    if (!isSettingsOpen()) return new Set();
     const domains = settingsRefreshDomains(previousState, state);
     // Exact own-write echoes already match the live model + pending draft. They
     // advance the persistence baseline but must perform zero Settings DOM work.
@@ -5138,7 +5187,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   async function openSettings() {
     closeDropChoice();
     closeFolder();
-    if (settingsDialog.open) {
+    if (isSettingsOpen()) {
       closeDialog(settingsDialog);
       return;
     }
@@ -5159,7 +5208,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void refreshFrequentlyVisited();
     settingsAutoSiteIcons.checked = state.settings.autoSiteIcons !== false;
     refreshBackgroundSettingsControls({ closePicker: true });
-    settingsDialog.show();
+    settingsDialog.hidden = false;
+    settingsDialog.setAttribute("aria-hidden", "false");
+    settingsButton?.setAttribute("aria-expanded", "true");
     reconcileAndRefreshSyncStatus().catch(error => console.warn(`${PRODUCT_NAME}: sync status unavailable`, error));
     refreshWebAccessUi().catch(error => console.warn(`${PRODUCT_NAME}: website permission status unavailable`, error));
   }
@@ -5197,14 +5248,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       renderBookmarkSidebar();
       renderBookmarkBrowser();
     }
-    if (settingsDialog?.open) {
+    if (isSettingsOpen()) {
       void refreshWebAccessUi().catch(error => console.warn(`${PRODUCT_NAME}: website permission status unavailable`, error));
     }
 
     // Translating longer/shorter labels may change layout height, but the user's
     // current place in the open Settings panel should remain stable.
     requestAnimationFrame(() => {
-      if (settingsDialog?.open && settingsForm) settingsForm.scrollTop = settingsScrollTop;
+      if (isSettingsOpen() && settingsForm) settingsForm.scrollTop = settingsScrollTop;
     });
   }
 
@@ -5244,7 +5295,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function scheduleBackgroundPersist(delay = 140) {
     clearTimeout(backgroundPersistTimer);
+    backgroundPersistTimer = null;
+    if (delay <= 0) {
+      void saveSettingsState().catch(console.error);
+      return;
+    }
     backgroundPersistTimer = setTimeout(() => {
+      backgroundPersistTimer = null;
       saveSettingsState().catch(console.error);
     }, delay);
   }
@@ -5265,7 +5322,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   settingsForm.addEventListener("focusout", () => {
     if (!deferredSettingsControlRefresh) return;
     requestAnimationFrame(() => {
-      if (!settingsDialog?.open || !deferredSettingsControlRefresh) return;
+      if (!isSettingsOpen() || !deferredSettingsControlRefresh) return;
       deferredSettingsControlRefresh = false;
       refreshSettingsControlsAfterExternalState();
     });
@@ -5315,12 +5372,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   settingsDarkWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("dark"));
   settingsLightWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("light"));
   settingsDarkWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("dark"));
+  settingsLightWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
+  settingsDarkWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
 
   settingsBackgroundFile.addEventListener("change", async () => {
     const file = settingsBackgroundFile.files?.[0];
     if (!file) return;
+    const generation = ++backgroundUploadGeneration;
+    const spaceId = state.activeSpaceId;
     try {
-      pendingBackgroundImage = await optimizeImageFile(file, {
+      const optimized = await optimizeImageFile(file, {
         maxWidth: 3840,
         maxHeight: 2160,
         minWidth: 1280,
@@ -5329,6 +5390,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         initialQuality: 0.95,
         maxInputBytes: 30_000_000
       });
+      if (generation !== backgroundUploadGeneration || state.activeSpaceId !== spaceId || !isSettingsOpen()) return;
+      pendingBackgroundImage = optimized;
       pendingBackgroundSourceKind = "upload";
       pendingBackgroundSourceUrl = "";
       pendingBackgroundPreset = "";
@@ -5339,7 +5402,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       void refreshAppearancePreview({ ...state.settings });
       showToast(t("backgroundApplied"));
     } catch (error) {
-      showToast(error.message || t("operationFailed"));
+      if (generation === backgroundUploadGeneration && state.activeSpaceId === spaceId && isSettingsOpen()) {
+        showToast(error.message || t("operationFailed"));
+      }
     } finally {
       settingsBackgroundFile.value = "";
     }
@@ -5350,8 +5415,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     colorPickerHue = Number(backgroundColorHue.value) || 0;
     applyColorPickerLive();
   });
+  backgroundColorHue?.addEventListener("change", () => {
+    clearTimeout(backgroundPersistTimer);
+    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+  });
   backgroundColorPlane?.addEventListener("pointerdown", event => {
     colorPlaneDragging = true;
+    colorPlaneRect = backgroundColorPlane.getBoundingClientRect();
     backgroundColorPlane.setPointerCapture?.(event.pointerId);
     updateColorPlaneFromPointer(event);
   });
@@ -5360,9 +5430,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
   backgroundColorPlane?.addEventListener("pointerup", event => {
     colorPlaneDragging = false;
+    colorPlaneRect = null;
     backgroundColorPlane.releasePointerCapture?.(event.pointerId);
+    clearTimeout(backgroundPersistTimer);
+    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
   });
-  backgroundColorPlane?.addEventListener("pointercancel", () => { colorPlaneDragging = false; });
+  backgroundColorPlane?.addEventListener("pointercancel", () => { colorPlaneDragging = false; colorPlaneRect = null; });
+  backgroundColorPlane?.addEventListener("lostpointercapture", () => { colorPlaneDragging = false; colorPlaneRect = null; });
+  window.addEventListener("resize", () => { colorPlaneRect = null; });
   backgroundColorPlane?.addEventListener("keydown", event => {
     const step = event.shiftKey ? 0.05 : 0.01;
     if (event.key === "ArrowLeft") colorPickerSaturation = clampUnit(colorPickerSaturation - step);
@@ -5409,8 +5484,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
   settingsBackgroundDim.addEventListener("input", () => applyBackgroundControlsLive());
+  settingsBackgroundDim.addEventListener("change", () => {
+    clearTimeout(backgroundPersistTimer);
+    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+  });
 
   clearBackgroundImage.addEventListener("click", () => {
+    backgroundUploadGeneration += 1;
     pendingBackgroundImage = "";
     pendingBackgroundSourceKind = "none";
     pendingBackgroundSourceUrl = "";
@@ -5421,6 +5501,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
   resetBackground.addEventListener("click", () => {
+    backgroundUploadGeneration += 1;
     pendingBackgroundImage = "";
     pendingBackgroundSourceKind = "none";
     pendingBackgroundSourceUrl = "";
@@ -5578,10 +5659,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
   systemThemeMedia.addEventListener?.("change", () => {
-    resolvedSystemTheme = systemThemeMedia.matches ? "dark" : "light";
-    if ((state.settings.theme || "system") === "system") {
-      applyThemeTransition();
-    }
     void refreshResolvedSystemTheme();
   });
   browser.theme?.onUpdated?.addListener?.(() => { void refreshResolvedSystemTheme(); });
@@ -5619,6 +5696,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   });
 
 
+
+  settingsTileSize?.addEventListener("change", () => {
+    clearTimeout(tileSizePersistTimer);
+    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+  });
 
   // ---------------------------------------------------------------------------
   // Settings: Firefox Sync status and explicit sync actions
@@ -6082,7 +6164,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function showSyncFeedback(message) {
     const localized = translateText(message);
-    if (!syncActionStatus || !settingsDialog.open) {
+    if (!syncActionStatus || !isSettingsOpen()) {
       showToast(localized);
       return;
     }
@@ -6476,7 +6558,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       }
     }
 
-    if (settingsDialog.open && !wallpaperGalleryDialog?.open && !settingsDialog.contains(event.target) && !settingsButton.contains(event.target)) {
+    if (isSettingsOpen() && !wallpaperGalleryDialog?.open && !settingsDialog.contains(event.target) && !settingsButton.contains(event.target)) {
       closeDialog(settingsDialog);
     }
   });
@@ -6485,12 +6567,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (event.key === "Escape") {
       closeFrequentContextMenu();
       closeBookmarkColorMenu();
+      // Settings is deliberately not a native <dialog> anymore, so preserve the
+      // browser-native Escape affordance explicitly. Keep the panel behind the
+      // native wallpaper picker until that child dialog closes itself.
+      if (isSettingsOpen() && !wallpaperGalleryDialog?.open) closeSettingsPanel();
       return;
     }
     if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || !isMultipleSpacesEnabled()) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName))) return;
-    if (settingsDialog?.open || shortcutDialog?.open || bookmarksDialog?.open || wallpaperGalleryDialog?.open) return;
+    if (isSettingsOpen() || shortcutDialog?.open || bookmarksDialog?.open || wallpaperGalleryDialog?.open) return;
     const spaceId = event.code === "Digit1" ? "personal" : event.code === "Digit2" ? "work" : "";
     if (!spaceId) return;
     event.preventDefault();
@@ -6724,7 +6810,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       // Sync status/quota updates are frequent and do not normally affect the
       // shortcut grid. Re-render only when entering/leaving the remote-wait UI.
       if (wasAwaitingRemote !== isAwaitingRemote(meta)) requestLauncherRenderAfterExternalState();
-      if (meta.syncEnabled && settingsDialog.open) refreshSyncStatus().catch(() => {});
+      if (meta.syncEnabled && isSettingsOpen()) refreshSyncStatus().catch(() => {});
     }
   });
 

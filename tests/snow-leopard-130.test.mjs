@@ -38,7 +38,7 @@ for (const browser of ["firefox", "chrome"]) {
     const source = newtab;
     const calls = [];
     const ctx = vm.createContext({
-      settingsDialog: { open: true },
+      settingsDialog: { hidden: false },
       deferredAppearanceVisual: false,
       deferredLauncherSettings: false,
       deferredLauncherRender: false,
@@ -49,6 +49,7 @@ for (const browser of ["firefox", "chrome"]) {
       scheduleAppearanceHintRefresh() {},
       console
     });
+    vm.runInContext(extractFunction(source, "isSettingsOpen"), ctx);
     vm.runInContext(extractFunction(source, "reconcileLauncherAfterExternalState"), ctx);
     ctx.reconcileLauncherAfterExternalState();
     assert.deepEqual(calls, [], "non-appearance external state must not touch any appearance painter while Settings is open");

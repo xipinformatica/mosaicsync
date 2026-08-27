@@ -17,7 +17,7 @@ for (const browser of ["firefox", "chrome"]) {
 
     const transition = js.match(/function applyThemeTransition\(\)\s*\{([\s\S]*?)\n  \}\n\n  function commitDeferredLauncherVisual/);
     assert.ok(transition, `${browser}: appearance transition helper missing`);
-    assert.match(transition[1], /if \(settingsDialog\?\.open\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\{ allowWhileSettingsOpen: true \}\);[\s\S]*?return;/,
+    assert.match(transition[1], /if \(isSettingsOpen\(\)\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\{ allowWhileSettingsOpen: true \}\);[\s\S]*?return;/,
       `${browser}: explicit Light/Dark selection must paint the matching wallpaper immediately`);
     const openBranch = transition[1].split("return;")[0];
     assert.doesNotMatch(openBranch, /applySettings\s*\(/,
@@ -28,7 +28,7 @@ for (const browser of ["firefox", "chrome"]) {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
     const helper = js.match(/function applyThemeWallpaperVisualSafely\(previousPresetId, previousImageValue, previousDim\)\s*\{([\s\S]*?)\n  \}\n\n  function stampThemeWallpaperMutation/);
     assert.ok(helper, `${browser}: wallpaper paint guard missing`);
-    assert.match(helper[1], /if \(settingsDialog\?\.open\)[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/,
+    assert.match(helper[1], /if \(isSettingsOpen\(\)\)[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/,
       `${browser}: active wallpaper changes must defer their full-page commit under Settings`);
     assert.doesNotMatch(helper[1].split("return;")[0], /applyPageBackgroundVisual\(/,
       `${browser}: active wallpaper changes must not repaint a background layer under Settings`);
@@ -42,7 +42,7 @@ for (const browser of ["firefox", "chrome"]) {
     const helper = js.match(/function applyPageBackgroundVisual\(\{ deferHeavyAssets = false, allowWhileSettingsOpen = false \} = \{\}\)\s*\{([\s\S]*?)\n  \}\n\n  function applyThemeSkinVisual/);
     assert.ok(helper, `${browser}: safe page-background helper missing`);
     const body = helper[1];
-    const openStart = body.indexOf("if (settingsDialog?.open && !allowWhileSettingsOpen)");
+    const openStart = body.indexOf("if (isSettingsOpen() && !allowWhileSettingsOpen)");
     const openReturn = body.indexOf("return;", openStart);
     assert.ok(openStart >= 0 && openReturn > openStart, `${browser}: Settings-open isolation branch missing`);
     const openBranch = body.slice(openStart, openReturn);
@@ -70,9 +70,9 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.9 ${browser} applies the deferred authoritative appearance only after Settings closes and a frame boundary`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    assert.match(js, /settingsDialog\?\.addEventListener\("close", \(\) => \{[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?!settingsDialog\?\.open\) commitDeferredLauncherVisual\(\);/,
+    assert.match(js, /function closeSettingsPanel\(\)[\s\S]*?settingsDialog\.hidden = true;[\s\S]*?requestAnimationFrame\(\(\) => \{[\s\S]*?!isSettingsOpen\(\)\) commitDeferredLauncherVisual\(\);/,
       `${browser}: deferred appearance must commit from the Settings close event on the next frame`);
-    assert.match(js, /function commitDeferredLauncherVisual\(\)[\s\S]*?if \(settingsDialog\?\.open\) return;[\s\S]*?deferredAppearanceVisual = false;[\s\S]*?if \(needsSettings\) \{[\s\S]*?applySettings\(\);/,
+    assert.match(js, /function commitDeferredLauncherVisual\(\)[\s\S]*?if \(isSettingsOpen\(\)\) return;[\s\S]*?deferredAppearanceVisual = false;[\s\S]*?if \(needsSettings\) \{[\s\S]*?applySettings\(\);/,
       `${browser}: deferred commit must refuse to repaint while Settings is still open`);
 
     const closeHelper = js.match(/function closeDialog\(dialog\)\s*\{([\s\S]*?)\n  \}/);

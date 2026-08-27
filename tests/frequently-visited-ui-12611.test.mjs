@@ -29,7 +29,7 @@ for (const browser of ['firefox', 'chrome']) {
     assert.match(block, /id="frequentlyVisitedStatus"/);
   });
 
-  test(`1.26.11 ${browser} Frequently visited visibility helper hides and restores all dependent controls together`, () => {
+  test(`1.26.11 ${browser} Frequently visited visibility helper uses one parent visibility owner`, () => {
     const source = fs.readFileSync(`src/shared/newtab/newtab.js`, 'utf8');
     const fn = extractFunction(source, 'setFrequentlyVisitedOptionsVisibility');
     const frequentOptions = { hidden: false };
@@ -40,7 +40,7 @@ for (const browser of ['firefox', 'chrome']) {
 
     context.setFrequentlyVisitedOptionsVisibility(false);
     assert.equal(frequentOptions.hidden, true);
-    assert.equal(frequentCountRow.hidden, true);
+    assert.equal(frequentCountRow.hidden, false, "the nested row must not own a second visibility mutation");
 
     context.setFrequentlyVisitedOptionsVisibility(true);
     assert.equal(frequentOptions.hidden, false);

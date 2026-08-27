@@ -112,6 +112,12 @@ for (const browser of ["firefox", "chrome"]) {
       scheduleImmediateIconRecoveryContinuation: () => { throw new Error("permission-blocked queue must not spin"); },
       browser: { alarms: { clear: async () => { alarmClears += 1; } } }
     };
+    ctx.mutateIconRecoveryQueue = async mutator => {
+      const current = await ctx.readIconRecoveryQueue();
+      const next = await mutator(current);
+      if (!next || next === current) return current;
+      return ctx.writeIconRecoveryQueue(next);
+    };
     vm.createContext(ctx);
     vm.runInContext(code, ctx);
     const result = await ctx.processIconRecoveryQueue();

@@ -5,13 +5,13 @@ import { readFile } from "node:fs/promises";
 for (const browser of ["firefox","chrome"]) {
   test(`${browser}: every dialog has a programmatic accessible name`, async () => {
     const html=await readFile(`dist/${browser}/newtab/newtab.html`,"utf8");
-    const dialogs=[...html.matchAll(/<dialog\b([^>]*)>/g)];
+    const dialogs=[...html.matchAll(/<(?:dialog\b|(?:aside|section|div)\b)([^>]*\brole="dialog"[^>]*)>/g)];
     assert.ok(dialogs.length >= 4);
     for (const match of dialogs) {
       const attrs=match[1];
       const label=attrs.match(/\baria-label="([^"]+)"/i)?.[1];
       const labelledBy=attrs.match(/\baria-labelledby="([^"]+)"/i)?.[1];
-      assert.ok(label || labelledBy, `dialog lacks aria-label/aria-labelledby: ${match[0]}`);
+      assert.ok(label || labelledBy, `dialog surface lacks aria-label/aria-labelledby: ${match[0]}`);
       if (labelledBy) assert.match(html, new RegExp(`\\bid=["']${labelledBy}["']`), `missing aria-labelledby target ${labelledBy}`);
     }
   });

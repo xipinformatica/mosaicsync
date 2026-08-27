@@ -149,7 +149,7 @@ for (const browser of ["firefox", "chrome"]) {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const html = fs.readFileSync(`dist/${browser}/newtab/newtab.html`, "utf8");
     const css = [fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8"), fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8")].join("\n");
-    assert.match(src, /if \(settingsDialog\?\.open\) \{[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
+    assert.match(src, /if \(isSettingsOpen\(\) && !allowWhileSettingsOpen\) \{[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
     assert.doesNotMatch(src, /paintAppearancePreviewLayer|appearancePreviewLayer|appearancePreviewImage/);
     assert.doesNotMatch(html, /appearancePreviewLayer|appearancePreviewImage/);
     assert.doesNotMatch(css, /appearance-preview-layer|appearance-preview-image/);
