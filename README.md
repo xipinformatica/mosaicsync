@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30**
+**Current source release: 1.30.1**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.1** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30 continues the **Snow Leopard** maintenance cycle. It hardens Settings rendering on Firefox/Linux by keeping full-viewport appearance paint frozen while Settings is open, improves automatic favicon quality follow-up, clarifies authoritative Sync publication versus foreign-device receipt, strengthens complete Personal+Work recovery tests, removes obsolete Sync/CSS baggage, and corrects localization drift. Galician is added as the 33rd supported locale; Arabic remains intentionally deferred until a dedicated RTL pass.
+1.30.1 continues the **Snow Leopard** maintenance cycle and folds in the unpublished 1.30 release candidate. Open Settings now adopts storage changes by affected domain instead of rebuilding unrelated sections, so exact own-write echoes cause no Settings-DOM refresh and Frequently Visited cannot rebuild Background controls. Automatic favicons use a fast provisional result followed by one durable bounded quality audit that can replace it with a better detected candidate; upgrading from any older MosaicSync release re-opens existing automatic favicons for this audit once. Sync source/receipt wording is clearer, complete Personal+Work recovery coverage is stronger, obsolete Sync/CSS baggage is removed, and localization drift is corrected. Galician is the 33rd supported locale; Arabic remains intentionally deferred until a dedicated RTL pass.
 
 The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 

@@ -187,7 +187,8 @@ test("chrome: local _favicon remains available without Website Access, but unkno
 
 test("chrome: quality-upgrade queue accepts browser-native artwork as replaceable", ()=>{
   const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
-  assert.match(src,/\["favicon", "firefox"\]\.includes\(shortcut\.imageSourceKind\)/,
+  const helper = extract(src,"automaticFaviconArtwork");
+  assert.match(helper,/\["favicon", "firefox"\]\.includes\(shortcut\.imageSourceKind(?: \|\| "none")?\)/,
     "Chrome-native legacy source kind must be eligible for a direct quality upgrade");
   assert.match(src,/qualitySide: 0, declared: false, sourceKind: "browser", native: true/,
     "Chrome native cache must remain provisional quality metadata");

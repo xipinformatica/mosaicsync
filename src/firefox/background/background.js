@@ -24,6 +24,9 @@ import {
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
   DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES,
   EXPECTATION_TTL_MS,
+  FAVICON_QUALITY_AUDIT_MAX_ENTRIES,
+  FAVICON_QUALITY_AUDIT_POLICY_VERSION,
+  FAVICON_QUALITY_AUDIT_TTL_MS,
   ICON_RECOVERY_ALARM,
   ICON_RECOVERY_CONCURRENCY,
   ICON_RECOVERY_CONTINUE_DELAY_MS,
@@ -37,6 +40,7 @@ import {
   LEGACY_ICON_HYDRATION_ALARM,
   LEGACY_SESSION_ICON_HYDRATION_FAILURES_KEY,
   LOCAL_ASSET_GC_KEY,
+  LOCAL_FAVICON_QUALITY_AUDIT_KEY,
   LOCAL_ICON_RECOVERY_QUEUE_KEY,
   LOCAL_ICON_RECOVERY_STATUS_KEY,
   LOCAL_MAINTENANCE_MIGRATIONS_KEY,
@@ -584,7 +588,7 @@ browser.permissions?.onAdded?.addListener(permissions => {
   webAccessCacheAt = Date.now();
   // A fresh grant can improve already-present browser/native or low-resolution
   // artwork as well as fill genuinely missing icons. Re-seed both classes.
-  void requestMissingShortcutIconHydration({ force: true, upgradeRecoveredFavicons: true }).catch(error => {
+  void requestMissingShortcutIconHydration({ force: true }).catch(error => {
     console.warn(`${PRODUCT_NAME}: could not resume favicon recovery after website access was granted`, error);
   });
 });
@@ -1456,7 +1460,6 @@ async function probeConventionalFaviconQualityUpgrade(origin, current, { deadlin
     const candidate = await fetchImageDataUrlDetailed(`${origin}${path}`, { deadlineAt, declared: true, sourceKind });
     if (!candidate.image) continue;
     best = betterFaviconCandidate(best, candidate);
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) break;
   }
   return best;
 }
@@ -1473,7 +1476,7 @@ async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt })
   if (finalOrigin !== origin) return current;
 
   let best = current;
-  const candidates = discovered.candidates || [];
+  const candidates = (discovered.candidates || []).slice(0, 16);
   for (let index = 0; index < candidates.length; index += 2) {
     if (Date.now() >= deadlineAt) break;
     const batch = candidates.slice(index, index + 2);
@@ -1486,7 +1489,6 @@ async function probeOriginalOriginDeclaredIcons(origin, current, { deadlineAt })
     for (const image of images) {
       if (image.image) best = betterFaviconCandidate(best, image);
     }
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) break;
   }
   return best;
 }
@@ -1515,7 +1517,7 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
     const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt, sourceKind: "favicon" });
     if (conventional.image) {
       best = betterFaviconCandidate(best, conventional);
-      return { ...best, provisional: !faviconCandidateIsAuthoritativelyGoodEnough(best) };
+      return { ...best, provisional: true };
     }
     sawTimeout = sawTimeout || conventional.reason === "timeout";
   }
@@ -1548,12 +1550,15 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   // redirected page's artwork, so the shortcut keeps the site's own identity.
   if (preferQuality && initialOrigin && discoveredFinalOrigin && discoveredFinalOrigin !== initialOrigin && Date.now() < deadlineAt) {
     best = await probeOriginalOriginDeclaredIcons(initialOrigin, best, { deadlineAt });
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
-      return { ...best, provisional: false };
+    // This return is safe only after the original site's complete bounded declared
+    // candidate set has been inspected. It avoids replacing the site's own strong
+    // identity with artwork from an anonymous login-provider redirect.
+    if (faviconCandidateIsAuthoritativelyGoodEnough(best) && !qualityUnresolved) {
+      return { ...best, qualityComplete: true, provisional: false };
     }
   }
 
-  const candidates = discovered.candidates || [];
+  const candidates = (discovered.candidates || []).slice(0, 16);
   for (let index = 0; index < candidates.length; index += 2) {
     if (Date.now() >= deadlineAt) { sawTimeout = true; qualityUnresolved = true; break; }
     const batch = candidates.slice(index, index + 2);
@@ -1568,26 +1573,23 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
       else if (image.reason === "timeout" || image.reason === "network") qualityUnresolved = true;
       sawTimeout = sawTimeout || image.reason === "timeout";
     }
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
-      return { ...best, provisional: false };
+    if (!preferQuality && faviconCandidateIsAuthoritativelyGoodEnough(best)) {
+      return { ...best, provisional: true };
     }
   }
 
   // Only after authoritative metadata has been tried do quality retries spend
   // time on conventional guessed filenames. Give that guesswork its own small
   // sub-budget so it can never starve page/manifest discovery again.
-  if (preferQuality && initialOrigin && Date.now() < deadlineAt) {
+  if (preferQuality && initialOrigin && Date.now() < deadlineAt && (!best?.image || !faviconCandidateIsAuthoritativelyGoodEnough(best) || qualityUnresolved)) {
     const fallbackDeadline = Math.min(deadlineAt, Date.now() + 2_500);
     const conventional = await fetchImageDataUrlDetailed(`${initialOrigin}/favicon.ico`, { deadlineAt: fallbackDeadline, sourceKind: "favicon" });
     if (conventional.image) best = betterFaviconCandidate(best, conventional);
     else if (conventional.reason === "timeout" || conventional.reason === "network") qualityUnresolved = true;
     sawTimeout = sawTimeout || conventional.reason === "timeout";
 
-    if (best?.image && !faviconCandidateIsAuthoritativelyGoodEnough(best) && Date.now() < fallbackDeadline) {
+    if (best?.image && Date.now() < fallbackDeadline) {
       best = await probeConventionalFaviconQualityUpgrade(initialOrigin, best, { deadlineAt: fallbackDeadline });
-    }
-    if (faviconCandidateIsAuthoritativelyGoodEnough(best)) {
-      return { ...best, provisional: false };
     }
   }
 
@@ -1606,7 +1608,12 @@ async function resolveFaviconForUrl(pageUrl, { timeoutMs = ICON_RECOVERY_FETCH_T
   }
 
   if (best?.image) {
-    return { ...best, provisional: !faviconCandidateIsAuthoritativelyGoodEnough(best) && qualityUnresolved };
+    const qualityComplete = Boolean(preferQuality) && !qualityUnresolved && !sawTimeout;
+    return {
+      ...best,
+      qualityComplete,
+      provisional: preferQuality ? !qualityComplete : (!faviconCandidateIsAuthoritativelyGoodEnough(best) && qualityUnresolved)
+    };
   }
   return { image: "", sourceUrl: "", reason: sawTimeout ? "timeout" : "not-found", provisional: false };
 }
@@ -1866,6 +1873,11 @@ function flattenShortcuts(state) {
   return shortcuts;
 }
 
+function automaticFaviconArtwork(shortcut) {
+  return Boolean(shortcut?.image) && shortcut.imageSyncKind === "device" &&
+    ["favicon", "firefox"].includes(shortcut.imageSourceKind || "none") && /^https?:/i.test(shortcut.url || "");
+}
+
 function shortcutNeedsProactiveFavicon(shortcut) {
   if (!shortcut || shortcut.type !== "shortcut" || shortcut.builtinIcon || !/^https?:/i.test(shortcut.url || "")) return false;
   const sourceKind = shortcut.imageSourceKind || "none";
@@ -1932,8 +1944,7 @@ async function applyProactiveFaviconResults(results) {
     if (!location || !workspaceAllowsAutoIcons(loaded.state, result.id)) continue;
     const shortcut = location.shortcut;
     if (shortcut.url !== result.url) continue;
-    const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) &&
-      shortcut.imageSourceKind === "favicon" && shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
+    const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) && automaticFaviconArtwork(shortcut);
     if (!shortcutNeedsProactiveFavicon(shortcut) && !upgradingRecoveredFavicon) continue;
     const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
     if (shortcut.image === result.image && shortcut.imageSyncKind === "device" && !shortcut.imageAssetId &&
@@ -1961,6 +1972,61 @@ async function applyProactiveFaviconResults(results) {
   return { appliedIds, unchangedIds };
 }
 
+function normalizeFaviconQualityAuditLedger(raw) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const byUrl = new Map();
+  for (const item of Array.isArray(source.items) ? source.items : []) {
+    let url = "";
+    try {
+      const parsed = new URL(String(item?.url || ""));
+      if (!/^https?:$/.test(parsed.protocol)) continue;
+      url = parsed.href;
+    } catch { continue; }
+    const checkedAt = Math.max(0, Number(item?.checkedAt) || 0);
+    const policyVersion = Math.max(0, Number(item?.policyVersion) || 0);
+    if (!checkedAt || !policyVersion) continue;
+    const previous = byUrl.get(url);
+    if (!previous || checkedAt > previous.checkedAt) byUrl.set(url, { url, checkedAt, policyVersion });
+  }
+  const items = [...byUrl.values()]
+    .sort((a, b) => b.checkedAt - a.checkedAt || a.url.localeCompare(b.url))
+    .slice(0, FAVICON_QUALITY_AUDIT_MAX_ENTRIES);
+  return { version: 1, items };
+}
+
+async function readFaviconQualityAuditLedger() {
+  try {
+    const stored = await browser.storage.local.get(LOCAL_FAVICON_QUALITY_AUDIT_KEY);
+    return normalizeFaviconQualityAuditLedger(stored?.[LOCAL_FAVICON_QUALITY_AUDIT_KEY]);
+  } catch {
+    return normalizeFaviconQualityAuditLedger(null);
+  }
+}
+
+function faviconQualityAuditNeeded(ledger, value, now = Date.now()) {
+  let url = "";
+  try { url = new URL(String(value || "")).href; } catch { return false; }
+  const item = (ledger?.items || []).find(entry => entry.url === url);
+  if (!item || item.policyVersion !== FAVICON_QUALITY_AUDIT_POLICY_VERSION) return true;
+  return now - item.checkedAt >= FAVICON_QUALITY_AUDIT_TTL_MS;
+}
+
+async function markFaviconQualityAuditsComplete(urls) {
+  const values = [...new Set((urls || []).filter(value => /^https?:/i.test(String(value || ""))))];
+  if (!values.length) return;
+  const ledger = await readFaviconQualityAuditLedger();
+  const byUrl = new Map((ledger.items || []).map(item => [item.url, item]));
+  const checkedAt = Date.now();
+  for (const value of values) {
+    try {
+      const url = new URL(String(value)).href;
+      byUrl.set(url, { url, checkedAt, policyVersion: FAVICON_QUALITY_AUDIT_POLICY_VERSION });
+    } catch {}
+  }
+  const normalized = normalizeFaviconQualityAuditLedger({ items: [...byUrl.values()] });
+  try { await browser.storage.local.set({ [LOCAL_FAVICON_QUALITY_AUDIT_KEY]: normalized }); } catch {}
+}
+
 function normalizeIconRecoveryQueue(raw) {
   const source = raw && typeof raw === "object" && Number(raw.version) === ICON_RECOVERY_QUEUE_VERSION ? raw : {};
   const items = [];
@@ -1986,9 +2052,9 @@ function normalizeIconRecoveryQueue(raw) {
 function iconRecoveryItemStillRelevant(shortcut, item) {
   if (!shortcut || shortcut.type !== "shortcut" || shortcut.url !== item?.url) return false;
   if (!item?.qualityUpgrade) return shortcutNeedsProactiveFavicon(shortcut);
-  // A quality-upgrade retry belongs only to an icon that this recovery engine
-  // already stored. User uploads and Firefox-resolved favicons supersede it.
-  return shortcut.imageSourceKind === "favicon" && shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
+  // Quality work belongs only to automatic browser/site artwork. User uploads,
+  // built-ins and manual chooser selections supersede it permanently.
+  return automaticFaviconArtwork(shortcut);
 }
 
 async function dropIconRecoveryQualityJobs() {
@@ -2069,7 +2135,11 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
   const loaded = await ensureLocalStorage();
   const requested = new Set(Array.isArray(shortcutIds) ? shortcutIds.filter(value => typeof value === "string" && value) : []);
   const targeted = requested.size > 0;
-  const current = await readIconRecoveryQueue();
+  const [current, qualityLedger, webAccessGranted] = await Promise.all([
+    readIconRecoveryQueue(),
+    readFaviconQualityAuditLedger(),
+    hasWebAccess()
+  ]);
   const existing = new Map(current.items.map(item => [item.id, item]));
 
   // Keep valid jobs from the other Space even when automatic site icons are
@@ -2083,15 +2153,15 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
     if (!workspaceAllowsAutoIcons(loaded.state, shortcut.id)) return false;
     if (targeted && !requested.has(shortcut.id)) return false;
     if (shortcutNeedsProactiveFavicon(shortcut)) return true;
-    return Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
-      shortcut.imageSyncKind === "device" && Boolean(shortcut.image) && /^https?:/i.test(shortcut.url || "");
+    return webAccessGranted && automaticFaviconArtwork(shortcut) &&
+      (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons));
   });
 
   for (const shortcut of eligible) {
     const previous = existing.get(shortcut.id);
     const reset = force || !previous || previous.url !== shortcut.url;
-    const migrationUpgrade = Boolean(upgradeRecoveredFavicons) && shortcut.imageSourceKind === "favicon" &&
-      shortcut.imageSyncKind === "device" && Boolean(shortcut.image);
+    const migrationUpgrade = automaticFaviconArtwork(shortcut) &&
+      (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons));
     nextById.set(shortcut.id, {
       id: shortcut.id,
       url: shortcut.url,
@@ -2104,7 +2174,7 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
   }
 
   const queue = await writeIconRecoveryQueue({ version: ICON_RECOVERY_QUEUE_VERSION, items: [...nextById.values()] });
-  const canAttemptNow = (await hasWebAccess()) || platformHasPermissionFreeFaviconSource();
+  const canAttemptNow = webAccessGranted || platformHasPermissionFreeFaviconSource();
   if (queue.items.length && canAttemptNow) await scheduleIconRecoveryAlarm(queue);
   return queue;
 }
@@ -2232,8 +2302,8 @@ async function processIconRecoveryQueue() {
     const outcomes = resolved.map(({ item, result }) => {
       if (!result?.image) return { item, ok: false, reason: result?.reason || "not-found" };
       if (applicationFailed) return { item, ok: false, reason: "commit-error" };
-      if (appliedIds.has(item.id)) return { item, ok: true, changed: true, reason: "", provisional: Boolean(result.provisional) };
-      if (unchangedIds.has(item.id)) return { item, ok: true, changed: false, reason: "unchanged", provisional: Boolean(result.provisional) };
+      if (appliedIds.has(item.id)) return { item, ok: true, changed: true, reason: "", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true };
+      if (unchangedIds.has(item.id)) return { item, ok: true, changed: false, reason: "unchanged", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true };
       return { item, ok: false, reason: "stale" };
     });
 
@@ -2247,18 +2317,31 @@ async function processIconRecoveryQueue() {
     let timedOut = 0;
     let exhausted = 0;
     let blockedByPermission = 0;
+    const completedQualityAuditUrls = new Set();
     for (const outcome of outcomes) {
       const current = byId.get(outcome.item.id);
       if (!current || current.url !== outcome.item.url) continue;
       if (outcome.ok) {
         if (outcome.changed) hydrated += 1;
         else unchanged += 1;
-        if (outcome.provisional && webAccessGranted) {
-          byId.set(outcome.item.id, nextIconRecoveryQualityRetry(current).item);
+        if (current.qualityUpgrade && outcome.qualityComplete) {
+          completedQualityAuditUrls.add(current.url);
+          byId.delete(outcome.item.id);
+        } else if (outcome.provisional && webAccessGranted) {
+          const next = nextIconRecoveryQualityRetry(current);
+          if (current.qualityUpgrade && next.exhausted) {
+            // The audit is bounded. Accept the best validated candidate seen
+            // after the retry budget and revisit only after the long TTL.
+            completedQualityAuditUrls.add(current.url);
+            byId.delete(outcome.item.id);
+            exhausted += 1;
+          } else {
+            byId.set(outcome.item.id, next.item);
+          }
         } else {
           // Without Website Access a successful browser-native result is the
           // best source currently available. Do not retain a quality-only job
-          // forever; an explicit later grant re-seeds upgrade candidates.
+          // forever; a later grant/startup can seed an unaudited URL again.
           byId.delete(outcome.item.id);
         }
         continue;
@@ -2291,14 +2374,21 @@ async function processIconRecoveryQueue() {
         continue;
       }
       const next = nextIconRecoveryFailure(current);
-      byId.set(outcome.item.id, {
-        ...next.item,
-        lastReason: String(outcome.reason || "not-found").slice(0, 48),
-        lastAttemptAt: Date.now()
-      });
-      if (next.exhausted) exhausted += 1;
+      if (current.qualityUpgrade && next.exhausted) {
+        completedQualityAuditUrls.add(current.url);
+        byId.delete(outcome.item.id);
+        exhausted += 1;
+      } else {
+        byId.set(outcome.item.id, {
+          ...next.item,
+          lastReason: String(outcome.reason || "not-found").slice(0, 48),
+          lastAttemptAt: Date.now()
+        });
+        if (next.exhausted) exhausted += 1;
+      }
     }
 
+    if (completedQualityAuditUrls.size) await markFaviconQualityAuditsComplete([...completedQualityAuditUrls]);
     const currentState = (await ensureLocalStorage()).state;
     queue = await writeIconRecoveryQueue({
       version: ICON_RECOVERY_QUEUE_VERSION,
@@ -2513,6 +2603,7 @@ async function learnFaviconFromTab(tab, shortcutId = "") {
       { persistSyncError: false }
     );
     learned = applied === true || learned;
+    if (discovered.qualityComplete === true) await markFaviconQualityAuditsComplete([tab.url]);
   }
 
   return learned;

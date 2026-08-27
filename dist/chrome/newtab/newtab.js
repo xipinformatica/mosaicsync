@@ -67,6 +67,8 @@ import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
   hasWebAccess,
+  permissionChangeAffectsTopSites,
+  permissionChangeAffectsWebAccess,
   removeSyncConsent,
   requestSyncConsentFromGesture,
   requestTopSitesPermissionFromGesture,
@@ -4894,8 +4896,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     stampThemeWallpaperMutation();
     rememberPendingSettings(["themeWallpapersEnabled", ...(enabled ? ["lightBackgroundDim", "darkBackgroundDim"] : [])]);
-    if (themeWallpaperChoices) themeWallpaperChoices.hidden = !enabled;
-    if (backgroundDimControls) backgroundDimControls.hidden = enabled;
+    // One control refresh owns visibility + both previews. Avoid touching the
+    // same layout state twice in one checkbox gesture.
     refreshThemeWallpaperControls();
 
     applyThemeWallpaperVisualSafely(previousPresetId, previousImageValue, previousDim);
@@ -5057,20 +5059,75 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return deferred;
   }
 
-  function refreshSettingsControlsAfterExternalState() {
-    if (!settingsDialog?.open) return;
+  const SETTINGS_REFRESH_KEYS = Object.freeze({
+    grid: Object.freeze(["columns", "rows", "tileSize"]),
+    theme: Object.freeze(["theme"]),
+    background: Object.freeze([
+      "backgroundColor", "backgroundColorCustomized", "backgroundPreset", "backgroundSourceKind",
+      "backgroundSourceUrl", "backgroundImage", "backgroundDim", "themeWallpapersEnabled",
+      "lightBackgroundPreset", "darkBackgroundPreset", "lightBackgroundDim", "darkBackgroundDim"
+    ]),
+    autoIcons: Object.freeze(["autoSiteIcons"])
+  });
+
+  function settingsKeysChanged(previousSettings, nextSettings, keys) {
+    for (const key of keys) {
+      if (!Object.is(previousSettings?.[key], nextSettings?.[key])) return true;
+    }
+    return false;
+  }
+
+  function spacesSettingsChanged(previousState, nextState) {
+    for (const spaceId of SPACE_IDS) {
+      const before = previousState?.spaces?.[spaceId]?.settings || {};
+      const after = nextState?.spaces?.[spaceId]?.settings || {};
+      if (!Object.is(before.multipleSpacesEnabled, after.multipleSpacesEnabled) ||
+          !Object.is(before.spaceName, after.spaceName)) return true;
+    }
+    return false;
+  }
+
+  function settingsRefreshDomains(previousState, nextState = state) {
+    if (!previousState || !nextState) return new Set(["grid", "theme", "spaces", "frequent", "background", "autoIcons"]);
+    if (previousState.activeSpaceId !== nextState.activeSpaceId) {
+      return new Set(["grid", "theme", "spaces", "frequent", "background", "autoIcons"]);
+    }
+    const previousSettings = previousState.settings || {};
+    const nextSettings = nextState.settings || {};
+    const domains = new Set();
+    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.grid)) domains.add("grid");
+    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.theme)) domains.add("theme");
+    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.background)) domains.add("background");
+    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.autoIcons)) domains.add("autoIcons");
+    if (spacesSettingsChanged(previousState, nextState)) domains.add("spaces");
+    const beforeFrequent = synchronizedFrequentlyVisitedSettings(previousState);
+    const afterFrequent = synchronizedFrequentlyVisitedSettings(nextState);
+    if (beforeFrequent.enabled !== afterFrequent.enabled || beforeFrequent.count !== afterFrequent.count) domains.add("frequent");
+    return domains;
+  }
+
+  function refreshSettingsControlsAfterExternalState(previousState = null) {
+    if (!settingsDialog?.open) return new Set();
+    const domains = settingsRefreshDomains(previousState, state);
+    // Exact own-write echoes already match the live model + pending draft. They
+    // advance the persistence baseline but must perform zero Settings DOM work.
+    if (!domains.size) return domains;
+
     let deferred = false;
-    deferred = refreshGridSettingsControls({ preserveActive: true }) || deferred;
-    if (controlContainsActiveElement(themeToggle)) deferred = true;
-    else updateThemeToggle();
-    deferred = refreshSpacesSettings({ preserveActive: true }) || deferred;
-    deferred = refreshFrequentlyVisitedSettingsControls({ preserveActive: true }) || deferred;
-    deferred = refreshBackgroundSettingsControls({ preserveActive: true }) || deferred;
-    if (settingsAutoSiteIcons) {
+    if (domains.has("grid")) deferred = refreshGridSettingsControls({ preserveActive: true }) || deferred;
+    if (domains.has("theme")) {
+      if (controlContainsActiveElement(themeToggle)) deferred = true;
+      else updateThemeToggle();
+    }
+    if (domains.has("spaces")) deferred = refreshSpacesSettings({ preserveActive: true }) || deferred;
+    if (domains.has("frequent")) deferred = refreshFrequentlyVisitedSettingsControls({ preserveActive: true }) || deferred;
+    if (domains.has("background")) deferred = refreshBackgroundSettingsControls({ preserveActive: true }) || deferred;
+    if (domains.has("autoIcons") && settingsAutoSiteIcons) {
       if (controlContainsActiveElement(settingsAutoSiteIcons)) deferred = true;
       else settingsAutoSiteIcons.checked = state.settings.autoSiteIcons !== false;
     }
-    deferredSettingsControlRefresh = deferred;
+    deferredSettingsControlRefresh = deferredSettingsControlRefresh || deferred;
+    return domains;
   }
 
   async function openSettings() {
@@ -5482,27 +5539,33 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     })();
   });
 
-  browser.permissions?.onRemoved?.addListener?.(() => {
-    void refreshWebAccessUi().then(granted => {
-      if (!granted && state.settings.autoSiteIcons) {
-        scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 50);
-      }
-    }).catch(() => {});
-    // Optional Top Sites permission is independent from the remembered feature
-    // preference. Reflect revocation immediately without silently turning it off.
-    if (frequentlyVisitedEnabled) scheduleFrequentlyVisitedRefresh(0);
+  browser.permissions?.onRemoved?.addListener?.(change => {
+    if (permissionChangeAffectsWebAccess(change)) {
+      void refreshWebAccessUi().then(granted => {
+        if (!granted && state.settings.autoSiteIcons) {
+          scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 50);
+        }
+      }).catch(() => {});
+    }
+    // Top Sites is independent from Website Access. Do not wake favicon/Web
+    // Access machinery for a history permission change.
+    if (permissionChangeAffectsTopSites(change) && frequentlyVisitedEnabled) {
+      scheduleFrequentlyVisitedRefresh(0);
+    }
   });
 
-  browser.permissions?.onAdded?.addListener?.(() => {
-    void refreshWebAccessUi().then(granted => {
-      if (granted && state.settings.autoSiteIcons) {
-        hideWebAccessPrompt();
-        requestMissingSiteIcons([], { force: true });
-      }
-    }).catch(() => {});
-    // If the browser restores/grants Top Sites permission, suggestions should return
-    // automatically without requiring the user to toggle the feature twice.
-    if (frequentlyVisitedEnabled) {
+  browser.permissions?.onAdded?.addListener?.(change => {
+    if (permissionChangeAffectsWebAccess(change)) {
+      void refreshWebAccessUi().then(granted => {
+        if (granted && state.settings.autoSiteIcons) {
+          hideWebAccessPrompt();
+          requestMissingSiteIcons([], { force: true });
+        }
+      }).catch(() => {});
+    }
+    // If the browser restores/grants Top Sites permission, suggestions should
+    // return automatically without rebuilding or waking unrelated Settings work.
+    if (permissionChangeAffectsTopSites(change) && frequentlyVisitedEnabled) {
       frequentCandidateCacheAt = 0;
       frequentCandidateCache = [];
       scheduleFrequentlyVisitedRefresh(0);
@@ -6615,6 +6678,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
               incoming = selectActiveSpaceNormalized(incoming, "personal");
               void writeActiveSpace("personal");
             }
+            const previousStateForSettingsRefresh = state;
             stateMutationGeneration += 1;
             state = incoming;
             // The persisted incoming value becomes the concurrency baseline. Any
@@ -6626,7 +6690,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             const previousFrequentEnabled = frequentlyVisitedEnabled;
             const previousFrequentCount = frequentlyVisitedCount;
             syncFrequentlyVisitedLocalsFromState(state);
-            refreshSettingsControlsAfterExternalState();
+            refreshSettingsControlsAfterExternalState(previousStateForSettingsRefresh);
             if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
               frequentCandidateCacheAt = 0;
               frequentCandidateCache = [];

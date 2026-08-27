@@ -59,7 +59,7 @@ for (const browser of ["firefox", "chrome"]) {
       workAuto: true
     });
     const ctx = runFunctions(src, [
-      "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
+      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
     ], {
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
@@ -111,7 +111,7 @@ for (const browser of ["firefox", "chrome"]) {
     let writes = 0;
     const currentState = stateWithSpaces({ work: [existing], workAuto: true });
     const ctx = runFunctions(src, [
-      "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
+      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
     ], {
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
@@ -137,7 +137,7 @@ for (const browser of ["firefox", "chrome"]) {
     const originalQueue = { version: 2, items: [{ id: "moved", url: "https://moved.example/", attempts: 1, nextAttemptAt: 99, qualityUpgrade: false }] };
     let written = null;
     const ctx = runFunctions(src, [
-      "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
+      "automaticFaviconArtwork", "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
       "workspaceAllowsAutoIcons", "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue", "pruneIconRecoveryQueueAgainstState"
     ], {
       PERSONAL_SPACE_ID: "personal",
@@ -145,6 +145,8 @@ for (const browser of ["firefox", "chrome"]) {
       ICON_RECOVERY_QUEUE_VERSION: 2,
       ensureLocalStorage: async () => ({ state: currentState }),
       readIconRecoveryQueue: async () => structuredClone(originalQueue),
+      readFaviconQualityAuditLedger: async () => ({ version: 1, entries: {} }),
+      faviconQualityAuditNeeded: () => false,
       writeIconRecoveryQueue: async queue => { written = structuredClone(queue); return queue; },
       hasWebAccess: async () => false,
       platformHasPermissionFreeFaviconSource: () => browser === "chrome",
@@ -253,7 +255,7 @@ test("chrome: 1.24.14i Space-aware seeding preserves browser-native favicon qual
   });
   const currentState = stateWithSpaces({ activeSpaceId: "personal", personal: [native], personalAuto: true });
   const ctx = runFunctions(src, [
-    "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
+    "automaticFaviconArtwork", "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
     "workspaceAllowsAutoIcons", "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue"
   ], {
     PERSONAL_SPACE_ID: "personal",
@@ -261,6 +263,8 @@ test("chrome: 1.24.14i Space-aware seeding preserves browser-native favicon qual
     ICON_RECOVERY_QUEUE_VERSION: 2,
     ensureLocalStorage: async () => ({ state: currentState }),
     readIconRecoveryQueue: async () => ({ version: 2, items: [] }),
+    readFaviconQualityAuditLedger: async () => ({ version: 1, entries: {} }),
+    faviconQualityAuditNeeded: () => true,
     writeIconRecoveryQueue: async queue => queue,
     hasWebAccess: async () => false,
     platformHasPermissionFreeFaviconSource: () => true,

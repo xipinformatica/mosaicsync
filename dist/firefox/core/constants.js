@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30";
+export const VERSION = "1.30.1";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -47,6 +47,7 @@ export const SESSION_PENDING_NAVIGATIONS_KEY = "mosaicsync.session.pending-short
 export const LEGACY_SESSION_ICON_HYDRATION_FAILURES_KEY = "mosaicsync.session.icon-hydration-failures.v1";
 export const LOCAL_ICON_RECOVERY_QUEUE_KEY = "mosaicsync.icon-recovery-queue.v2";
 export const LOCAL_ICON_RECOVERY_STATUS_KEY = "mosaicsync.icon-recovery-status.v2";
+export const LOCAL_FAVICON_QUALITY_AUDIT_KEY = "mosaicsync.favicon-quality-audit.v1";
 export const LOCAL_MAINTENANCE_MIGRATIONS_KEY = "mosaicsync.maintenance-migrations.v1";
 export const LOCAL_ASSET_WRITE_LOCK_NAME = "mosaicsync.local-assets.write.v1";
 
@@ -98,6 +99,9 @@ export const ICON_RECOVERY_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000, 5 * 
 export const ICON_RECOVERY_MAX_ATTEMPTS = ICON_RECOVERY_RETRY_DELAYS_MS.length + 1;
 export const ICON_RECOVERY_EXHAUSTED_RETRY_MS = 24 * 60 * 60 * 1000;
 export const ICON_RECOVERY_HIGH_QUALITY_SIDE = 128;
+export const FAVICON_QUALITY_AUDIT_POLICY_VERSION = 1;
+export const FAVICON_QUALITY_AUDIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export const FAVICON_QUALITY_AUDIT_MAX_ENTRIES = 256;
 export const SYNC_WATCH_PERIOD_MINUTES = 5;
 export const WEB_ACCESS_CACHE_MS = 5_000;
 export const DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES = 512 * 1024;

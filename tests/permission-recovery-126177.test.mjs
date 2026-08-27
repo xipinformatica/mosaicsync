@@ -103,8 +103,8 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(src, /frequentlyVisitedPermissionButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?const permissionPromise = requestTopSitesPermissionFromGesture\(\);[\s\S]*?void \(async \(\) => \{/);
     assert.match(src, /const permissionPromise = wantsEnabled \? requestTopSitesPermissionFromGesture\(\) : null;[\s\S]*?await persistFrequentlyVisitedPreference\(\{ enabled: wantsEnabled \}\)/, "turning the feature on must start the permission request from the user gesture and persist synchronized intent independently");
     assert.match(src, /scheduleFrequentlyVisitedPermissionReconciliation\(\);/);
-    assert.match(src, /browser\.permissions\?\.onRemoved[\s\S]*?if \(frequentlyVisitedEnabled\) scheduleFrequentlyVisitedRefresh\(0\);/);
-    assert.match(src, /browser\.permissions\?\.onAdded[\s\S]*?scheduleFrequentlyVisitedRefresh\(0\);/);
+    assert.match(src, /browser\.permissions\?\.onRemoved[\s\S]*?permissionChangeAffectsTopSites\(change\)[\s\S]*?scheduleFrequentlyVisitedRefresh\(0\);/, "Top Sites removal must self-heal Frequently Visited without waking unrelated permission work");
+    assert.match(src, /browser\.permissions\?\.onAdded[\s\S]*?permissionChangeAffectsTopSites\(change\)[\s\S]*?scheduleFrequentlyVisitedRefresh\(0\);/, "Top Sites grant must self-heal Frequently Visited through the filtered permission path");
     assert.match(src, /const importedFrequentEnabled = parsed\.preferences\.frequentlyVisitedEnabled === true;/);
     assert.match(src, /frequentlyVisitedEnabled:\s*importedFrequentEnabled,[\s\S]*?frequentlyVisitedCount:\s*importedFrequentCount/);
     assert.doesNotMatch(src, /importedFrequentEnabled\s*&&\s*hasTopSites/);

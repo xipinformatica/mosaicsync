@@ -45,6 +45,8 @@ for (const browserName of ["firefox", "chrome"]) {
       devMark: () => {}, devMeasure: () => {},
       ensureLocalStorage: async () => ({ state }),
       readIconRecoveryQueue: async () => queue,
+      readFaviconQualityAuditLedger: async () => ({ version: 1, entries: {} }),
+      faviconQualityAuditNeeded: () => false,
       writeIconRecoveryQueue: async value => { queue = value; return value; },
       scheduleIconRecoveryAlarm: async () => { schedules += 1; },
       hasWebAccess: async () => true,
@@ -61,6 +63,7 @@ for (const browserName of ["firefox", "chrome"]) {
         const loc = ctx.findShortcutLocationById(st, id);
         return Boolean(loc?.workspace?.settings?.autoSiteIcons);
       },
+      automaticFaviconArtwork: shortcut => Boolean(shortcut?.image && ["favicon", "firefox"].includes(shortcut.imageSourceKind)),
       shortcutNeedsProactiveFavicon: shortcut => !shortcut.image && shortcut.imageSourceKind === "none",
       iconRecoveryItemStillRelevant: (shortcut, item) => Boolean(shortcut && shortcut.url === item.url),
       iconRecoveryItemStillRelevantInState: (st, item) => {

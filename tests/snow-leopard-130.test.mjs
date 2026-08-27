@@ -72,8 +72,10 @@ test("1.30 automatic favicon recovery always performs a bounded quality follow-u
   const threshold = Number(firefoxBg.match(/const FAVICON_AUTHORITATIVE_SUITABILITY\s*=\s*(\d+);/)?.[1] || 0);
   assert.ok(threshold >= 375, "64px conventional favicon must not suppress the automatic quality pass");
   const resolver = extractFunction(firefoxBg, "resolveFaviconForUrl");
-  assert.match(resolver, /if \(!preferQuality && initialOrigin\)[\s\S]*?return \{ \.\.\.best, provisional: !faviconCandidateIsAuthoritativelyGoodEnough\(best\) \};/,
-    "fast pass must explicitly mark merely adequate artwork provisional so the durable quality follow-up runs");
+  assert.match(resolver, /if \(!preferQuality && initialOrigin\)[\s\S]*?return \{ \.\.\.best, provisional: true \};/,
+    "fast pass must explicitly remain provisional so the durable quality follow-up runs");
+  assert.doesNotMatch(resolver, /if \(preferQuality[^\n]*faviconCandidateIsAuthoritativelyGoodEnough\(best\)[\s\S]{0,180}?return/,
+    "final quality mode must not stop merely because an adequate candidate crossed the old threshold");
 });
 
 test("1.30 Sync copy wording distinguishes foreign receipt from this device publishing", () => {

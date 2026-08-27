@@ -36,6 +36,15 @@ export async function hasTopSitesPermission() {
   return browser.permissions.contains({ permissions: [TOP_SITES_PERMISSION] });
 }
 
+export function permissionChangeAffectsTopSites(change) {
+  return Array.isArray(change?.permissions) && change.permissions.includes(TOP_SITES_PERMISSION);
+}
+
+export function permissionChangeAffectsWebAccess(change) {
+  const origins = Array.isArray(change?.origins) ? change.origins : [];
+  return WEB_ORIGINS.some(origin => origins.includes(origin));
+}
+
 /**
  * MosaicSync uses one optional HTTP/HTTPS grant for automatic favicons and
  * user-requested web images. Asking once is substantially less disruptive than
