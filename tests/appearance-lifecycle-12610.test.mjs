@@ -43,7 +43,7 @@ function makeDialog() {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.30.2 ${browser} Light/Dark selector paints its matching wallpaper immediately while ordinary Settings background work stays deferred`, async () => {
+  test(`1.30.11 ${browser} Light/Dark selector previews its matching wallpaper immediately while the real page stays frozen`, async () => {
     const source = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
     const settingsDialog = makeDialog();
     const page = {
@@ -55,6 +55,8 @@ for (const browser of ["firefox", "chrome"]) {
       })
     };
     const documentElement = { dataset: {}, style: makeStyle({ "--page-bg": "#222222", "--background-dim": "0.3" }) };
+    const appearancePreviewLayer = { hidden: true, style: makeStyle() };
+    const appearancePreviewImage = makeImage();
     const raf = [];
     let applySettingsCalls = 0;
     let hintRefreshCalls = 0;
@@ -71,6 +73,8 @@ for (const browser of ["firefox", "chrome"]) {
       settingsButton: { setAttribute() {} },
       closeBackgroundColorPicker() {},
       page,
+      appearancePreviewLayer,
+      appearancePreviewImage,
       document: { documentElement },
       effectiveBackgroundColor(settings) { return settings.theme === "light" ? "#f7f3fb" : "#15101d"; },
       effectiveBackgroundPresetId(settings) { return settings.theme === "light" ? "light-wallpaper" : "dark-wallpaper"; },
@@ -89,6 +93,8 @@ for (const browser of ["firefox", "chrome"]) {
 
     for (const name of [
       "isSettingsOpen",
+      "paintAppearancePreviewLayer",
+      "clearAppearancePreviewLayer",
       "applyPageBackgroundVisual",
       "applyThemeSkinVisual",
       "applyThemeTransition",
@@ -111,17 +117,25 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(documentElement.dataset.effectiveTheme, "light", "theme skin should switch immediately");
     assert.equal(documentElement.style.colorScheme, "light");
     assert.equal(toggleCalls, 1);
-    assert.equal(page.style.backgroundColor, "#f7f3fb", "selected theme color must update immediately");
-    assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")', "selected theme wallpaper must update immediately");
-    assert.equal(documentElement.style["--page-bg"], "#f7f3fb");
-    assert.equal(documentElement.style["--background-dim"], "0.05", "selected theme darkness must update immediately");
-    assert.equal(vm.runInContext("deferredAppearanceVisual", context), false);
+    assert.equal(page.style.backgroundColor, "#222222", "real page color must stay frozen while Settings is open");
+    assert.equal(page.style.backgroundImage, 'url("old-wallpaper.webp")', "real page wallpaper must stay frozen while Settings is open");
+    assert.equal(documentElement.style["--page-bg"], "#222222");
+    assert.equal(documentElement.style["--background-dim"], "0.3", "real root dim must stay frozen while Settings is open");
+    assert.equal(appearancePreviewLayer.hidden, false, "isolated preview must become visible");
+    assert.equal(appearancePreviewLayer.style.backgroundColor, "#f7f3fb");
+    assert.equal(appearancePreviewLayer.style["--appearance-preview-dim"], "0.05");
+    assert.equal(appearancePreviewImage.hidden, false);
+    assert.equal(appearancePreviewImage.src, "extension:///light-wallpaper.webp");
+    assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
     assert.equal(applySettingsCalls, 0, "theme selection must not invoke the broad Settings/grid renderer");
 
-    // Ordinary/non-selector full-page work is still protected while Settings is open.
+    // Other direct appearance work also updates only the preview while Settings is open.
     context.state.settings.theme = "dark";
     context.applyPageBackgroundVisual();
-    assert.equal(page.style.backgroundImage, 'url("extension:///light-wallpaper.webp")', "ordinary background work remains frozen under Settings");
+    assert.equal(page.style.backgroundImage, 'url("old-wallpaper.webp")', "authoritative page remains frozen under Settings");
+    assert.equal(appearancePreviewLayer.style.backgroundColor, "#15101d");
+    assert.equal(appearancePreviewLayer.style["--appearance-preview-dim"], "0.3");
+    assert.equal(appearancePreviewImage.src, "extension:///dark-wallpaper.webp");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), true);
 
     // Execute the actual production Settings close path, then flush its rAF.
@@ -135,6 +149,9 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(page.style.backgroundImage, 'url("extension:///dark-wallpaper.webp")');
     assert.equal(documentElement.style["--page-bg"], "#15101d");
     assert.equal(documentElement.style["--background-dim"], "0.3");
+    assert.equal(appearancePreviewLayer.hidden, true, "preview must clear after authoritative post-close commit");
+    assert.equal(appearancePreviewImage.hidden, true);
+    assert.equal(appearancePreviewImage.src, "");
     assert.equal(vm.runInContext("deferredAppearanceVisual", context), false);
   });
 

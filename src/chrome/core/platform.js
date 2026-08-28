@@ -5,8 +5,6 @@ import "./browser-shim.js";
  * Chrome-specific API differences live here instead of leaking into profile/model code.
  */
 export const PLATFORM_ID = "chrome";
-export const PLATFORM_NAME = "Chrome";
-export const ACCOUNT_PROVIDER_NAME = "Google";
 
 export async function getNativeTopSites({ limit = 100 } = {}) {
   if (!browser.topSites?.get) return [];

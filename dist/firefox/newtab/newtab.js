@@ -228,6 +228,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let resolvedSystemTheme = systemThemeMedia.matches ? "dark" : "light";
   const graphemeSegmenter = typeof Intl.Segmenter === "function" ? new Intl.Segmenter(undefined, { granularity: "grapheme" }) : null;
   const page = document.getElementById("page");
+  const appearancePreviewLayer = document.getElementById("appearancePreviewLayer");
+  const appearancePreviewImage = document.getElementById("appearancePreviewImage");
   const grid = document.getElementById("shortcutGrid");
   const emptyState = document.getElementById("emptyState");
   const syncPendingState = document.getElementById("syncPendingState");
@@ -2324,7 +2326,35 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     brand.hidden = !settings.brandVisible;
   }
 
-  function applyPageBackgroundVisual({ deferHeavyAssets = false, allowWhileSettingsOpen = false } = {}) {
+  function paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground = false } = {}) {
+    if (!appearancePreviewLayer || !appearancePreviewImage) return false;
+    appearancePreviewLayer.style.backgroundColor = renderedBackgroundColor;
+    appearancePreviewLayer.style.setProperty("--appearance-preview-dim", String(effectiveBackgroundDim(state.settings) / 100));
+    if (!deferCustomBackground) {
+      if (resolvedBackground) {
+        appearancePreviewImage.src = resolvedBackground;
+        appearancePreviewImage.hidden = false;
+      } else {
+        appearancePreviewImage.hidden = true;
+        appearancePreviewImage.removeAttribute("src");
+      }
+    }
+    appearancePreviewLayer.hidden = false;
+    return true;
+  }
+
+  function clearAppearancePreviewLayer() {
+    if (!appearancePreviewLayer) return;
+    appearancePreviewLayer.hidden = true;
+    appearancePreviewLayer.style.backgroundColor = "";
+    appearancePreviewLayer.style.removeProperty("--appearance-preview-dim");
+    if (appearancePreviewImage) {
+      appearancePreviewImage.hidden = true;
+      appearancePreviewImage.removeAttribute("src");
+    }
+  }
+
+  function applyPageBackgroundVisual({ deferHeavyAssets = false } = {}) {
     const settings = state.settings;
     const renderedBackgroundColor = effectiveBackgroundColor(settings);
     const effectivePresetId = effectiveBackgroundPresetId(settings);
@@ -2333,11 +2363,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const deferCustomBackground = deferHeavyAssets && settings.backgroundImageDeferred === true && !effectivePresetId;
 
     // Firefox/Linux can lose the painted descendants of the open Settings surface
-    // when unrelated full-viewport work churns underneath it. Keep ordinary
-    // appearance/background commits frozen while Settings is open, but allow the
-    // explicit Light/Dark selector to paint only the already-existing page visual
-    // immediately so the visible wallpaper always matches the selected theme.
-    if (isSettingsOpen() && !allowWhileSettingsOpen) {
+    // when the real full-viewport page/root background churns underneath it. While
+    // Settings is open, mirror only the requested appearance onto the isolated,
+    // paint-contained preview surface and defer one authoritative page commit.
+    if (isSettingsOpen()) {
+      paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground });
       deferredAppearanceVisual = true;
       return;
     }
@@ -2354,6 +2384,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       document.documentElement.style.removeProperty("--boot-background-image");
     }
     document.documentElement.dataset.canvasText = effectiveCanvasText();
+    clearAppearancePreviewLayer();
   }
 
   function applyThemeSkinVisual() {
@@ -4936,7 +4967,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (!themeWallpaperVisualChanged(previousPresetId, previousImageValue, previousDim)) return;
 
     if (isSettingsOpen()) {
-      deferredAppearanceVisual = true;
+      applyPageBackgroundVisual();
       return;
     }
 
@@ -4974,7 +5005,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           stampThemeWallpaperMutation();
           rememberPendingSettings(["lightBackgroundDim", "darkBackgroundDim"]);
           refreshThemeWallpaperControls({ refreshChoices: false });
-          if (isSettingsOpen()) deferredAppearanceVisual = true;
+          if (isSettingsOpen()) applyPageBackgroundVisual();
           else applySettings();
           scheduleBackgroundPersist(0);
         }
@@ -5016,7 +5047,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     rememberPendingSettings([key]);
     refreshThemeWallpaperDimControl(target);
     if (effectiveThemeFor(state.settings) === target) {
-      if (isSettingsOpen()) deferredAppearanceVisual = true;
+      if (isSettingsOpen()) applyPageBackgroundVisual();
       else applySettings();
     }
     queueThemeWallpaperPersistence();
@@ -5042,12 +5073,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function applyThemeTransition() {
     if (isSettingsOpen()) {
-      // The explicit appearance selector is a direct user gesture: update the
-      // lightweight theme chrome and the current page wallpaper together. Do not
-      // run the broad Settings/grid renderer here; unrelated background mutations
-      // remain deferred until close through applyPageBackgroundVisual's default.
+      // The selector's lightweight theme chrome updates immediately, while the
+      // matching wallpaper/dim is shown through the isolated preview surface. The
+      // authoritative page/root background remains frozen until Settings closes.
       applyThemeSkinVisual();
-      applyPageBackgroundVisual({ allowWhileSettingsOpen: true });
+      applyPageBackgroundVisual();
       return;
     }
     applySettings();

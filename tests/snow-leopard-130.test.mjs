@@ -34,7 +34,7 @@ const firefoxBg = fs.readFileSync("src/firefox/background/background.js", "utf8"
 const english = fs.readFileSync("src/shared/core/i18n-locales/en.js", "utf8");
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.30 ${browser} open Settings never repaints a full-viewport appearance layer`, () => {
+  test(`1.30.11 ${browser} external reconciliation stays paint-free while Settings appearance preview remains user-driven`, () => {
     const source = newtab;
     const calls = [];
     const ctx = vm.createContext({
@@ -57,8 +57,9 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(ctx.deferredLauncherRender, true);
 
     const applyBackground = extractFunction(source, "applyPageBackgroundVisual");
-    assert.doesNotMatch(applyBackground, /paintAppearancePreviewLayer\(/,
-      "open Settings must defer the real page background instead of mutating a second full-screen compositor layer");
+    assert.match(applyBackground, /if \(isSettingsOpen\(\)\)[\s\S]*?paintAppearancePreviewLayer\(/,
+      "direct appearance gestures may use only the isolated Settings preview surface");
+    assert.doesNotMatch(applyBackground.split("if (isSettingsOpen())")[0], /page\.style\.background(?:Image|Color)/);
   });
 }
 

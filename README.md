@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.9**
+**Current source release: 1.30.12**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.9** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.12** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.9 is a zero-new-features **trusted-state efficiency and cleanup** release on top of 1.30.8. Already-normalized New Tab preference mutations now replace known-valid workspaces through an explicit trusted fast path instead of repeatedly traversing/hash-validating the same image-heavy state before the real persistence boundary; the defensive public model APIs remain intact. Background publication likewise reuses the state already normalized by `pushLocalMutation()`, and the five-minute alarm marks its pending-local retry as already completed so the semantic freshness check does not immediately repeat the same journal read. Additional evidence tests cover local-vs-remote ordering, deletion dominance and same-key Settings races. Proven-dead runtime symbols/CSS variables were removed without changing behavior. All 1.30.8 Sync safeguards remain unchanged. The **next release after 1.30.9 must implement the bounded verified device-snapshot generation cache** described in `README-DEVELOPMENT.md`; it is intentionally not part of 1.30.9.
+1.30.12 is an **update/reinstall data-preservation hardening release**. Browser lifecycle reason `install` is no longer treated as authority to reset MosaicSync state: the normal storage initializer supplies defaults only when durable keys are actually absent, while any surviving layout, device identity, Sync bootstrap/status, applied revisions and onboarding state remain intact across install-like recovery transitions. Routine Firefox development testing now has an explicit separate-ID package (`mosaicsync-dev@xipinformatica.cat`) so `about:debugging` cannot overlay the production AMO identity `mosaicsync@xipinformatica.cat`. This does not claim to prevent Firefox itself from deleting an extension/storage namespace; a signed AMO update test remains a required release gate. The 1.30.11 appearance-preview fix and 1.30.10 Sync snapshot cache remain unchanged.
+
+1.30.11 is a focused **Settings appearance regression fix** on top of 1.30.10. Wallpaper selection, normal background darkness, separate Light/Dark wallpaper selection and the active Light/Dark darkness slider again update visually in real time while Settings is open. The Firefox/Linux compositor safeguard remains intact: MosaicSync does not repaint the authoritative full-screen `.page` wallpaper or root darkness variables under the open Settings surface. Instead, Settings-only secondary CSS provides an isolated paint-contained preview layer backed by a plain `<img>` and its own dim overlay; closing Settings commits the same appearance once to the real page on the existing next-frame deferred path and clears the preview. Sync, storage/profile schemas, permissions, snapshot caching, CSP, navigation and privacy behavior are unchanged.
 
 The Firefox and Chrome New Tab runtime continues to come from one canonical shared source at build time, preventing browser drift without runtime imports. Runtime CSS consists only of launcher-critical CSS plus idempotent on-demand secondary CSS; the obsolete monolithic reference stylesheet has been removed from the source tree entirely. The mascot remains critical-only, logo hover does not request secondary CSS, Light mode is correct from the first frame, and reduced-motion behavior is preserved.
 

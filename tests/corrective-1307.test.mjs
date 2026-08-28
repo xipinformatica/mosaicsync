@@ -47,14 +47,18 @@ function extractFunction(source, name) {
 
 test("1.30.7 trusted cross-Space fast paths are output-equivalent to defensive wrappers", async () => {
   const model = await import(`../dist/firefox/core/model.js?1307=${Date.now()}`);
+  // Keep the fixture's logical clock safely ahead of wall time so the defensive
+  // and trusted calls cannot differ merely because Date.now() crosses a
+  // millisecond boundary between the two otherwise-equivalent operations.
+  const logicalClock = 4_000_000_000_000;
   const before = model.normalizeState({
     activeSpaceId: "personal",
     spaces: {
       personal: {
-        shortcuts: [{ type:"shortcut", id:"a", title:"A", url:"https://a.test/", position:0, createdAt:1, modifiedAt:1, image:"", imageSyncData:"", imageSyncKind:"none", imageSourceKind:"none", imageStyle:"contain", source:"manual" }],
-        settings: {}, settingsModifiedAt:1, updatedAt:1
+        shortcuts: [{ type:"shortcut", id:"a", title:"A", url:"https://a.test/", position:0, createdAt:logicalClock, modifiedAt:logicalClock, image:"", imageSyncData:"", imageSyncKind:"none", imageSourceKind:"none", imageStyle:"contain", source:"manual" }],
+        settings: {}, settingsModifiedAt:logicalClock, updatedAt:logicalClock
       },
-      work: { shortcuts: [], settings: {}, settingsModifiedAt:1, updatedAt:1 }
+      work: { shortcuts: [], settings: {}, settingsModifiedAt:logicalClock, updatedAt:logicalClock }
     }
   });
   const options = { shortcutId:"a", fromSpaceId:"personal", toSpaceId:"work" };

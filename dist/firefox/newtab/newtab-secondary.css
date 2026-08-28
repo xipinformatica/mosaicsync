@@ -2,6 +2,37 @@
  * MosaicSync secondary New Tab stylesheet.
  * Critical first-frame declarations are omitted to avoid duplicate CSS parsing/cascade work.
  */
+/*
+ * Live Settings appearance preview. The authoritative .page wallpaper and root
+ * dim variables remain frozen while Settings is open. This fixed paint-contained
+ * child uses a plain <img> surface so wallpaper/darkness changes remain visible
+ * without re-entering Firefox/Linux's compositor-sensitive page-background path.
+ */
+.appearance-preview-layer{
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: var(--page-bg);
+  contain: paint;
+}
+.appearance-preview-layer::after{
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgba(0,0,0,var(--appearance-preview-dim,0));
+}
+.appearance-preview-image{
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  pointer-events: none;
+}
+
 
   to { transform: rotate(8deg); }
 }.folder-item-tile img{pointer-events: none;user-select: none;-moz-user-select: none;}.folder-item-tile > img.artwork-layer{grid-area: 1 / 1;}.dialog{width: min(620px, calc(100vw - 32px));max-height: min(820px, calc(100vh - 32px));padding: 0;border: 1px solid var(--border);border-radius: 18px;color: var(--text);background: transparent;box-shadow: var(--shadow);}.dialog::backdrop{background: rgba(10, 6, 15, .57);backdrop-filter: blur(5px);}.dialog-card{max-height: min(820px, calc(100vh - 32px));overflow: auto;padding: 26px;border-radius: 18px;background: rgba(35, 27, 48, .98);}.dialog-heading{display: flex;align-items: flex-start;justify-content: space-between;gap: 18px;margin-bottom: 22px;}.dialog-heading h2{margin: 2px 0 0;font-size: 24px;letter-spacing: -.25px;}.eyebrow{margin: 0;color: #bba7da;font-size: 12px;text-transform: uppercase;letter-spacing: .12em;font-weight: 700;}.icon-button{width: 36px;height: 36px;border: 0;border-radius: 9px;background: transparent;color: rgba(255,255,255,.72);font-size: 28px;line-height: 30px;cursor: pointer;}.icon-button:hover{background: rgba(255,255,255,.08);color: #fff;}.field{display: grid;gap: 7px;margin: 15px 0;}.field > span, .image-fieldset legend{color: rgba(255,255,255,.82);font-size: 13px;font-weight: 600;}.field input,

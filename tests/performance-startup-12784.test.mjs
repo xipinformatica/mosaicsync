@@ -145,14 +145,16 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(src, /storage\.(?:local|sync|session)\.set\([^)]*startupTiming|fetch\([^)]*startupTiming|sendMessage\([^)]*startupTiming/);
   });
 
-  test(`1.30 ${browser} keeps full-viewport wallpaper paint completely frozen while Settings is open`, () => {
+  test(`1.30.11 ${browser} keeps authoritative wallpaper paint frozen while Settings uses an isolated preview`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const html = fs.readFileSync(`dist/${browser}/newtab/newtab.html`, "utf8");
-    const css = [fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8"), fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8")].join("\n");
-    assert.match(src, /if \(isSettingsOpen\(\) && !allowWhileSettingsOpen\) \{[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
-    assert.doesNotMatch(src, /paintAppearancePreviewLayer|appearancePreviewLayer|appearancePreviewImage/);
-    assert.doesNotMatch(html, /appearancePreviewLayer|appearancePreviewImage/);
-    assert.doesNotMatch(css, /appearance-preview-layer|appearance-preview-image/);
+    const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
+    const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
+    assert.match(src, /if \(isSettingsOpen\(\)\) \{[\s\S]*?paintAppearancePreviewLayer\([\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/);
+    assert.match(src, /function clearAppearancePreviewLayer\(/);
+    assert.match(html, /appearancePreviewLayer|appearancePreviewImage/);
+    assert.doesNotMatch(critical, /appearance-preview-layer|appearance-preview-image/);
+    assert.match(secondary, /appearance-preview-layer|appearance-preview-image/);
   });
 
   test(`1.27.8.5 ${browser} synchronizes Frequent Show/Count intent but requests Top Sites only from a local user gesture`, () => {

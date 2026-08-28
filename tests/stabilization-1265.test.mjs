@@ -17,35 +17,34 @@ for (const browser of ["firefox", "chrome"]) {
 
     const transition = js.match(/function applyThemeTransition\(\)\s*\{([\s\S]*?)\n  \}\n\n  function commitDeferredLauncherVisual/);
     assert.ok(transition, `${browser}: appearance transition helper missing`);
-    assert.match(transition[1], /if \(isSettingsOpen\(\)\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\{ allowWhileSettingsOpen: true \}\);[\s\S]*?return;/,
-      `${browser}: explicit Light/Dark selection must paint the matching wallpaper immediately`);
+    assert.match(transition[1], /if \(isSettingsOpen\(\)\)[\s\S]*?applyThemeSkinVisual\(\);[\s\S]*?applyPageBackgroundVisual\(\);[\s\S]*?return;/,
+      `${browser}: explicit Light/Dark selection must paint the matching wallpaper preview immediately`);
     const openBranch = transition[1].split("return;")[0];
     assert.doesNotMatch(openBranch, /applySettings\s*\(/,
       `${browser}: live theme switching must not call the full renderer under Settings`);
   });
 
-  test(`1.30 ${browser} defers active day/night wallpaper changes without touching any full-viewport layer`, async () => {
+  test(`1.30.11 ${browser} previews active day/night wallpaper changes without touching the real page`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
     const helper = js.match(/function applyThemeWallpaperVisualSafely\(previousPresetId, previousImageValue, previousDim\)\s*\{([\s\S]*?)\n  \}\n\n  function stampThemeWallpaperMutation/);
     assert.ok(helper, `${browser}: wallpaper paint guard missing`);
-    assert.match(helper[1], /if \(isSettingsOpen\(\)\)[\s\S]*?deferredAppearanceVisual = true;[\s\S]*?return;/,
-      `${browser}: active wallpaper changes must defer their full-page commit under Settings`);
-    assert.doesNotMatch(helper[1].split("return;")[0], /applyPageBackgroundVisual\(/,
-      `${browser}: active wallpaper changes must not repaint a background layer under Settings`);
+    assert.match(helper[1], /if \(isSettingsOpen\(\)\)[\s\S]*?applyPageBackgroundVisual\(\);[\s\S]*?return;/,
+      `${browser}: active wallpaper changes must route through the isolated preview under Settings`);
     const openBranch = helper[1].split("return;")[0];
     assert.doesNotMatch(openBranch, /applySettings\s*\(/,
-      `${browser}: Settings-open wallpaper branch must not invoke the full renderer`);
+      `${browser}: Settings-open wallpaper branch must not invoke the broad renderer`);
   });
 
   test(`1.26.9 ${browser} background helper isolates Settings-open painting from .page`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const helper = js.match(/function applyPageBackgroundVisual\(\{ deferHeavyAssets = false, allowWhileSettingsOpen = false \} = \{\}\)\s*\{([\s\S]*?)\n  \}\n\n  function applyThemeSkinVisual/);
+    const helper = js.match(/function applyPageBackgroundVisual\(\{ deferHeavyAssets = false \} = \{\}\)\s*\{([\s\S]*?)\n  \}\n\n  function applyThemeSkinVisual/);
     assert.ok(helper, `${browser}: safe page-background helper missing`);
     const body = helper[1];
-    const openStart = body.indexOf("if (isSettingsOpen() && !allowWhileSettingsOpen)");
+    const openStart = body.indexOf("if (isSettingsOpen())");
     const openReturn = body.indexOf("return;", openStart);
     assert.ok(openStart >= 0 && openReturn > openStart, `${browser}: Settings-open isolation branch missing`);
     const openBranch = body.slice(openStart, openReturn);
+    assert.match(openBranch, /paintAppearancePreviewLayer\(renderedBackgroundColor, resolvedBackground, \{ deferCustomBackground \}\);/);
     assert.match(openBranch, /deferredAppearanceVisual = true;/,
       `${browser}: real background commit must remain deferred`);
     assert.doesNotMatch(openBranch, /page\.style\.background(?:Image|Color)|--page-bg/,
@@ -58,14 +57,15 @@ for (const browser of ["firefox", "chrome"]) {
       `${browser}: closed-Settings path must still commit the authoritative page wallpaper`);
   });
 
-  test(`1.30 ${browser} has no full-screen appearance preview layer under Settings`, async () => {
+  test(`1.30.11 ${browser} restores the isolated Settings appearance preview surface outside critical CSS`, async () => {
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
     const critical = await readFile(`src/shared/newtab/newtab-critical.css`, "utf8");
     const secondary = await readFile(`src/shared/newtab/newtab-secondary.css`, "utf8");
-    assert.doesNotMatch(html, /appearancePreviewLayer|appearancePreviewImage/,
-      `${browser}: the compositor-sensitive full-screen preview DOM must stay removed`);
-    assert.doesNotMatch(`${critical}\n${secondary}`, /appearance-preview-layer|appearance-preview-image/,
-      `${browser}: no runtime stylesheet may recreate the full-screen preview surface`);
+    assert.match(html, /id="appearancePreviewLayer"[\s\S]*?id="appearancePreviewImage"/);
+    assert.doesNotMatch(critical, /appearance-preview-layer|appearance-preview-image/,
+      `${browser}: Settings-only preview CSS must stay off the first-frame critical sheet`);
+    assert.match(secondary, /\.appearance-preview-layer\{[\s\S]*?contain:\s*paint;/);
+    assert.match(secondary, /\.appearance-preview-image\{[\s\S]*?object-fit:\s*cover;/);
   });
 
   test(`1.26.9 ${browser} applies the deferred authoritative appearance only after Settings closes and a frame boundary`, async () => {

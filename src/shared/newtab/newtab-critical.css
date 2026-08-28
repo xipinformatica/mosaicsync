@@ -63,7 +63,8 @@ select{ font: inherit; }button{ color: inherit; }.page{
   transition: none;
 }:root[data-render-ready="true"] .page{
   transition: background-color 150ms ease, background-image 180ms ease;
-}.page::after{
+}
+.page::after{
   content: "";
   position: fixed;
   inset: 0;

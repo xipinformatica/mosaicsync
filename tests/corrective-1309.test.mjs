@@ -71,8 +71,8 @@ test("1.30.9 measured New Tab preference paths use trusted normalized workspace 
 test("1.30.9 Sync publication reuses the already-normalized state for profile snapshot publication", () => {
   for (const browser of ["firefox", "chrome"]) {
     const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
-    assert.doesNotMatch(source, /publishProfileDeviceSnapshot\(normalizeState\(newRaw\), meta\)/);
-    assert.match(source, /publishProfileDeviceSnapshot\(newRaw, meta\)/);
+    assert.doesNotMatch(source, /publishProfileDeviceSnapshot\(normalizeState\((?:newRaw|newStateInput)\), meta\)/);
+    assert.match(source, /publishProfileDeviceSnapshot\(newStateInput, meta\)/);
   }
 });
 

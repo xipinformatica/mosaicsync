@@ -3,15 +3,17 @@
 from pathlib import Path
 import json
 import re
+import sys
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
 OUT = ROOT / "artifacts"
+DEV_OUT = ROOT / "dev-artifacts"
 FIXED_TIME = (2026, 1, 1, 0, 0, 0)
 
 SOURCE_EXCLUDED_DIRS = frozenset({
-    ".git", "node_modules", "artifacts", "coverage", ".nyc_output",
+    ".git", "node_modules", "artifacts", "dev-artifacts", "coverage", ".nyc_output",
     "__pycache__", "tmp", "temp", "web-ext-artifacts"
 })
 SOURCE_EXCLUDED_NAMES = frozenset({"package-size-report.json", ".DS_Store", "Thumbs.db", "Desktop.ini"})
@@ -58,6 +60,43 @@ def package(browser: str, version: str) -> Path:
             archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
     return output
 
+
+
+FIREFOX_PRODUCTION_GECKO_ID = "mosaicsync@xipinformatica.cat"
+FIREFOX_DEV_GECKO_ID = "mosaicsync-dev@xipinformatica.cat"
+
+def package_firefox_dev(version: str) -> Path:
+    """Create an explicitly non-release Firefox package for about:debugging.
+
+    It deliberately uses a different Gecko ID so a temporary development copy
+    cannot overlay, replace or share the storage namespace of the AMO release.
+    """
+    source = DIST / "firefox"
+    manifest_path = source / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    gecko = manifest.setdefault("browser_specific_settings", {}).setdefault("gecko", {})
+    if gecko.get("id") != FIREFOX_PRODUCTION_GECKO_ID:
+        raise SystemExit(
+            f"Refusing dev package: production Firefox ID drifted to {gecko.get('id')!r}"
+        )
+    gecko["id"] = FIREFOX_DEV_GECKO_ID
+    manifest["name"] = "MosaicSync Dev"
+    manifest["short_name"] = "MosaicSync Dev"
+
+    output = DEV_OUT / f"mosaicsync-{version}-firefox-dev-temporary.zip"
+    DEV_OUT.mkdir(exist_ok=True)
+    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+        for path in sorted(p for p in source.rglob("*") if p.is_file()):
+            rel = path.relative_to(source).as_posix()
+            info = ZipInfo(rel, FIXED_TIME)
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            if rel == "manifest.json":
+                payload = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+            else:
+                payload = path.read_bytes()
+            archive.writestr(info, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
+    return output
 
 def size_category(rel: str) -> str:
     if rel.startswith("core/i18n-locales/") or rel == "core/i18n-runtime-catalog.js": return "localization"
@@ -148,6 +187,13 @@ if __name__ == "__main__":
         )
     release_label = versions["chrome"]
     verify_release_identity(release_label)
+
+    if sys.argv[1:] == ["--firefox-dev"]:
+        print(package_firefox_dev(release_label))
+        raise SystemExit(0)
+    if sys.argv[1:]:
+        raise SystemExit("Usage: tools/package.py [--firefox-dev]")
+
     outputs = {browser: package(browser, release_label) for browser in ("firefox", "chrome")}
     for browser in ("firefox", "chrome"):
         print(outputs[browser])

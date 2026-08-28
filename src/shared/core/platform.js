@@ -4,8 +4,6 @@
  * leaking into otherwise shared MosaicSync modules.
  */
 export const PLATFORM_ID = "firefox";
-export const PLATFORM_NAME = "Firefox";
-export const ACCOUNT_PROVIDER_NAME = "Mozilla";
 
 export async function getNativeTopSites({ limit = 100 } = {}) {
   if (!browser.topSites?.get) return [];

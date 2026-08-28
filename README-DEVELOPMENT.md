@@ -1,18 +1,38 @@
 # MosaicSync development
 
-> **Current release: 1.30.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.12.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+## 1.30.12 install/reinstall preservation and Firefox development-identity policy
+
+`runtime.onInstalled` reason values are browser lifecycle notifications, not authorization to destroy MosaicSync data. In particular, `reason === "install"` must never by itself reset `mosaicsync.state`, `mosaicsync.meta`, onboarding, Sync enablement/bootstrap/status, applied revision markers, remote-receipt bookkeeping, pending Sync recovery state, or icon-recovery state. `ensureLocalStorage()` remains the single normal initializer: when authoritative local keys are genuinely absent it materializes the default first-install state; when they survive a reinstall/recovery/false-install transition, they are normalized/migrated and preserved. An incomplete surviving onboarding state may still foreground Welcome, but Welcome must not be reached by first destroying the surviving Sync/recovery state. Explicit destructive reset/clear behavior must remain user-initiated.
+
+Public Firefox builds keep the production Gecko ID `mosaicsync@xipinformatica.cat`. Routine `about:debugging` builds must use the separate development ID `mosaicsync-dev@xipinformatica.cat` and a visible `MosaicSync Dev` name. `python tools/package.py --firefox-dev` (or `npm run firefox:dev`) creates that non-release package from the built Firefox runtime without mutating `dist/firefox`; public packaging continues to emit only the Firefox, Chrome and GitHub-ready release ZIPs. Never submit the development-ID package to AMO, and never use a same-production-ID temporary package as the routine development workflow.
+
+This policy is defense in depth, not a claim that WebExtension code can prevent Firefox from uninstalling an add-on or deleting its storage namespace. Signed AMO upgrade behavior must therefore be validated separately on a disposable profile with real MosaicSync data before broad rollout.
+
+## 1.30.11 live Settings appearance-preview policy
+
+1.30.11 restores the safe live appearance-preview architecture after the stricter 1.30 Settings freeze accidentally removed real-time wallpaper and darkness feedback. While Settings is open, any direct appearance gesture may update only the fixed `#appearancePreviewLayer` / `#appearancePreviewImage` surface and its private `--appearance-preview-dim` value. The real `.page` `backgroundColor`/`backgroundImage`, root `--page-bg`, root `--background-dim`, and authoritative canvas-text choice must remain frozen until Settings closes. The preview layer must remain a simple paint-contained Settings-only surface using a plain `<img>` with `object-fit: cover`; do not replace it with CSS `background-image`, filters, backdrop effects, or any path that mutates the real full-viewport page underneath the open Settings panel.
+
+The preview DOM is the first child of `#page`, but its styling belongs in the deferred secondary stylesheet rather than the first-frame critical CSS because `openSettings()` awaits secondary styles before exposing the panel. Wallpaper/preset changes, ordinary background darkness, active separate Light/Dark darkness, and explicit Light/Dark theme selection must all update this preview immediately. External storage/Sync reconciliation remains paint-free while Settings is open. On close, the existing next-animation-frame `commitDeferredLauncherVisual()` performs one authoritative `applySettings()` commit and `clearAppearancePreviewLayer()` hides/resets the preview. Reopening Settings before that frame must continue to suppress a stale commit.
+
+## 1.30.10 verified device-snapshot decode cache policy
+
+1.30.10 is a zero-new-features background performance/refinement release on top of 1.30.9. Preserve every 1.30.9 trusted-state and 1.30.8 Sync correctness invariant. Complete chunked device/profile snapshot generations may be reused only through a worker-local decoded-generation cache whose maximum entry count is tied to `DEVICE_SNAPSHOT_MAX_RECENT_DEVICES` (currently 8). On every read, the current root/manifest, expected chunk set, per-chunk schema/device/commit/slot/index/total metadata, assembled data length and `dataFingerprint` must still be checked before any cache lookup. Only a generation that previously completed the normal Base64 decode, bounded gzip decompression, JSON parse, Personal/Work reconstruction and record/settings validation may enter the cache. Cache identity must include the generation plus every manifest field that affects the returned decoded result or an existing validation decision. Incomplete, corrupt, malformed, oversized, fingerprint-failing or record/settings-validation-failing generations are never cached as failures. Previous-generation fallback remains independently verifiable and a later-completed current generation must be accepted normally. The cache is disposable performance state only: never persist it, never make conflict resolution depend on it, and treat worker restart/cache loss as a CPU miss only.
+
+Regression coverage must use deterministic decode counts rather than fragile wall-clock thresholds: eight unchanged retained device generations decode on the first read and add zero expensive decodes on an identical second read. Keep explicit tests for incomplete→complete delivery, changed/corrupt chunks after cache population, manifest/generation invalidation, invalid decode/record validation non-caching, previous-generation fallback/current completion and Firefox/Chrome parity. The final `writeLocalStateWithBaseline()` normalization remains the durable persistence trust boundary; do not combine this cache with a normalized-write bypass or Sync conflict redesign.
+
 ## 1.30.9 trusted-state efficiency and cleanup policy
 
 1.30.9 is a zero-new-features refinement release on top of 1.30.8. Preserve the complete 1.30.8 Sync/evidence architecture unchanged. The live New Tab `state` has already crossed `normalizeState()`; controlled internal preference mutations may use `replaceWorkspaceTrustedNormalized()` only when the workspace being inserted is constructed entirely from an already-normalized workspace plus known-valid normalized values/timestamps. The ordinary persistence writer remains the final defensive boundary and still normalizes/projects before durable storage. Public/raw-state callers continue to use defensive wrappers. Background Personal/Work publication may reuse the `newState` already normalized by `pushLocalMutation()` rather than normalizing it again before complete profile snapshot publication. The watchdog may suppress only the duplicate pending-local retry that was already completed earlier in the same serialized alarm task; it must not skip pending recovery on foreground/startup/message checks.
 
-### Mandatory next-release requirement: verified device-snapshot generation cache
+### Requirement fulfilled by 1.30.10: verified device-snapshot generation cache
 
-The **next release after 1.30.9 (normally 1.30.10) must implement** the deferred device/profile snapshot decode cache unless an emergency corrective hotfix makes that technically impossible. This is no longer an optional backlog idea. The cache must be very small, worker-local and disposable, keyed by immutable complete-generation identity (at minimum device/profile identity plus commit/generation/slot and data fingerprint). Cache only generations that are complete and have passed chunk metadata checks, data fingerprint verification, decompression/JSON parsing and record/settings fingerprint validation. Never cache incomplete, malformed, fingerprint-failing or partially delivered generations, and never make correctness depend on the cache surviving an MV3 worker restart. Add explicit regressions proving: successful unchanged generations are reused; a changed generation is decoded again; incomplete delivery is never cached; a later completion of that same generation is accepted; worker-cache loss changes performance only, not results. Keep this requirement visible in future release planning and suggest it before any other optional performance work.
+The mandatory next-release cache recorded for 1.30.9 was implemented in 1.30.10 with stricter current-manifest/chunk/fingerprint revalidation before lookup, an eight-entry bound tied to retained recent devices, previous-generation fallback coverage and deterministic decode-count regressions. Preserve those invariants in future releases; the cache remains disposable performance state and never a correctness source.
 
 ## 1.30.8 Sync same-key concurrency hardening policy
 
@@ -364,7 +384,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.12` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

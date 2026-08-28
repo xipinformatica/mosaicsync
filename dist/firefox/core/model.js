@@ -527,10 +527,6 @@ export function selectActiveSpaceNormalized(normalized, spaceId = DEFAULT_SPACE_
   };
 }
 
-export function selectActiveSpace(state, spaceId = DEFAULT_SPACE_ID) {
-  return selectActiveSpaceNormalized(normalizeState(state), spaceId);
-}
-
 // Trusted internal fast path. Callers must pass a state/workspace that already
 // crossed normalizeState()/normalizeWorkspace(). It deliberately performs no
 // defensive normalization so high-frequency UI mutations do not re-hash the

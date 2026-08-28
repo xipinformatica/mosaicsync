@@ -114,6 +114,12 @@ let foregroundReconcileInFlight = null;
 const ignoredLocalStateSignatures = new Map();
 const expectedSyncChanges = new Map();
 const deliveredCoreEvidence = new Map();
+// Performance-only cache for complete, currently verifiable device/profile
+// generations. Every lookup still revalidates the manifest, chunk set and
+// compressed-data fingerprint before this cache can bypass gzip/JSON decoding.
+// Losing the map on an MV3 worker restart therefore changes CPU cost only.
+const deviceSnapshotDecodeCache = new Map();
+const DEVICE_SNAPSHOT_DECODE_CACHE_MAX = DEVICE_SNAPSHOT_MAX_RECENT_DEVICES;
 const REMOVED = Symbol("removed");
 const DELIVERED_CORE_EVIDENCE_TTL_MS = Math.max(EXPECTATION_TTL_MS, 10 * 60 * 1000);
 const ASSET_GC_MIN_OBSERVATION_GAP_MS = 12 * 60 * 60 * 1000;
@@ -538,44 +544,17 @@ browser.runtime.onInstalled.addListener(details => {
     const { meta } = await ensureLocalStorage();
     let nextMeta = meta;
 
-    // A genuine fresh install always starts with an incomplete onboarding
-    // marker. This makes the first-run flow deterministic even if a profile
-    // had stale development state from an earlier temporary build. Updates do
-    // not reset completed onboarding.
-    if (details.reason === "install") {
-      try { await browser.storage.local.remove([LOCAL_ICON_RECOVERY_QUEUE_KEY, LOCAL_ICON_RECOVERY_STATUS_KEY]); } catch {}
-      try { await clearAllPendingSyncRecoveryState(); } catch {}
-      nextMeta = await writeLocalMeta({
-        ...meta,
-        // Treat a genuine install as a new device bootstrap even if a
-        // development profile unexpectedly retained extension-local metadata.
-        // The layout itself is preserved until the user chooses a source, but
-        // Sync permission/source state must be chosen again explicitly.
-        syncEnabled: false,
-        syncInitialized: false,
-        syncBootstrapMode: "none",
-        syncStatus: "off",
-        lastSyncAt: 0,
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncSkippedAssets: 0,
-        syncFastSnapshotFallback: false,
-        syncProfileProtection: "unknown",
-        syncProfileProtectionReason: "",
-        onboardingCompleted: false,
-        onboardingVersion: "",
-        syncWaitStartedAt: 0,
-        lastAppliedSyncRevision: "",
-      lastAppliedWorkSyncRevision: "",
-        lastAppliedDeviceSnapshotRevision: "",
-      lastAppliedProfileSnapshotRevision: "",
-      lastProfileSnapshotPublishedAt: 0,
-        lastRemoteReceiptAt: 0,
-        lastRemoteReceiptRevision: "",
-        lastRemoteReceiptUpdatedAt: 0,
-        lastRemoteReceiptOriginDeviceId: ""
-      });
-    }
+    // `runtime.onInstalled({ reason: "install" })` is lifecycle metadata, not
+    // proof that MosaicSync has never existed in this browser profile. Firefox
+    // can report install-like transitions during recovery/reinstallation, and
+    // extension-local storage may legitimately survive such a transition.
+    //
+    // Therefore this event must never reset durable MosaicSync state, Sync
+    // bookkeeping or onboarding by itself. `ensureLocalStorage()` already
+    // creates the normal defaults when the authoritative keys are truly absent;
+    // when they exist, preserving them is the only fail-safe behavior. Any
+    // destructive reset belongs behind an explicit user action, never an
+    // ambiguous browser lifecycle reason.
 
     if (!nextMeta.onboardingCompleted) {
       try {
@@ -2962,6 +2941,7 @@ async function setSyncEnabled(enabled) {
   const previous = await readLocalMeta();
 
   if (!enabled) {
+    clearDeviceSnapshotDecodeCache();
     await clearAllPendingSyncRecoveryState();
     const next = await writeLocalMeta({
       ...previous,
@@ -3111,6 +3091,71 @@ function deviceSnapshotMetadata(records, settings, deviceId, commitId, published
   return metadata;
 }
 
+function deviceSnapshotDecodeCacheKey(value) {
+  if (!value || value.kind !== "device-snapshot-manifest") return "";
+  // Cache only modern complete Personal+Work generations whose compressed and
+  // reconstructed record sets are all fingerprint-verifiable. Older compatible
+  // manifests remain readable through the normal decoder but are intentionally
+  // never trusted as reusable performance state.
+  if (value.profileComplete !== true || Number(value.profileSnapshotVersion) !== PROFILE_SNAPSHOT_SCHEMA_VERSION) return "";
+  if (typeof value.dataFingerprint !== "string" || !value.dataFingerprint) return "";
+  if (typeof value.recordFingerprint !== "string" || !value.recordFingerprint) return "";
+  if (typeof value.workRecordFingerprint !== "string" || !value.workRecordFingerprint) return "";
+  // Include every manifest field that affects either the returned decoded
+  // snapshot or an existing validation decision. If any such metadata changes,
+  // a fresh decode/validation is required even when the compressed bytes match.
+  return JSON.stringify([
+    Number(value.schemaVersion) || 0,
+    value.kind,
+    Number(value.chunkSchemaVersion) || 0,
+    typeof value.deviceId === "string" ? value.deviceId : "",
+    typeof value.commitId === "string" ? value.commitId : "",
+    Number(value.publishedAt) || 0,
+    Number(value.updatedAt) || 0,
+    Number(value.liveRecordCount) || 0,
+    typeof value.recordFingerprint === "string" ? value.recordFingerprint : "",
+    Number(value.settingsModifiedAt) || 0,
+    typeof value.encoding === "string" ? value.encoding : "",
+    Number(value.compressedBytes) || 0,
+    Number(value.jsonChars) || 0,
+    Number(value.profileSnapshotVersion) || 0,
+    value.profileComplete === true,
+    Number(value.workLiveRecordCount) || 0,
+    typeof value.workRecordFingerprint === "string" ? value.workRecordFingerprint : "",
+    Number(value.workSettingsModifiedAt) || 0,
+    typeof value.slot === "string" ? value.slot : "",
+    Number(value.parts) || 0,
+    Number(value.dataChars) || 0,
+    typeof value.dataFingerprint === "string" ? value.dataFingerprint : ""
+  ]);
+}
+
+function readDeviceSnapshotDecodeCache(value) {
+  const key = deviceSnapshotDecodeCacheKey(value);
+  if (!key) return null;
+  const cached = deviceSnapshotDecodeCache.get(key);
+  if (!cached) return null;
+  // Refresh insertion order to make the bounded Map an LRU.
+  deviceSnapshotDecodeCache.delete(key);
+  deviceSnapshotDecodeCache.set(key, cached);
+  return cached;
+}
+
+function rememberDeviceSnapshotDecodeCache(value, decoded) {
+  const key = deviceSnapshotDecodeCacheKey(value);
+  if (!key || !decoded || decoded.kind !== "device-snapshot") return decoded;
+  if (deviceSnapshotDecodeCache.has(key)) deviceSnapshotDecodeCache.delete(key);
+  deviceSnapshotDecodeCache.set(key, decoded);
+  while (deviceSnapshotDecodeCache.size > DEVICE_SNAPSHOT_DECODE_CACHE_MAX) {
+    deviceSnapshotDecodeCache.delete(deviceSnapshotDecodeCache.keys().next().value);
+  }
+  return decoded;
+}
+
+function clearDeviceSnapshotDecodeCache() {
+  deviceSnapshotDecodeCache.clear();
+}
+
 async function decodeDeviceSnapshotData(value, data) {
   if (!value || value.schemaVersion !== DEVICE_SNAPSHOT_SCHEMA_VERSION) return null;
   if (value.encoding !== "gzip-base64" || typeof data !== "string" || !data) return null;
@@ -3198,7 +3243,15 @@ async function decodeDeviceSnapshotCurrentPayload(value, all = null) {
   const data = chunks.join("");
   if (Number(value.dataChars) !== data.length) return null;
   if (value.dataFingerprint && value.dataFingerprint !== fnv1a(data)) return null;
-  return decodeDeviceSnapshotData(value, data);
+
+  // Do not consult the cache until the generation currently visible in
+  // storage.sync has independently passed all cheap completeness/chunk/content
+  // checks. A torn or changed generation can therefore never be hidden by an
+  // older cached decode. Only the expensive Base64/gzip/JSON/Map phase is reused.
+  const cached = readDeviceSnapshotDecodeCache(value);
+  if (cached) return cached;
+  const decoded = await decodeDeviceSnapshotData(value, data);
+  return decoded ? rememberDeviceSnapshotDecodeCache(value, decoded) : null;
 }
 
 async function decodeDeviceSnapshotPayload(value, all = null) {
@@ -3712,6 +3765,7 @@ async function reconcileIfNewCommit(reason = "message", providedMeta = null, pen
   if (checkReason === "foreground") await ensureSyncWatchAlarm(meta);
   if (!meta.syncEnabled) {
     clearDeliveredCoreEvidence();
+    clearDeviceSnapshotDecodeCache();
     await noteSyncDiagnostic({
       ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
       ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -4559,9 +4613,11 @@ function rebaseCoreWritesAgainstDeliveredSnapshot(writes, snapshot, spaceId = PE
   return rebased;
 }
 
-async function pushPersonalMutation(oldRaw, newRaw, meta) {
-  const oldState = workspaceStateNormalized(oldRaw, PERSONAL_SPACE_ID);
-  const newState = workspaceStateNormalized(newRaw, PERSONAL_SPACE_ID);
+async function pushPersonalMutation(oldStateInput, newStateInput, meta) {
+  // Inputs already crossed normalizeState() in pushLocalMutation(). Keep the
+  // names explicit so future callers do not mistake this for a raw-state API.
+  const oldState = workspaceStateNormalized(oldStateInput, PERSONAL_SPACE_ID);
+  const newState = workspaceStateNormalized(newStateInput, PERSONAL_SPACE_ID);
   const oldRecords = flattenStateNormalized(oldState, meta.deviceId);
   const newRecords = flattenStateNormalized(newState, meta.deviceId);
   const newSettings = makeSettingsRecordNormalized(newState, meta.deviceId);
@@ -4619,7 +4675,7 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
     await writeSyncItems({ [SYNC_DATASET_KEY]: publishedDataset });
     // Publish the complete Personal+Work device generation only after the
     // compatibility commit marker exists, so deletions/tombstones are retained.
-    fastPublish = await publishProfileDeviceSnapshot(newRaw, meta);
+    fastPublish = await publishProfileDeviceSnapshot(newStateInput, meta);
   }
 
   // Core layout data is always written before binary artwork. Images are
@@ -4658,9 +4714,10 @@ function workspaceCoreSignature(fullState, spaceId, deviceId = "") {
   });
 }
 
-async function pushWorkMutation(oldRaw, newRaw, meta) {
-  const oldState = workspaceStateNormalized(oldRaw, WORK_SPACE_ID);
-  const newState = workspaceStateNormalized(newRaw, WORK_SPACE_ID);
+async function pushWorkMutation(oldStateInput, newStateInput, meta) {
+  // Inputs already crossed normalizeState() in pushLocalMutation().
+  const oldState = workspaceStateNormalized(oldStateInput, WORK_SPACE_ID);
+  const newState = workspaceStateNormalized(newStateInput, WORK_SPACE_ID);
   const namespace = syncNamespace(WORK_SPACE_ID);
   const oldRecords = flattenStateNormalized(oldState, meta.deviceId);
   const newRecords = flattenStateNormalized(newState, meta.deviceId);
@@ -4705,7 +4762,7 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
     await writeSyncItems({ [namespace.datasetKey]: publishedDataset });
   }
   const profilePublish = hasOwnEnumerable(rebasedWrites)
-    ? await publishProfileDeviceSnapshot(newRaw, meta)
+    ? await publishProfileDeviceSnapshot(newStateInput, meta)
     : { written: true, setRevision: "", publishedAt: 0 };
 
   snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });

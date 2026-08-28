@@ -58,8 +58,21 @@ const sync = makeStorageArea();
 const session = makeStorageArea();
 const alarms = new Map();
 let websiteAccess = false;
+const createdTabs = [];
 let fetchHandler = async () => { throw new Error('unexpected fetch'); };
 const fetchLog = [];
+
+let decompressionStreamCount = 0;
+const nativeDecompressionStream = globalThis.DecompressionStream;
+if (scenario.startsWith("sync-13010-") && typeof nativeDecompressionStream === "function") {
+  // Count the production decoder's expensive gzip phase without changing its
+  // behavior. CompressionStream used by the test fixture is intentionally left
+  // untouched.
+  globalThis.DecompressionStream = function MosaicSyncCountedDecompressionStream(format) {
+    decompressionStreamCount += 1;
+    return new nativeDecompressionStream(format);
+  };
+}
 
 globalThis.fetch = async (url, options = {}) => {
   fetchLog.push({ url: String(url), options: clone(options) });
@@ -103,7 +116,7 @@ const api = {
   tabs: {
     onUpdated: events.onTabUpdated,
     onRemoved: events.onTabRemoved,
-    async create() { return { id: 1 }; },
+    async create(options = {}) { createdTabs.push(clone(options)); return { id: createdTabs.length }; },
     async query() { return []; }
   },
   topSites: { async get() { return []; } },
@@ -227,6 +240,115 @@ function findCompactShortcut(rawState, id) {
     }
   }
   return null;
+}
+
+function fnv1aForFixture(value) {
+  let hash = 0x811c9dc5;
+  const text = String(value);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+function liveRecordCountForFixture(records) {
+  let count = 0;
+  for (const record of records?.values?.() || []) {
+    if (record?.kind === "shortcut" || record?.kind === "folder") count += 1;
+  }
+  return count;
+}
+
+function recordFingerprintForFixture(records) {
+  const live = [];
+  for (const record of records?.values?.() || []) {
+    if (record?.kind !== "shortcut" && record?.kind !== "folder") continue;
+    const { deviceId: _deviceId, ...semantic } = record;
+    live.push(semantic);
+  }
+  live.sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? "")));
+  return fnv1aForFixture(model.stableStringify(live));
+}
+
+async function gzipBase64ForFixture(value) {
+  const json = JSON.stringify(value);
+  const input = new TextEncoder().encode(json);
+  const stream = new Blob([input]).stream().pipeThrough(new CompressionStream("gzip"));
+  const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
+  return {
+    data: Buffer.from(compressed).toString("base64"),
+    compressedBytes: compressed.byteLength,
+    jsonChars: json.length
+  };
+}
+
+async function completeProfileSnapshotFixture(baseState, {
+  deviceId = "remote-cache-device",
+  commitId = "cache-generation",
+  slot = "a",
+  publishedAt = 500,
+  chunkChars = 1400,
+  previousProfile = null
+} = {}) {
+  const personal = model.workspaceStateNormalized(baseState, "personal");
+  const work = model.workspaceStateNormalized(baseState, "work");
+  const personalRecords = model.flattenStateNormalized(personal, deviceId);
+  const workRecords = model.flattenStateNormalized(work, deviceId);
+  const personalSettings = model.makeSettingsRecordNormalized(personal, deviceId);
+  const workSettings = model.makeSettingsRecordNormalized(work, deviceId);
+  const payload = {
+    version: constants.DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    records: [...personalRecords.values()],
+    settings: personalSettings,
+    workRecords: [...workRecords.values()],
+    workSettings
+  };
+  const encoded = await gzipBase64ForFixture(payload);
+  const parts = [];
+  for (let offset = 0; offset < encoded.data.length; offset += chunkChars) parts.push(encoded.data.slice(offset, offset + chunkChars));
+  const rootKey = `${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent(deviceId)}`;
+  const updatedAt = Math.max(Number(personal.updatedAt) || 0, Number(work.updatedAt) || 0);
+  const root = {
+    schemaVersion: constants.DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    kind: "device-snapshot-manifest",
+    chunkSchemaVersion: constants.DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+    deviceId, commitId, publishedAt, updatedAt,
+    liveRecordCount: liveRecordCountForFixture(personalRecords),
+    recordFingerprint: recordFingerprintForFixture(personalRecords),
+    settingsModifiedAt: Number(personalSettings.modifiedAt) || 0,
+    encoding: "gzip-base64",
+    compressedBytes: encoded.compressedBytes,
+    jsonChars: encoded.jsonChars,
+    profileSnapshotVersion: constants.PROFILE_SNAPSHOT_SCHEMA_VERSION,
+    profileComplete: true,
+    workLiveRecordCount: liveRecordCountForFixture(workRecords),
+    workRecordFingerprint: recordFingerprintForFixture(workRecords),
+    workSettingsModifiedAt: Number(workSettings.modifiedAt) || 0,
+    slot, parts: parts.length, dataChars: encoded.data.length,
+    dataFingerprint: fnv1aForFixture(encoded.data),
+    ...(previousProfile ? { previousProfile: clone(previousProfile) } : {})
+  };
+  const entries = { [rootKey]: root };
+  parts.forEach((data, index) => {
+    entries[`${rootKey}.chunk.${slot}.${index}`] = {
+      schemaVersion: constants.DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+      kind: "device-snapshot-chunk",
+      deviceId, commitId, slot, index, total: parts.length, data
+    };
+  });
+  return { rootKey, root, entries, parts, personalRecords, workRecords, personalSettings, workSettings };
+}
+
+function previousDescriptorForFixture(root) {
+  const fields = [
+    "commitId", "publishedAt", "updatedAt", "liveRecordCount", "recordFingerprint", "settingsModifiedAt",
+    "encoding", "compressedBytes", "jsonChars", "slot", "parts", "dataChars", "dataFingerprint",
+    "workLiveRecordCount", "workRecordFingerprint", "workSettingsModifiedAt"
+  ];
+  const out = {};
+  for (const field of fields) out[field] = root[field];
+  return out;
 }
 
 if (scenario === 'favicon-network') {
@@ -1034,6 +1156,299 @@ else if (scenario === 'sync-1309-personal-settings-mid-publication-evidence') {
   assert.equal(Number(finalSettings?.modifiedAt),500);
   assert.equal(Number(dataset?.settingsModifiedAt),500,'commit marker must reflect the repaired Settings winner');
   console.log(JSON.stringify({ok:true,injected,columns:finalSettings?.settings?.columns,settingsModifiedAt:dataset?.settingsModifiedAt}));
+}
+
+else if (scenario === 'sync-13010-device-cache-reuse') {
+  const items=[];
+  for(let i=0;i<12;i++) items.push(shortcut(`p${i}`,`https://p${i}.cache.test/`,200+i));
+  const workItems=[];
+  for(let i=0;i<8;i++) workItems.push(shortcut(`w${i}`,`https://w${i}.cache.test/`,300+i));
+  const base=stateWith({personal:items,work:workItems});
+  const allEntries={};
+  for(let index=0;index<8;index++){
+    const fixture=await completeProfileSnapshotFixture(base,{deviceId:`cache-device-${index}`,commitId:`cache-g${index}`,publishedAt:1000+index});
+    Object.assign(allEntries,fixture.entries);
+  }
+  await sync.set(allEntries);
+  decompressionStreamCount=0;
+  const first=await send({type:'mosaicsync:get-sync-status'});
+  const afterFirst=decompressionStreamCount;
+  const second=await send({type:'mosaicsync:get-sync-status'});
+  const afterSecond=decompressionStreamCount;
+  assert.equal(first?.remoteState,'complete');
+  assert.equal(second?.remoteState,'complete');
+  assert.equal(first?.remoteItems,second?.remoteItems,'cached read must preserve merged Personal+Work semantics');
+  assert.equal(afterFirst,8,'first read must decode all eight retained device generations');
+  assert.equal(afterSecond,8,'identical second read must reuse all eight verified generations');
+  console.log(JSON.stringify({ok:true,afterFirst,afterSecond,remoteCommitId:second?.remoteCommitId,remoteItems:second?.remoteItems}));
+}
+
+else if (scenario === 'sync-13010-cache-incomplete-then-complete') {
+  const base=stateWith({personal:[shortcut('p','https://p.cache.test/',200)],work:[shortcut('w','https://w.cache.test/',200)]});
+  const fixture=await completeProfileSnapshotFixture(base,{deviceId:'incomplete-device',commitId:'incomplete-g',publishedAt:2000,chunkChars:24});
+  assert.ok(fixture.parts.length>1,'fixture must be multi-chunk');
+  const missingKey=`${fixture.rootKey}.chunk.${fixture.root.slot}.${fixture.parts.length-1}`;
+  const missingValue=fixture.entries[missingKey];
+  const partial={...fixture.entries}; delete partial[missingKey];
+  await sync.set(partial);
+  decompressionStreamCount=0;
+  const incomplete=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,0,'incomplete generation must fail before gzip and cannot populate cache');
+  assert.equal(incomplete?.remoteState,'partial');
+  await sync.set({[missingKey]:missingValue});
+  const complete=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'later completion of the same generation must perform its first full decode');
+  assert.equal(complete?.remoteState,'complete');
+  await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'completed generation must then be reusable');
+  console.log(JSON.stringify({ok:true,decompressions:decompressionStreamCount,remoteState:complete?.remoteState}));
+}
+
+else if (scenario === 'sync-13010-cache-revalidates-current-bytes') {
+  const base=stateWith({personal:[shortcut('p','https://p.cache.test/',200)],work:[shortcut('w','https://w.cache.test/',200)]});
+  const fixture=await completeProfileSnapshotFixture(base,{deviceId:'corrupt-device',commitId:'corrupt-g',publishedAt:3000,chunkChars:64});
+  await sync.set(fixture.entries);
+  decompressionStreamCount=0;
+  const first=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(first?.remoteState,'complete');
+  assert.equal(decompressionStreamCount,1);
+  const chunkKey=`${fixture.rootKey}.chunk.${fixture.root.slot}.0`;
+  const chunk=clone(fixture.entries[chunkKey]);
+  chunk.data=(chunk.data[0]==='A'?'B':'A')+chunk.data.slice(1);
+  await sync.set({[chunkKey]:chunk});
+  const corrupt=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'changed compressed bytes must be rejected before a cache lookup can mask corruption');
+  assert.equal(corrupt?.remoteState,'partial');
+  await sync.set({[chunkKey]:fixture.entries[chunkKey]});
+  const restored=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'restoring identical verified bytes may safely reuse the prior complete decode');
+  assert.equal(restored?.remoteState,'complete');
+  console.log(JSON.stringify({ok:true,decompressions:decompressionStreamCount,corruptState:corrupt?.remoteState,restoredState:restored?.remoteState}));
+}
+
+else if (scenario === 'sync-13010-cache-previous-generation-fallback') {
+  const oldState=stateWith({personal:[shortcut('old','https://old.cache.test/',200)],work:[shortcut('work-old','https://work-old.cache.test/',200)]});
+  const currentState=stateWith({personal:[shortcut('new','https://new.cache.test/',500)],work:[shortcut('work-new','https://work-new.cache.test/',500)]});
+  const oldFixture=await completeProfileSnapshotFixture(oldState,{deviceId:'fallback-device',commitId:'old-generation',slot:'a',publishedAt:4000,chunkChars:48});
+  const currentFixture=await completeProfileSnapshotFixture(currentState,{deviceId:'fallback-device',commitId:'new-generation',slot:'b',publishedAt:5000,chunkChars:48,previousProfile:previousDescriptorForFixture(oldFixture.root)});
+  const all={...oldFixture.entries,...currentFixture.entries};
+  const missingCurrentKey=`${currentFixture.rootKey}.chunk.${currentFixture.root.slot}.${currentFixture.parts.length-1}`;
+  const missingCurrentValue=all[missingCurrentKey];
+  delete all[missingCurrentKey];
+  // Both fixtures share one root key: restore the current root after merging the
+  // old chunks so previousProfile is authoritative while current is torn.
+  all[currentFixture.rootKey]=currentFixture.root;
+  await sync.set(all);
+  decompressionStreamCount=0;
+  const fallback=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'torn current generation must decode the previous complete slot once');
+  assert.equal(fallback?.remoteCommitId,'old-generation');
+  await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,1,'unchanged previous fallback should be cached');
+  await sync.set({[missingCurrentKey]:missingCurrentValue});
+  const current=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,2,'newly completed current generation must decode once rather than being blocked by cached previous data');
+  assert.equal(current?.remoteCommitId,'new-generation');
+  await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,2,'completed current generation should then reuse its cache entry');
+  console.log(JSON.stringify({ok:true,decompressions:decompressionStreamCount,fallbackCommit:fallback?.remoteCommitId,currentCommit:current?.remoteCommitId}));
+}
+
+else if (scenario === 'sync-13010-cache-failures-never-cache') {
+  const base=stateWith({personal:[shortcut('p','https://p.cache.test/',200)],work:[shortcut('w','https://w.cache.test/',200)]});
+  const invalidFingerprint=await completeProfileSnapshotFixture(base,{deviceId:'invalid-record-device',commitId:'invalid-record-g',publishedAt:5500});
+  invalidFingerprint.root.recordFingerprint='00000000';
+  invalidFingerprint.entries[invalidFingerprint.rootKey]=invalidFingerprint.root;
+  await sync.set(invalidFingerprint.entries);
+  decompressionStreamCount=0;
+  const firstInvalid=await send({type:'mosaicsync:get-sync-status'});
+  const secondInvalid=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(firstInvalid?.remoteState,'partial');
+  assert.equal(secondInvalid?.remoteState,'partial');
+  assert.equal(decompressionStreamCount,2,'decoded-but-invalid record fingerprints must never populate the cache');
+
+  await sync.clear();
+  const malformed=await completeProfileSnapshotFixture(base,{deviceId:'invalid-gzip-device',commitId:'invalid-gzip-g',publishedAt:5600});
+  const raw=Buffer.from('not-a-gzip-stream').toString('base64');
+  const root={...malformed.root,compressedBytes:Buffer.byteLength('not-a-gzip-stream'),dataChars:raw.length,dataFingerprint:fnv1aForFixture(raw),parts:1};
+  const chunkKey=`${malformed.rootKey}.chunk.${root.slot}.0`;
+  await sync.set({
+    [malformed.rootKey]:root,
+    [chunkKey]:{schemaVersion:constants.DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,kind:'device-snapshot-chunk',deviceId:root.deviceId,commitId:root.commitId,slot:root.slot,index:0,total:1,data:raw}
+  });
+  decompressionStreamCount=0;
+  const firstGzip=await send({type:'mosaicsync:get-sync-status'});
+  const secondGzip=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(firstGzip?.remoteState,'partial');
+  assert.equal(secondGzip?.remoteState,'partial');
+  assert.equal(decompressionStreamCount,2,'malformed gzip generations must be retried rather than cached as a failure');
+
+  await sync.clear();
+  const legacyNoFingerprint=await completeProfileSnapshotFixture(base,{deviceId:'no-fingerprint-device',commitId:'no-fingerprint-g',publishedAt:5700});
+  legacyNoFingerprint.root.dataFingerprint='';
+  legacyNoFingerprint.entries[legacyNoFingerprint.rootKey]=legacyNoFingerprint.root;
+  await sync.set(legacyNoFingerprint.entries);
+  decompressionStreamCount=0;
+  const firstLegacy=await send({type:'mosaicsync:get-sync-status'});
+  const secondLegacy=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(firstLegacy?.remoteState,'complete','legacy compatible manifest without a data fingerprint remains readable');
+  assert.equal(secondLegacy?.remoteState,'complete');
+  assert.equal(decompressionStreamCount,2,'a generation without a verified compressed-data fingerprint must never enter the cache');
+  console.log(JSON.stringify({ok:true,invalidFingerprintDecodes:2,invalidGzipDecodes:2,unfingerprintedDecodes:decompressionStreamCount}));
+}
+
+else if (scenario === 'sync-13010-cache-validation-metadata-miss') {
+  const base=stateWith({personal:[shortcut('p','https://p.cache.test/',200)],work:[shortcut('w','https://w.cache.test/',200)]});
+  const fixture=await completeProfileSnapshotFixture(base,{deviceId:'metadata-device',commitId:'metadata-g',publishedAt:6000});
+  await sync.set(fixture.entries);
+  decompressionStreamCount=0;
+  const first=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(first?.remoteCommitId,'metadata-g');
+  assert.equal(decompressionStreamCount,1);
+  const changedRoot={...fixture.root,publishedAt:6001};
+  await sync.set({[fixture.rootKey]:changedRoot});
+  const second=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,2,'manifest metadata that changes decoded semantics must invalidate the cache even when compressed bytes match');
+  assert.equal(second?.remoteCommitId,'metadata-g');
+
+  const changedCommit='metadata-g2';
+  const commitEntries={[fixture.rootKey]:{...changedRoot,commitId:changedCommit}};
+  for(let index=0;index<fixture.parts.length;index++) {
+    const key=`${fixture.rootKey}.chunk.${fixture.root.slot}.${index}`;
+    commitEntries[key]={...fixture.entries[key],commitId:changedCommit};
+  }
+  await sync.set(commitEntries);
+  const third=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,3,'a new generation identity must decode again even when payload bytes are unchanged');
+  assert.equal(third?.remoteCommitId,changedCommit);
+  await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(decompressionStreamCount,3);
+  console.log(JSON.stringify({ok:true,decompressions:decompressionStreamCount,commitId:third?.remoteCommitId}));
+}
+
+else if (scenario === 'lifecycle-13012-false-install-preserves-complete') {
+  const existingState=stateWith({
+    personal:[shortcut('personal-kept','https://personal-kept.test/',400)],
+    work:[shortcut('work-kept','https://work-kept.test/',450)],
+    activeSpaceId:'work'
+  });
+  const existingMeta={
+    ...constants.DEFAULT_META,
+    deviceId:'device-preserved',
+    syncEnabled:true,
+    syncInitialized:true,
+    syncBootstrapMode:'remote',
+    syncStatus:'ready',
+    lastSyncAt:123456,
+    syncProfileProtection:'protected',
+    syncProfileProtectionReason:'',
+    onboardingCompleted:true,
+    onboardingVersion:'1.30.10',
+    syncWaitStartedAt:999,
+    lastAppliedSyncRevision:'personal-rev',
+    lastAppliedWorkSyncRevision:'work-rev',
+    lastAppliedDeviceSnapshotRevision:'device-rev',
+    lastAppliedProfileSnapshotRevision:'profile-rev',
+    lastProfileSnapshotPublishedAt:777,
+    lastRemoteReceiptAt:888,
+    lastRemoteReceiptRevision:'receipt-rev',
+    lastRemoteReceiptUpdatedAt:666,
+    lastRemoteReceiptOriginDeviceId:'remote-device'
+  };
+  await local.set({
+    [constants.LOCAL_STATE_KEY]:existingState,
+    [constants.LOCAL_ACTIVE_SPACE_KEY]:'work',
+    [constants.LOCAL_META_KEY]:existingMeta
+  });
+  const beforeState=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const beforeMeta=clone((await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY]);
+  assert.equal(events.onInstalled.listeners.length,1);
+  events.onInstalled.listeners[0]({reason:'install'});
+  await send({type:'mosaicsync:get-sync-status'});
+  const afterState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const afterMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.deepEqual(model.normalizeState(afterState),model.normalizeState(beforeState),'an install-like lifecycle event must not replace the semantic existing layout');
+  for (const key of [
+    'deviceId','syncEnabled','syncInitialized','syncBootstrapMode','syncStatus','lastSyncAt',
+    'syncProfileProtection','syncProfileProtectionReason','onboardingCompleted','onboardingVersion',
+    'syncWaitStartedAt','lastAppliedSyncRevision','lastAppliedWorkSyncRevision',
+    'lastAppliedDeviceSnapshotRevision','lastAppliedProfileSnapshotRevision','lastProfileSnapshotPublishedAt',
+    'lastRemoteReceiptAt','lastRemoteReceiptRevision','lastRemoteReceiptUpdatedAt','lastRemoteReceiptOriginDeviceId'
+  ]) assert.deepEqual(afterMeta[key],beforeMeta[key],`false install must preserve meta.${key}`);
+  assert.equal(createdTabs.length,0,'completed onboarding must not be reopened by a false install event');
+  console.log(JSON.stringify({ok:true,preserved:true,onboarding:afterMeta.onboardingCompleted,syncStatus:afterMeta.syncStatus}));
+}
+
+else if (scenario === 'lifecycle-13012-false-install-preserves-waiting') {
+  const existingState=stateWith({personal:[shortcut('local-draft','https://draft.test/',300)]});
+  await seedLocalState(existingState,{
+    syncEnabled:true,
+    syncInitialized:false,
+    syncBootstrapMode:'remote',
+    syncStatus:'waiting',
+    onboardingCompleted:false,
+    onboardingVersion:'',
+    syncWaitStartedAt:424242,
+    lastRemoteReceiptAt:313131,
+    lastRemoteReceiptRevision:'partial-receipt'
+  });
+  const beforeMeta=clone((await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY]);
+  events.onInstalled.listeners[0]({reason:'install'});
+  await send({type:'mosaicsync:get-sync-status'});
+  const afterMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const afterState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.ok(findCompactShortcut(afterState,'local-draft'),'waiting local draft must survive an install-like recovery event');
+  for (const key of ['syncEnabled','syncInitialized','syncBootstrapMode','syncStatus','syncWaitStartedAt','lastRemoteReceiptAt','lastRemoteReceiptRevision']) {
+    assert.deepEqual(afterMeta[key],beforeMeta[key],`false install must preserve waiting meta.${key}`);
+  }
+  assert.equal(createdTabs.length,1,'incomplete onboarding may still foreground Welcome without resetting recovery state');
+  console.log(JSON.stringify({ok:true,preservedWaiting:true,syncStatus:afterMeta.syncStatus,welcomeTabs:createdTabs.length}));
+}
+
+else if (scenario === 'lifecycle-13012-genuine-fresh-install-defaults') {
+  assert.equal((await local.get(null))[constants.LOCAL_STATE_KEY],undefined);
+  assert.equal((await local.get(null))[constants.LOCAL_META_KEY],undefined);
+  events.onInstalled.listeners[0]({reason:'install'});
+  await send({type:'mosaicsync:get-sync-status'});
+  const state=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.ok(state && typeof state==='object','fresh install must materialize default local state');
+  assert.equal(meta?.syncEnabled,false);
+  assert.equal(meta?.syncInitialized,false);
+  assert.equal(meta?.syncBootstrapMode,'none');
+  assert.equal(meta?.syncStatus,'off');
+  assert.equal(meta?.onboardingCompleted,false);
+  assert.ok(typeof meta?.deviceId==='string' && meta.deviceId.length>0,'fresh install must receive a device id');
+  assert.equal(createdTabs.length,1,'genuine fresh install must foreground Welcome');
+  console.log(JSON.stringify({ok:true,fresh:true,syncStatus:meta.syncStatus,welcomeTabs:createdTabs.length}));
+}
+
+else if (scenario === 'lifecycle-13012-update-and-downgrade-preserve') {
+  const existingState=stateWith({personal:[shortcut('kept','https://kept.test/',500)]});
+  await seedLocalState(existingState,{
+    syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',
+    onboardingCompleted:true,onboardingVersion:'1.30.10',lastAppliedSyncRevision:'stable-rev'
+  });
+  const baselineState=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const baselineMeta=clone((await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY]);
+  events.onInstalled.listeners[0]({reason:'update',previousVersion:'1.30.10'});
+  await send({type:'mosaicsync:get-sync-status'});
+  let currentState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  let currentMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.deepEqual(model.normalizeState(currentState),model.normalizeState(baselineState),'normal update must preserve semantic local layout');
+  for(const key of ['deviceId','syncEnabled','syncInitialized','syncBootstrapMode','syncStatus','onboardingCompleted','onboardingVersion','lastAppliedSyncRevision']) {
+    assert.deepEqual(currentMeta[key],baselineMeta[key],`normal update must preserve meta.${key}`);
+  }
+  events.onInstalled.listeners[0]({reason:'update',previousVersion:'1.30.99'});
+  await send({type:'mosaicsync:get-sync-status'});
+  currentState=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  currentMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.deepEqual(model.normalizeState(currentState),model.normalizeState(baselineState),'downgrade/re-upgrade style update event must preserve semantic local layout');
+  for(const key of ['deviceId','syncEnabled','syncInitialized','syncBootstrapMode','syncStatus','onboardingCompleted','onboardingVersion','lastAppliedSyncRevision']) {
+    assert.deepEqual(currentMeta[key],baselineMeta[key],`downgrade/update must preserve meta.${key}`);
+  }
+  assert.equal(createdTabs.length,0,'completed onboarding must stay completed across update/downgrade events');
+  console.log(JSON.stringify({ok:true,updatePreserved:true,downgradePreserved:true}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {
