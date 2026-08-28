@@ -7,7 +7,7 @@ if (!['firefox','chrome'].includes(browserName) || !scenario) throw new Error('u
 const root = resolve(import.meta.dirname, '../..');
 
 let fakeNow = 1_787_920_000_000;
-if (scenario.startsWith('sync-loss-13013-')) Date.now = () => fakeNow;
+if (/^sync-loss-1301[34]-/.test(scenario)) Date.now = () => fakeNow;
 
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
@@ -59,7 +59,7 @@ const events = {
 const local = makeStorageArea();
 const sync = makeStorageArea();
 const session = makeStorageArea();
-if (scenario.startsWith('sync-loss-13013-')) {
+if (/^sync-loss-1301[34]-/.test(scenario)) {
   sync.getBytesInUse = async function(keys = null) {
     const obj = await this.get(keys);
     return Object.entries(obj).reduce((sum,[key,value]) => sum + Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value)), 0);
@@ -361,7 +361,44 @@ function previousDescriptorForFixture(root) {
   return out;
 }
 
-if (scenario === 'favicon-network') {
+if (scenario === 'favicon-preference-rehydrate-13014') {
+  websiteAccess = true;
+  const preferredBytes = tinyPng(64,64,4);
+  const fallbackBytes = tinyPng(32,32,1);
+  const preferredDataUrl = `data:image/png;base64,${Buffer.from(preferredBytes).toString('base64')}`;
+  const preference = model.faviconPreferenceForCandidate({
+    image: preferredDataUrl,
+    sourceUrl: 'https://pref.test/chosen.png',
+    source: 'link'
+  });
+  const chosen = shortcut('preferred','https://pref.test/');
+  chosen.imageSyncKind = 'device';
+  chosen.imageSourceKind = 'upload';
+  chosen.imageIsFallback = true;
+  chosen.faviconPreference = preference;
+  const s = stateWith({ personal: [chosen], autoPersonal: false });
+  await seedLocalState(s);
+  const html = new TextEncoder().encode('<html><head><link rel="icon" type="image/png" sizes="64x64" href="/chosen.png"></head><body></body></html>');
+  fetchHandler = async url => {
+    if (url === 'https://pref.test/') return responseBytes(html,'text/html',url);
+    if (url === 'https://pref.test/favicon.ico') return responseBytes(fallbackBytes,'image/png',url);
+    if (url === 'https://pref.test/chosen.png') return responseBytes(preferredBytes,'image/png',url);
+    throw new Error(`unexpected fetch ${url}`);
+  };
+  const result = await send({ type:'mosaicsync:hydrate-missing-icons', shortcutIds:['preferred'], force:true });
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const item=findCompactShortcut(raw,'preferred');
+  assert.equal(result.hydrated,1,'explicit favicon preference must hydrate even with automatic site icons disabled');
+  assert.equal(item.faviconPreference,preference,'compact user preference must remain durable after local hydration');
+  assert.equal(item.imageSourceKind,'upload','preferred detected favicon remains explicit user artwork semantics');
+  assert.equal(item.imageSyncKind,'device','actual favicon pixels must remain device-local');
+  assert.equal(item.imageIsFallback,false,'exact preferred candidate must resolve the pending preference');
+  assert.ok(item.localImageAssetId,'preferred candidate must be materialized as a local asset');
+  const asset=(await local.get(`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`))[`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`];
+  assert.equal(asset,preferredDataUrl,'receiver must reconstruct the exact selected candidate rather than automatic fallback');
+  console.log(JSON.stringify({ok:true,hydrated:1,preference,exact:true}));
+}
+else if (scenario === 'favicon-network') {
   websiteAccess = true;
   const s = stateWith({ personal: [shortcut('fresh','https://fresh.test/')] });
   await seedLocalState(s);
@@ -1590,8 +1627,9 @@ else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
   assert.ok(Number(continuity.lastResetEpoch)>0);
   assert.equal(cleared.meta.syncEnabled,false);
 
-  // Model another established 1.30.13 device observing the reset marker: it must
-  // preserve its local profile, turn Sync off, and never resurrect the cloud.
+  // Model another established device observing the reset marker: it must
+  // preserve its local profile, stay safely enrolled in await-remote mode, and
+  // never resurrect the cloud while the explicit reset sentinel remains.
   await local.set({
     [constants.LOCAL_META_KEY]:{...cleared.meta,syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-100},
     [constants.LOCAL_SYNC_CONTINUITY_KEY]:{...continuity,established:true,lastResetEpoch:0,lossState:'none',lastHealthyAt:fakeNow-100}
@@ -1600,12 +1638,13 @@ else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
   const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
   const observerMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
   assert.equal(observed.reason,'intentional-remote-reset');
-  assert.equal(observerMeta.syncEnabled,false,'observer must respect explicit reset instead of republishing');
+  assert.equal(observerMeta.syncEnabled,true,'observer must remain enrolled without becoming a recovery publisher');
+  assert.equal(observerMeta.syncInitialized,false);
+  assert.equal(observerMeta.syncBootstrapMode,'await-remote');
   assert.equal(sync.stats.setCalls,setsBefore,'observer must not write over the reset sentinel');
 
   // A later explicit local-source choice is allowed to supersede the reset, but
   // the marker must disappear only after a complete Personal+Work publication.
-  await send({type:'mosaicsync:set-sync-enabled',enabled:true});
   const republished=await send({type:'mosaicsync:bootstrap-local'});
   assert.equal(republished?.ok,true);
   const afterRepublish=await sync.get(null);
@@ -1661,6 +1700,91 @@ else if (scenario === 'sync-loss-13013-partial-nonzero-does-not-recover') {
   assert.equal(sync.stats.setCalls,setsBefore,'partial non-zero remote must not trigger catastrophic recovery publication');
   assert.notEqual(result?.reason,'remote-loss-quarantine');
   console.log(JSON.stringify({ok:true,partialStayedPartial:true,noRecovery:true}));
+}
+
+else if (scenario === 'sync-loss-13014-zero-double-check') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const healthy={...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')};
+  await sync.set(healthy);
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const setsBefore=sync.stats.setCalls;
+  sync.getBytesInUse=async()=>0; // simulate a transient quota/API false zero
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.notEqual(continuity?.lossState,'quarantine','non-empty namespace must defeat a false getBytesInUse zero');
+  assert.notEqual(result?.reason,'remote-loss-quarantine');
+  assert.equal(sync.stats.setCalls,setsBefore,'double-check must not publish or mutate remote data');
+  console.log(JSON.stringify({ok:true,doubleChecked:true,falseZeroIgnored:true}));
+}
+
+else if (scenario === 'sync-loss-13014-startup-warmup') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const oldEligible=Number(continuity.recoveryEligibleAt);
+  fakeNow=oldEligible+(3*60*60*1000);
+  const setsBefore=sync.stats.setCalls;
+  for(const listener of events.onStartup.listeners) listener();
+  await send({type:'mosaicsync:get-sync-status'}); // flush startup queue
+  continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'quarantine');
+  assert.ok(Number(continuity.recoveryEligibleAt)>=fakeNow+constants.SYNC_RECOVERY_STARTUP_WARMUP_MS,
+    'browser restart must grant Firefox Sync a fresh warm-up window before recovery');
+  assert.equal(sync.stats.setCalls,setsBefore,'expired quarantine from a previous session must not publish immediately on startup');
+  console.log(JSON.stringify({ok:true,startupWarmup:true,recoveryEligibleAt:continuity.recoveryEligibleAt}));
+}
+
+else if (scenario === 'sync-loss-13014-reset-peer-rejoins') {
+  const base=stateWith({personal:[shortcut('old','https://old.test/',500)],work:[shortcut('work-old','https://work-old.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const epoch=fakeNow+100;
+  await sync.clear();
+  await sync.set({[constants.SYNC_RESET_INTENT_KEY]:{schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',epoch,initiatedByDevice:'peer-reset-device',initiatedAt:fakeNow}});
+  const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  let observerMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(observed.reason,'intentional-remote-reset');
+  assert.equal(observerMeta.syncEnabled,true,'reset observer must remain enrolled in Sync');
+  assert.equal(observerMeta.syncInitialized,false);
+  assert.equal(observerMeta.syncBootstrapMode,'await-remote');
+  assert.equal(observerMeta.syncStatus,'waiting');
+
+  const replacement=stateWith({personal:[shortcut('new','https://new.test/',900)],work:[shortcut('work-new','https://work-new.test/',900)]});
+  await sync.clear();
+  await sync.set({...remotePersonalEntries(replacement,'p2'),...remoteWorkEntries(replacement,'w2')});
+  const restored=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  observerMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const localState=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  assert.equal(observerMeta.syncEnabled,true);
+  assert.equal(observerMeta.syncInitialized,true,'observer must automatically rejoin when a complete post-reset profile appears');
+  assert.equal(localState.spaces.personal.shortcuts.some(item=>item.id==='new'),true);
+  assert.equal(localState.spaces.personal.shortcuts.some(item=>item.id==='old'),false);
+  console.log(JSON.stringify({ok:true,waited:true,rejoined:true,restoredReason:restored?.reason||''}));
+}
+
+else if (scenario === 'sync-loss-13014-recovering-restart-grace') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  await local.set({[constants.LOCAL_SYNC_CONTINUITY_KEY]:{
+    schemaVersion:constants.SYNC_CONTINUITY_SCHEMA_VERSION,established:true,lastHealthyAt:fakeNow-1000,
+    lastCompleteRevision:'x',lastPublisherDeviceId:'peer',lastResetEpoch:0,personalTombstones:[],workTombstones:[],
+    lossState:'recovering',lossDetectedAt:fakeNow-600000,recoveryEligibleAt:fakeNow+constants.SYNC_RECOVERY_RESTART_GRACE_MS,
+    recoveryAttempts:1,lastRecoveredAt:0
+  }});
+  const setsBefore=sync.stats.setCalls;
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'});
+  assert.equal(result?.pending,true);
+  assert.equal(sync.stats.setCalls,setsBefore,'replacement worker must respect persisted recovering grace before another publication');
+  console.log(JSON.stringify({ok:true,restartGrace:true}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {

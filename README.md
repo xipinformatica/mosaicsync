@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.13**
+**Current source release: 1.30.14**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,15 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.12** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.14** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.12 is an **update/reinstall data-preservation hardening release**. Browser lifecycle reason `install` is no longer treated as authority to reset MosaicSync state: the normal storage initializer supplies defaults only when durable keys are actually absent, while any surviving layout, device identity, Sync bootstrap/status, applied revisions and onboarding state remain intact across install-like recovery transitions. Routine Firefox development testing now has an explicit separate-ID package (`mosaicsync-dev@xipinformatica.cat`) so `about:debugging` cannot overlay the production AMO identity `mosaicsync@xipinformatica.cat`. This does not claim to prevent Firefox itself from deleting an extension/storage namespace; a signed AMO update test remains a required release gate. The 1.30.11 appearance-preview fix and 1.30.10 Sync snapshot cache remain unchanged.
+1.30.14 is a focused **Sync recovery hardening + manual favicon-intent synchronization** release on top of 1.30.13. Catastrophic-zero detection now requires both the quota API and a full namespace read to agree that Sync is empty; a persisted loss state gets a fresh startup warm-up before any recovery publication; a worker interrupted during recovery observes a persisted retry grace; and peers that observe an intentional reset remain safely enrolled in `await-remote` so they can automatically accept a later authoritative replacement without merging pre-reset data back into it. Reset markers now require a non-empty initiating device ID.
+
+When the user explicitly chooses one of MosaicSync's detected favicon candidates, 1.30.14 synchronizes only a compact optional preference token, never the favicon pixels or raw favicon URL. Receiving devices reconstruct the chosen candidate locally through the existing bounded favicon discovery/recovery pipeline when permission is available. The preference is preserved if the local browser cannot currently fetch it, manual intent outranks automatic favicon selection, and ordinary shortcuts that never use the chooser pay zero additional Sync bytes. The existing **Sync this image** option remains the only path that deliberately synchronizes optimized image bytes.
+
+1.30.13 remains the foundation for catastrophic Sync-loss containment: established devices preserve their local Personal/Work profile through a confirmed raw zero namespace, retain bounded verified deletion tombstones, replay pending edits after safe recovery, and distinguish MosaicSync-controlled reset through a non-zero reset marker. 1.30.12's non-destructive lifecycle handling and separate Firefox development identity remain intact.
 
 1.30.11 is a focused **Settings appearance regression fix** on top of 1.30.10. Wallpaper selection, normal background darkness, separate Light/Dark wallpaper selection and the active Light/Dark darkness slider again update visually in real time while Settings is open. The Firefox/Linux compositor safeguard remains intact: MosaicSync does not repaint the authoritative full-screen `.page` wallpaper or root darkness variables under the open Settings surface. Instead, Settings-only secondary CSS provides an isolated paint-contained preview layer backed by a plain `<img>` and its own dim overlay; closing Settings commits the same appearance once to the real page on the existing next-frame deferred path and clears the preview. Sync, storage/profile schemas, permissions, snapshot caching, CSP, navigation and privacy behavior are unchanged.
 

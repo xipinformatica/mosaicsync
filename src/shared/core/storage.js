@@ -266,6 +266,7 @@ function projectRenderShortcut(item) {
     url: item.url,
     builtinIcon,
     colorTag,
+    faviconPreference: typeof item.faviconPreference === "string" ? item.faviconPreference : "",
     image,
     localImageAssetId: item.localImageAssetId || "",
     // Sync derivatives can be independently quota-compressed but are not needed

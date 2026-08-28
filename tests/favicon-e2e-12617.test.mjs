@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { normalizeFaviconPreference } from "../src/shared/core/model.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}`);
@@ -24,6 +25,9 @@ function extract(src, name) {
 }
 
 function installQueueMutationStub(ctx) {
+  if (!ctx.resolveFaviconForUrlWithPreference && ctx.resolveFaviconForUrl) {
+    ctx.resolveFaviconForUrlWithPreference = (url, _preference, options) => ctx.resolveFaviconForUrl(url, options);
+  }
   ctx.mutateIconRecoveryQueue = async mutator => {
     const current = await ctx.readIconRecoveryQueue();
     const next = await mutator(current);
@@ -46,7 +50,7 @@ for (const browserName of ["firefox", "chrome"]) {
     let schedules = 0;
     let committed = 0;
     const ctx = {
-      console, Date, Set, Map,
+      console, Date, Set, Map, normalizeFaviconPreference,
       PERSONAL_SPACE_ID: "personal", WORK_SPACE_ID: "work",
       ICON_RECOVERY_QUEUE_VERSION: 2, ICON_RECOVERY_CONCURRENCY: 3, ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
       ICON_RECOVERY_ALARM: "fav", ICON_RECOVERY_CONTINUE_DELAY_MS: 120,
@@ -71,6 +75,12 @@ for (const browserName of ["firefox", "chrome"]) {
       workspaceAllowsAutoIcons: (st, id) => {
         const loc = ctx.findShortcutLocationById(st, id);
         return Boolean(loc?.workspace?.settings?.autoSiteIcons);
+      },
+      shortcutAllowsFaviconRecovery: (st, id) => {
+        const loc = ctx.findShortcutLocationById(st, id);
+        const pref = normalizeFaviconPreference(loc?.shortcut?.faviconPreference);
+        const manualPending = Boolean(pref && loc?.shortcut?.imageSourceKind === "upload" && loc?.shortcut?.imageSyncKind === "device" && (!loc?.shortcut?.image || loc.shortcut.imageIsFallback === true));
+        return manualPending || Boolean(loc?.workspace?.settings?.autoSiteIcons);
       },
       automaticFaviconArtwork: shortcut => Boolean(shortcut?.image && ["favicon", "firefox"].includes(shortcut.imageSourceKind)),
       shortcutNeedsProactiveFavicon: shortcut => !shortcut.image && shortcut.imageSourceKind === "none",
@@ -120,7 +130,7 @@ test("1.26.17 Chrome native fallback is attempted without Website Access and doe
   let queue = { version: 2, items: [{ id: "s", url: "https://known.test/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let resolverCalls = 0;
   const ctx = {
-    console, Date, Set, Map,
+    console, Date, Set, Map, normalizeFaviconPreference,
     iconRecoveryRun: null,
     ICON_RECOVERY_CONCURRENCY: 3, ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000, ICON_RECOVERY_ALARM: "fav", ICON_RECOVERY_QUEUE_VERSION: 2,
     devMark: () => {}, devMeasure: () => {},

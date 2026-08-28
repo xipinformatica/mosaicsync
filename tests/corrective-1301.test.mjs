@@ -122,7 +122,7 @@ test("1.30.1 automatic favicon upgrade remains device-local and never targets ex
 test("1.30.1 favicon recovery deduplicates identical exact-URL work while keeping fast and quality passes distinct", () => {
   for (const browser of ["firefox","chrome"]) {
     const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8"); const fn=extract(src,"processIconRecoveryQueue");
-    assert.match(fn,/const key = `\$\{item\.qualityUpgrade \? "quality" : "fast"\}\\n\$\{item\.url\}`/);
+    assert.match(fn,/const key = `\$\{item\.qualityUpgrade \? "quality" : "fast"\}\\n\$\{item\.url\}\\n\$\{normalizeFaviconPreference\(item\.faviconPreference\)\}`/);
     assert.match(fn,/existing\.items\.push\(item\)/);
   }
 });

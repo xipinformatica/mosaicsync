@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { normalizeFaviconPreference } from "../src/shared/core/model.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}(`);
@@ -41,6 +42,9 @@ function stateWithSpaces({ activeSpaceId = "personal", personal = [], work = [],
 }
 
 function installQueueMutationStub(ctx) {
+  if (!ctx.resolveFaviconForUrlWithPreference && ctx.resolveFaviconForUrl) {
+    ctx.resolveFaviconForUrlWithPreference = (url, _preference, options) => ctx.resolveFaviconForUrl(url, options);
+  }
   if (ctx.mutateIconRecoveryQueue || !ctx.readIconRecoveryQueue || !ctx.writeIconRecoveryQueue) return;
   ctx.mutateIconRecoveryQueue = async mutator => {
     const current = await ctx.readIconRecoveryQueue();
@@ -51,10 +55,12 @@ function installQueueMutationStub(ctx) {
 }
 
 function runFunctions(src, names, context, prelude = "") {
-  const ctx = { console, ...context };
+  const ctx = { console, normalizeFaviconPreference, ...context };
   installQueueMutationStub(ctx);
   vm.createContext(ctx);
-  const body = names.map(name => extract(src, name)).join("\n\n");
+  const helperNames = ["manualFaviconPreferencePending", "shortcutAllowsFaviconRecovery"];
+  const uniqueNames = [...new Set([...helperNames, ...names])];
+  const body = uniqueNames.map(name => extract(src, name)).join("\n\n");
   vm.runInContext(`${prelude}\n${body}`, ctx);
   return ctx;
 }
@@ -185,7 +191,7 @@ for (const browser of ["firefox", "chrome"]) {
     let finalQueue = null;
     let status = null;
     let metaWrites = 0;
-    const ctx = { console };
+    const ctx = { console, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -225,7 +231,7 @@ for (const browser of ["firefox", "chrome"]) {
     const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
     const queue = { version: 2, items: [{ id: "same", url: "https://same.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: true }] };
     let finalQueue = null;
-    const ctx = { console };
+    const ctx = { console, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -295,7 +301,7 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
   const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
   const queue = { version: 2, items: [{ id: "store", url: "https://chromewebstore.google.com/detail/x", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let finalQueue = null;
-  const ctx = { console };
+  const ctx = { console, normalizeFaviconPreference };
   vm.createContext(ctx);
   Object.assign(ctx, {
     ICON_RECOVERY_CONCURRENCY: 3,
@@ -335,7 +341,7 @@ for (const browser of ["firefox", "chrome"]) {
     let finalQueue = null;
     let status = null;
     let metaWrites = 0;
-    const ctx = { console: { ...console, error: () => {} } };
+    const ctx = { console: { ...console, error: () => {} }, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,

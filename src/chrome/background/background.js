@@ -86,6 +86,8 @@ import {
   SYNC_RECOVERY_VERY_STALE_DELAY_MS,
   SYNC_RECOVERY_JITTER_MS,
   SYNC_RECOVERY_MAX_ATTEMPTS,
+  SYNC_RECOVERY_RESTART_GRACE_MS,
+  SYNC_RECOVERY_STARTUP_WARMUP_MS,
   TOMBSTONE_TTL_MS,
   VERSION,
   WEB_ACCESS_CACHE_MS
@@ -94,6 +96,7 @@ import {
   assetIdForDataUrl,
   chooseNewerRecord,
   collectLocalAssetsNormalized,
+  faviconPreferenceMatchesCandidate,
   flattenStateNormalized,
   makeSettingsRecordNormalized,
   makeTombstone,
@@ -103,6 +106,7 @@ import {
   mergeRecordMaps,
   newestRecordTimestamp,
   nextMutationTime,
+  normalizeFaviconPreference,
   normalizeState,
   replaceWorkspaceNormalized,
   settingsRecordEqual,
@@ -618,7 +622,7 @@ function validResetIntent(value) {
   return Boolean(value && value.kind === "reset-intent" &&
     Number(value.schemaVersion) === SYNC_RESET_INTENT_SCHEMA_VERSION &&
     Number.isFinite(Number(value.epoch)) && Number(value.epoch) > 0 &&
-    typeof value.initiatedByDevice === "string");
+    typeof value.initiatedByDevice === "string" && value.initiatedByDevice.length > 0);
 }
 
 function recoveryStalePenalty(continuity, now = Date.now()) {
@@ -643,6 +647,20 @@ async function scheduleSyncRecoveryAlarm(when = 0) {
   } catch (error) {
     console.warn(`${PRODUCT_NAME}: could not schedule Sync recovery check`, error);
   }
+}
+
+async function deferPersistedSyncRecoveryAfterBrowserStartup(meta) {
+  const continuity = await readSyncContinuity(meta);
+  if (!continuity.established || !["quarantine", "recovering"].includes(continuity.lossState)) return continuity;
+  const now = Date.now();
+  if (Number(continuity.recoveryEligibleAt) > now) return continuity;
+  // Time spent with the browser closed is not evidence that Firefox Sync had a
+  // chance to download Extension-Storage. Give every persisted loss state one
+  // fresh startup window before any authoritative recovery publication.
+  const recoveryEligibleAt = now + SYNC_RECOVERY_STARTUP_WARMUP_MS;
+  const next = await writeSyncContinuity({ ...continuity, recoveryEligibleAt }, meta);
+  await scheduleSyncRecoveryAlarm(recoveryEligibleAt);
+  return next;
 }
 
 async function markSyncContinuityHealthy(meta, descriptor = {}) {
@@ -701,13 +719,17 @@ async function observeRemoteResetIntent(intent, meta) {
   await clearAllPendingSyncRecoveryState();
   const next = await writeLocalMeta({
     ...meta,
-    syncEnabled: false,
+    // A peer that observes an explicit reset must never resurrect its old local
+    // copy, but it also should not silently drop out of Sync forever. Keep it in
+    // the existing safe await-remote mode so a later explicit “Use this device”
+    // publication from any peer can automatically become the new source.
+    syncEnabled: true,
     syncInitialized: false,
-    syncBootstrapMode: "none",
-    syncStatus: "off",
+    syncBootstrapMode: "await-remote",
+    syncStatus: "waiting",
     lastSyncError: "",
     lastSyncWarning: "",
-    syncWaitStartedAt: 0
+    syncWaitStartedAt: Date.now()
   });
   await ensureSyncWatchAlarm(next);
   return { ok: true, skipped: true, reason: "intentional-remote-reset", meta: next };
@@ -737,6 +759,12 @@ async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "mess
   } else {
     const usedBytes = await browser.storage.sync.getBytesInUse(null);
     if (Number(usedBytes) > 0) return null;
+    // Never enter catastrophic-loss quarantine from one quota API observation
+    // alone. A second independent namespace read must also be genuinely empty.
+    // This protects startup/engine-initialization races where getBytesInUse()
+    // can transiently report zero while records are already locally visible.
+    const zeroCheck = await browser.storage.sync.get(null);
+    if (zeroCheck && Object.keys(zeroCheck).length > 0) return null;
     const now = Date.now();
     const eligibleAt = now + SYNC_RECOVERY_QUARANTINE_MS +
       recoveryStalePenalty(continuity, now) + recoveryDeviceJitter(meta.deviceId);
@@ -766,7 +794,15 @@ async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "mess
   }
 
   const attempt = Math.max(0, Number(continuity.recoveryAttempts) || 0) + 1;
-  continuity = await writeSyncContinuity({ ...continuity, lossState: "recovering", recoveryAttempts: attempt }, meta);
+  // Persist a one-shot grace deadline before starting the publication. It is not
+  // consulted by this live attempt, but if MV3 kills the worker halfway through,
+  // the replacement worker waits briefly before publishing a second generation.
+  continuity = await writeSyncContinuity({
+    ...continuity,
+    lossState: "recovering",
+    recoveryAttempts: attempt,
+    recoveryEligibleAt: now + SYNC_RECOVERY_RESTART_GRACE_MS
+  }, meta);
   await writeSyncRecoveryStatus("recovering");
 
   try {
@@ -899,6 +935,7 @@ browser.runtime.onStartup.addListener(() => {
     let { meta } = await ensureLocalStorage();
     await ensureSyncWatchAlarm(meta);
     await runOneTimeLegacyMaintenance();
+    await deferPersistedSyncRecoveryAfterBrowserStartup(meta);
     if (meta.syncEnabled && meta.syncInitialized) {
       // Startup must run the catastrophic-loss guard before replaying a pending
       // local mutation. A crash-surviving journal must never become the first
@@ -2354,6 +2391,74 @@ async function discoverFaviconChoicesForUrl(pageUrl, { timeoutMs = 10_000, signa
   rememberFaviconChoices(cacheKey, result);
   return cloneFaviconChoiceResult(result);
 }
+
+async function resolveFaviconForUrlWithPreference(pageUrl, preference, { timeoutMs = ICON_RECOVERY_FETCH_TIMEOUT_MS, preferQuality = false } = {}) {
+  const wanted = normalizeFaviconPreference(preference);
+  if (!wanted) return resolveFaviconForUrl(pageUrl, { timeoutMs, preferQuality });
+
+  if (wanted === "b") {
+    const browserCandidate = await resolveBrowserCachedFavicon(pageUrl);
+    if (browserCandidate?.image) {
+      return {
+        ...browserCandidate,
+        preferenceMatched: true,
+        provisional: false,
+        qualityComplete: true
+      };
+    }
+    return { image: "", sourceUrl: "", reason: "not-found", preferenceMatched: false, provisional: false };
+  }
+
+  // URL/inline preferences deliberately require Website Access. The preference
+  // itself is harmless Sync metadata; fetching the chosen resource remains a
+  // normal device-local website operation and never prompts outside a user gesture.
+  if (!(await hasWebAccess())) return { image: "", sourceUrl: "", reason: "permission", preferenceMatched: false, provisional: false };
+  const discovered = await discoverFaviconChoicesForUrl(pageUrl, { timeoutMs });
+  if (discovered?.ok === true) {
+    const candidates = Array.isArray(discovered.candidates) ? discovered.candidates : [];
+    const exact = candidates.find(candidate => faviconPreferenceMatchesCandidate(wanted, candidate));
+    if (exact?.image) {
+      return {
+        image: exact.image,
+        sourceUrl: exact.sourceUrl || "",
+        width: exact.width || 0,
+        height: exact.height || 0,
+        qualitySide: exact.qualitySide || 0,
+        declared: exact.declared === true,
+        sourceKind: exact.source || "favicon",
+        preferenceMatched: true,
+        provisional: false,
+        qualityComplete: true
+      };
+    }
+    // The site may have moved/changed the chosen favicon. Show the best currently
+    // discoverable local fallback but retain the preference and retry it through
+    // the existing bounded recovery backoff rather than forgetting user intent.
+    const fallback = candidates[0];
+    if (fallback?.image) {
+      return {
+        image: fallback.image,
+        sourceUrl: fallback.sourceUrl || "",
+        width: fallback.width || 0,
+        height: fallback.height || 0,
+        qualitySide: fallback.qualitySide || 0,
+        declared: fallback.declared === true,
+        sourceKind: fallback.source || "favicon",
+        preferenceMatched: false,
+        provisional: true,
+        qualityComplete: false
+      };
+    }
+  }
+  return {
+    image: "",
+    sourceUrl: "",
+    reason: discovered?.error || discovered?.reason || "not-found",
+    preferenceMatched: false,
+    provisional: false
+  };
+}
+
 function flattenShortcuts(state) {
   const shortcuts = [];
   const seen = new Set();
@@ -2385,8 +2490,15 @@ function automaticFaviconArtwork(shortcut) {
     ["favicon", "firefox"].includes(shortcut.imageSourceKind || "none") && /^https?:/i.test(shortcut.url || "");
 }
 
+function manualFaviconPreferencePending(shortcut) {
+  const preference = normalizeFaviconPreference(shortcut?.faviconPreference);
+  return Boolean(preference && shortcut?.imageSourceKind === "upload" && shortcut?.imageSyncKind === "device" &&
+    (!shortcut?.image || shortcut.imageIsFallback === true));
+}
+
 function shortcutNeedsProactiveFavicon(shortcut) {
   if (!shortcut || shortcut.type !== "shortcut" || shortcut.builtinIcon || !/^https?:/i.test(shortcut.url || "")) return false;
+  if (manualFaviconPreferencePending(shortcut)) return true;
   const sourceKind = shortcut.imageSourceKind || "none";
   if (sourceKind === "firefox") return true;
   if (sourceKind === "favicon") return !shortcut.image;
@@ -2430,9 +2542,18 @@ function workspaceAllowsAutoIcons(state, shortcutId) {
   return Boolean(location?.workspace?.settings?.autoSiteIcons);
 }
 
+function shortcutAllowsFaviconRecovery(state, shortcutId) {
+  const location = findShortcutLocationById(state, shortcutId);
+  if (!location) return false;
+  // Explicit manual favicon intent is independent of the workspace's automatic
+  // site-icon preference. A receiving device must be allowed to reconstruct the
+  // user's chosen candidate even when automatic favicon learning is disabled.
+  return manualFaviconPreferencePending(location.shortcut) || Boolean(location.workspace?.settings?.autoSiteIcons);
+}
+
 function iconRecoveryItemStillRelevantInState(state, item) {
   const location = findShortcutLocationById(state, item?.id);
-  if (!location || !workspaceAllowsAutoIcons(state, item?.id)) return false;
+  if (!location || !shortcutAllowsFaviconRecovery(state, item?.id)) return false;
   return iconRecoveryItemStillRelevant(location.shortcut, item);
 }
 
@@ -2448,14 +2569,21 @@ async function applyProactiveFaviconResults(results) {
     // ownership again at commit time so a Personal→Work move neither discards
     // useful work nor applies it under the wrong Space's auto-icon preference.
     const location = findShortcutLocationById(loaded.state, result.id);
-    if (!location || !workspaceAllowsAutoIcons(loaded.state, result.id)) continue;
+    if (!location || !shortcutAllowsFaviconRecovery(loaded.state, result.id)) continue;
     const shortcut = location.shortcut;
     if (shortcut.url !== result.url) continue;
+    const currentPreference = normalizeFaviconPreference(shortcut.faviconPreference);
+    const resultPreference = normalizeFaviconPreference(result.faviconPreference);
+    if (currentPreference !== resultPreference) continue;
+    const preferenceUpgrade = Boolean(result.allowFaviconUpgrade) && manualFaviconPreferencePending(shortcut);
     const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) && automaticFaviconArtwork(shortcut);
-    if (!shortcutNeedsProactiveFavicon(shortcut) && !upgradingRecoveredFavicon) continue;
+    if (!shortcutNeedsProactiveFavicon(shortcut) && !upgradingRecoveredFavicon && !preferenceUpgrade) continue;
     const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
+    const nextFallback = customUploadFallback
+      ? (currentPreference ? result.preferenceMatched !== true : true)
+      : false;
     if (shortcut.image === result.image && shortcut.imageSyncKind === "device" && !shortcut.imageAssetId &&
-        shortcut.imageIsFallback === customUploadFallback &&
+        shortcut.imageIsFallback === nextFallback &&
         (customUploadFallback || (shortcut.imageSourceKind === "favicon" && shortcut.imageSourceUrl === result.sourceUrl))) {
       unchangedIds.add(result.id);
       continue;
@@ -2464,7 +2592,7 @@ async function applyProactiveFaviconResults(results) {
     shortcut.imageSyncData = "";
     shortcut.imageAssetId = "";
     shortcut.imageSyncKind = "device";
-    shortcut.imageIsFallback = customUploadFallback;
+    shortcut.imageIsFallback = nextFallback;
     if (!customUploadFallback) {
       shortcut.imageSourceKind = "favicon";
       shortcut.imageSourceUrl = result.sourceUrl;
@@ -2551,6 +2679,7 @@ function normalizeIconRecoveryQueue(raw) {
     items.push({
       id,
       url,
+      faviconPreference: normalizeFaviconPreference(item.faviconPreference),
       attempts: Math.max(0, Math.min(ICON_RECOVERY_MAX_ATTEMPTS, Number(item.attempts) || 0)),
       nextAttemptAt: Number.isFinite(Number(item.nextAttemptAt)) ? Math.max(0, Number(item.nextAttemptAt)) : 0,
       qualityUpgrade: Boolean(item.qualityUpgrade),
@@ -2564,10 +2693,12 @@ function normalizeIconRecoveryQueue(raw) {
 
 function iconRecoveryItemStillRelevant(shortcut, item) {
   if (!shortcut || shortcut.type !== "shortcut" || shortcut.url !== item?.url) return false;
+  if (normalizeFaviconPreference(shortcut.faviconPreference) !== normalizeFaviconPreference(item?.faviconPreference)) return false;
   if (!item?.qualityUpgrade) return shortcutNeedsProactiveFavicon(shortcut);
-  // A quality-upgrade retry belongs only to automatic browser/site artwork.
-  // User uploads supersede it and are never replaced by automatic recovery.
-  return automaticFaviconArtwork(shortcut);
+  // Automatic quality upgrades and unresolved explicit favicon preferences both
+  // use the same bounded retry engine. Exact manual matches stop retrying by
+  // clearing imageIsFallback when they commit.
+  return automaticFaviconArtwork(shortcut) || manualFaviconPreferencePending(shortcut);
 }
 
 async function dropIconRecoveryQualityJobs() {
@@ -2664,7 +2795,7 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
     hasWebAccess()
   ]);
   const eligible = flattenShortcuts(loaded.state).filter(shortcut => {
-    if (!workspaceAllowsAutoIcons(loaded.state, shortcut.id)) return false;
+    if (!shortcutAllowsFaviconRecovery(loaded.state, shortcut.id)) return false;
     if (targeted && !requested.has(shortcut.id)) return false;
     if (shortcutNeedsProactiveFavicon(shortcut)) return true;
     return webAccessGranted && automaticFaviconArtwork(shortcut) &&
@@ -2677,12 +2808,15 @@ async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeR
     const nextById = new Map(nextItems.map(item => [item.id, item]));
     for (const shortcut of eligible) {
       const previous = existing.get(shortcut.id);
-      const reset = force || !previous || previous.url !== shortcut.url;
+      const faviconPreference = normalizeFaviconPreference(shortcut.faviconPreference);
+      const reset = force || !previous || previous.url !== shortcut.url ||
+        normalizeFaviconPreference(previous.faviconPreference) !== faviconPreference;
       const migrationUpgrade = automaticFaviconArtwork(shortcut) &&
         (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons));
       nextById.set(shortcut.id, {
         id: shortcut.id,
         url: shortcut.url,
+        faviconPreference,
         attempts: reset ? 0 : previous.attempts,
         nextAttemptAt: reset ? 0 : previous.nextAttemptAt,
         qualityUpgrade: migrationUpgrade || (!reset && Boolean(previous.qualityUpgrade)),
@@ -2762,7 +2896,7 @@ async function processIconRecoveryQueue() {
       // Deduplicate only semantically identical resolver work. Different pages
       // on the same origin can legitimately declare different icons, and the
       // fast and quality passes intentionally use different resolver ordering.
-      const key = `${item.qualityUpgrade ? "quality" : "fast"}\n${item.url}`;
+      const key = `${item.qualityUpgrade ? "quality" : "fast"}\n${item.url}\n${normalizeFaviconPreference(item.faviconPreference)}`;
       const existing = dueByResolutionKey.get(key);
       if (existing) {
         existing.items.push(item);
@@ -2795,7 +2929,10 @@ async function processIconRecoveryQueue() {
     // pages that merely share an origin.
     const resolvedGroups = await Promise.all(dueGroups.map(async group => {
       const item = group.representative;
-      const result = await resolveFaviconForUrl(item.url, { timeoutMs: ICON_RECOVERY_FETCH_TIMEOUT_MS, preferQuality: Boolean(item.qualityUpgrade) });
+      const result = await resolveFaviconForUrlWithPreference(item.url, item.faviconPreference, {
+        timeoutMs: ICON_RECOVERY_FETCH_TIMEOUT_MS,
+        preferQuality: Boolean(item.qualityUpgrade)
+      });
       return { group, result };
     }));
     const resolved = resolvedGroups.flatMap(({ group, result }) =>
@@ -2806,6 +2943,7 @@ async function processIconRecoveryQueue() {
       .map(({ item, result }) => ({
         id: item.id,
         url: item.url,
+        faviconPreference: normalizeFaviconPreference(item.faviconPreference),
         ...result,
         allowFaviconUpgrade: Boolean(item.qualityUpgrade)
       }));
@@ -2838,7 +2976,8 @@ async function processIconRecoveryQueue() {
       const byId = new Map(currentQueue.items.map(item => [item.id, item]));
       for (const outcome of outcomes) {
         const current = byId.get(outcome.item.id);
-        if (!current || current.url !== outcome.item.url) continue;
+        if (!current || current.url !== outcome.item.url ||
+            normalizeFaviconPreference(current.faviconPreference) !== normalizeFaviconPreference(outcome.item.faviconPreference)) continue;
         if (outcome.ok) {
           if (outcome.changed) hydrated += 1;
           else unchanged += 1;
@@ -4473,23 +4612,33 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     workspaceStateNormalized(remoteWorkLegacy, PERSONAL_SPACE_ID)
   );
 
-  // Merge local edits on top of the complete incoming profile instead of
-  // replacing them. Unrelated shortcuts therefore survive; same-record conflicts
-  // continue to use MosaicSync's deterministic timestamp/device rules.
+  // A peer that observed an explicit reset is deliberately waiting for a new
+  // authoritative source. Its pre-reset local profile is preserved while waiting
+  // for safety/UX, but it must NOT be merged back into the first complete
+  // post-reset profile or the reset would resurrect old shortcuts/settings.
+  const continuity = await readSyncContinuity(meta);
+  const awaitingPostResetReplacement = meta.syncBootstrapMode === "await-remote" &&
+    continuity.established === false && Number(continuity.lastResetEpoch) > 0;
+
+  // Ordinary fresh-device delivery still merges edits the user made while Sync
+  // was arriving. A reset observer instead applies the exact verified remote
+  // replacement, because the old local semantic state belongs to the reset epoch.
   let mergedState = remoteOnlyState;
-  for (const [spaceId, remote] of [[PERSONAL_SPACE_ID, remotePersonal], [WORK_SPACE_ID, remoteWork]]) {
-    const localWorkspace = workspaceStateNormalized(fullLocalState, spaceId);
-    const localRecords = flattenStateNormalized(localWorkspace, meta.deviceId);
-    const localSettings = makeSettingsRecordNormalized(localWorkspace, meta.deviceId);
-    const mergedRecords = pruneExpiredTombstones(mergeRecordMaps(remote.records, localRecords));
-    const mergedSettings = chooseSettings(localSettings, remote.settings, localWorkspace);
-    const mergedAssets = new Map([...(remote.assets || new Map()), ...collectLocalAssetsNormalized(localWorkspace)]);
-    const mergedLegacy = stateFromRecords(mergedRecords, mergedSettings, localWorkspace, mergedAssets);
-    mergedState = replaceWorkspaceNormalized(
-      mergedState,
-      spaceId,
-      workspaceStateNormalized(mergedLegacy, PERSONAL_SPACE_ID)
-    );
+  if (!awaitingPostResetReplacement) {
+    for (const [spaceId, remote] of [[PERSONAL_SPACE_ID, remotePersonal], [WORK_SPACE_ID, remoteWork]]) {
+      const localWorkspace = workspaceStateNormalized(fullLocalState, spaceId);
+      const localRecords = flattenStateNormalized(localWorkspace, meta.deviceId);
+      const localSettings = makeSettingsRecordNormalized(localWorkspace, meta.deviceId);
+      const mergedRecords = pruneExpiredTombstones(mergeRecordMaps(remote.records, localRecords));
+      const mergedSettings = chooseSettings(localSettings, remote.settings, localWorkspace);
+      const mergedAssets = new Map([...(remote.assets || new Map()), ...collectLocalAssetsNormalized(localWorkspace)]);
+      const mergedLegacy = stateFromRecords(mergedRecords, mergedSettings, localWorkspace, mergedAssets);
+      mergedState = replaceWorkspaceNormalized(
+        mergedState,
+        spaceId,
+        workspaceStateNormalized(mergedLegacy, PERSONAL_SPACE_ID)
+      );
+    }
   }
   await setLocalStateSilently(mergedState);
 

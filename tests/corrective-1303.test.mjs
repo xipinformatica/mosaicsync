@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { normalizeFaviconPreference } from "../src/shared/core/model.js";
 
 function extractFunction(source, name) {
   let start = source.indexOf(`async function ${name}(`);
@@ -205,7 +206,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.30.3 ${browser} recovery queue rejects non-finite persisted timestamps`, () => {
     const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
-    const context = vm.createContext({ ICON_RECOVERY_QUEUE_VERSION: 2, ICON_RECOVERY_MAX_ATTEMPTS: 5, Number, Math, Set });
+    const context = vm.createContext({ ICON_RECOVERY_QUEUE_VERSION: 2, ICON_RECOVERY_MAX_ATTEMPTS: 5, Number, Math, Set, normalizeFaviconPreference });
     vm.runInContext(extractFunction(source, "normalizeIconRecoveryQueue"), context);
     const normalized = context.normalizeIconRecoveryQueue({
       version: 2,

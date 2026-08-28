@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const VERSION = "1.30.13";
+const VERSION = "1.30.14";
 
 test("1.30 has one exact release identity across public/runtime surfaces", () => {
   const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
@@ -12,21 +12,21 @@ test("1.30 has one exact release identity across public/runtime surfaces", () =>
   const chromeHtml = fs.readFileSync("dist/chrome/newtab/newtab.html", "utf8");
   const readme = fs.readFileSync("README.md", "utf8");
   const devReadme = fs.readFileSync("README-DEVELOPMENT.md", "utf8");
-  const releaseNotes = fs.readFileSync("docs/RELEASE-1.30.13.md", "utf8");
-  const qa = fs.readFileSync("docs/QA-1.30.13.md", "utf8");
+  const releaseNotes = fs.readFileSync("docs/RELEASE-1.30.14.md", "utf8");
+  const qa = fs.readFileSync("docs/QA-1.30.14.md", "utf8");
   const baseline = JSON.parse(fs.readFileSync("package-size-baseline.json", "utf8"));
   const buildManifest = JSON.parse(fs.readFileSync("build-manifest.json", "utf8"));
   assert.equal(ff.version, VERSION);
   assert.equal(chrome.version, VERSION);
   assert.equal(chrome.version_name, VERSION);
-  assert.match(constants, /export const VERSION = "1\.30\.13";/);
-  assert.match(ffHtml, /MosaicSync · 1\.30\.13/g);
-  assert.match(chromeHtml, /MosaicSync · 1\.30\.13/g);
-  assert.match(readme, /Current source release: 1\.30\.13/);
+  assert.match(constants, /export const VERSION = "1\.30\.14";/);
+  assert.match(ffHtml, /MosaicSync · 1\.30\.14/g);
+  assert.match(chromeHtml, /MosaicSync · 1\.30\.14/g);
+  assert.match(readme, /Current source release: 1\.30\.14/);
   assert.match(devReadme, /1\.30/);
-  assert.match(releaseNotes, /^# MosaicSync 1\.30\.13 publication notes/m);
-  assert.match(releaseNotes, /## GitHub release title\n\n`MosaicSync 1\.30\.13`/);
-  assert.match(qa, /^# MosaicSync 1\.30\.13 QA \/ release-candidate checklist/m);
+  assert.match(releaseNotes, /^# MosaicSync 1\.30\.14 publication notes/m);
+  assert.match(releaseNotes, /## GitHub release title\n\n`MosaicSync 1\.30\.14`/);
+  assert.match(qa, /^# MosaicSync 1\.30\.14 QA \/ release-candidate checklist/m);
   assert.equal(baseline.browsers.firefox.version, VERSION);
   assert.equal(baseline.browsers.chrome.version, VERSION);
   assert.equal(buildManifest.browsers.firefox.version, VERSION);
@@ -35,10 +35,10 @@ test("1.30 has one exact release identity across public/runtime surfaces", () =>
 
 test("1.30 public changelog keeps internal candidates out of the public release sequence", () => {
   const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
-  assert.match(changelog, /^## 1\.30\.13\n/);
+  assert.match(changelog, /^## 1\.30\.14\n/);
   for (const unpublished of ["1.27.8", "1.27.8.1", "1.27.8.2", "1.27.8.3", "1.27.8.4", "1.27.8.5", "1.27.8.6", "1.27.8.7", "1.27.8.8", "1.26.13", "1.26.13b", "1.26.14", "1.26.15", "1.26.16", "1.26.17", "1.26.17.1", "1.26.17.2", "1.30.3"]) {
     assert.doesNotMatch(changelog, new RegExp(`^## ${unpublished.replaceAll(".", "\\.")}(?:\\s|$)`, "m"));
   }
   const headings = [...changelog.matchAll(/^## ([^\n]+)$/gm)].map(match => match[1]);
-  assert.deepEqual(headings.slice(0, 14), [VERSION, "1.30.12", "1.30.11", "1.30.10", "1.30.9", "1.30.8", "1.30.7", "1.30.6", "1.30.5", "1.30.4", "1.30.2", "1.30.1", "1.27.9", "1.27.8.9"]);
+  assert.deepEqual(headings.slice(0, 14), [VERSION, "1.30.13", "1.30.12", "1.30.11", "1.30.10", "1.30.9", "1.30.8", "1.30.7", "1.30.6", "1.30.5", "1.30.4", "1.30.2", "1.30.1", "1.27.9"]);
 });

@@ -103,6 +103,56 @@ function normalizeShortcutImageSourceKind(value) {
   return value === "builtin" ? "builtin" : normalizeImageSourceKind(value);
 }
 
+function compactFaviconPreferenceHash(value) {
+  let hash = 0x811c9dc5;
+  const text = String(value || "");
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+export function normalizeFaviconPreference(value) {
+  const preference = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (preference === "b") return "b";
+  if (/^u:[0-9a-f]{8}:[0-9a-f]{8}$/.test(preference)) return preference;
+  if (/^i:[0-9a-f]{8}$/.test(preference)) return preference;
+  return "";
+}
+
+export function faviconPreferenceForCandidate(candidate) {
+  if (!candidate || typeof candidate !== "object") return "";
+  if (String(candidate.source || "").toLowerCase() === "browser") return "b";
+  const image = typeof candidate.image === "string" && candidate.image.startsWith("data:image/")
+    ? candidate.image
+    : "";
+  let sourceUrl = "";
+  try {
+    const parsed = new URL(String(candidate.sourceUrl || ""));
+    if (/^https?:$/.test(parsed.protocol)) sourceUrl = parsed.href;
+  } catch {}
+  if (sourceUrl && image) return `u:${compactFaviconPreferenceHash(sourceUrl)}:${compactFaviconPreferenceHash(image)}`;
+  if (sourceUrl) return `u:${compactFaviconPreferenceHash(sourceUrl)}:00000000`;
+  if (image) return `i:${compactFaviconPreferenceHash(image)}`;
+  return "";
+}
+
+export function faviconPreferenceMatchesCandidate(preference, candidate) {
+  const wanted = normalizeFaviconPreference(preference);
+  if (!wanted) return false;
+  if (wanted === "b") return String(candidate?.source || "").toLowerCase() === "browser";
+  const actual = faviconPreferenceForCandidate(candidate);
+  if (!actual) return false;
+  if (wanted === actual) return true;
+  if (wanted.startsWith("u:") && actual.startsWith("u:")) {
+    const [, wantedUrlHash, wantedImageHash] = wanted.split(":");
+    const [, actualUrlHash, actualImageHash] = actual.split(":");
+    return wantedUrlHash === actualUrlHash || (wantedImageHash !== "00000000" && wantedImageHash === actualImageHash);
+  }
+  return false;
+}
+
 function normalizeShortcutColorTag(value) {
   return SHORTCUT_COLOR_TAG_KEYS.includes(value) ? value : "";
 }
@@ -251,6 +301,7 @@ function normalizeShortcut(item, index = 0, memo = null) {
     url,
     builtinIcon,
     colorTag,
+    faviconPreference: normalizeFaviconPreference(item.faviconPreference),
     image,
     localImageAssetId,
     imageSyncData,
@@ -955,6 +1006,7 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
     : "";
   const builtinIcon = normalizeBuiltinShortcutIcon(shortcut.builtinIcon);
   const colorTag = normalizeShortcutColorTag(shortcut.colorTag);
+  const faviconPreference = normalizeFaviconPreference(shortcut.faviconPreference);
   const record = {
     schemaVersion: SYNC_SCHEMA_VERSION,
     kind: "shortcut",
@@ -978,6 +1030,10 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
   // for empty presentation metadata on every shortcut.
   if (builtinIcon) record.builtinIcon = builtinIcon;
   if (colorTag) record.colorTag = colorTag;
+  // Manual favicon choice is user intent, not artwork bytes. Keep the Sync cost
+  // to one tiny optional token; the receiving browser reconstructs the pixels
+  // from its own browser/site favicon sources.
+  if (faviconPreference) record.favPref = faviconPreference;
   // Almost every shortcut has never crossed Spaces. Keep the common Sync record
   // compact and only pay for this conflict-resolution marker when it is needed.
   if (Number.isFinite(shortcut.spaceMoveAt) && shortcut.spaceMoveAt > 0) {
@@ -1120,6 +1176,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     if (!url) continue;
     const builtinIcon = normalizeBuiltinShortcutIcon(record.builtinIcon);
     const colorTag = normalizeShortcutColorTag(record.colorTag);
+    const remoteFaviconPreference = normalizeFaviconPreference(record.favPref);
 
     let image = "";
     let imageSyncData = "";
@@ -1127,8 +1184,10 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     const localItem = findItemById(local, record.id);
     const remoteSourceKind = normalizeShortcutImageSourceKind(record.imageSourceKind);
     const localSourceKind = normalizeShortcutImageSourceKind(localItem?.imageSourceKind);
+    const localFaviconPreference = normalizeFaviconPreference(localItem?.faviconPreference);
+    const preferenceCompatible = !remoteFaviconPreference || remoteFaviconPreference === localFaviconPreference;
     const localAutoArtwork = Boolean(
-      localItem?.image && localItem?.url === url && ["favicon", "firefox"].includes(localSourceKind)
+      preferenceCompatible && localItem?.image && localItem?.url === url && ["favicon", "firefox"].includes(localSourceKind)
     );
     if (record.imageKind === "sync" || record.imageKind === "local") {
       imageSyncData = assets.get(record.imageAssetId) || "";
@@ -1157,7 +1216,10 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
         imageIsFallback = localItem.imageIsFallback === true;
       }
     } else if (record.imageKind === "device") {
-      if (localItem?.image) {
+      // A newly synchronized manual favicon preference must invalidate pixels
+      // chosen for a different preference. The missing device-only image then
+      // enters the existing bounded favicon hydration queue on this browser.
+      if (preferenceCompatible && localItem?.image) {
         image = localItem.image;
         imageIsFallback = localItem.imageIsFallback === true;
       }
@@ -1198,6 +1260,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
       url,
       builtinIcon,
       colorTag,
+      faviconPreference: remoteFaviconPreference,
       image,
       imageSyncData,
       imageAssetId: builtinIcon ? "" : (["sync", "local"].includes(record.imageKind) && typeof record.imageAssetId === "string" ? record.imageAssetId : ""),
@@ -1482,6 +1545,7 @@ function projectStateForSyncSignature(source) {
       url: item.url,
       builtinIcon: normalizeBuiltinShortcutIcon(item.builtinIcon),
       colorTag: normalizeShortcutColorTag(item.colorTag),
+      faviconPreference: normalizeFaviconPreference(item.faviconPreference),
       imageAssetId: automaticallyLearnedArtwork ? "" : (item.imageAssetId || ""),
       imageSyncKind: automaticallyLearnedArtwork ? "none" : (item.imageSyncKind || "none"),
       imageSourceKind: automaticallyLearnedArtwork ? "none" : localSourceKind,

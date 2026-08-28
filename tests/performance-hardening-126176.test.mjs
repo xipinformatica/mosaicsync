@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { normalizeFaviconPreference } from "../src/shared/core/model.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { webcrypto } from "node:crypto";
@@ -35,6 +36,9 @@ function extract(src, name) {
 }
 
 function installQueueMutationStub(ctx) {
+  if (!ctx.resolveFaviconForUrlWithPreference && ctx.resolveFaviconForUrl) {
+    ctx.resolveFaviconForUrlWithPreference = (url, _preference, options) => ctx.resolveFaviconForUrl(url, options);
+  }
   if (ctx.mutateIconRecoveryQueue || !ctx.readIconRecoveryQueue || !ctx.writeIconRecoveryQueue) return;
   ctx.mutateIconRecoveryQueue = async mutator => {
     const current = await ctx.readIconRecoveryQueue();
@@ -58,7 +62,7 @@ for (const browser of ["firefox", "chrome"]) {
     };
     const calls = [];
     let finalQueue = null;
-    const ctx = { console };
+    const ctx = { console, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -121,7 +125,7 @@ for (const browser of ["firefox", "chrome"]) {
     };
     let resolverCalls = 0;
     let finalQueue = null;
-    const ctx = { console };
+    const ctx = { console, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3, ICON_RECOVERY_QUEUE_VERSION: 2, ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
@@ -177,7 +181,7 @@ for (const browser of ["firefox", "chrome"]) {
     let resolverCalls = 0;
     let writeCalls = 0;
     let finalQueue = null;
-    const ctx = { console, structuredClone };
+    const ctx = { console, structuredClone, normalizeFaviconPreference };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -216,6 +220,12 @@ for (const browser of ["firefox", "chrome"]) {
       workspaceAllowsAutoIcons: (state, id) => {
         const location = ctx.findShortcutLocationById(state, id);
         return Boolean(location?.workspace?.settings?.autoSiteIcons);
+      },
+      shortcutAllowsFaviconRecovery: (state, id) => {
+        const location = ctx.findShortcutLocationById(state, id);
+        const pref = normalizeFaviconPreference(location?.shortcut?.faviconPreference);
+        const manualPending = Boolean(pref && location?.shortcut?.imageSourceKind === "upload" && location?.shortcut?.imageSyncKind === "device" && (!location?.shortcut?.image || location.shortcut.imageIsFallback === true));
+        return manualPending || Boolean(location?.workspace?.settings?.autoSiteIcons);
       },
       shortcutNeedsProactiveFavicon: shortcut => Boolean(shortcut && !shortcut.image),
       writeLocalState: async state => { writeCalls += 1; return state; },

@@ -7,6 +7,9 @@ if (!['firefox','chrome'].includes(browserName) || !deviceId || !['a','b'].inclu
 }
 const root = resolve(import.meta.dirname, '../..');
 const clone = value => value === undefined ? undefined : structuredClone(value);
+const nativeDateNow = Date.now.bind(Date);
+let timeOffsetMs = 0;
+Date.now = () => nativeDateNow() + timeOffsetMs;
 
 function makeEvent() {
   const listeners=[];
@@ -153,6 +156,11 @@ async function handleCommand(message){
       // Alarm listeners enqueue asynchronously; a status request queues behind it.
       await send({type:'mosaicsync:get-sync-status'});
       result={ok:true};
+    }
+    else if(command==='advance-time'){
+      const delta=Number(args.ms)||0;
+      timeOffsetMs += delta;
+      result={ok:true,now:Date.now(),offset:timeOffsetMs};
     }
     else throw new Error(`unknown command ${command}`);
     process.send({type:'reply',id,result});

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { normalizeFaviconPreference } from "../src/shared/core/model.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}`);
@@ -31,7 +32,7 @@ function extract(src, name) {
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.15 ${browser} favicon discovery enumerates both Spaces`, () => {
     const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
-    const ctx = { PERSONAL_SPACE_ID: "personal", WORK_SPACE_ID: "work" };
+    const ctx = { normalizeFaviconPreference, PERSONAL_SPACE_ID: "personal", WORK_SPACE_ID: "work" };
     vm.createContext(ctx);
     vm.runInContext(extract(src, "flattenShortcuts"), ctx);
     const result = ctx.flattenShortcuts({
@@ -78,7 +79,7 @@ for (const browser of ["firefox", "chrome"]) {
     let status = null;
     let alarmClears = 0;
     let alarmSchedules = 0;
-    const ctx = {
+    const ctx = { normalizeFaviconPreference,
       console,
       Date,
       Set,
@@ -98,6 +99,7 @@ for (const browser of ["firefox", "chrome"]) {
       hasWebAccess: async () => false,
       platformHasPermissionFreeFaviconSource: () => browser === "chrome",
       resolveFaviconForUrl: async () => ({ image: "", reason: "permission", provisional: false }),
+      resolveFaviconForUrlWithPreference: async (url, _preference, options) => ctx.resolveFaviconForUrl(url, options),
       enqueue: async fn => fn(),
       applyProactiveFaviconResults: async () => ({ appliedIds: new Set(), unchangedIds: new Set() }),
       writeIconRecoveryQueue: async value => {

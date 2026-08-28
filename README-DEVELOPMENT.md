@@ -1,10 +1,20 @@
 # MosaicSync development
 
-> **Current release: 1.30.13.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.14.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.14 recovery hardening and manual detected-favicon intent policy
+
+1.30.14 keeps the 1.30.13 catastrophic-loss architecture and makes its first-loss and restart decisions more conservative. A first catastrophic-zero transition requires two independent observations: `storage.sync.getBytesInUse(null)` must report zero and a full `storage.sync.get(null)` read must also contain no keys. A persisted quarantine/recovering state whose deadline elapsed while the browser was closed receives a fresh startup warm-up before authoritative publication, because time spent with Firefox/Chrome closed is not evidence that browser Sync had a chance to redeliver Extension-Storage. Before a live recovery publication begins, the worker persists a short restart-grace deadline; if MV3 terminates the worker mid-publication, its replacement waits through that one-shot grace before another attempt rather than immediately generating another recovery write.
+
+A peer observing a valid intentional reset no longer drops permanently out of Sync. It preserves its local profile for safety/UX but remains `syncEnabled` in the existing non-publishing `await-remote` mode. The first later complete post-reset profile is treated as an authoritative replacement and **must not** merge the observer's pre-reset local shortcuts/settings back into the new epoch. Reset control records require a non-empty initiating device ID. The explicit-reset non-zero-marker ordering from 1.30.13 remains unchanged.
+
+Manual **Choose detected favicon** selections carry a compact optional synchronized `favPref` token. This field represents user intent only: no selected favicon pixels and no raw favicon URL are included in the shortcut Sync record. Network candidates use short hashes of the normalized candidate resource and selected image; browser-native candidates use a one-byte class token. The field is omitted when unused. A receiving browser retains the token even when Website Access is unavailable and reconstructs the preferred candidate locally through the bounded favicon recovery queue when a legal source becomes available. An exact preference match clears the temporary fallback marker; if the site changes its favicon resources, the best currently discoverable favicon may be shown provisionally while the original preference remains eligible for bounded retry. Explicit preference recovery is allowed even if automatic site-icon learning is disabled, because a user choice is not an automatic-learning preference. The existing **Sync this image** control remains separate and is the only explicit path that sends optimized favicon/image bytes through `storage.sync`.
+
+Do not turn `favPref` into a remote-image transport, persist raw potentially tokenized favicon URLs, or make ordinary automatically learned favicons synchronize this field. Changing the shortcut URL, selecting a built-in icon, uploading another local image, clearing artwork or choosing an explicit web image must clear the old favicon preference so a locator from one site cannot be reused for another.
 
 ## 1.30.13 catastrophic Sync-loss containment and self-healing policy
 
@@ -398,7 +408,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.13` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.14` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

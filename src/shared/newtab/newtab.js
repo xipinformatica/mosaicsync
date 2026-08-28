@@ -44,6 +44,7 @@ import {
   clampInt,
   createCrossSpaceSyncIntentNormalized,
   effectiveBackgroundDimForTheme,
+  faviconPreferenceForCandidate,
   initializeThemeWallpaperDims,
   hexLuminance,
   hostLabel,
@@ -407,6 +408,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let pendingShortcutImageKind = "none";
   let pendingShortcutImageSourceKind = "none";
   let pendingShortcutImageSourceUrl = "";
+  let pendingShortcutFaviconPreference = "";
   let pendingShortcutImageIsFallback = false;
   let pendingShortcutBuiltinIcon = "";
   let pendingShortcutColorTag = "";
@@ -3555,6 +3557,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         pendingShortcutImageKind = "none";
         pendingShortcutImageSourceKind = "builtin";
         pendingShortcutImageSourceUrl = "";
+        pendingShortcutFaviconPreference = "";
         pendingShortcutImageIsFallback = false;
         shortcutImageStyle.value = "contain";
         shortcutImageUrl.value = "";
@@ -3667,6 +3670,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         // compact derivative should travel to other devices.
         pendingShortcutImageSourceKind = "upload";
         pendingShortcutImageSourceUrl = "";
+        // Sync only a compact locator for the user's explicit detected-favicon
+        // choice. The image pixels remain device-local unless the existing
+        // “Sync this image” option is explicitly enabled.
+        pendingShortcutFaviconPreference = faviconPreferenceForCandidate(candidate);
         pendingShortcutImageIsFallback = false;
         shortcutImageStyle.value = "contain";
         shortcutImageUrl.value = "";
@@ -3709,6 +3716,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     pendingShortcutImageKind = item?.imageSyncKind || classifyImage(item?.image || "");
     pendingShortcutImageSourceKind = item?.imageSourceKind || (item?.source === "firefox-import" ? "firefox" : "none");
     pendingShortcutImageSourceUrl = item?.imageSourceUrl || "";
+    pendingShortcutFaviconPreference = item?.faviconPreference || "";
     pendingShortcutImageIsFallback = item?.imageIsFallback === true;
     pendingShortcutBuiltinIcon = BUILTIN_SHORTCUT_ICON_KEYS.includes(item?.builtinIcon) ? item.builtinIcon : "";
     pendingShortcutColorTag = SHORTCUT_COLOR_TAG_KEYS.includes(item?.colorTag) ? item.colorTag : "";
@@ -3855,6 +3863,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   shortcutUrl.addEventListener("input", () => {
     if (detectedFaviconPickerUrl) resetDetectedFaviconPicker();
+    // The compact preference identifies a candidate discovered for the previous
+    // shortcut URL. Keep the already selected pixels as local custom artwork,
+    // but never send a stale favicon locator for a different site.
+    if (pendingShortcutFaviconPreference) pendingShortcutFaviconPreference = "";
   });
 
   chooseBuiltinShortcutIcon?.addEventListener("click", () => {
@@ -3895,6 +3907,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       pendingShortcutImageKind = "device";
       pendingShortcutImageSourceKind = "upload";
       pendingShortcutImageSourceUrl = "";
+      pendingShortcutFaviconPreference = "";
       pendingShortcutImageIsFallback = false;
       shortcutSyncImage.checked = false;
       shortcutArtworkEdited = true;
@@ -3917,6 +3930,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     pendingShortcutImageKind = "none";
     pendingShortcutImageSourceKind = "none";
     pendingShortcutImageSourceUrl = "";
+    pendingShortcutFaviconPreference = "";
     pendingShortcutImageIsFallback = false;
     pendingShortcutBuiltinIcon = "";
     shortcutImageUrl.value = "";
@@ -3971,6 +3985,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         pendingShortcutImageKind = "device";
         pendingShortcutImageSourceKind = "remote";
         pendingShortcutImageSourceUrl = parsed.href;
+        pendingShortcutFaviconPreference = "";
         pendingShortcutImageIsFallback = false;
         shortcutSyncImage.checked = false;
         shortcutArtworkEdited = true;
@@ -4079,6 +4094,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           url,
           builtinIcon: pendingShortcutBuiltinIcon,
           colorTag: pendingShortcutColorTag,
+          faviconPreference: pendingShortcutFaviconPreference,
           image,
           imageSyncData,
           imageSyncKind,
@@ -4099,6 +4115,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           url,
           builtinIcon: pendingShortcutBuiltinIcon,
           colorTag: pendingShortcutColorTag,
+          faviconPreference: pendingShortcutFaviconPreference,
           image,
           imageSyncData,
           imageSyncKind,

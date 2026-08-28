@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { faviconPreferenceForCandidate } from "../src/shared/core/model.js";
 
 import {
   DEFAULT_SETTINGS,
@@ -319,6 +320,7 @@ for (const browser of ["firefox", "chrome"]) {
       detectedFaviconStatus: status,
       chooseDetectedFavicon: chooseButton,
       detectedFaviconPickerUrl: "https://site.example/",
+      faviconPreferenceForCandidate,
       document: { createElement: tag => new FakeElement(tag) },
       t: key => key,
       normalizeShortcutUrl: value => value,
@@ -332,6 +334,7 @@ for (const browser of ["firefox", "chrome"]) {
       pendingShortcutImageKind: "none",
       pendingShortcutImageSourceKind: "builtin",
       pendingShortcutImageSourceUrl: "",
+      pendingShortcutFaviconPreference: "",
       pendingShortcutImageIsFallback: false,
       shortcutImageStyle: { value: "cover" },
       shortcutImageUrl: { value: "https://old.example/icon.png" },
@@ -349,6 +352,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(context.pendingShortcutBuiltinIcon, "");
     assert.equal(context.pendingShortcutImageSourceKind, "upload", "manual detected choice must be protected from automatic favicon replacement");
     assert.equal(context.pendingShortcutImageSourceUrl, "", "chosen pixels should not silently change later because a remote favicon URL changed");
+    assert.match(context.pendingShortcutFaviconPreference, /^u:[0-9a-f]{8}:[0-9a-f]{8}$/, "manual choice should also retain compact cross-device favicon intent");
     assert.equal(context.shortcutSyncImage.checked, false, "existing opt-in Sync-this-image behavior remains explicit");
     assert.equal(context.shortcutArtworkEdited, true);
   });
