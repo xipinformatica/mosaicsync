@@ -1,10 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.30.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.9 trusted-state efficiency and cleanup policy
+
+1.30.9 is a zero-new-features refinement release on top of 1.30.8. Preserve the complete 1.30.8 Sync/evidence architecture unchanged. The live New Tab `state` has already crossed `normalizeState()`; controlled internal preference mutations may use `replaceWorkspaceTrustedNormalized()` only when the workspace being inserted is constructed entirely from an already-normalized workspace plus known-valid normalized values/timestamps. The ordinary persistence writer remains the final defensive boundary and still normalizes/projects before durable storage. Public/raw-state callers continue to use defensive wrappers. Background Personal/Work publication may reuse the `newState` already normalized by `pushLocalMutation()` rather than normalizing it again before complete profile snapshot publication. The watchdog may suppress only the duplicate pending-local retry that was already completed earlier in the same serialized alarm task; it must not skip pending recovery on foreground/startup/message checks.
+
+### Mandatory next-release requirement: verified device-snapshot generation cache
+
+The **next release after 1.30.9 (normally 1.30.10) must implement** the deferred device/profile snapshot decode cache unless an emergency corrective hotfix makes that technically impossible. This is no longer an optional backlog idea. The cache must be very small, worker-local and disposable, keyed by immutable complete-generation identity (at minimum device/profile identity plus commit/generation/slot and data fingerprint). Cache only generations that are complete and have passed chunk metadata checks, data fingerprint verification, decompression/JSON parsing and record/settings fingerprint validation. Never cache incomplete, malformed, fingerprint-failing or partially delivered generations, and never make correctness depend on the cache surviving an MV3 worker restart. Add explicit regressions proving: successful unchanged generations are reused; a changed generation is decoded again; incomplete delivery is never cached; a later completion of that same generation is accepted; worker-cache loss changes performance only, not results. Keep this requirement visible in future release planning and suggest it before any other optional performance work.
 
 ## 1.30.8 Sync same-key concurrency hardening policy
 
@@ -356,7 +364,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

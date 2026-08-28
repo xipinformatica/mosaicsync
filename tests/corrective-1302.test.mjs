@@ -46,7 +46,7 @@ for (const browser of ["firefox", "chrome"]) {
     const ctx = {
       console, URL, Date,
       ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,
-      ICON_RECOVERY_HIGH_QUALITY_SIDE:128,
+      
       FAVICON_AUTHORITATIVE_SUITABILITY:375,
       hasWebAccess:async()=>true,
       isProtectedChromeStoreUrl:()=>false,

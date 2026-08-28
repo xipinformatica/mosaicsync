@@ -34,7 +34,6 @@ import {
   ICON_RECOVERY_CONTINUE_DELAY_MS,
   ICON_RECOVERY_EXHAUSTED_RETRY_MS,
   ICON_RECOVERY_FETCH_TIMEOUT_MS,
-  ICON_RECOVERY_HIGH_QUALITY_SIDE,
   ICON_RECOVERY_MAX_ATTEMPTS,
   ICON_RECOVERY_QUEUE_VERSION,
   ICON_RECOVERY_RETRY_DELAYS_MS,
@@ -791,7 +790,7 @@ browser.alarms?.onAlarm?.addListener(alarm => {
       // commit-marker comparison. If currently usable remote records/settings
       // differ from local state, reconcileIfNewCommit() falls through to the
       // same full merge used at startup without paying that cost on every tick.
-      await reconcileIfNewCommit("alarm", meta);
+      await reconcileIfNewCommit("alarm", meta, true);
       meta = await readLocalMeta();
       await maybeGarbageCollectStaleDeviceSnapshots(meta);
     }
@@ -3706,7 +3705,7 @@ function markAppliedRemoteCore(meta, deviceRevision = "") {
   return { ...meta, lastAppliedDeviceSnapshotRevision: deviceRevision };
 }
 
-async function reconcileIfNewCommit(reason = "message", providedMeta = null) {
+async function reconcileIfNewCommit(reason = "message", providedMeta = null, pendingLocalAlreadyRetried = false) {
   const checkReason = syncCheckReason(reason);
   const checkedAt = Date.now();
   let meta = providedMeta || await readLocalMeta();
@@ -3736,7 +3735,7 @@ async function reconcileIfNewCommit(reason = "message", providedMeta = null) {
     return result;
   }
 
-  meta = await retryPendingLocalSyncMutation(meta);
+  if (!pendingLocalAlreadyRetried) meta = await retryPendingLocalSyncMutation(meta);
   await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
   await repairDeliveredCoreEvidence(WORK_SPACE_ID);
   const all = await browser.storage.sync.get(null);
@@ -4620,7 +4619,7 @@ async function pushPersonalMutation(oldRaw, newRaw, meta) {
     await writeSyncItems({ [SYNC_DATASET_KEY]: publishedDataset });
     // Publish the complete Personal+Work device generation only after the
     // compatibility commit marker exists, so deletions/tombstones are retained.
-    fastPublish = await publishProfileDeviceSnapshot(normalizeState(newRaw), meta);
+    fastPublish = await publishProfileDeviceSnapshot(newRaw, meta);
   }
 
   // Core layout data is always written before binary artwork. Images are
@@ -4706,7 +4705,7 @@ async function pushWorkMutation(oldRaw, newRaw, meta) {
     await writeSyncItems({ [namespace.datasetKey]: publishedDataset });
   }
   const profilePublish = hasOwnEnumerable(rebasedWrites)
-    ? await publishProfileDeviceSnapshot(normalizeState(newRaw), meta)
+    ? await publishProfileDeviceSnapshot(newRaw, meta)
     : { written: true, setRevision: "", publishedAt: 0 };
 
   snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });

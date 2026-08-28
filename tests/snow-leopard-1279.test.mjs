@@ -144,7 +144,7 @@ for (const browser of ["firefox", "chrome"]) {
     const context = vm.createContext({
       Math, Number, String, URL, RegExp,
       ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
-      ICON_RECOVERY_HIGH_QUALITY_SIDE: 128,
+      
       hasWebAccess: async () => true,
       isProtectedChromeStoreUrl: () => false,
       resolveBrowserCachedFavicon: async () => ({ image: "" }),

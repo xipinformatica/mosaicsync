@@ -99,7 +99,7 @@ for (const browser of ["firefox", "chrome"]) {
     const permissionAt = src.indexOf("browser.permissions?.onAdded", alarmAt);
     const block = src.slice(alarmAt, permissionAt);
     assert.match(block, /if \(alarm\?\.name !== SYNC_WATCH_ALARM\) return;/);
-    assert.match(block, /await reconcileIfNewCommit\("alarm"(?:, meta)?\);/);
+    assert.match(block, /await reconcileIfNewCommit\("alarm"(?:, meta(?:, true)?)?\);/);
   });
 }
 

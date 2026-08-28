@@ -102,20 +102,9 @@ export async function registrableDomainFromHostname(value) {
   return labels.slice(-(publicSuffixLabels + 1)).join(".");
 }
 
-export async function registrableDomainFromUrl(value) {
-  const safeUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(value) || "";
-  if (!safeUrl) return "";
-  try {
-    return registrableDomainFromHostname(new URL(safeUrl).hostname);
-  } catch {
-    return "";
-  }
-}
-
 export function hostnameMatchesRegistrableDomain(hostnameValue, domainValue) {
   const hostname = normalizeHostname(hostnameValue);
   const domain = normalizeHostname(domainValue);
   return Boolean(hostname && domain && (hostname === domain || hostname.endsWith(`.${domain}`)));
 }
 
-export function resetPublicSuffixRulesForTests() { rulesPromise = null; }

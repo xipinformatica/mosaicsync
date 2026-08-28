@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.8";
+export const VERSION = "1.30.9";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -99,7 +99,6 @@ export const ICON_RECOVERY_CONTINUE_DELAY_MS = 120;
 export const ICON_RECOVERY_RETRY_DELAYS_MS = Object.freeze([15_000, 60_000, 5 * 60_000, 30 * 60_000]);
 export const ICON_RECOVERY_MAX_ATTEMPTS = ICON_RECOVERY_RETRY_DELAYS_MS.length + 1;
 export const ICON_RECOVERY_EXHAUSTED_RETRY_MS = 24 * 60 * 60 * 1000;
-export const ICON_RECOVERY_HIGH_QUALITY_SIDE = 128;
 export const FAVICON_QUALITY_AUDIT_POLICY_VERSION = 1;
 export const FAVICON_QUALITY_AUDIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const FAVICON_QUALITY_AUDIT_MAX_ENTRIES = 256;
@@ -112,7 +111,6 @@ export const FREQUENT_CANDIDATE_CACHE_MS = 30_000;
 export const FREQUENT_TOP_SITES_LIMIT = 100;
 export const FREQUENT_HIDDEN_DOMAINS_MAX = 128;
 export const BACKGROUND_PRELOAD_CACHE_MAX = 8;
-export const NATIVE_FAVICON_CONCURRENCY = 6;
 export const LOADED_LOCALE_CATALOG_MAX = 4;
 export const RENDER_MANIFEST_MAX_CHARS = 220_000;
 export const RENDER_PREVIEW_MAX_CHARS = 6000;

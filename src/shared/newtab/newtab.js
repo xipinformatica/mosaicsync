@@ -54,8 +54,8 @@ import {
   moveShortcutOutOfFolder,
   nextMutationTime,
   replaceWorkspace,
+  replaceWorkspaceTrustedNormalized,
   now,
-  selectActiveSpace,
   selectActiveSpaceNormalized,
   repairTopLevelPositions,
   stableStringify,
@@ -968,7 +968,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const normalizedEnabled = enabled === true;
     const normalizedCount = [3, 5, 8, 10].includes(Number(count)) ? Number(count) : 5;
     const baseState = writeBaseline;
-    const normalized = normalizeState(state);
+    // `state` is the already-normalized live model. These two controlled setting
+    // writes only introduce normalized booleans/counts and monotonic timestamps;
+    // avoid re-normalizing/image-hashing both Spaces before the real persistence
+    // boundary validates the final state.
+    const normalized = state;
     const observedClocks = [];
     for (const spaceId of SPACE_IDS) {
       const workspace = normalized.spaces[spaceId];
@@ -988,7 +992,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         settingsModifiedAt: timestamp,
         updatedAt: Math.max(Number(workspace.updatedAt) || 0, timestamp)
       };
-      next = replaceWorkspace(next, spaceId, updatedWorkspace);
+      next = replaceWorkspaceTrustedNormalized(next, spaceId, updatedWorkspace);
     }
     state = next;
     stateMutationGeneration += 1;
@@ -1991,11 +1995,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   async function persistWorkspaceSetting(spaceId, key, value) {
     const baseState = writeBaseline;
-    const normalized = normalizeState(state);
+    // This helper is currently used only for normalized Space names. Preserve
+    // the trusted live state and let writeLocalStateWithBaseline remain the final
+    // defensive persistence boundary instead of traversing all artwork twice.
+    const normalized = state;
     const workspace = normalized.spaces[spaceId];
     const timestamp = nextMutationTime(workspace.settingsModifiedAt, workspace.updatedAt);
     const updatedWorkspace = { ...workspace, settings: { ...workspace.settings, [key]: value }, settingsModifiedAt: timestamp, updatedAt: Math.max(Number(workspace.updatedAt) || 0, timestamp) };
-    state = replaceWorkspace(normalized, spaceId, updatedWorkspace);
+    state = replaceWorkspaceTrustedNormalized(normalized, spaceId, updatedWorkspace);
     stateMutationGeneration += 1;
     const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
@@ -2012,13 +2019,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   async function setMultipleSpacesEnabled(enabled) {
     const baseState = writeBaseline;
-    const normalized = normalizeState(state);
+    const normalized = state;
     const personal = normalized.spaces.personal;
     const timestamp = nextMutationTime(personal.settingsModifiedAt, personal.updatedAt);
-    const updatedPersonal = { ...personal, settings: { ...personal.settings, multipleSpacesEnabled: enabled }, settingsModifiedAt: timestamp, updatedAt: Math.max(Number(personal.updatedAt) || 0, timestamp) };
-    state = replaceWorkspace(normalized, "personal", updatedPersonal);
+    const updatedPersonal = { ...personal, settings: { ...personal.settings, multipleSpacesEnabled: enabled === true }, settingsModifiedAt: timestamp, updatedAt: Math.max(Number(personal.updatedAt) || 0, timestamp) };
+    state = replaceWorkspaceTrustedNormalized(normalized, "personal", updatedPersonal);
     if (!enabled) {
-      state = selectActiveSpace(state, "personal");
+      state = selectActiveSpaceNormalized(state, "personal");
       await writeActiveSpace("personal");
     }
     stateMutationGeneration += 1;

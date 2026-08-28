@@ -7,8 +7,6 @@
  * Runtime permission helpers. Permission requests intentionally return their promise
  * immediately so callers can invoke them directly inside a user-gesture handler.
  */
-import { SYNC_DATA_COLLECTION_TYPES } from "./constants.js";
-
 const TOP_SITES_PERMISSION = "topSites";
 const WEB_ORIGINS = Object.freeze(["http://*/*", "https://*/*"]);
 

@@ -35,7 +35,7 @@ for (const browser of ["firefox", "chrome"]) {
     const low = icon("LOW64",64,"https://fixture.test/64.png");
     const high = icon("HIGH192",192,"https://fixture.test/192.png");
     const ctx = {
-      console, URL, Date, ICON_RECOVERY_FETCH_TIMEOUT_MS:8000, ICON_RECOVERY_HIGH_QUALITY_SIDE:128, FAVICON_AUTHORITATIVE_SUITABILITY:375,
+      console, URL, Date, ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,  FAVICON_AUTHORITATIVE_SUITABILITY:375,
       isProtectedChromeStoreUrl:()=>false, hasWebAccess:async()=>true, resolveBrowserCachedFavicon:async()=>null,
       discoverPageIconInfo:async url => ({ candidates:[{url:low.sourceUrl,sideHint:64,source:"link"},{url:high.sourceUrl,sideHint:192,source:"link"}], finalPageUrl:url, reason:"" }),
       fetchImageDataUrlDetailed:async url => { calls.push(url); if (url===low.sourceUrl) return low; if (url===high.sourceUrl) return high; return {image:"",reason:"http-404",width:0,height:0,qualitySide:0}; }

@@ -511,10 +511,6 @@ export function workspaceStateNormalized(normalized, spaceId = DEFAULT_SPACE_ID)
   };
 }
 
-export function workspaceState(state, spaceId = DEFAULT_SPACE_ID) {
-  return workspaceStateNormalized(normalizeState(state), spaceId);
-}
-
 export function selectActiveSpaceNormalized(normalized, spaceId = DEFAULT_SPACE_ID) {
   const source = normalized && typeof normalized === "object" && normalized.spaces && typeof normalized.spaces === "object"
     ? normalized
@@ -535,22 +531,32 @@ export function selectActiveSpace(state, spaceId = DEFAULT_SPACE_ID) {
   return selectActiveSpaceNormalized(normalizeState(state), spaceId);
 }
 
-export function replaceWorkspaceNormalized(normalized, spaceId, workspace) {
-  const source = normalized && typeof normalized === "object" && normalized.spaces && typeof normalized.spaces === "object"
-    ? normalized
-    : normalizeState(normalized);
+// Trusted internal fast path. Callers must pass a state/workspace that already
+// crossed normalizeState()/normalizeWorkspace(). It deliberately performs no
+// defensive normalization so high-frequency UI mutations do not re-hash the
+// same already-validated artwork tree before the persistence boundary validates
+// the final state again.
+export function replaceWorkspaceTrustedNormalized(normalized, spaceId, workspace) {
   const id = SPACE_IDS.includes(spaceId) ? spaceId : DEFAULT_SPACE_ID;
-  const nextWorkspace = normalizeWorkspace(workspace);
-  const spaces = { ...source.spaces, [id]: nextWorkspace };
-  const active = spaces[source.activeSpaceId] || spaces[DEFAULT_SPACE_ID];
+  const spaces = { ...normalized.spaces, [id]: workspace };
+  const active = spaces[normalized.activeSpaceId] || spaces[DEFAULT_SPACE_ID];
   return {
-    ...source,
+    ...normalized,
     spaces,
     shortcuts: active.shortcuts,
     settings: active.settings,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
+}
+
+export function replaceWorkspaceNormalized(normalized, spaceId, workspace) {
+  const source = normalized && typeof normalized === "object" && normalized.spaces && typeof normalized.spaces === "object"
+    ? normalized
+    : normalizeState(normalized);
+  const id = SPACE_IDS.includes(spaceId) ? spaceId : DEFAULT_SPACE_ID;
+  const nextWorkspace = normalizeWorkspace(workspace);
+  return replaceWorkspaceTrustedNormalized(source, id, nextWorkspace);
 }
 
 export function replaceWorkspace(state, spaceId, workspace) {

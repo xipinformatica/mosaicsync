@@ -5,7 +5,6 @@
  */
 :root {
   color-scheme: light dark;
-  --page: #140522;
   --panel: #22152f;
   --panel-soft: rgba(255,255,255,.055);
   --panel-hover: rgba(255,255,255,.085);
@@ -15,7 +14,6 @@
   --border-strong: rgba(255,255,255,.22);
   --accent: #8b5cf6;
   --accent-2: #26b9f5;
-  --accent-soft: rgba(139,92,246,.18);
   --shadow: 0 28px 90px rgba(0,0,0,.38);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
 }
@@ -323,7 +321,6 @@ h1 { margin: 0; font-size: clamp(32px, 5vw, 42px); line-height: 1.05; letter-spa
 
 @media (prefers-color-scheme: light) {
   :root {
-    --page: #f5f2f8;
     --panel: #ffffff;
     --panel-soft: rgba(46,25,67,.045);
     --panel-hover: rgba(46,25,67,.075);

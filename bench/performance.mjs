@@ -62,3 +62,17 @@ if (crossSpaceShortcutId) {
     });
   }, 20);
 }
+const trustedPersonal = normalized.spaces.personal;
+const trustedWorkspaceMutation = {
+  ...trustedPersonal,
+  settings: { ...trustedPersonal.settings, spaceName: "Benchmark" },
+  settingsModifiedAt: 123456,
+  updatedAt: Math.max(Number(trustedPersonal.updatedAt) || 0, 123456)
+};
+bench("workspace setting legacy defensive chain(200)", () => {
+  const revalidated = model.normalizeState(normalized);
+  model.replaceWorkspace(revalidated, "personal", trustedWorkspaceMutation);
+}, 5);
+bench("workspace setting trusted replacement(200)", () => {
+  model.replaceWorkspaceTrustedNormalized(normalized, "personal", trustedWorkspaceMutation);
+}, 1000);

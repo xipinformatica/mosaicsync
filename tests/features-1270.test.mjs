@@ -68,7 +68,7 @@ function stateWith(items) {
 }
 
 test("1.30 release identity and additive shortcut schemas are unified", () => {
-  assert.equal(VERSION, "1.30.8");
+  assert.equal(VERSION, "1.30.9");
   assert.equal(STATE_SCHEMA_VERSION, 18);
   assert.equal(SYNC_SCHEMA_VERSION, 10);
   assert.ok(BUILTIN_SHORTCUT_ICON_KEYS.includes("code"));

@@ -836,6 +836,206 @@ else if (scenario === 'sync-1308-post-single-flight-freshness') {
   console.log(JSON.stringify({ok:true,firstRequests:firstBatch.length,newRead:true,recovered:second?.ok!==false}));
 }
 
+else if (scenario === 'sync-1309-personal-local-newer-than-evidence') {
+  websiteAccess=false;
+  const originalLocal=stateWith({personal:[shortcut('shared','https://local-old.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:initial'});
+  const initialRemote=stateWith({personal:[shortcut('shared','https://remote-old.test/',100)]});
+  await sync.set(remotePersonalEntries(initialRemote,'initial-1309-local-newer'));
+
+  const targetKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('shared')}`;
+  const deliveredRemoteState=stateWith({personal:[shortcut('shared','https://remote-mid.test/',500)]});
+  const deliveredRemoteRecord=remotePersonalEntries(deliveredRemoteState,'foreign-1309-local-newer')[targetKey];
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && Number(targetValue.modifiedAt) > 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(deliveredRemoteRecord));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(deliveredRemoteRecord)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const editedLocal=stateWith({personal:[shortcut('shared','https://local-newer.test/',600),shortcut('local-new','https://local-new.test/',700)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalShared=(await sync.get(targetKey))[targetKey];
+  const dataset=(await sync.get(constants.SYNC_DATASET_KEY))[constants.SYNC_DATASET_KEY];
+  assert.equal(injected,true,'fixture must inject an older-than-local same-key remote value during publication');
+  assert.equal(finalShared?.url,'https://local-newer.test/','delivered evidence must never reintroduce an older remote record over a newer local winner');
+  assert.equal(Number(dataset?.liveRecordCount),2);
+  console.log(JSON.stringify({ok:true,injected,localWinner:finalShared?.url,liveRecordCount:dataset?.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1309-personal-newer-remote-tombstone-evidence') {
+  websiteAccess=false;
+  const originalLocal=stateWith({personal:[shortcut('shared','https://local-old.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:initial'});
+  const initialRemote=stateWith({personal:[shortcut('shared','https://remote-old.test/',100)]});
+  await sync.set(remotePersonalEntries(initialRemote,'initial-1309-tombstone'));
+
+  const targetKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('shared')}`;
+  const deliveredTombstone=model.makeTombstone('shared','remote-device',500);
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && targetValue.kind !== 'deleted' && Number(targetValue.modifiedAt) < 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(deliveredTombstone));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(deliveredTombstone)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const editedLocal=stateWith({personal:[shortcut('shared','https://local-mid.test/',200),shortcut('local-new','https://local-new.test/',300)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalShared=(await sync.get(targetKey))[targetKey];
+  const localNewKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('local-new')}`;
+  const finalLocalNew=(await sync.get(localNewKey))[localNewKey];
+  const dataset=(await sync.get(constants.SYNC_DATASET_KEY))[constants.SYNC_DATASET_KEY];
+  assert.equal(injected,true,'fixture must inject a newer remote tombstone during publication');
+  assert.equal(finalShared?.kind,'deleted','a newer delivered tombstone must survive a racing older local live record');
+  assert.ok(finalLocalNew,'unrelated local record must still publish while the tombstone wins');
+  assert.equal(Number(dataset?.liveRecordCount),1,'tombstones are not live records in the repaired commit marker');
+  console.log(JSON.stringify({ok:true,injected,tombstoneWinner:finalShared?.kind,localPublished:Boolean(finalLocalNew),liveRecordCount:dataset?.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1309-personal-local-live-newer-than-tombstone-evidence') {
+  websiteAccess=false;
+  const originalLocal=stateWith({personal:[shortcut('shared','https://local-old.test/',100)]});
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:initial'});
+  const initialRemote=stateWith({personal:[shortcut('shared','https://remote-old.test/',100)]});
+  await sync.set(remotePersonalEntries(initialRemote,'initial-1309-local-live'));
+
+  const targetKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('shared')}`;
+  const deliveredTombstone=model.makeTombstone('shared','remote-device',500);
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && targetValue.kind !== 'deleted' && Number(targetValue.modifiedAt) > 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(deliveredTombstone));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(deliveredTombstone)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const editedLocal=stateWith({personal:[shortcut('shared','https://local-live-newer.test/',600),shortcut('local-new','https://local-new.test/',700)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalShared=(await sync.get(targetKey))[targetKey];
+  const dataset=(await sync.get(constants.SYNC_DATASET_KEY))[constants.SYNC_DATASET_KEY];
+  assert.equal(injected,true,'fixture must inject an older remote tombstone during publication');
+  assert.equal(finalShared?.kind,'deleted','an older tombstone still dominates a later ordinary edit unless an explicit newer cross-Space move revives the record');
+  assert.equal(Number(dataset?.liveRecordCount),1);
+  console.log(JSON.stringify({ok:true,injected,tombstoneWinner:finalShared?.kind,liveRecordCount:dataset?.liveRecordCount}));
+}
+
+else if (scenario === 'sync-1309-personal-settings-mid-publication-evidence') {
+  websiteAccess=false;
+  const base=stateWith({personal:[]});
+  const originalWorkspace=model.workspaceStateNormalized(base,'personal');
+  const originalLocal=model.replaceWorkspaceNormalized(base,'personal',{
+    ...originalWorkspace,
+    settings:{...originalWorkspace.settings,columns:8},
+    settingsModifiedAt:100,
+    updatedAt:100
+  });
+  await seedLocalState(originalLocal,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'local',syncStatus:'ready',lastAppliedSyncRevision:'commit:initial'});
+  await sync.set(remotePersonalEntries(originalLocal,'initial-1309-settings'));
+
+  const targetKey=constants.SYNC_SETTINGS_KEY;
+  const remoteWorkspace=model.workspaceStateNormalized(originalLocal,'personal');
+  const newerRemoteState=model.replaceWorkspaceNormalized(originalLocal,'personal',{
+    ...remoteWorkspace,
+    settings:{...remoteWorkspace.settings,columns:12},
+    settingsModifiedAt:500,
+    updatedAt:500
+  });
+  const newerRemoteSettings=remotePersonalEntries(newerRemoteState,'foreign-1309-settings')[targetKey];
+  const originalSet=sync.set.bind(sync);
+  let injected=false;
+  sync.set=async items => {
+    const targetValue=items?.[targetKey];
+    if (targetValue && !injected && Number(targetValue.modifiedAt) < 500) {
+      injected=true;
+      const previous=clone(sync.data.get(targetKey));
+      sync.data.set(targetKey,clone(newerRemoteSettings));
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:previous,newValue:clone(newerRemoteSettings)}},'sync');
+      }
+    }
+    const oldTarget=targetValue ? clone(sync.data.get(targetKey)) : undefined;
+    await originalSet(items);
+    if (targetValue) {
+      for(const listener of events.onStorageChanged.listeners) {
+        listener({[targetKey]:{oldValue:oldTarget,newValue:clone(targetValue)}},'sync');
+      }
+    }
+  };
+
+  const localWorkspace=model.workspaceStateNormalized(originalLocal,'personal');
+  const editedLocal=model.replaceWorkspaceNormalized(originalLocal,'personal',{
+    ...localWorkspace,
+    settings:{...localWorkspace.settings,columns:10},
+    settingsModifiedAt:200,
+    updatedAt:200
+  });
+  await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
+  for(const listener of events.onStorageChanged.listeners) {
+    listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
+  }
+  await send({type:'mosaicsync:get-sync-status'});
+  const finalSettings=(await sync.get(targetKey))[targetKey];
+  const dataset=(await sync.get(constants.SYNC_DATASET_KEY))[constants.SYNC_DATASET_KEY];
+  assert.equal(injected,true,'fixture must inject newer same-key settings during publication');
+  assert.equal(Number(finalSettings?.settings?.columns),12,'newer delivered Settings evidence must survive the racing older local Settings write');
+  assert.equal(Number(finalSettings?.modifiedAt),500);
+  assert.equal(Number(dataset?.settingsModifiedAt),500,'commit marker must reflect the repaired Settings winner');
+  console.log(JSON.stringify({ok:true,injected,columns:finalSettings?.settings?.columns,settingsModifiedAt:dataset?.settingsModifiedAt}));
+}
+
 else if (scenario === 'sync-same-marker-divergence') {
   websiteAccess=false;
   const localState=stateWith({personal:[shortcut('shared','https://local.test/',100)]});
