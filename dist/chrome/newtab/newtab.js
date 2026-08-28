@@ -26,6 +26,7 @@ import {
   DONATE_URL,
   LOCAL_META_KEY,
   LOCAL_STATE_KEY,
+  LOCAL_SYNC_RECOVERY_STATUS_KEY,
   PRODUCT_NAME,
   RENDER_MANIFEST_KEY,
   RENDER_PREVIEW_MAX_CHARS,
@@ -6873,6 +6874,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         }
       })();
     }
+
+    const recoveryStatusChange = changes[LOCAL_SYNC_RECOVERY_STATUS_KEY];
+    const recoveryStatus = recoveryStatusChange?.newValue;
+    if (recoveryStatus?.state === "recovering") showToast(t("syncRecoveryRestoring"));
+    else if (recoveryStatus?.state === "restored") showToast(t("syncRecoveryRestored"));
+    else if (recoveryStatus?.state === "failed") showToast(t("syncRecoveryFailed"));
 
     const metaChange = changes[LOCAL_META_KEY];
     if (metaChange?.newValue) {

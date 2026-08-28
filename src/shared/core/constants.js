@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.12";
+export const VERSION = "1.30.13";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -50,6 +50,8 @@ export const LOCAL_ICON_RECOVERY_STATUS_KEY = "mosaicsync.icon-recovery-status.v
 export const LOCAL_FAVICON_QUALITY_AUDIT_KEY = "mosaicsync.favicon-quality-audit.v1";
 export const LOCAL_MAINTENANCE_MIGRATIONS_KEY = "mosaicsync.maintenance-migrations.v1";
 export const LOCAL_SYNC_DIAGNOSTICS_KEY = "mosaicsync.sync-diagnostics.v1";
+export const LOCAL_SYNC_CONTINUITY_KEY = "mosaicsync.sync-continuity.v1";
+export const LOCAL_SYNC_RECOVERY_STATUS_KEY = "mosaicsync.sync-recovery-status.v1";
 export const LOCAL_ASSET_WRITE_LOCK_NAME = "mosaicsync.local-assets.write.v1";
 
 // Alarm names are part of persisted browser state too; changing one is a
@@ -57,6 +59,7 @@ export const LOCAL_ASSET_WRITE_LOCK_NAME = "mosaicsync.local-assets.write.v1";
 export const LEGACY_ICON_HYDRATION_ALARM = "mosaicsync-icon-hydration-v1";
 export const ICON_RECOVERY_ALARM = "mosaicsync-icon-recovery-v2";
 export const SYNC_WATCH_ALARM = "mosaicsync-sync-watch-v1";
+export const SYNC_RECOVERY_ALARM = "mosaicsync-sync-recovery-v1";
 
 export const STATE_SCHEMA_VERSION = 18;
 export const META_SCHEMA_VERSION = 12;
@@ -69,6 +72,10 @@ export const SYNC_SPACE_PREFIX = `${SYNC_PREFIX}space.`;
 export const SYNC_ITEM_PREFIX = `${SYNC_PREFIX}item.`;
 export const SYNC_ASSET_PREFIX = `${SYNC_PREFIX}asset.`;
 export const SYNC_DEVICE_SNAPSHOT_PREFIX = `${SYNC_PREFIX}device.`;
+export const SYNC_RESET_INTENT_KEY = `${SYNC_PREFIX}reset-intent`;
+export const SYNC_RESET_INTENT_SCHEMA_VERSION = 1;
+export const SYNC_CONTINUITY_SCHEMA_VERSION = 1;
+export const SYNC_RECOVERY_STATUS_SCHEMA_VERSION = 1;
 export const DEVICE_SNAPSHOT_SCHEMA_VERSION = 2;
 export const PROFILE_SNAPSHOT_SCHEMA_VERSION = 1;
 export const DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION = 1;
@@ -103,6 +110,13 @@ export const FAVICON_QUALITY_AUDIT_POLICY_VERSION = 1;
 export const FAVICON_QUALITY_AUDIT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const FAVICON_QUALITY_AUDIT_MAX_ENTRIES = 256;
 export const SYNC_WATCH_PERIOD_MINUTES = 5;
+export const SYNC_RECOVERY_QUARANTINE_MS = 5 * 60 * 1000;
+export const SYNC_RECOVERY_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
+export const SYNC_RECOVERY_VERY_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+export const SYNC_RECOVERY_STALE_DELAY_MS = 2 * 60 * 1000;
+export const SYNC_RECOVERY_VERY_STALE_DELAY_MS = 5 * 60 * 1000;
+export const SYNC_RECOVERY_JITTER_MS = 30 * 1000;
+export const SYNC_RECOVERY_MAX_ATTEMPTS = 3;
 export const SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS = 60_000;
 export const WEB_ACCESS_CACHE_MS = 5_000;
 export const DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES = 512 * 1024;

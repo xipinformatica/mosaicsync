@@ -68,6 +68,12 @@ for (const browser of ["firefox", "chrome"]) {
       }),
       retryPendingLocalSyncMutation: async meta => meta,
       repairDeliveredCoreEvidence: async () => ({ repaired: 0, resolved: 0 }),
+      beginOrContinueCatastrophicSyncRecovery: async () => null,
+      markSyncContinuityHealthy: async () => null,
+      completeRemoteDescriptor: () => null,
+      observeRemoteResetIntent: async () => null,
+      validResetIntent: () => false,
+      SYNC_RESET_INTENT_KEY: "mosaicsync:reset-intent",
       browser: { storage: { sync: { get: async () => ({}) } } },
       readCoreSources: async () => ({ shared: { dataset: { commitId: "same" } }, device: { revision: "device:same" }, profile: null }),
       datasetRevision: dataset => dataset?.commitId ? `commit:${dataset.commitId}` : "",
@@ -99,7 +105,7 @@ for (const browser of ["firefox", "chrome"]) {
     const permissionAt = src.indexOf("browser.permissions?.onAdded", alarmAt);
     const block = src.slice(alarmAt, permissionAt);
     assert.match(block, /if \(alarm\?\.name !== SYNC_WATCH_ALARM\) return;/);
-    assert.match(block, /await reconcileIfNewCommit\("alarm"(?:, meta(?:, true)?)?\);/);
+    assert.match(block, /await reconcileIfNewCommit\("alarm"(?:, meta(?:, (?:true|false))?)?\);/);
   });
 }
 

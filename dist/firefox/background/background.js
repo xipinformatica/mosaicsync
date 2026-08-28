@@ -44,6 +44,8 @@ import {
   LOCAL_ICON_RECOVERY_STATUS_KEY,
   LOCAL_MAINTENANCE_MIGRATIONS_KEY,
   LOCAL_SYNC_DIAGNOSTICS_KEY,
+  LOCAL_SYNC_CONTINUITY_KEY,
+  LOCAL_SYNC_RECOVERY_STATUS_KEY,
   LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX,
   LOCAL_PENDING_SYNC_MUTATION_KEY,
   LOCAL_PRE_SPACES_BACKUP_KEY,
@@ -60,6 +62,10 @@ import {
   SYNC_CORE_RESERVE_BYTES,
   SYNC_DATASET_KEY,
   SYNC_DEVICE_SNAPSHOT_PREFIX,
+  SYNC_RESET_INTENT_KEY,
+  SYNC_RESET_INTENT_SCHEMA_VERSION,
+  SYNC_CONTINUITY_SCHEMA_VERSION,
+  SYNC_RECOVERY_STATUS_SCHEMA_VERSION,
   SYNC_ITEM_PREFIX,
   SYNC_PREFIX,
   SYNC_QUOTA_BYTES,
@@ -69,7 +75,15 @@ import {
   SYNC_SPACE_PREFIX,
   SYNC_SCHEMA_VERSION,
   SYNC_WATCH_ALARM,
+  SYNC_RECOVERY_ALARM,
   SYNC_WATCH_PERIOD_MINUTES,
+  SYNC_RECOVERY_QUARANTINE_MS,
+  SYNC_RECOVERY_STALE_AFTER_MS,
+  SYNC_RECOVERY_VERY_STALE_AFTER_MS,
+  SYNC_RECOVERY_STALE_DELAY_MS,
+  SYNC_RECOVERY_VERY_STALE_DELAY_MS,
+  SYNC_RECOVERY_JITTER_MS,
+  SYNC_RECOVERY_MAX_ATTEMPTS,
   TOMBSTONE_TTL_MS,
   VERSION,
   WEB_ACCESS_CACHE_MS
@@ -514,6 +528,291 @@ function syncCheckReason(value) {
   return SYNC_DIAGNOSTIC_REASONS.has(value) ? value : "message";
 }
 
+const SYNC_LOSS_STATES = new Set(["none", "quarantine", "recovering", "failed"]);
+
+function inferredContinuityEstablished(meta) {
+  return Boolean(meta?.syncEnabled && meta?.syncInitialized && (
+    meta.lastAppliedProfileSnapshotRevision ||
+    (meta.lastAppliedSyncRevision && meta.lastAppliedWorkSyncRevision) ||
+    meta.lastAppliedDeviceSnapshotRevision ||
+    meta.lastRemoteReceiptAt ||
+    meta.lastSyncAt
+  ));
+}
+
+function normalizeContinuityTombstones(value) {
+  if (!Array.isArray(value)) return [];
+  const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+  const out = [];
+  const seen = new Set();
+  for (const raw of value) {
+    if (!raw || raw.kind !== "deleted" || typeof raw.id !== "string" || !raw.id || seen.has(raw.id)) continue;
+    const deletedAt = Number(raw.deletedAt);
+    const modifiedAt = Number(raw.modifiedAt);
+    if (!Number.isFinite(deletedAt) || !Number.isFinite(modifiedAt) || deletedAt < cutoff) continue;
+    seen.add(raw.id);
+    out.push({
+      schemaVersion: Number(raw.schemaVersion) || SYNC_SCHEMA_VERSION,
+      kind: "deleted",
+      id: raw.id,
+      deletedAt,
+      modifiedAt,
+      deviceId: typeof raw.deviceId === "string" ? raw.deviceId : ""
+    });
+  }
+  out.sort((a, b) => (b.modifiedAt - a.modifiedAt) || compareStableText(a.id, b.id));
+  return out.slice(0, SYNC_QUOTA_MAX_ITEMS);
+}
+
+function continuityTombstonesFromRecords(records) {
+  return normalizeContinuityTombstones([...records?.values?.() || []]);
+}
+
+function normalizeSyncContinuity(raw, meta = null) {
+  const source = raw && typeof raw === "object" ? raw : {};
+  const established = source.established === true ||
+    (source.established !== false && inferredContinuityEstablished(meta));
+  return {
+    schemaVersion: SYNC_CONTINUITY_SCHEMA_VERSION,
+    established,
+    lastHealthyAt: Number.isFinite(Number(source.lastHealthyAt)) ? Number(source.lastHealthyAt) : 0,
+    lastCompleteRevision: typeof source.lastCompleteRevision === "string" ? source.lastCompleteRevision : "",
+    lastPublisherDeviceId: typeof source.lastPublisherDeviceId === "string" ? source.lastPublisherDeviceId : "",
+    lastResetEpoch: Number.isFinite(Number(source.lastResetEpoch)) ? Number(source.lastResetEpoch) : 0,
+    personalTombstones: normalizeContinuityTombstones(source.personalTombstones),
+    workTombstones: normalizeContinuityTombstones(source.workTombstones),
+    lossState: SYNC_LOSS_STATES.has(source.lossState) ? source.lossState : "none",
+    lossDetectedAt: Number.isFinite(Number(source.lossDetectedAt)) ? Number(source.lossDetectedAt) : 0,
+    recoveryEligibleAt: Number.isFinite(Number(source.recoveryEligibleAt)) ? Number(source.recoveryEligibleAt) : 0,
+    recoveryAttempts: Math.max(0, Math.min(SYNC_RECOVERY_MAX_ATTEMPTS, Number(source.recoveryAttempts) || 0)),
+    lastRecoveredAt: Number.isFinite(Number(source.lastRecoveredAt)) ? Number(source.lastRecoveredAt) : 0
+  };
+}
+
+async function readSyncContinuity(meta = null) {
+  const stored = await browser.storage.local.get(LOCAL_SYNC_CONTINUITY_KEY);
+  return normalizeSyncContinuity(stored?.[LOCAL_SYNC_CONTINUITY_KEY], meta);
+}
+
+async function writeSyncContinuity(value, meta = null) {
+  const next = normalizeSyncContinuity(value, meta);
+  await browser.storage.local.set({ [LOCAL_SYNC_CONTINUITY_KEY]: next });
+  return next;
+}
+
+async function writeSyncRecoveryStatus(state) {
+  const allowed = new Set(["recovering", "restored", "failed"]);
+  if (!allowed.has(state)) return;
+  await browser.storage.local.set({
+    [LOCAL_SYNC_RECOVERY_STATUS_KEY]: {
+      schemaVersion: SYNC_RECOVERY_STATUS_SCHEMA_VERSION,
+      state,
+      eventId: uid("sync-recovery"),
+      updatedAt: Date.now()
+    }
+  });
+}
+
+function validResetIntent(value) {
+  return Boolean(value && value.kind === "reset-intent" &&
+    Number(value.schemaVersion) === SYNC_RESET_INTENT_SCHEMA_VERSION &&
+    Number.isFinite(Number(value.epoch)) && Number(value.epoch) > 0 &&
+    typeof value.initiatedByDevice === "string");
+}
+
+function recoveryStalePenalty(continuity, now = Date.now()) {
+  const healthyAt = Number(continuity?.lastHealthyAt) || 0;
+  if (!healthyAt) return SYNC_RECOVERY_VERY_STALE_DELAY_MS;
+  const age = Math.max(0, now - healthyAt);
+  if (age >= SYNC_RECOVERY_VERY_STALE_AFTER_MS) return SYNC_RECOVERY_VERY_STALE_DELAY_MS;
+  if (age >= SYNC_RECOVERY_STALE_AFTER_MS) return SYNC_RECOVERY_STALE_DELAY_MS;
+  return 0;
+}
+
+function recoveryDeviceJitter(deviceId) {
+  if (!SYNC_RECOVERY_JITTER_MS) return 0;
+  return Number.parseInt(fnv1a(deviceId || "mosaicsync"), 16) % SYNC_RECOVERY_JITTER_MS;
+}
+
+async function scheduleSyncRecoveryAlarm(when = 0) {
+  if (!browser.alarms?.create || !browser.alarms?.clear) return;
+  try {
+    await browser.alarms.clear(SYNC_RECOVERY_ALARM);
+    if (Number(when) > Date.now()) await browser.alarms.create(SYNC_RECOVERY_ALARM, { when: Number(when) });
+  } catch (error) {
+    console.warn(`${PRODUCT_NAME}: could not schedule Sync recovery check`, error);
+  }
+}
+
+async function markSyncContinuityHealthy(meta, descriptor = {}) {
+  const current = await readSyncContinuity(meta);
+  const next = await writeSyncContinuity({
+    ...current,
+    established: true,
+    lastHealthyAt: Date.now(),
+    lastCompleteRevision: descriptor.revision || current.lastCompleteRevision || "",
+    lastPublisherDeviceId: descriptor.publisherDeviceId || current.lastPublisherDeviceId || "",
+    personalTombstones: descriptor.personalTombstones ?? current.personalTombstones,
+    workTombstones: descriptor.workTombstones ?? current.workTombstones,
+    lossState: "none",
+    lossDetectedAt: 0,
+    recoveryEligibleAt: 0,
+    recoveryAttempts: 0
+  }, meta);
+  await scheduleSyncRecoveryAlarm(0);
+  return next;
+}
+
+async function markIntentionalSyncReset(meta, epoch) {
+  const current = await readSyncContinuity(meta);
+  const next = await writeSyncContinuity({
+    ...current,
+    established: false,
+    lastResetEpoch: Math.max(Number(current.lastResetEpoch) || 0, Number(epoch) || 0),
+    personalTombstones: [],
+    workTombstones: [],
+    lossState: "none",
+    lossDetectedAt: 0,
+    recoveryEligibleAt: 0,
+    recoveryAttempts: 0
+  }, meta);
+  await scheduleSyncRecoveryAlarm(0);
+  return next;
+}
+
+function completeRemoteDescriptor(sources, workSnapshot) {
+  const personal = combinedRemoteCore(sources.shared, sources.device);
+  const work = combinedWorkRemoteCore(workSnapshot, sources.profile);
+  const complete = remoteCoreUsable(personal) && remoteCoreUsable(work) &&
+    (sources.profile?.complete === true || (isSnapshotUsable(sources.shared) && isSnapshotUsable(workSnapshot)));
+  if (!complete) return null;
+  return {
+    revision: sources.profile?.revision || `${personal.revision || ""}|${work.revision || ""}`,
+    publisherDeviceId: sources.profile?.originDeviceId || personal.originDeviceId || work.originDeviceId || "",
+    personalTombstones: continuityTombstonesFromRecords(personal.records),
+    workTombstones: continuityTombstonesFromRecords(work.records)
+  };
+}
+
+async function observeRemoteResetIntent(intent, meta) {
+  if (!validResetIntent(intent)) return null;
+  await markIntentionalSyncReset(meta, Number(intent.epoch));
+  await clearAllPendingSyncRecoveryState();
+  const next = await writeLocalMeta({
+    ...meta,
+    syncEnabled: false,
+    syncInitialized: false,
+    syncBootstrapMode: "none",
+    syncStatus: "off",
+    lastSyncError: "",
+    lastSyncWarning: "",
+    syncWaitStartedAt: 0
+  });
+  await ensureSyncWatchAlarm(next);
+  return { ok: true, skipped: true, reason: "intentional-remote-reset", meta: next };
+}
+
+async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "message") {
+  let continuity = await readSyncContinuity(meta);
+  if (!continuity.established) return null;
+
+  // Once a loss has been observed, partial recovery fragments remain quarantined
+  // until a complete Personal+Work profile validates. A failed mid-publication
+  // must not strand every other device merely because a few keys made the
+  // namespace non-zero.
+  if (continuity.lossState !== "none") {
+    const all = await browser.storage.sync.get(null);
+    const reset = all?.[SYNC_RESET_INTENT_KEY];
+    if (validResetIntent(reset)) return observeRemoteResetIntent(reset, meta);
+    const sources = await readCoreSources(all, { includeAssets: false });
+    const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
+    const complete = completeRemoteDescriptor(sources, workSnapshot);
+    if (complete) {
+      const hadConfirmedRecovery = continuity.lossState === "recovering" || continuity.recoveryAttempts > 0;
+      await markSyncContinuityHealthy(meta, complete);
+      if (hadConfirmedRecovery) await writeSyncRecoveryStatus("restored");
+      return null;
+    }
+  } else {
+    const usedBytes = await browser.storage.sync.getBytesInUse(null);
+    if (Number(usedBytes) > 0) return null;
+    const now = Date.now();
+    const eligibleAt = now + SYNC_RECOVERY_QUARANTINE_MS +
+      recoveryStalePenalty(continuity, now) + recoveryDeviceJitter(meta.deviceId);
+    continuity = await writeSyncContinuity({
+      ...continuity,
+      lossState: "quarantine",
+      lossDetectedAt: now,
+      recoveryEligibleAt: eligibleAt,
+      recoveryAttempts: 0
+    }, meta);
+    await scheduleSyncRecoveryAlarm(eligibleAt);
+    await noteSyncDiagnostic({
+      lastCheckAt: now,
+      lastCheckReason: syncCheckReason(checkReason),
+      lastCheckOutcome: "remote-loss-quarantine"
+    });
+    return { ok: true, pending: true, reason: "remote-loss-quarantine", meta };
+  }
+
+  const now = Date.now();
+  if (continuity.lossState === "failed") {
+    return { ok: false, reason: "remote-loss-recovery-failed", error: "MosaicSync couldn't restore the synchronized copy. Your local profile is still safe.", meta };
+  }
+  if (now < continuity.recoveryEligibleAt) {
+    await scheduleSyncRecoveryAlarm(continuity.recoveryEligibleAt);
+    return { ok: true, pending: true, reason: "remote-loss-quarantine", meta };
+  }
+
+  const attempt = Math.max(0, Number(continuity.recoveryAttempts) || 0) + 1;
+  continuity = await writeSyncContinuity({ ...continuity, lossState: "recovering", recoveryAttempts: attempt }, meta);
+  await writeSyncRecoveryStatus("recovering");
+
+  try {
+    const result = await bootstrapLocal({
+      recovery: true,
+      markContinuity: false,
+      preservePendingSyncRecovery: true,
+      retainedPersonalTombstones: continuity.personalTombstones,
+      retainedWorkTombstones: continuity.workTombstones
+    });
+    if (!result?.ok) throw new Error(result?.error || "Sync recovery publication failed.");
+
+    let currentMeta = result.meta || await readLocalMeta();
+    currentMeta = await retryPendingCrossSpaceSync(currentMeta);
+    currentMeta = await retryPendingLocalSyncMutation(currentMeta);
+    const status = await getSyncStatus();
+    if (!status?.hasRemoteData) throw new Error("The recovered synchronized copy could not be verified.");
+
+    const all = await browser.storage.sync.get(null);
+    const sources = await readCoreSources(all, { includeAssets: false });
+    const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
+    const descriptor = completeRemoteDescriptor(sources, workSnapshot);
+    if (!descriptor) throw new Error("The recovered synchronized copy is incomplete.");
+    const healthy = await markSyncContinuityHealthy(currentMeta, descriptor);
+    await writeSyncContinuity({ ...healthy, lastRecoveredAt: Date.now() }, currentMeta);
+    await writeSyncRecoveryStatus("restored");
+    return { ok: true, recovered: true, reason: "remote-loss-recovered", meta: await readLocalMeta() };
+  } catch (error) {
+    const currentMeta = await readLocalMeta();
+    if (attempt >= SYNC_RECOVERY_MAX_ATTEMPTS) {
+      await writeSyncContinuity({ ...continuity, lossState: "failed", recoveryEligibleAt: 0 }, currentMeta);
+      await scheduleSyncRecoveryAlarm(0);
+      await writeSyncRecoveryStatus("failed");
+      const failedMeta = await writeLocalMeta({
+        ...currentMeta,
+        syncStatus: "error",
+        lastSyncError: "MosaicSync couldn't restore the synchronized copy. Your local profile is still safe."
+      });
+      return { ok: false, reason: "remote-loss-recovery-failed", error: failedMeta.lastSyncError, meta: failedMeta };
+    }
+    const retryAt = Date.now() + SYNC_RECOVERY_QUARANTINE_MS + recoveryDeviceJitter(meta.deviceId);
+    await writeSyncContinuity({ ...continuity, lossState: "quarantine", recoveryEligibleAt: retryAt, recoveryAttempts: attempt }, currentMeta);
+    await scheduleSyncRecoveryAlarm(retryAt);
+    return { ok: true, pending: true, reason: "remote-loss-retry", meta: currentMeta };
+  }
+}
+
 async function ensureSyncWatchAlarm(meta) {
   if (!browser.alarms?.create || !browser.alarms?.clear) return;
   try {
@@ -600,16 +899,17 @@ browser.runtime.onStartup.addListener(() => {
     await ensureSyncWatchAlarm(meta);
     await runOneTimeLegacyMaintenance();
     if (meta.syncEnabled && meta.syncInitialized) {
-      meta = await retryPendingLocalSyncMutation(meta);
-      // reconcile("merge") replays any durable cross-Space transactions first.
-      const result = await reconcile("merge");
+      // Startup must run the catastrophic-loss guard before replaying a pending
+      // local mutation. A crash-surviving journal must never become the first
+      // write that recreates a browser-wiped Sync namespace.
+      const result = await reconcileIfNewCommit("startup", meta, false);
       await noteSyncDiagnostic({
         lastReconcileAt: Date.now(),
         lastReconcileReason: "startup",
         lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
       });
     } else if (meta.syncEnabled && meta.syncBootstrapMode === "await-remote") {
-      const result = await reconcile("merge");
+      const result = await reconcileIfNewCommit("startup");
       await noteSyncDiagnostic({
         lastReconcileAt: Date.now(),
         lastReconcileReason: "startup",
@@ -653,6 +953,8 @@ browser.storage.onChanged.addListener((changes, areaName) => {
       // granted. A device must first be explicitly bootstrapped from local or
       // synchronized data.
       if (meta.syncEnabled && meta.syncInitialized) {
+        const continuity = await readSyncContinuity(meta);
+        if (continuity.lossState !== "none") return;
         const pending = await readPendingLocalSyncMutation();
         if (pending) {
           await pushLocalMutation(pending.before, pending.after, meta);
@@ -714,8 +1016,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
         return;
       }
       if (meta.syncInitialized) {
-        // reconcile("merge") replays any durable cross-Space transactions first.
-        const result = await reconcile("merge");
+        const result = await reconcileIfNewCommit("storage-event");
         await noteSyncDiagnostic({
           lastReconcileAt: Date.now(),
           lastReconcileReason: "storage-event",
@@ -735,6 +1036,10 @@ browser.alarms?.onAlarm?.addListener(alarm => {
     void processIconRecoveryQueue().catch(error => {
       console.warn(`${PRODUCT_NAME}: scheduled favicon recovery failed`, error);
     });
+    return;
+  }
+  if (alarm?.name === SYNC_RECOVERY_ALARM) {
+    enqueue(() => reconcileIfNewCommit("alarm"));
     return;
   }
   if (alarm?.name !== SYNC_WATCH_ALARM) return;
@@ -762,13 +1067,10 @@ browser.alarms?.onAlarm?.addListener(alarm => {
       return;
     }
     if (meta.syncInitialized) {
-      meta = await retryPendingLocalSyncMutation(meta);
-      meta = await retryPendingCrossSpaceSync(meta);
-      // The watchdog performs a strong semantic consistency check, not only a
-      // commit-marker comparison. If currently usable remote records/settings
-      // differ from local state, reconcileIfNewCommit() falls through to the
-      // same full merge used at startup without paying that cost on every tick.
-      await reconcileIfNewCommit("alarm", meta, true);
+      // Catastrophic namespace loss must be checked before replaying any pending
+      // local mutation; otherwise an ordinary edit could accidentally become the
+      // first write that recreates an externally wiped cloud namespace.
+      await reconcileIfNewCommit("alarm", meta, false);
       meta = await readLocalMeta();
       await maybeGarbageCollectStaleDeviceSnapshots(meta);
     }
@@ -2959,7 +3261,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
         : enqueue(() => reconcileIfNewCommit(reason));
     }
     case "mosaicsync:reconcile-now":
-      return enqueue(() => reconcile("merge"));
+      return enqueue(() => reconcileIfNewCommit("message"));
     case "mosaicsync:restore-from-sync":
       return enqueue(() => bootstrapRemote({ waitIfMissing: false, force: true }));
     case "mosaicsync:clear-sync-data":
@@ -3822,16 +4124,23 @@ async function reconcileIfNewCommit(reason = "message", providedMeta = null, pen
     return result;
   }
 
+  const lossGuard = await beginOrContinueCatastrophicSyncRecovery(meta, checkReason);
+  if (lossGuard) return lossGuard;
+
   if (!pendingLocalAlreadyRetried) meta = await retryPendingLocalSyncMutation(meta);
   await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
   await repairDeliveredCoreEvidence(WORK_SPACE_ID);
   const all = await browser.storage.sync.get(null);
+  const resetIntent = all?.[SYNC_RESET_INTENT_KEY];
+  if (validResetIntent(resetIntent)) return observeRemoteResetIntent(resetIntent, meta);
   const sources = await readCoreSources(all, { includeAssets: false });
   const sharedRevision = datasetRevision(sources.shared.dataset);
   const deviceRevision = sources.device?.revision || "";
   const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
   const workRevision = datasetRevision(workSnapshot.dataset);
   const profileRevision = sources.profile?.revision || "";
+  const completeDescriptor = completeRemoteDescriptor(sources, workSnapshot);
+  if (completeDescriptor) await markSyncContinuityHealthy(meta, completeDescriptor);
   const diagnosticObservation = {
     lastObservedSharedRevision: sharedRevision,
     lastObservedDeviceRevision: deviceRevision,
@@ -3975,7 +4284,7 @@ async function getSyncStatus() {
   };
 }
 
-async function publishWorkspaceAuthoritative(fullState, meta, spaceId) {
+async function publishWorkspaceAuthoritative(fullState, meta, spaceId, { retainedTombstones = [] } = {}) {
   const namespace = syncNamespace(spaceId);
   const localState = workspaceStateNormalized(fullState, spaceId);
   let snapshot = await prepareSyncSnapshot(spaceId);
@@ -3988,6 +4297,9 @@ async function publishWorkspaceAuthoritative(fullState, meta, spaceId) {
   const writes = { [namespace.settingsKey]: settings };
 
   for (const [id, record] of records) writes[itemKey(id, spaceId)] = record;
+  for (const tombstone of normalizeContinuityTombstones(retainedTombstones)) {
+    if (!records.has(tombstone.id)) writes[itemKey(tombstone.id, spaceId)] = tombstone;
+  }
   for (const [id, remoteRecord] of snapshot.records) {
     if (!records.has(id) && remoteRecord?.kind !== "deleted") {
       writes[itemKey(id, spaceId)] = makeTombstone(id, meta.deviceId, timestamp);
@@ -4010,7 +4322,7 @@ async function publishWorkspaceAuthoritative(fullState, meta, spaceId) {
   return { dataset, timestamp, assetResult };
 }
 
-async function bootstrapLocal() {
+async function bootstrapLocal({ recovery = false, markContinuity = true, preservePendingSyncRecovery = false, retainedPersonalTombstones = [], retainedWorkTombstones = [] } = {}) {
   const { state, meta } = await ensureLocalStorage();
   const personalState = workspaceStateNormalized(state, PERSONAL_SPACE_ID);
   if (!meta.syncEnabled) {
@@ -4035,6 +4347,12 @@ async function bootstrapLocal() {
   const deviceRecords = new Map(records);
 
   for (const [id, record] of records) writes[itemKey(id)] = record;
+  for (const tombstone of normalizeContinuityTombstones(retainedPersonalTombstones)) {
+    if (!records.has(tombstone.id)) {
+      writes[itemKey(tombstone.id)] = tombstone;
+      deviceRecords.set(tombstone.id, tombstone);
+    }
+  }
   for (const [id, remoteRecord] of snapshot.records) {
     if (!records.has(id) && remoteRecord?.kind !== "deleted") {
       const tombstone = makeTombstone(id, meta.deviceId, timestamp);
@@ -4073,7 +4391,7 @@ async function bootstrapLocal() {
   if (staleAssetKeys.length) await removeSyncItems([...new Set(staleAssetKeys)]);
   await clearAssetGcLedger();
 
-  const workPublish = await publishWorkspaceAuthoritative(state, meta, WORK_SPACE_ID);
+  const workPublish = await publishWorkspaceAuthoritative(state, meta, WORK_SPACE_ID, { retainedTombstones: retainedWorkTombstones });
   const workRevision = datasetRevision(workPublish.dataset);
   const profilePublishMeta = { ...meta, syncInitialized: true, lastAppliedWorkSyncRevision: workRevision };
   const profilePublish = await publishProfileDeviceSnapshot(state, profilePublishMeta, { force: true });
@@ -4097,9 +4415,20 @@ async function bootstrapLocal() {
     syncWaitStartedAt: 0
   });
   await writeLocalMeta(refreshed);
-  await clearPendingLocalSyncMutation();
+  // A normal/user-authoritative publish intentionally supersedes any old reset
+  // sentinel, but only after a complete Personal+Work copy has been committed.
+  const resetRead = await browser.storage.sync.get(SYNC_RESET_INTENT_KEY);
+  if (validResetIntent(resetRead?.[SYNC_RESET_INTENT_KEY])) await removeSyncItems([SYNC_RESET_INTENT_KEY]);
+  if (!preservePendingSyncRecovery) await clearPendingLocalSyncMutation();
   await ensureSyncWatchAlarm(refreshed);
-  return { ok: true, meta: refreshed, action: "published", remoteUpdatedAt: timestamp };
+  if (markContinuity) {
+    const all = await browser.storage.sync.get(null);
+    const sources = await readCoreSources(all, { includeAssets: false });
+    const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
+    const descriptor = completeRemoteDescriptor(sources, workSnapshot);
+    if (descriptor) await markSyncContinuityHealthy(refreshed, descriptor);
+  }
+  return { ok: true, meta: refreshed, action: recovery ? "recovery-published" : "published", remoteUpdatedAt: timestamp };
 }
 
 async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
@@ -4109,6 +4438,8 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
   }
 
   const sources = await readCoreSources();
+  const resetIntent = sources.all?.[SYNC_RESET_INTENT_KEY];
+  if (validResetIntent(resetIntent) && meta.syncInitialized) return observeRemoteResetIntent(resetIntent, meta);
   const personalCore = combinedRemoteCore(sources.shared, sources.device);
   const workSnapshot = await readSyncSnapshot(sources.all, { spaceId: WORK_SPACE_ID });
   const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
@@ -4223,6 +4554,12 @@ async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     syncWaitStartedAt: 0
   });
   await writeLocalMeta(refreshed);
+  await markSyncContinuityHealthy(refreshed, {
+    revision: sources.profile?.revision || `${remotePersonal.revision || ""}|${remoteWork.revision || ""}`,
+    publisherDeviceId: sources.profile?.originDeviceId || remotePersonal.originDeviceId || remoteWork.originDeviceId || "",
+    personalTombstones: continuityTombstonesFromRecords(remotePersonal.records),
+    workTombstones: continuityTombstonesFromRecords(remoteWork.records)
+  });
 
   // If the user created/edited anything while the fresh profile was waiting,
   // publish only that semantic delta after the complete remote baseline exists.
@@ -5246,12 +5583,32 @@ function recordWithWinnerIdentity(record, winner, fallbackDeviceId) {
 
 async function clearSyncData() {
   const meta = await readLocalMeta();
+  const continuity = await readSyncContinuity(meta);
+  const epoch = nextMutationTime(continuity.lastResetEpoch, Date.now());
+  const resetIntent = {
+    schemaVersion: SYNC_RESET_INTENT_SCHEMA_VERSION,
+    kind: "reset-intent",
+    epoch,
+    initiatedByDevice: meta.deviceId || "",
+    initiatedAt: Date.now()
+  };
+
+  // Commit the reset marker first. MosaicSync-controlled deletion therefore
+  // never creates the same 0-byte namespace that Firefox uninstall cleanup can
+  // create. Surviving 1.30.13+ devices can distinguish explicit deletion from
+  // catastrophic external loss, including devices that were briefly offline.
+  await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent });
   const all = await browser.storage.sync.get(null);
-  const keys = Object.keys(all).filter(key => key.startsWith(SYNC_PREFIX));
+  const keys = Object.keys(all).filter(key => key.startsWith(SYNC_PREFIX) && key !== SYNC_RESET_INTENT_KEY);
   if (keys.length) await removeSyncItems(keys);
   await clearAssetGcLedger();
   await clearAllPendingSyncRecoveryState();
+  await markIntentionalSyncReset(meta, epoch);
 
+  const [usedBytes, remaining] = await Promise.all([
+    browser.storage.sync.getBytesInUse(null),
+    browser.storage.sync.get(null)
+  ]);
   const next = await writeLocalMeta({
     ...meta,
     syncEnabled: false,
@@ -5265,7 +5622,7 @@ async function clearSyncData() {
     syncFastSnapshotFallback: false,
     syncWaitStartedAt: 0,
     lastAppliedSyncRevision: "",
-      lastAppliedWorkSyncRevision: "",
+    lastAppliedWorkSyncRevision: "",
     lastAppliedDeviceSnapshotRevision: "",
     lastAppliedProfileSnapshotRevision: "",
     lastProfileSnapshotPublishedAt: 0,
@@ -5273,11 +5630,11 @@ async function clearSyncData() {
     lastRemoteReceiptRevision: "",
     lastRemoteReceiptUpdatedAt: 0,
     lastRemoteReceiptOriginDeviceId: "",
-    syncBytesInUse: 0,
-    syncItemCount: 0
+    syncBytesInUse: Math.max(0, Number(usedBytes) || 0),
+    syncItemCount: Object.keys(remaining || {}).filter(key => key.startsWith(SYNC_PREFIX)).length
   });
   await ensureSyncWatchAlarm(next);
-  return { ok: true, meta: next, removed: keys.length };
+  return { ok: true, meta: next, removed: keys.length, resetEpoch: epoch };
 }
 
 async function readSyncSnapshot(preloaded = null, { includeAssets = true, spaceId = PERSONAL_SPACE_ID } = {}) {

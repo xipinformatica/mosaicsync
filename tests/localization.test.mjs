@@ -11,7 +11,7 @@ for (const browser of ["firefox", "chrome"]) {
     const files = (await readdir(dir)).filter(name => name.endsWith(".js")).sort();
     const en = (await import(`../dist/${browser}/core/i18n-locales/en.js?${Date.now()}`)).MESSAGES;
     const keys = Object.keys(en).sort();
-    assert.equal(keys.length, 406);
+    assert.equal(keys.length, 409);
     const sourceValues = new Map();
     for (const [key,value] of Object.entries(en)) {
       assert.ok(String(value).trim(), `${key}: empty English value`);
@@ -35,7 +35,7 @@ for (const browser of ["firefox", "chrome"]) {
       "Not synchronized yet", "Firefox is still delivering the synchronized copy", "This device ${thisDevice}",
       "A complete synchronized copy is available${"
     ]) assert.equal(src.includes(forbidden),false,`raw UI English remains: ${forbidden}`);
-    for (const key of ["autoSiteIconsEnabled","autoSiteIconsDisabled","notSynchronizedYet","syncPartialRecords","syncAssetQuotaWarningMany"]) {
+    for (const key of ["autoSiteIconsEnabled","autoSiteIconsDisabled","notSynchronizedYet","syncPartialRecords","syncAssetQuotaWarningMany","syncRecoveryRestoring","syncRecoveryRestored","syncRecoveryFailed"]) {
       assert.ok(src.includes(`t("${key}"`),`missing localized dynamic key ${key}`);
     }
   });

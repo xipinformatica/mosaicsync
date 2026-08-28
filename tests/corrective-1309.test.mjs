@@ -76,11 +76,15 @@ test("1.30.9 Sync publication reuses the already-normalized state for profile sn
   }
 });
 
-test("1.30.9 watchdog retries pending local publication only once before its semantic freshness check", () => {
+test("1.30.9 watchdog retries pending local publication only once after catastrophic-loss protection", () => {
   for (const browser of ["firefox", "chrome"]) {
     const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
-    assert.match(source, /await reconcileIfNewCommit\("alarm", meta, true\);/);
+    assert.match(source, /await reconcileIfNewCommit\("alarm", meta, false\);/);
     assert.match(source, /if \(!pendingLocalAlreadyRetried\) meta = await retryPendingLocalSyncMutation\(meta\);/);
+    const reconcileStart = source.indexOf("async function reconcileIfNewCommit");
+    const recoveryAt = source.indexOf("beginOrContinueCatastrophicSyncRecovery", reconcileStart);
+    const retryAt = source.indexOf("retryPendingLocalSyncMutation", reconcileStart);
+    assert.ok(recoveryAt >= reconcileStart && recoveryAt < retryAt, `${browser}: catastrophic loss guard must run before replaying any pending local publication`);
   }
 });
 

@@ -1,10 +1,24 @@
 # MosaicSync development
 
-> **Current release: 1.30.12.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.13.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.13 catastrophic Sync-loss containment and self-healing policy
+
+1.30.13 treats total disappearance of MosaicSync's `storage.sync` namespace as an external failure condition only when the current device has durable evidence that it previously participated in a complete synchronized profile. A genuinely new device with no continuity evidence keeps the existing `await-remote` behavior and never invents or publishes a source profile.
+
+An established device that observes exactly zero MosaicSync Sync bytes must preserve `mosaicsync.state`, onboarding state and Sync identity, enter a device-local quarantine, and avoid all Sync publication until the recovery deadline. The quarantine is deliberately silent in the UI. A complete Personal+Work remote profile appearing during the quarantine cancels recovery immediately and normal reconciliation resumes. Non-zero partial/corrupt delivery remains the responsibility of the existing torn-delivery/checksum/previous-generation paths and is not classified as catastrophic absence.
+
+If the namespace remains truly empty through quarantine, a surviving device may republish its current valid local Personal+Work profile through the existing authoritative generation machinery. Recovery reuses the serialized background queue, preserves verified recent deletion tombstones in a bounded device-local continuity record, keeps pending local/cross-Space mutation journals until the base profile is published, then replays them and verifies a complete remote profile before declaring success. Recent devices receive the shortest recovery delay; stale devices add a bounded delay and every device adds deterministic jitter so several survivors do not stampede the empty namespace at the same instant. Existing deterministic merge/tombstone rules remain authoritative after a recovery generation appears.
+
+A MosaicSync-controlled **Clear Sync copy** must never intentionally create a zero-byte namespace. 1.30.13 first publishes a small versioned `reset-intent` control record, then removes the other MosaicSync Sync records and disables Sync while preserving the local profile. Other 1.30.13 devices that observe that valid reset marker respect it rather than auto-resurrecting the old cloud copy. A later explicit local bootstrap publishes a complete profile first and only then removes the reset marker. This reserves a raw zero-byte namespace for external uninstall/storage loss instead of normal MosaicSync semantics.
+
+Recovery UX is intentionally non-blocking: suspicion/quarantine is silent; confirmed automatic repair emits a localized informational toast; successful verification emits a localized completion toast; exhausted recovery attempts emit a localized failure warning while explicitly preserving the local profile. The new user-facing strings are present in all supported runtime locales.
+
+The continuity/recovery records are device-local protocol metadata only. They are not exported in profiles, do not contain browsing telemetry, and add no permissions or MosaicSync backend. This release does not change the existing shortcut/settings/profile Sync schema; it adds only the reset-control record and local recovery metadata.
 
 ## 1.30.12 install/reinstall preservation and Firefox development-identity policy
 
@@ -384,7 +398,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.12` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.13` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

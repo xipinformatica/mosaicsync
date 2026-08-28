@@ -6,6 +6,9 @@ const [browserName, scenario] = process.argv.slice(2);
 if (!['firefox','chrome'].includes(browserName) || !scenario) throw new Error('usage: browser scenario');
 const root = resolve(import.meta.dirname, '../..');
 
+let fakeNow = 1_787_920_000_000;
+if (scenario.startsWith('sync-loss-13013-')) Date.now = () => fakeNow;
+
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
 }
@@ -56,6 +59,12 @@ const events = {
 const local = makeStorageArea();
 const sync = makeStorageArea();
 const session = makeStorageArea();
+if (scenario.startsWith('sync-loss-13013-')) {
+  sync.getBytesInUse = async function(keys = null) {
+    const obj = await this.get(keys);
+    return Object.entries(obj).reduce((sum,[key,value]) => sum + Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value)), 0);
+  };
+}
 const alarms = new Map();
 let websiteAccess = false;
 const createdTabs = [];
@@ -132,6 +141,7 @@ if (browserName === 'chrome') {
 
 const constants = await import(`${pathToFileURL(resolve(root, `dist/${browserName}/core/constants.js`)).href}?h=${Date.now()}`);
 const model = await import(`${pathToFileURL(resolve(root, `dist/${browserName}/core/model.js`)).href}?h=${Date.now()}`);
+const storageCore = await import(`${pathToFileURL(resolve(root, `dist/${browserName}/core/storage.js`)).href}?h=${Date.now()}`);
 
 function workspace(shortcuts, settings = {}) {
   return {
@@ -1449,6 +1459,208 @@ else if (scenario === 'lifecycle-13012-update-and-downgrade-preserve') {
   }
   assert.equal(createdTabs.length,0,'completed onboarding must stay completed across update/downgrade events');
   console.log(JSON.stringify({ok:true,updatePreserved:true,downgradePreserved:true}));
+}
+
+else if (scenario === 'sync-loss-13013-single-survivor-recovers') {
+  const base=stateWith({
+    personal:[shortcut('keep','https://keep.test/',500),shortcut('delete-during-loss','https://delete-during-loss.test/',500)],
+    work:[shortcut('work-keep','https://work-keep.test/',500)]
+  });
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncBootstrapMode:'none',syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const healthy={...remotePersonalEntries(base,'personal-healthy'),...remoteWorkEntries(base,'work-healthy')};
+  const deletedKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('old-deleted')}`;
+  healthy[deletedKey]={schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'deleted',id:'old-deleted',deletedAt:fakeNow-2000,modifiedAt:fakeNow-2000,deviceId:'remote-device'};
+  await sync.set(healthy);
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity?.established,true,'healthy established device must record Sync continuity');
+  assert.ok(continuity.personalTombstones.some(t=>t.id==='old-deleted'),'continuity must retain synchronized tombstones needed to prevent stale resurrection');
+
+  const before=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const writesBefore=sync.stats.setCalls;
+  await sync.clear();
+  const first=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(first?.reason,'remote-loss-quarantine');
+  assert.equal(sync.stats.setCalls,writesBefore,'first empty observation must not immediately republish');
+  assert.deepEqual(model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]),model.normalizeState(before),'quarantine must preserve the local profile');
+  continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'quarantine');
+  assert.ok(Number(continuity.recoveryEligibleAt)>fakeNow);
+  assert.ok(alarms.has(constants.SYNC_RECOVERY_ALARM),'quarantine must persist a recovery wakeup');
+
+  // A local edit made while the cloud is absent must remain local and must not
+  // accidentally recreate the namespace before the quarantine expires.
+  const edited=stateWith({
+    personal:[shortcut('keep','https://keep.test/',500),shortcut('during-loss','https://during-loss.test/',700)],
+    work:[shortcut('work-keep','https://work-keep.test/',500)]
+  });
+  const oldRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  await storageCore.writeLocalState(edited,{recordSyncMutation:true,baseState:oldRaw,baseStateIsCompact:true});
+  const newRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const writesBeforeLocalEvent=sync.stats.setCalls;
+  for(const listener of events.onStorageChanged.listeners) listener({[constants.LOCAL_STATE_KEY]:{oldValue:oldRaw,newValue:newRaw}},'local');
+  await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(sync.stats.setCalls,writesBeforeLocalEvent,'local edits must be write-blocked during catastrophic-loss quarantine');
+
+  fakeNow=Number(continuity.recoveryEligibleAt)+1;
+  for(const listener of events.onAlarm.listeners) listener({name:constants.SYNC_RECOVERY_ALARM});
+  const status=await send({type:'mosaicsync:get-sync-status'}); // flush the serialized recovery queue
+  assert.equal(status.hasRemoteData,true,'surviving device must recreate a complete remote profile');
+  const remote=await sync.get(null);
+  assert.ok(remote[deletedKey]?.kind==='deleted','recovery must republish last-known-good tombstones');
+  assert.ok(Object.values(remote).some(v=>v?.id==='during-loss' && v?.kind==='shortcut'),'local edits made during quarantine must be included in the recovered profile');
+  assert.ok(Object.values(remote).some(v=>v?.id==='delete-during-loss' && v?.kind==='deleted'),'deletions made during quarantine must be replayed as tombstones after recovery');
+  continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'none');
+  assert.equal(continuity.established,true);
+  assert.ok(Number(continuity.lastRecoveredAt)>0);
+  const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
+  assert.equal(recoveryStatus?.state,'restored');
+  console.log(JSON.stringify({ok:true,recovered:true,remoteItems:status.remoteItems,tombstonePreserved:true,editPreserved:true,deletePreserved:true}));
+}
+
+else if (scenario === 'sync-loss-13013-upgrade-infers-established') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{
+    syncEnabled:true,syncInitialized:true,syncBootstrapMode:'none',syncStatus:'ready',
+    lastAppliedSyncRevision:'commit:old-personal',lastAppliedWorkSyncRevision:'commit:old-work',
+    lastAppliedProfileSnapshotRevision:'profile:old',lastSyncAt:fakeNow-1000
+  });
+  assert.equal((await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY],undefined,'1.30.12-style profile must begin without the new continuity key');
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(result?.reason,'remote-loss-quarantine','upgrade must infer prior healthy participation instead of treating zero as a fresh install');
+  assert.equal(continuity?.established,true);
+  assert.equal(continuity?.lossState,'quarantine');
+  assert.equal(sync.stats.setCalls,0,'migration guard must not publish before quarantine expires');
+  console.log(JSON.stringify({ok:true,inferredEstablished:true,quarantined:true}));
+}
+
+else if (scenario === 'sync-loss-13013-fresh-empty-waits') {
+  const fresh=stateWith();
+  await seedLocalState(fresh,{syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting',onboardingCompleted:false});
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
+  assert.equal(result?.pending,true);
+  assert.equal(meta.syncBootstrapMode,'await-remote');
+  assert.notEqual(continuity?.lossState,'quarantine','fresh device must not mistake an empty cloud for catastrophic loss');
+  assert.equal(recoveryStatus,undefined);
+  assert.equal(sync.stats.setCalls,0,'fresh waiting device must not publish');
+  console.log(JSON.stringify({ok:true,freshWait:true,syncStatus:meta.syncStatus}));
+}
+
+else if (scenario === 'sync-loss-13013-transient-empty-cancels') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const healthy={...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')};
+  await sync.set(healthy);
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'quarantine');
+  await sync.set(healthy);
+  const writesBefore=sync.stats.setCalls;
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'none','valid data reappearing during quarantine must cancel recovery');
+  const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
+  assert.equal(recoveryStatus,undefined,'transient suspicion must remain silent to the user');
+  assert.equal(sync.stats.setCalls,writesBefore,'cancelling transient loss must not manufacture a recovery generation');
+  console.log(JSON.stringify({ok:true,cancelled:true,silent:true}));
+}
+
+else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const before=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const cleared=await send({type:'mosaicsync:clear-sync-data'});
+  const remote=await sync.get(null);
+  const keys=Object.keys(remote);
+  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY],'intentional clear must leave only the reset sentinel');
+  assert.ok(await sync.getBytesInUse(null)>0,'intentional clear must never create a 0-byte namespace');
+  assert.ok(Number(remote[constants.SYNC_RESET_INTENT_KEY]?.epoch)>0);
+  assert.deepEqual(model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]),model.normalizeState(before),'clearing cloud copy must preserve local profile');
+  let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.established,false);
+  assert.ok(Number(continuity.lastResetEpoch)>0);
+  assert.equal(cleared.meta.syncEnabled,false);
+
+  // Model another established 1.30.13 device observing the reset marker: it must
+  // preserve its local profile, turn Sync off, and never resurrect the cloud.
+  await local.set({
+    [constants.LOCAL_META_KEY]:{...cleared.meta,syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-100},
+    [constants.LOCAL_SYNC_CONTINUITY_KEY]:{...continuity,established:true,lastResetEpoch:0,lossState:'none',lastHealthyAt:fakeNow-100}
+  });
+  const setsBefore=sync.stats.setCalls;
+  const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const observerMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(observed.reason,'intentional-remote-reset');
+  assert.equal(observerMeta.syncEnabled,false,'observer must respect explicit reset instead of republishing');
+  assert.equal(sync.stats.setCalls,setsBefore,'observer must not write over the reset sentinel');
+
+  // A later explicit local-source choice is allowed to supersede the reset, but
+  // the marker must disappear only after a complete Personal+Work publication.
+  await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  const republished=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(republished?.ok,true);
+  const afterRepublish=await sync.get(null);
+  assert.equal(afterRepublish[constants.SYNC_RESET_INTENT_KEY],undefined,'successful explicit local bootstrap must retire the reset sentinel');
+  const status=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(status.hasRemoteData,true,'explicit local bootstrap after reset must create a complete synchronized profile');
+  console.log(JSON.stringify({ok:true,nonzeroReset:true,observerRespected:true,republishedAfterReset:true,remainingBytes:await sync.getBytesInUse(null)}));
+}
+
+else if (scenario === 'sync-loss-13013-recovery-failure-preserves-local') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const healthy={...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')};
+  await sync.set(healthy);
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const before=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  await sync.clear();
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+
+  const originalSet=sync.set.bind(sync);
+  sync.set=async () => { sync.stats.setCalls += 1; throw new Error('injected recovery write failure'); };
+  for(let attempt=1; attempt<=constants.SYNC_RECOVERY_MAX_ATTEMPTS; attempt+=1){
+    let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+    fakeNow=Number(continuity.recoveryEligibleAt)+1;
+    for(const listener of events.onAlarm.listeners) listener({name:constants.SYNC_RECOVERY_ALARM});
+    await send({type:'mosaicsync:get-sync-status'});
+  }
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
+  assert.equal(continuity.lossState,'failed');
+  assert.equal(continuity.recoveryAttempts,constants.SYNC_RECOVERY_MAX_ATTEMPTS);
+  assert.equal(meta.syncStatus,'error');
+  assert.match(meta.lastSyncError,/local profile is still safe/i);
+  assert.equal(recoveryStatus?.state,'failed');
+  assert.deepEqual(model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]),model.normalizeState(before),'exhausted recovery must never damage the local profile');
+  sync.set=originalSet;
+  console.log(JSON.stringify({ok:true,failedSafely:true,attempts:continuity.recoveryAttempts,localPreserved:true}));
+}
+
+else if (scenario === 'sync-loss-13013-partial-nonzero-does-not-recover') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  const settings=model.makeSettingsRecordNormalized(model.workspaceStateNormalized(base,'personal'),'remote-device');
+  await sync.set({[constants.SYNC_SETTINGS_KEY]:settings});
+  const setsBefore=sync.stats.setCalls;
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity.lossState,'none','non-zero partial/corrupt delivery must stay in existing torn-delivery handling');
+  assert.equal(sync.stats.setCalls,setsBefore,'partial non-zero remote must not trigger catastrophic recovery publication');
+  assert.notEqual(result?.reason,'remote-loss-quarantine');
+  console.log(JSON.stringify({ok:true,partialStayedPartial:true,noRecovery:true}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {

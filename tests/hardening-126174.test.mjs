@@ -80,7 +80,7 @@ test("1.26.17.4 checksum-valid hostile profile keys cannot pollute Object.protot
 test("1.26.17.4 source keeps profile restore explicitly authoritative while hardening file reads", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const background = await readFile(resolve(`src/${browser}/background/background.js`), "utf8");
-    const start = background.indexOf("async function bootstrapLocal()");
+    const start = background.indexOf("async function bootstrapLocal(");
     const end = background.indexOf("async function", start + 30);
     const section = background.slice(start, end > start ? end : undefined);
     assert.match(section, /Authoritative local publish/);
