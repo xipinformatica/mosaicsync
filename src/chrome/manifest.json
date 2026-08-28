@@ -2,7 +2,9 @@
   "manifest_version": 3,
   "name": "MosaicSync",
   "short_name": "MosaicSync",
-  "version": "1.30.15",
+  "version": "1.30.16",
+  "version_name": "1.30.16",
+  "minimum_chrome_version": "104",
   "description": "__MSG_extensionDescription__",
   "permissions": [
     "storage",
@@ -44,6 +46,5 @@
     "http://*/*",
     "https://*/*"
   ],
-  "default_locale": "en",
-  "version_name": "1.30.15"
+  "default_locale": "en"
 }

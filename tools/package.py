@@ -4,6 +4,8 @@ from pathlib import Path
 import json
 import re
 import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from release_contract import validate_manifest, validate_zip
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -173,6 +175,8 @@ if __name__ == "__main__":
         browser: json.loads((DIST / browser / "manifest.json").read_text())
         for browser in ("firefox", "chrome")
     }
+    for browser, manifest in manifests.items():
+        validate_manifest(browser, manifest)
     versions = {browser: manifest["version"] for browser, manifest in manifests.items()}
     if len(set(versions.values())) != 1:
         raise SystemExit(f"Browser technical versions differ: {versions}")
@@ -196,6 +200,7 @@ if __name__ == "__main__":
 
     outputs = {browser: package(browser, release_label) for browser in ("firefox", "chrome")}
     for browser in ("firefox", "chrome"):
+        validate_zip(browser, outputs[browser])
         print(outputs[browser])
     print(package_source(release_label))
     print(package_size_report(outputs, release_label))

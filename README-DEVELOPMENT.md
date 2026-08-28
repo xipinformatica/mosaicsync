@@ -1,11 +1,17 @@
 # MosaicSync development
 
-> **Current release: 1.30.15.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.16.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+
+## 1.30.16 browser/store release-contract policy
+
+Production manifests are an explicit browser/store capability contract, not merely valid JSON. Firefox is desktop-only and must not contain `browser_specific_settings.gecko_android`; its New Tab and Home overrides are deliberate. Chrome declares the oldest supported API floor explicitly with `minimum_chrome_version: 104`, driven by the Manifest V3 `_favicon` API; `storage.session` is older (Chrome 102+) and the other newer optional optimization APIs are guarded/fallback-capable. Exact top-level manifest keys, required/optional/host permissions, production identity and browser-specific differences are allow-listed against the generated runtime and final public ZIPs.
+
+Firefox's optional `browsingActivity` and `technicalAndInteraction` data-collection categories are retained deliberately. They describe user-created shortcut URLs/domains and MosaicSync configuration/recovery metadata that the user explicitly sends through browser-native Firefox Sync; they do **not** indicate developer analytics or telemetry. Every declared category has a centralized machine-readable rationale. Future manifest capabilities, permissions, data categories or fixed external endpoints must fail the release-contract gate until deliberately reviewed and approved.
 
 ## 1.30.15 fine-grained Settings conflict policy
 
@@ -216,7 +222,7 @@ The compact PSL build must emit deterministic semantic rule counts and SHA-256 m
 
 ## 1.27.4 runtime-size / favicon-picker lifecycle policy
 
-The reviewed files under `src/shared/core/i18n-locales/` remain the authoritative human-readable 32-language catalogs. `tools/build.mjs` may generate a compact runtime representation in `dist/` only when exhaustive tests prove exact source→runtime key/value equivalence. Locale lazy-loading remains unchanged: English plus only the active locale are loaded, and compacting must not cause all catalogs to parse on New Tab startup.
+The reviewed files under `src/shared/core/i18n-locales/` remain the authoritative human-readable 33-language catalogs. `tools/build.mjs` may generate a compact runtime representation in `dist/` only when exhaustive tests prove exact source→runtime key/value equivalence. Locale lazy-loading remains unchanged: English plus only the active locale are loaded, and compacting must not cause all catalogs to parse on New Tab startup.
 
 The authoritative `src/shared/core/public_suffix_list.dat` remains the complete upstream PSL with provenance/comments. The build emits a rules-only runtime copy with a compact license/provenance header. Every non-comment rule and its order must be byte-text equivalent after trimming; no PSL rule may be removed or rewritten. Package-size monitoring is deterministic and category-based. `package-size-baseline.json` is a conscious release baseline, not a hard product-size ceiling; unexpected category/total deflated growth above the configured 15% tolerance must require an explicit baseline update.
 
@@ -418,7 +424,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.15` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.16` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

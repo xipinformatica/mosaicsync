@@ -27,6 +27,8 @@ MosaicSync does **not** operate a separate synchronization server and does not r
 
 Data sent through Firefox Sync or Chrome Sync is handled by Mozilla or Google respectively according to their services and privacy policies.
 
+On Firefox, Mozilla's built-in consent system classifies synchronized data by type. **Browsing activity** refers here to user-created MosaicSync shortcut URLs/domains that the user chose to synchronize; it does not mean MosaicSync synchronizes Firefox browsing history or the Frequently Visited/Top Sites list. **Technical and interaction data** refers here to MosaicSync configuration such as layout/settings plus synchronization/recovery metadata that can be carried by Firefox Sync. These categories describe browser-native Sync data leaving the local browser; MosaicSync still sends no analytics, telemetry or interaction metrics to the developer and operates no telemetry/backend service.
+
 ## Frequently Visited
 
 The Frequently Visited feature is optional and uses the browser's top-sites/history-derived API after the relevant permission is granted.

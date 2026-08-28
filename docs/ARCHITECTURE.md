@@ -17,7 +17,7 @@ Remote raster/SVG artwork is admitted to browser decoding only after the format-
 
 ## Development safety rules
 
-1. User-facing strings go through the 32-language localization catalog.
+1. User-facing strings go through the 33-language localization catalog.
 2. Runtime data-format changes require migration + backward-compatibility tests.
 3. Firefox and Chrome are built together from this tree.
 4. Favicon, Sync and storage changes require focused regression tests before packaging.

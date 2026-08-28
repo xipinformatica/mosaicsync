@@ -6,7 +6,7 @@
 import { PLATFORM_ID } from "./platform.js";
 
 // Browser branding is applied *after* normal MosaicSync localization. This keeps
-// one complete 32-language catalog shared by Firefox and Chrome while ensuring
+// one complete 33-language catalog shared by Firefox and Chrome while ensuring
 // browser-specific copy never bypasses the translation layer.
 const SPECIAL_RULES = Object.freeze({
   en: [

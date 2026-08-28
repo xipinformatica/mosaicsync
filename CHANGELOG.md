@@ -1,3 +1,14 @@
+## 1.30.16
+
+- Removed Firefox's unintended `browser_specific_settings.gecko_android` declaration so AMO no longer advertises MosaicSync as Android-compatible; MosaicSync remains a desktop extension until Android support is deliberately implemented and tested.
+- Added Chrome `minimum_chrome_version: 104`, matching the oldest API floor required by MosaicSync's Manifest V3 `_favicon` integration. `storage.session` is available earlier (102+) and optional compression/image acceleration paths remain feature-detected.
+- Added an exact browser/store release-contract gate for Firefox and Chrome manifests: approved top-level properties, required/optional/host permissions, production identity, CSP, New Tab/Home behavior, Firefox data-collection categories and Chrome minimum version are now pinned.
+- Added final public-ZIP validation so production packaging fails if Android support, a development identity, localhost endpoints, unexpected fixed external hosts or other unapproved release-surface declarations leak into a browser artifact.
+- Retained Firefox's optional `browsingActivity` and `technicalAndInteraction` declarations and added machine-readable rationales: the former covers user-created shortcut URLs/domains sent through Firefox Sync; the latter covers synchronized MosaicSync settings/layout/recovery metadata. Neither category represents developer analytics or telemetry.
+- Clarified PRIVACY.md so Mozilla's data-category wording is explicitly distinguished from device-local Firefox browsing history/Top Sites and from MosaicSync developer telemetry/backend behavior.
+- Documented Firefox's Home override as intentional, Chrome's absence of that override as intentional, and corrected current localization-policy references from 32 to 33 languages.
+- No Sync/state schema, runtime feature, permission, CSP, UI-control, telemetry, backend or remote-code behavior changed.
+
 ## 1.30.15
 
 - Replaced whole-Settings last-writer-wins synchronization with compact per-logical-setting clocks so an unrelated stale preference from another device can no longer overwrite a newer user choice merely because both lived in one Settings record.

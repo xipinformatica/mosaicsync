@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.15";
+export const VERSION = "1.30.16";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -313,7 +313,13 @@ export const BACKGROUND_PRESETS = Object.freeze({
 });
 
 
-export const SYNC_DATA_COLLECTION_TYPES = Object.freeze([
-  "browsingActivity",
-  "technicalAndInteraction"
-]);
+// Firefox's built-in data-collection consent describes the *type* of data
+// leaving the local browser, not developer telemetry. MosaicSync has no
+// developer analytics/backend; these two optional categories cover only data
+// the user deliberately sends through browser-native Sync. Keep the rationale
+// machine-readable so release-contract tests reject undocumented category drift.
+export const SYNC_DATA_COLLECTION_RATIONALE = Object.freeze({
+  browsingActivity: "User-created MosaicSync shortcut URLs and domains can be transmitted through browser-native Sync when the user enables synchronization.",
+  technicalAndInteraction: "MosaicSync settings, layout configuration and synchronization/recovery metadata can be transmitted through browser-native Sync when the user enables synchronization."
+});
+export const SYNC_DATA_COLLECTION_TYPES = Object.freeze(Object.keys(SYNC_DATA_COLLECTION_RATIONALE));
