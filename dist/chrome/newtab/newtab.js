@@ -23,6 +23,7 @@ import {
   FREQUENT_CANDIDATE_CACHE_MS,
   BACKGROUND_PRELOAD_CACHE_MAX,
   SPACE_IDS,
+  SETTINGS_SYNC_CLOCK_KEYS,
   DONATE_URL,
   LOCAL_META_KEY,
   LOCAL_STATE_KEY,
@@ -1534,6 +1535,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       spaces[spaceId] = {
         ...workspace,
         shortcuts: workspace.shortcuts.map(stampItem),
+        settingsClock: Object.fromEntries(SETTINGS_SYNC_CLOCK_KEYS.map(key => [key, [timestamp, ""]])),
         settingsModifiedAt: timestamp,
         updatedAt: timestamp
       };

@@ -72,6 +72,7 @@ function repairProfileRecordIds(state) {
     spaces,
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };

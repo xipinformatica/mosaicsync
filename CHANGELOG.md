@@ -1,3 +1,14 @@
+## 1.30.15
+
+- Replaced whole-Settings last-writer-wins synchronization with compact per-logical-setting clocks so an unrelated stale preference from another device can no longer overwrite a newer user choice merely because both lived in one Settings record.
+- Independent controls now converge independently across devices, including Frequently Visited Show/Count, columns/rows/tile size, theme and darkness controls, Light/Dark wallpaper choices, brand visibility, Multiple Spaces and Space names. Only genuinely indivisible internal properties share one clock.
+- Unified local optimistic Settings concurrency and browser Sync on the same deterministic merge primitive. Same-setting conflicts still converge by logical timestamp/device tie-break; unrelated setting changes are preserved on both sides.
+- Migrates 1.30.14 and older Settings conservatively by inheriting each logical clock from the existing whole `settingsModifiedAt`. Legacy records without fine clocks remain tolerated; equal-value legacy writes do not artificially advance a fine clock, while genuinely differing legacy values are handled conservatively because older clients cannot identify which field was intentionally edited.
+- Carries Settings clocks through Personal/Work state, shared ledgers, device/profile snapshots, `.mosaicsync` backups and catastrophic-recovery publication. Explicit reset / **Use this device** remains a whole-profile authority boundary.
+- Keeps `autoSiteIcons`, `webAccessPrompted`, browser permissions, browsing-derived Frequently Visited sites and other device-local state out of Sync. The Frequently Visited UI and all other controls are visually unchanged.
+- Advanced persisted state schema to 19 and Sync record schema to 11. No profile-container format bump, new permission, backend, telemetry, remote code or CSP relaxation.
+- Added deterministic fine-clock regressions and a seeded five-device Settings stress model covering independent edits, same-setting conflicts, delayed/reordered delivery and a catastrophic Sync-loss authority epoch.
+
 ## 1.30.14
 
 - Hardened 1.30.13 catastrophic-zero detection so one `getBytesInUse(null) === 0` observation is never enough to enter quarantine: a second full `storage.sync.get(null)` read must also be genuinely empty. Any visible non-zero namespace remains in the existing normal/torn/corruption path.

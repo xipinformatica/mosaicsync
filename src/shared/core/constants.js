@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.14";
+export const VERSION = "1.30.15";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -61,9 +61,9 @@ export const ICON_RECOVERY_ALARM = "mosaicsync-icon-recovery-v2";
 export const SYNC_WATCH_ALARM = "mosaicsync-sync-watch-v1";
 export const SYNC_RECOVERY_ALARM = "mosaicsync-sync-recovery-v1";
 
-export const STATE_SCHEMA_VERSION = 18;
+export const STATE_SCHEMA_VERSION = 19;
 export const META_SCHEMA_VERSION = 12;
-export const SYNC_SCHEMA_VERSION = 10;
+export const SYNC_SCHEMA_VERSION = 11;
 
 export const SYNC_PREFIX = "mosaicsync.sync.";
 export const SYNC_SETTINGS_KEY = `${SYNC_PREFIX}settings`;
@@ -150,6 +150,31 @@ export const DEFAULT_SPACE_ID = "personal";
 export const SHORTCUT_COLOR_TAG_KEYS = Object.freeze(["red", "orange", "amber", "green", "teal", "blue", "violet", "pink"]);
 export const BUILTIN_SHORTCUT_ICON_KEYS = Object.freeze(["home", "mail", "work", "star", "heart", "shopping", "finance", "video", "music", "news", "code", "cloud", "game"]);
 
+// Settings synchronization uses one compact clock per independent user decision.
+// Only fields that form one indivisible internal value share a clock. Keep this
+// contract centralized so UI, local concurrency, browser Sync, snapshots and
+// migration can never silently drift back to whole-record conflict semantics.
+export const SETTINGS_SYNC_CLOCK_GROUPS = Object.freeze({
+  c: Object.freeze(["columns"]),
+  r: Object.freeze(["rows"]),
+  z: Object.freeze(["tileSize"]),
+  bc: Object.freeze(["backgroundColor", "backgroundColorCustomized"]),
+  bw: Object.freeze(["backgroundAssetId", "backgroundImageKind", "backgroundSourceKind", "backgroundSourceUrl", "backgroundPreset", "backgroundFit", "backgroundPosition"]),
+  bd: Object.freeze(["backgroundDim"]),
+  t: Object.freeze(["theme"]),
+  tw: Object.freeze(["themeWallpapersEnabled"]),
+  lp: Object.freeze(["lightBackgroundPreset"]),
+  ld: Object.freeze(["lightBackgroundDim"]),
+  dp: Object.freeze(["darkBackgroundPreset"]),
+  dd: Object.freeze(["darkBackgroundDim"]),
+  b: Object.freeze(["brandVisible"]),
+  fv: Object.freeze(["frequentlyVisitedEnabled"]),
+  fc: Object.freeze(["frequentlyVisitedCount"]),
+  s: Object.freeze(["spaceName"]),
+  m: Object.freeze(["multipleSpacesEnabled"])
+});
+export const SETTINGS_SYNC_CLOCK_KEYS = Object.freeze(Object.keys(SETTINGS_SYNC_CLOCK_GROUPS));
+
 export const DEFAULT_SETTINGS = Object.freeze({
   columns: 8,
   rows: 8,
@@ -192,6 +217,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
 export const DEFAULT_WORKSPACE = Object.freeze({
   shortcuts: Object.freeze([]),
   settings: DEFAULT_SETTINGS,
+  settingsClock: Object.freeze({}),
   settingsModifiedAt: 0,
   updatedAt: 0
 });
@@ -207,6 +233,7 @@ export const DEFAULT_STATE = Object.freeze({
   }),
   shortcuts: Object.freeze([]),
   settings: DEFAULT_SETTINGS,
+  settingsClock: Object.freeze({}),
   settingsModifiedAt: 0,
   updatedAt: 0
 });

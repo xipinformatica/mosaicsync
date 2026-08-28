@@ -1,10 +1,20 @@
 # MosaicSync development
 
-> **Current release: 1.30.14.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.15.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+
+## 1.30.15 fine-grained Settings conflict policy
+
+- Synchronized Settings must be ordered at the granularity of an independent user decision, not by one whole-record timestamp. The authoritative compact grouping contract lives in `SETTINGS_SYNC_CLOCK_GROUPS`; only inseparable internal representation fields may share a clock.
+- Every logical Settings mutation advances only its own clock through `nextMutationTime`. Local optimistic concurrency, shared-ledger reconciliation, device/profile snapshots and recovery use the same `mergeSettingsRecords` semantics. Same-logical-setting conflicts remain deterministic; unrelated settings merge independently.
+- Existing records without fine clocks inherit the previous `settingsModifiedAt` baseline. Legacy old-client records are tolerated conservatively; missing intent information from an old client must never be invented.
+- `autoSiteIcons`, `webAccessPrompted`, browser permissions, active/default Space presentation and browsing-derived data remain device-local and must not enter the fine-clock Sync record.
+- Explicit reset / **Use this device** is an authority-epoch replacement, not an ordinary per-setting merge. Pre-reset Settings clocks must not resurrect through a peer.
+- Persisted state schema is 19 and Sync schema is 11. The `.mosaicsync` container format and device/profile snapshot envelope versions remain unchanged because the clock metadata is carried inside the existing state/Settings payloads.
 
 ## 1.30.14 recovery hardening and manual detected-favicon intent policy
 
@@ -408,7 +418,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.14` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.15` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

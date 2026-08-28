@@ -12,6 +12,7 @@ import {
   DONATE_URL,
   FREQUENTLY_VISITED_PREF_KEY,
   SPACE_IDS,
+  SETTINGS_SYNC_CLOCK_KEYS,
   SUPPORT_URL,
   VERSION
 } from "../core/constants.js";
@@ -157,6 +158,7 @@ function stampImportedProfileState(importedState) {
     spaces[spaceId] = {
       ...workspace,
       shortcuts: workspace.shortcuts.map(stampItem),
+      settingsClock: Object.fromEntries(SETTINGS_SYNC_CLOCK_KEYS.map(key => [key, [timestamp, ""]])),
       settingsModifiedAt: timestamp,
       updatedAt: timestamp
     };

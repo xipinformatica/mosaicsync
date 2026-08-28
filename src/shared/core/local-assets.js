@@ -84,6 +84,7 @@ function projectWorkspace(workspace, assets, referencedIds, memo = null) {
   return {
     shortcuts,
     settings: projectedSettings,
+    settingsClock: source.settingsClock && typeof source.settingsClock === "object" ? source.settingsClock : {},
     settingsModifiedAt: Number(source.settingsModifiedAt) || 0,
     updatedAt: Number(source.updatedAt) || 0
   };
@@ -263,6 +264,7 @@ export function dehydrateStateLocalAssets(state, { spaceIds = SPACE_IDS } = {}) 
     const active = spaces[source.activeSpaceId];
     result.shortcuts = active.shortcuts;
     result.settings = active.settings;
+    result.settingsClock = active.settingsClock;
     result.settingsModifiedAt = active.settingsModifiedAt;
     result.updatedAt = active.updatedAt;
   }

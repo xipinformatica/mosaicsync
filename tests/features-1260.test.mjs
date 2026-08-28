@@ -41,9 +41,9 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.30.14");
-  assert.equal(STATE_SCHEMA_VERSION, 18);
-  assert.equal(SYNC_SCHEMA_VERSION, 10);
+  assert.equal(VERSION, "1.30.15");
+  assert.equal(STATE_SCHEMA_VERSION, 19);
+  assert.equal(SYNC_SCHEMA_VERSION, 11);
 });
 
 test("light/dark built-in wallpaper choices survive normalization and Sync reconstruction", () => {

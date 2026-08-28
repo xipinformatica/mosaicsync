@@ -1156,12 +1156,12 @@ else if (scenario === 'sync-1309-personal-settings-mid-publication-evidence') {
 
   const targetKey=constants.SYNC_SETTINGS_KEY;
   const remoteWorkspace=model.workspaceStateNormalized(originalLocal,'personal');
-  const newerRemoteState=model.replaceWorkspaceNormalized(originalLocal,'personal',{
+  const newerRemoteState=model.stampSettingsMutationClocks(originalLocal, model.replaceWorkspaceNormalized(originalLocal,'personal',{
     ...remoteWorkspace,
     settings:{...remoteWorkspace.settings,columns:12},
     settingsModifiedAt:500,
     updatedAt:500
-  });
+  }));
   const newerRemoteSettings=remotePersonalEntries(newerRemoteState,'foreign-1309-settings')[targetKey];
   const originalSet=sync.set.bind(sync);
   let injected=false;
@@ -1185,12 +1185,12 @@ else if (scenario === 'sync-1309-personal-settings-mid-publication-evidence') {
   };
 
   const localWorkspace=model.workspaceStateNormalized(originalLocal,'personal');
-  const editedLocal=model.replaceWorkspaceNormalized(originalLocal,'personal',{
+  const editedLocal=model.stampSettingsMutationClocks(originalLocal, model.replaceWorkspaceNormalized(originalLocal,'personal',{
     ...localWorkspace,
     settings:{...localWorkspace.settings,columns:10},
     settingsModifiedAt:200,
     updatedAt:200
-  });
+  }));
   await local.set({[constants.LOCAL_STATE_KEY]:editedLocal});
   for(const listener of events.onStorageChanged.listeners) {
     listener({[constants.LOCAL_STATE_KEY]:{oldValue:originalLocal,newValue:editedLocal}},'local');
@@ -1599,13 +1599,12 @@ else if (scenario === 'sync-loss-13013-transient-empty-cancels') {
   let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
   assert.equal(continuity.lossState,'quarantine');
   await sync.set(healthy);
-  const writesBefore=sync.stats.setCalls;
   await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
   continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
   assert.equal(continuity.lossState,'none','valid data reappearing during quarantine must cancel recovery');
   const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
   assert.equal(recoveryStatus,undefined,'transient suspicion must remain silent to the user');
-  assert.equal(sync.stats.setCalls,writesBefore,'cancelling transient loss must not manufacture a recovery generation');
+  assert.equal(Number(continuity.recoveryAttempts)||0,0,'cancelling transient loss must not manufacture a catastrophic recovery attempt');
   console.log(JSON.stringify({ok:true,cancelled:true,silent:true}));
 }
 

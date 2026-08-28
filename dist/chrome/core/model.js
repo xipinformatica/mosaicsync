@@ -15,6 +15,8 @@ import {
   DEFAULT_STATE,
   DEFAULT_SPACE_ID,
   SPACE_IDS,
+  SETTINGS_SYNC_CLOCK_GROUPS,
+  SETTINGS_SYNC_CLOCK_KEYS,
   SHORTCUT_COLOR_TAG_KEYS,
   META_SCHEMA_VERSION,
   STATE_SCHEMA_VERSION,
@@ -44,6 +46,108 @@ export function nextMutationTime(...values) {
     if (Number.isFinite(numeric)) next = Math.max(next, Math.trunc(numeric) + 1);
   }
   return next;
+}
+
+// Fine-grained Settings clocks -----------------------------------------------------
+// A whole Settings record contains many independent user decisions. 1.30.15
+// keeps one compact logical clock per decision so an unrelated edit on a stale
+// device cannot silently revert another setting. A blank owner means "this local
+// device, not materialized yet"; Sync record construction replaces it with a
+// compact deterministic device tie id.
+function compactSettingsDeviceTieId(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  if (/^[0-9a-f]{8}$/.test(text)) return text;
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+
+function normalizeSettingsStamp(raw, fallbackTime = 0, fallbackDeviceId = "", fillMissingOwner = false) {
+  let time = Number(fallbackTime);
+  let owner = "";
+  if (Array.isArray(raw)) {
+    if (Number.isFinite(Number(raw[0]))) time = Number(raw[0]);
+    if (typeof raw[1] === "string" && raw[1]) owner = compactSettingsDeviceTieId(raw[1]);
+  } else if (raw && typeof raw === "object") {
+    if (Number.isFinite(Number(raw.t))) time = Number(raw.t);
+    if (typeof raw.d === "string" && raw.d) owner = compactSettingsDeviceTieId(raw.d);
+  } else if (raw !== null && raw !== undefined && raw !== "" && Number.isFinite(Number(raw))) {
+    time = Number(raw);
+  }
+  time = Number.isFinite(time) && time > 0 ? Math.trunc(time) : 0;
+  if (fillMissingOwner && time > 0 && !owner) owner = compactSettingsDeviceTieId(fallbackDeviceId);
+  return [time, owner];
+}
+
+export function normalizeSettingsClock(raw, fallbackTime = 0, fallbackDeviceId = "", fillMissingOwner = false) {
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  const result = {};
+  for (const key of SETTINGS_SYNC_CLOCK_KEYS) {
+    result[key] = normalizeSettingsStamp(source[key], fallbackTime, fallbackDeviceId, fillMissingOwner);
+  }
+  return result;
+}
+
+function settingsStampEqual(left, right) {
+  return Number(left?.[0]) === Number(right?.[0]) && String(left?.[1] || "") === String(right?.[1] || "");
+}
+
+function settingsGroupValuesEqual(leftSettings, rightSettings, groupKey) {
+  const fields = SETTINGS_SYNC_CLOCK_GROUPS[groupKey] || [];
+  for (const field of fields) {
+    if (!Object.is(leftSettings?.[field], rightSettings?.[field])) return false;
+  }
+  return true;
+}
+
+/**
+ * Stamp only logical Settings decisions whose values changed from base -> intended
+ * and whose clock was not already supplied by an authoritative caller (for example
+ * a remote Sync reconstruction). This lets the persistence boundary cover every
+ * Settings mutation path without teaching each UI control about clock metadata.
+ */
+export function stampSettingsMutationClocks(baseState, intendedState) {
+  const base = normalizeState(baseState || DEFAULT_STATE);
+  const intended = normalizeState(intendedState || DEFAULT_STATE);
+  let result = intended;
+  for (const spaceId of SPACE_IDS) {
+    const baseWorkspace = base.spaces[spaceId];
+    const intendedWorkspace = result.spaces[spaceId];
+    let clock = normalizeSettingsClock(intendedWorkspace.settingsClock, intendedWorkspace.settingsModifiedAt);
+    const baseClock = normalizeSettingsClock(baseWorkspace.settingsClock, baseWorkspace.settingsModifiedAt);
+    let changed = false;
+    let maxStamp = Number(intendedWorkspace.settingsModifiedAt) || 0;
+    for (const groupKey of SETTINGS_SYNC_CLOCK_KEYS) {
+      const groupChanged = !settingsGroupValuesEqual(baseWorkspace.settings, intendedWorkspace.settings, groupKey);
+      if (!groupChanged) {
+        maxStamp = Math.max(maxStamp, Number(clock[groupKey]?.[0]) || 0);
+        continue;
+      }
+      // If the caller already supplied a different group stamp, it is authoritative
+      // (remote/import/recovery state). Otherwise this is an unstamped local edit.
+      if (settingsStampEqual(clock[groupKey], baseClock[groupKey])) {
+        const requested = Number(intendedWorkspace.settingsModifiedAt) || 0;
+        const prior = Number(baseClock[groupKey]?.[0]) || 0;
+        const timestamp = requested > prior ? requested : nextMutationTime(prior, baseWorkspace.settingsModifiedAt, intendedWorkspace.updatedAt);
+        clock[groupKey] = [timestamp, ""];
+        changed = true;
+      }
+      maxStamp = Math.max(maxStamp, Number(clock[groupKey]?.[0]) || 0);
+    }
+    if (!changed) continue;
+    const updatedWorkspace = {
+      ...intendedWorkspace,
+      settingsClock: clock,
+      settingsModifiedAt: maxStamp,
+      updatedAt: Math.max(Number(intendedWorkspace.updatedAt) || 0, maxStamp)
+    };
+    result = replaceWorkspaceTrustedNormalized(result, spaceId, updatedWorkspace);
+  }
+  return selectActiveSpaceNormalized(result, result.activeSpaceId);
 }
 
 export function clampInt(value, min, max, fallback) {
@@ -513,6 +617,7 @@ export function normalizeWorkspace(raw, memo = null) {
   const safe = {
     shortcuts: [],
     settings: { ...DEFAULT_SETTINGS },
+    settingsClock: normalizeSettingsClock(null, 0),
     settingsModifiedAt: 0,
     updatedAt: 0
   };
@@ -541,6 +646,7 @@ export function normalizeWorkspace(raw, memo = null) {
   safe.settingsModifiedAt = Number.isFinite(raw.settingsModifiedAt)
     ? raw.settingsModifiedAt
     : (Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0);
+  safe.settingsClock = normalizeSettingsClock(raw.settingsClock, safe.settingsModifiedAt);
   safe.updatedAt = Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0;
   return safe;
 }
@@ -557,6 +663,7 @@ export function workspaceStateNormalized(normalized, spaceId = DEFAULT_SPACE_ID)
     spaces: source.spaces,
     shortcuts: workspace.shortcuts,
     settings: workspace.settings,
+    settingsClock: workspace.settingsClock,
     settingsModifiedAt: workspace.settingsModifiedAt,
     updatedAt: workspace.updatedAt
   };
@@ -573,6 +680,7 @@ export function selectActiveSpaceNormalized(normalized, spaceId = DEFAULT_SPACE_
     activeSpaceId: id,
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
@@ -592,6 +700,7 @@ export function replaceWorkspaceTrustedNormalized(normalized, spaceId, workspace
     spaces,
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
@@ -639,12 +748,14 @@ export function normalizeState(raw, memo = null) {
     if (topLevelLooksLive && (
       source.shortcuts !== activeRaw?.shortcuts ||
       source.settings !== activeRaw?.settings ||
+      source.settingsClock !== activeRaw?.settingsClock ||
       Number(source.settingsModifiedAt) !== Number(activeRaw?.settingsModifiedAt) ||
       Number(source.updatedAt) !== Number(activeRaw?.updatedAt)
     )) {
       spaces[activeSpaceId] = normalizeWorkspace({
         shortcuts: source.shortcuts,
         settings: source.settings,
+        settingsClock: source.settingsClock || activeRaw?.settingsClock,
         settingsModifiedAt: source.settingsModifiedAt,
         updatedAt: source.updatedAt
       }, memo);
@@ -666,6 +777,11 @@ export function normalizeState(raw, memo = null) {
       ...spaces.work.settings,
       frequentlyVisitedEnabled: frequentEnabled,
       frequentlyVisitedCount: frequentCount
+    },
+    settingsClock: {
+      ...spaces.work.settingsClock,
+      fv: spaces.personal.settingsClock.fv,
+      fc: spaces.personal.settingsClock.fc
     }
   };
 
@@ -678,6 +794,7 @@ export function normalizeState(raw, memo = null) {
     // They intentionally reference the selected workspace in memory.
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
@@ -749,6 +866,7 @@ export function moveShortcutOutOfFolder(state, { shortcutId, spaceId = "", posit
     spaces,
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
@@ -869,6 +987,7 @@ export function moveShortcutBetweenSpacesNormalized(normalized, { shortcutId, fr
     spaces,
     shortcuts: active.shortcuts,
     settings: active.settings,
+    settingsClock: active.settingsClock,
     settingsModifiedAt: active.settingsModifiedAt,
     updatedAt: active.updatedAt
   };
@@ -1053,10 +1172,21 @@ export function makeTombstone(id, deviceId, timestamp = now()) {
   };
 }
 
+function settingsClockForSyncRecord(normalized, deviceId = "") {
+  const clock = normalizeSettingsClock(normalized.settingsClock, normalized.settingsModifiedAt);
+  const materialized = {};
+  for (const key of SETTINGS_SYNC_CLOCK_KEYS) {
+    const [time, owner] = clock[key];
+    materialized[key] = [time, time > 0 ? (owner || compactSettingsDeviceTieId(deviceId)) : ""];
+  }
+  return materialized;
+}
+
 export function makeSettingsRecordNormalized(normalized, deviceId = "") {
   const settings = normalized.settings;
   const backgroundImageKind = (settings.backgroundImage || settings.backgroundLocalAssetId) ? "device" : "none";
   const backgroundAssetId = "";
+  const settingsClock = settingsClockForSyncRecord(normalized, deviceId);
   return {
     schemaVersion: SYNC_SCHEMA_VERSION,
     kind: "settings",
@@ -1085,7 +1215,11 @@ export function makeSettingsRecordNormalized(normalized, deviceId = "") {
       spaceName: settings.spaceName || "",
       multipleSpacesEnabled: settings.multipleSpacesEnabled !== false
     },
-    modifiedAt: normalized.settingsModifiedAt || normalized.updatedAt || 0,
+    settingsClock,
+    modifiedAt: Math.max(
+      Number(normalized.settingsModifiedAt) || 0,
+      ...Object.values(settingsClock).map(stamp => Number(stamp?.[0]) || 0)
+    ),
     deviceId
   };
 }
@@ -1142,6 +1276,108 @@ export function chooseNewerRecord(a, b) {
   const bDevice = typeof b.deviceId === "string" ? b.deviceId : "";
   if (aDevice !== bDevice) return aDevice > bDevice ? a : b;
   return stableStringify(a) >= stableStringify(b) ? a : b;
+}
+
+function settingsGroupProjection(record, groupKey) {
+  const source = record?.settings && typeof record.settings === "object" ? record.settings : {};
+  const projected = {};
+  for (const field of SETTINGS_SYNC_CLOCK_GROUPS[groupKey] || []) {
+    if (Object.prototype.hasOwnProperty.call(source, field)) projected[field] = source[field];
+  }
+  return projected;
+}
+
+function settingsGroupCompatible(leftRecord, rightRecord, groupKey) {
+  const left = leftRecord?.settings || {};
+  const right = rightRecord?.settings || {};
+  for (const field of SETTINGS_SYNC_CLOCK_GROUPS[groupKey] || []) {
+    if (!Object.prototype.hasOwnProperty.call(left, field) || !Object.prototype.hasOwnProperty.call(right, field)) continue;
+    if (!jsonSemanticEqual(left[field], right[field])) return false;
+  }
+  return true;
+}
+
+function settingsStampInfo(record, groupKey) {
+  const explicit = Boolean(record?.settingsClock && typeof record.settingsClock === "object" &&
+    Object.prototype.hasOwnProperty.call(record.settingsClock, groupKey));
+  const raw = explicit ? record.settingsClock[groupKey] : null;
+  return {
+    explicit,
+    stamp: normalizeSettingsStamp(raw, Number(record?.modifiedAt) || 0, record?.deviceId || "", true)
+  };
+}
+
+function compareSettingsGroup(leftRecord, rightRecord, groupKey) {
+  const leftInfo = settingsStampInfo(leftRecord, groupKey);
+  const rightInfo = settingsStampInfo(rightRecord, groupKey);
+  const compatible = settingsGroupCompatible(leftRecord, rightRecord, groupKey);
+
+  // If a legacy whole-record writer carries the same group value as a fine-clock
+  // peer, do not let its unrelated whole-record timestamp artificially advance
+  // this group's clock. This materially reduces rolling-version stale poisoning
+  // while remaining conservative when the values actually differ.
+  if (compatible && leftInfo.explicit !== rightInfo.explicit) {
+    return leftInfo.explicit ? { winner: leftRecord, loser: rightRecord, stamp: leftInfo.stamp } :
+      { winner: rightRecord, loser: leftRecord, stamp: rightInfo.stamp };
+  }
+
+  const [leftTime, leftOwner] = leftInfo.stamp;
+  const [rightTime, rightOwner] = rightInfo.stamp;
+  if (leftTime !== rightTime) {
+    return leftTime > rightTime
+      ? { winner: leftRecord, loser: rightRecord, stamp: leftInfo.stamp }
+      : { winner: rightRecord, loser: leftRecord, stamp: rightInfo.stamp };
+  }
+  if (leftOwner !== rightOwner) {
+    return leftOwner > rightOwner
+      ? { winner: leftRecord, loser: rightRecord, stamp: leftInfo.stamp }
+      : { winner: rightRecord, loser: leftRecord, stamp: rightInfo.stamp };
+  }
+  const leftText = stableStringify(settingsGroupProjection(leftRecord, groupKey));
+  const rightText = stableStringify(settingsGroupProjection(rightRecord, groupKey));
+  return leftText >= rightText
+    ? { winner: leftRecord, loser: rightRecord, stamp: leftInfo.stamp }
+    : { winner: rightRecord, loser: leftRecord, stamp: rightInfo.stamp };
+}
+
+/**
+ * Merge synchronized Settings at the granularity of independent logical controls.
+ * Shortcut/tombstone conflict semantics remain in chooseNewerRecord(); only the
+ * historically over-broad Settings record receives fine-grained treatment.
+ */
+export function mergeSettingsRecords(leftRecord, rightRecord) {
+  if (!leftRecord) return rightRecord || null;
+  if (!rightRecord) return leftRecord;
+  if (leftRecord.kind !== "settings") return rightRecord;
+  if (rightRecord.kind !== "settings") return leftRecord;
+
+  const wholeWinner = chooseNewerRecord(leftRecord, rightRecord);
+  const mergedSettings = { ...(wholeWinner?.settings || {}) };
+  const mergedClock = {};
+  let newest = Math.max(Number(leftRecord.modifiedAt) || 0, Number(rightRecord.modifiedAt) || 0);
+
+  for (const groupKey of SETTINGS_SYNC_CLOCK_KEYS) {
+    const { winner, loser, stamp } = compareSettingsGroup(leftRecord, rightRecord, groupKey);
+    const winnerSettings = winner?.settings || {};
+    const loserSettings = loser?.settings || {};
+    for (const field of SETTINGS_SYNC_CLOCK_GROUPS[groupKey] || []) {
+      if (Object.prototype.hasOwnProperty.call(winnerSettings, field)) mergedSettings[field] = winnerSettings[field];
+      else if (Object.prototype.hasOwnProperty.call(loserSettings, field)) mergedSettings[field] = loserSettings[field];
+      else delete mergedSettings[field];
+    }
+    mergedClock[groupKey] = stamp;
+    newest = Math.max(newest, Number(stamp?.[0]) || 0);
+  }
+
+  return {
+    ...wholeWinner,
+    schemaVersion: Math.max(Number(leftRecord.schemaVersion) || 0, Number(rightRecord.schemaVersion) || 0, SYNC_SCHEMA_VERSION),
+    kind: "settings",
+    settings: mergedSettings,
+    settingsClock: mergedClock,
+    modifiedAt: newest,
+    deviceId: wholeWinner?.deviceId || ""
+  };
 }
 
 export function mergeRecordMaps(localRecords, remoteRecords) {
@@ -1297,11 +1533,16 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
   }
 
   const settings = settingsFromRecord(settingsRecord, local, assets);
+  const settingsModifiedAt = Number.isFinite(settingsRecord?.modifiedAt) ? settingsRecord.modifiedAt : local.settingsModifiedAt;
+  const settingsClock = settingsRecord?.kind === "settings"
+    ? normalizeSettingsClock(settingsRecord.settingsClock, settingsModifiedAt, settingsRecord.deviceId || "", true)
+    : normalizeSettingsClock(local.settingsClock, local.settingsModifiedAt);
   return normalizeState({
     schemaVersion: STATE_SCHEMA_VERSION,
     shortcuts: topLevel,
     settings,
-    settingsModifiedAt: Number.isFinite(settingsRecord?.modifiedAt) ? settingsRecord.modifiedAt : local.settingsModifiedAt,
+    settingsClock,
+    settingsModifiedAt,
     updatedAt: Math.max(local.updatedAt, newestRecordTimestamp(records), Number(settingsRecord?.modifiedAt) || 0)
   });
 }
@@ -1586,6 +1827,7 @@ function projectStateForSyncSignature(source) {
         spaceName: settings.spaceName || "",
         multipleSpacesEnabled: settings.multipleSpacesEnabled !== false
       },
+      settingsClock: normalizeSettingsClock(workspace?.settingsClock, workspace?.settingsModifiedAt),
       settingsModifiedAt: workspace?.settingsModifiedAt,
       updatedAt: workspace?.updatedAt
     };

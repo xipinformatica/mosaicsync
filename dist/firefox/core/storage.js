@@ -37,6 +37,7 @@ import {
   ensureDeviceId,
   normalizeState,
   selectActiveSpaceNormalized,
+  stampSettingsMutationClocks,
   uid
 } from "./model.js";
 import { persistedWorkspacePayloadEqual, rebaseConcurrentState } from "./concurrency.js";
@@ -421,12 +422,17 @@ async function persistNormalizedState(normalized, {
     // state inside the same write lock and rebase only this caller's delta when
     // its baseline no longer matches. The same read also carries the durable
     // unsent-mutation journal when this is a Sync-relevant user edit.
-    const transactionRead = (baseState || recordSyncMutation)
-      ? await browser.storage.local.get(recordSyncMutation
-        ? [LOCAL_STATE_KEY, LOCAL_PENDING_SYNC_MUTATION_KEY]
-        : LOCAL_STATE_KEY)
-      : {};
+    const transactionRead = await browser.storage.local.get(recordSyncMutation
+      ? [LOCAL_STATE_KEY, LOCAL_PENDING_SYNC_MUTATION_KEY]
+      : LOCAL_STATE_KEY);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
+
+    // Fine-grained Settings clocks are inferred at the persistence boundary. UI
+    // callers continue mutating ordinary settings exactly as before; only groups
+    // whose values changed and whose clock was not already supplied by an
+    // authoritative remote/import state are stamped as local user intent.
+    finalState = stampSettingsMutationClocks(baseState || latestRaw || DEFAULT_STATE, finalState);
+
     if (baseState) {
       if (latestRaw && !persistedWorkspacePayloadEqual(baseState, latestRaw)) {
         finalState = rebaseConcurrentState(baseState, normalized, latestRaw);
@@ -692,6 +698,8 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
   const meta = ensureDeviceId(result[LOCAL_META_KEY] || DEFAULT_META);
   const normalizationMs = perfNow() - normalizeStartedAt;
 
+  const needsStateSchemaMigration = Boolean(result[LOCAL_STATE_KEY]) &&
+    Number(rawState?.schemaVersion) !== Number(DEFAULT_STATE.schemaVersion);
   const needsSpacesMigration = Boolean(result[LOCAL_STATE_KEY]) &&
     (!rawState?.spaces || typeof rawState.spaces !== "object");
   if (needsSpacesMigration) {
@@ -706,7 +714,7 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
   const needsAssetMigration = !assetStoreCurrent || stateHasInlineLocalAssets(rawState);
   const forcedPersonal = !multipleSpacesEnabled && (rawState?.activeSpaceId === "work" || result[LOCAL_ACTIVE_SPACE_KEY] === "work");
 
-  if (!result[LOCAL_STATE_KEY] || needsSpacesMigration || forcedPersonal || needsAssetMigration) {
+  if (!result[LOCAL_STATE_KEY] || needsStateSchemaMigration || needsSpacesMigration || forcedPersonal || needsAssetMigration) {
     // A legacy inline profile is migrated exactly once. If this New Tab asked for
     // active-only hydration but the old state was already inline, all original
     // pixels are still present in rawState and therefore migrate losslessly.

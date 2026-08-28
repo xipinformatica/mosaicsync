@@ -17,11 +17,13 @@ import {
   flattenStateNormalized,
   makeSettingsRecordNormalized,
   makeTombstone,
+  mergeSettingsRecords,
   normalizeState,
   normalizeWorkspace,
   replaceWorkspaceNormalized,
   selectActiveSpaceNormalized,
   settingsRecordEqual,
+  stampSettingsMutationClocks,
   stateFromRecords,
   syncRecordEqual
 } from "./model.js";
@@ -83,6 +85,7 @@ function workspaceAsState(workspace) {
   return normalizeState({
     shortcuts: workspace?.shortcuts || [],
     settings: workspace?.settings || {},
+    settingsClock: workspace?.settingsClock || {},
     settingsModifiedAt: Number(workspace?.settingsModifiedAt) || 0,
     updatedAt: Number(workspace?.updatedAt) || 0
   });
@@ -170,53 +173,6 @@ function settingsFieldsMatch(leftRecord, rightRecord, fields) {
   return fields.every(key => jsonValueEqual(left[key], right[key]));
 }
 
-function mergeSettingsRecords(baseRecord, intendedRecord, latestRecord) {
-  if (settingsRecordEqual(baseRecord, intendedRecord)) {
-    return { record: latestRecord, intendedWinsConflict: false };
-  }
-
-  // There are no per-field clocks in the persisted settings schema. Preserve
-  // disjoint concurrent setting edits field-by-field; if both tabs changed the
-  // same field, use the exact deterministic whole-record ordering already used
-  // by Sync as the tie-breaker.
-  const conflictWinner = chooseNewerRecord(latestRecord, intendedRecord);
-  const intendedWinsConflict = conflictWinner === intendedRecord;
-  const baseSettings = baseRecord?.settings || {};
-  const intendedSettings = intendedRecord?.settings || {};
-  const latestSettings = latestRecord?.settings || {};
-  const mergedSettings = { ...latestSettings };
-  const keys = new Set([
-    ...Object.keys(baseSettings),
-    ...Object.keys(intendedSettings),
-    ...Object.keys(latestSettings)
-  ]);
-
-  for (const key of keys) {
-    const baseValue = baseSettings[key];
-    const intendedValue = intendedSettings[key];
-    const latestValue = latestSettings[key];
-    const intendedChanged = !jsonValueEqual(baseValue, intendedValue);
-    if (!intendedChanged) {
-      mergedSettings[key] = latestValue;
-      continue;
-    }
-    const latestChanged = !jsonValueEqual(baseValue, latestValue);
-    mergedSettings[key] = latestChanged && !jsonValueEqual(intendedValue, latestValue)
-      ? (intendedWinsConflict ? intendedValue : latestValue)
-      : intendedValue;
-  }
-
-  return {
-    record: {
-      ...conflictWinner,
-      kind: "settings",
-      settings: mergedSettings,
-      modifiedAt: Math.max(Number(latestRecord?.modifiedAt) || 0, Number(intendedRecord?.modifiedAt) || 0)
-    },
-    intendedWinsConflict
-  };
-}
-
 function rebaseWorkspace(baseWorkspace, intendedWorkspace, latestWorkspace) {
   const baseState = workspaceAsState(baseWorkspace);
   const intendedState = workspaceAsState(intendedWorkspace);
@@ -251,15 +207,13 @@ function rebaseWorkspace(baseWorkspace, intendedWorkspace, latestWorkspace) {
   const baseSettingsRecord = makeSettingsRecordNormalized(baseState);
   const intendedSettingsRecord = makeSettingsRecordNormalized(intendedState);
   const latestSettingsRecord = makeSettingsRecordNormalized(latestState);
-  const { record: mergedSettingsRecord, intendedWinsConflict } = mergeSettingsRecords(
-    baseSettingsRecord,
-    intendedSettingsRecord,
-    latestSettingsRecord
-  );
+  const mergedSettingsRecord = mergeSettingsRecords(latestSettingsRecord, intendedSettingsRecord);
+  const intendedWinsConflict = chooseNewerRecord(latestSettingsRecord, intendedSettingsRecord) === intendedSettingsRecord;
 
   const reconstructed = stateFromRecords(mergedRecords, mergedSettingsRecord, {
     shortcuts: latestWorkspace?.shortcuts || [],
     settings: latestWorkspace?.settings || {},
+    settingsClock: latestWorkspace?.settingsClock || {},
     settingsModifiedAt: Number(latestWorkspace?.settingsModifiedAt) || 0,
     updatedAt: Number(latestWorkspace?.updatedAt) || 0
   });
@@ -324,8 +278,8 @@ function rebaseWorkspace(baseWorkspace, intendedWorkspace, latestWorkspace) {
  */
 export function rebaseConcurrentState(baseState, intendedState, latestState) {
   const base = normalizeState(baseState);
-  const intended = normalizeState(intendedState);
-  const latest = normalizeState(latestState);
+  const intended = stampSettingsMutationClocks(base, normalizeState(intendedState));
+  const latest = stampSettingsMutationClocks(base, normalizeState(latestState));
 
   let merged = latest;
   for (const spaceId of SPACE_IDS) {

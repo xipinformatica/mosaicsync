@@ -98,6 +98,7 @@ import {
   flattenStateNormalized,
   makeSettingsRecordNormalized,
   makeTombstone,
+  mergeSettingsRecords,
   localStateSyncClockSignature,
   localStateSyncRawSignature,
   localStateSyncSignature,
@@ -109,6 +110,7 @@ import {
   replaceWorkspaceNormalized,
   settingsRecordEqual,
   stableStringify,
+  stampSettingsMutationClocks,
   stateFromRecords,
   syncRecordEqual,
   uid,
@@ -3780,7 +3782,7 @@ function mergeDeviceSnapshots(snapshots) {
   const revisions = [];
   for (const snapshot of snapshots) {
     records = mergeRecordMaps(records, snapshot.records);
-    settings = settings ? chooseNewerRecord(settings, snapshot.settings) : snapshot.settings;
+    settings = settings ? mergeSettingsRecords(settings, snapshot.settings) : snapshot.settings;
     updatedAt = Math.max(updatedAt, Number(snapshot.updatedAt) || 0);
     if (Number(snapshot.publishedAt) >= latestPublishedAt) {
       latestPublishedAt = Number(snapshot.publishedAt) || 0;
@@ -3820,9 +3822,9 @@ function mergeProfileDeviceSnapshots(snapshots) {
   const revisions = [];
   for (const snapshot of complete) {
     personalRecords = mergeRecordMaps(personalRecords, snapshot.records);
-    personalSettings = personalSettings ? chooseNewerRecord(personalSettings, snapshot.settings) : snapshot.settings;
+    personalSettings = personalSettings ? mergeSettingsRecords(personalSettings, snapshot.settings) : snapshot.settings;
     workRecords = mergeRecordMaps(workRecords, snapshot.workRecords);
-    workSettings = workSettings ? chooseNewerRecord(workSettings, snapshot.workSettings) : snapshot.workSettings;
+    workSettings = workSettings ? mergeSettingsRecords(workSettings, snapshot.workSettings) : snapshot.workSettings;
     updatedAt = Math.max(updatedAt, Number(snapshot.updatedAt) || 0);
     if (Number(snapshot.publishedAt) >= latestPublishedAt) {
       latestPublishedAt = Number(snapshot.publishedAt) || 0;
@@ -4088,7 +4090,7 @@ function combinedRemoteCore(shared, device) {
   let settings = device.settings;
   if (sharedUsable) {
     records = mergeRecordMaps(records, shared.records);
-    settings = chooseNewerRecord(settings, shared.settings);
+    settings = mergeSettingsRecords(settings, shared.settings);
   }
   const revisionParts = [device.revision];
   if (sharedUsable) revisionParts.push(datasetRevision(shared.dataset));
@@ -4126,7 +4128,7 @@ function combinedWorkRemoteCore(shared, profile) {
   // by the existing commutative per-record clocks, preserving newer concurrent
   // edits without treating absent keys as deletions.
   if (shared?.records instanceof Map) records = mergeRecordMaps(records, shared.records);
-  if (shared?.settings) settings = chooseNewerRecord(settings, shared.settings);
+  if (shared?.settings) settings = mergeSettingsRecords(settings, shared.settings);
   const revisionParts = [profile.revision];
   if (sharedUsable) revisionParts.push(datasetRevision(shared.dataset));
   revisionParts.sort(compareStableText);
@@ -5327,7 +5329,11 @@ function workspaceCoreChanged(oldState, newState, spaceId, deviceId = "") {
 
 async function pushLocalMutation(oldRaw, newRaw, meta) {
   const oldState = normalizeState(oldRaw);
-  const newState = normalizeState(newRaw);
+  // The normal storage writer already stamps fine-grained Settings clocks.
+  // Repeat the inference defensively at the background boundary so a legacy/
+  // direct storage.local writer with a newer whole settingsModifiedAt cannot
+  // publish an unstamped Settings mutation or trigger clock oscillation.
+  const newState = stampSettingsMutationClocks(oldState, normalizeState(newRaw));
   const personalChanged = workspaceCoreChanged(oldState, newState, PERSONAL_SPACE_ID, meta.deviceId);
   const workChanged = workspaceCoreChanged(oldState, newState, WORK_SPACE_ID, meta.deviceId);
   if (!personalChanged && !workChanged) return;
@@ -5714,7 +5720,7 @@ async function reconcile(strategy = "merge") {
 function chooseSettings(localSettings, remoteSettings, localState) {
   if (!remoteSettings) return localSettings;
   if (!localState.shortcuts.length && !localState.settingsModifiedAt) return remoteSettings;
-  return chooseNewerRecord(localSettings, remoteSettings);
+  return mergeSettingsRecords(localSettings, remoteSettings);
 }
 
 function recordWithWinnerIdentity(record, winner, fallbackDeviceId) {
