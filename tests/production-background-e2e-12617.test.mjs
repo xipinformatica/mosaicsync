@@ -71,3 +71,14 @@ for(const browser of ['firefox','chrome']) {
     assert.equal(out.ok,true); assert.equal(out.afterCommit,out.beforeCommit); assert.ok(out.newChunkWrites>0); assert.equal(out.protection,'limited');
   });
 }
+
+for(const browser of ['firefox','chrome']) {
+  test(`1.30.17 production ${browser} protects explicit Settings from a raw legacy device snapshot`,()=>{
+    const out=run(browser,'sync-13017-legacy-snapshot-settings-protected');
+    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,8);
+  });
+  test(`1.30.17 production ${browser} protects explicit snapshot Settings from a raw legacy shared record`,()=>{
+    const out=run(browser,'sync-13017-legacy-shared-settings-protected');
+    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,8);
+  });
+}

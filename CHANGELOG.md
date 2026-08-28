@@ -1,3 +1,11 @@
+## 1.30.17
+
+- Fixed a mixed-version Settings Sync regression found by an independent adversarial audit: a still-running pre-1.30.15 client could publish an unrelated Settings change with a newer whole-record timestamp and silently revert a newer fine-clock setting from a modern device.
+- Fine-clock-vs-legacy merges now always preserve the explicit modern value for that logical control. This deliberately treats legacy whole-record timestamps as insufficient evidence of per-setting intent once modern clock metadata exists.
+- Legacy-only Settings remain readable and republish with modern clocks; legacy-vs-legacy deterministic compatibility and modern-vs-modern fine-clock conflict behavior remain unchanged.
+- Added direct arrival-order regressions plus production Firefox/Chrome coverage proving raw legacy device snapshots and raw legacy shared Settings records cannot overwrite modern explicit Settings.
+- Retains all 1.30.16 browser/store contract hardening, desktop-only Firefox declaration, Chrome minimum-version declaration, permissions, privacy boundaries and UI behavior.
+
 ## 1.30.16
 
 - Removed Firefox's unintended `browser_specific_settings.gecko_android` declaration so AMO no longer advertises MosaicSync as Android-compatible; MosaicSync remains a desktop extension until Android support is deliberately implemented and tested.

@@ -4,7 +4,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const VERSION = "1.30.16";
+const VERSION = "1.30.17";
 const FIREFOX_KEYS = [
   "action", "author", "background", "browser_specific_settings", "chrome_settings_overrides",
   "chrome_url_overrides", "content_security_policy", "default_locale", "description", "homepage_url",
@@ -17,7 +17,7 @@ const CHROME_KEYS = [
   "optional_host_permissions", "optional_permissions", "permissions", "short_name", "version", "version_name"
 ].sort();
 
-test("1.30.16 production manifests match the approved browser/store capability contract", async () => {
+test("1.30.17 production manifests match the approved browser/store capability contract", async () => {
   const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
   const chrome = JSON.parse(fs.readFileSync("dist/chrome/manifest.json", "utf8"));
 
@@ -53,7 +53,7 @@ test("1.30.16 production manifests match the approved browser/store capability c
   assert.equal(Object.hasOwn(chrome, "browser_specific_settings"), false);
 });
 
-test("1.30.16 Firefox data-collection categories are backed by explicit browser-native-Sync rationales", async () => {
+test("1.30.17 Firefox data-collection categories are backed by explicit browser-native-Sync rationales", async () => {
   const constants = await import(`${pathToFileURL(process.cwd() + "/dist/firefox/core/constants.js").href}?contract=${Date.now()}`);
   const declared = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"))
     .browser_specific_settings.gecko.data_collection_permissions.optional;
@@ -67,7 +67,7 @@ test("1.30.16 Firefox data-collection categories are backed by explicit browser-
   assert.match(constants.SYNC_DATA_COLLECTION_RATIONALE.technicalAndInteraction, /settings|configuration/i);
 });
 
-test("1.30.16 deterministic release-contract scanner accepts both built runtime trees", () => {
+test("1.30.17 deterministic release-contract scanner accepts both built runtime trees", () => {
   const result = spawnSync("python", ["tools/release_contract.py"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.match(result.stdout, /Release contract OK/);

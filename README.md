@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.16**
+**Current source release: 1.30.17**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.16** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.17** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.16 is a focused **browser/store contract hardening** release. Firefox now declares desktop-only support by removing the accidental `gecko_android` compatibility block, while Chrome explicitly declares its real API floor with `minimum_chrome_version: 104`. Release-contract checks now pin the exact approved manifest properties, required/optional/host permissions, browser-specific New Tab/Home behavior, production identity, Firefox data-collection categories and their documented browser-native-Sync rationale, plus final-package checks that reject unapproved capabilities, development IDs and unexpected fixed external endpoints. Privacy wording now distinguishes synchronized shortcut URLs/settings from device-local Firefox history/Top Sites and from developer telemetry. Runtime Sync/state behavior, schemas, permissions and UI controls are unchanged.
+1.30.17 is a focused **mixed-version Settings Sync safety** release. Once a modern fine-grained Settings clock exists for a logical control, a still-running pre-1.30.15 client can no longer use a later whole-record timestamp from an unrelated Settings edit to revert that modern value. Legacy-only records remain readable, legacy-vs-legacy ordering remains deterministic, and modern-vs-modern fine-clock behavior is unchanged. Production regressions cover raw legacy device snapshots and raw legacy shared Settings records on Firefox and Chrome.
+
+1.30.16 is a focused **browser/store contract hardening** release. Firefox declares desktop-only support by removing the accidental `gecko_android` compatibility block, while Chrome explicitly declares its real API floor with `minimum_chrome_version: 104`. Release-contract checks pin the exact approved manifest properties, required/optional/host permissions, browser-specific New Tab/Home behavior, production identity, Firefox data-collection categories and their documented browser-native-Sync rationale, plus final-package checks that reject unapproved capabilities, development IDs and unexpected fixed external endpoints. Privacy wording distinguishes synchronized shortcut URLs/settings from device-local Firefox history/Top Sites and from developer telemetry.
 
 1.30.15 introduced compact per-logical-setting Sync clocks so independent Settings changes from different devices converge without stale-field clobbering; same-setting conflicts remain deterministic and reset/recovery authority remains unchanged.
 

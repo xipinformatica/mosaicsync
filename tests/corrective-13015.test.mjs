@@ -67,7 +67,7 @@ function applyRecord(record, local = baseState()) {
 }
 
 test("1.30.15 release and Settings clock schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.16");
+  assert.equal(VERSION, "1.30.17");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
   assert.equal(SETTINGS_SYNC_CLOCK_KEYS.length, 17);
@@ -154,7 +154,27 @@ test("1.30.15 same-setting equal-clock conflicts converge regardless of arrival 
   assert.deepEqual(ab.settingsClock.t, ba.settingsClock.t);
 });
 
-test("1.30.15 legacy same-value writes do not artificially advance fine clocks", () => {
+test("1.30.17 explicit fine clocks outrank later legacy whole-record timestamps", () => {
+  const base = baseState();
+  const modern = mutateSetting(base, "rows", 7, 1000);
+  const modernRecord = recordFor(modern, "new-device");
+  const legacy = structuredClone(recordFor(base, "old-device"));
+  delete legacy.settingsClock;
+  legacy.schemaVersion = 10;
+  legacy.modifiedAt = 5000;
+  legacy.deviceId = "old-device";
+  legacy.settings.rows = 6;
+  legacy.settings.columns = 10;
+
+  const merged = mergeSettingsRecords(modernRecord, legacy);
+  const reversed = mergeSettingsRecords(legacy, modernRecord);
+  assert.equal(merged.settings.rows, 7, "stale legacy rows must not revert an explicit modern edit");
+  assert.equal(merged.settings.columns, base.settings.columns, "legacy whole-record writes cannot claim per-setting intent once fine clocks exist");
+  assert.deepEqual(merged.settingsClock.r, modernRecord.settingsClock.r);
+  assert.equal(stableStringify(reversed), stableStringify(merged), "mixed-version merge must remain arrival-order independent");
+});
+
+test("1.30.17 legacy same-value writes do not artificially advance fine clocks", () => {
   const base = baseState();
   const modern = mutateSetting(base, "theme", "light", 500);
   const modernRecord = recordFor(modern, "new-device");
@@ -163,12 +183,39 @@ test("1.30.15 legacy same-value writes do not artificially advance fine clocks",
   legacy.schemaVersion = 10;
   legacy.modifiedAt = 1000;
   legacy.deviceId = "old-device";
-  legacy.settings.tileSize = 92;
 
   const merged = mergeSettingsRecords(modernRecord, legacy);
   assert.equal(merged.settings.theme, "light");
-  assert.deepEqual(merged.settingsClock.t, modernRecord.settingsClock.t, "legacy unrelated write must not raise theme clock");
-  assert.equal(merged.settings.tileSize, 92, "legacy changed field still participates conservatively");
+  assert.deepEqual(merged.settingsClock.t, modernRecord.settingsClock.t, "legacy equal-value write must not raise the fine clock");
+});
+
+test("1.30.17 two legacy Settings records retain deterministic whole-record compatibility", () => {
+  const left = recordFor(baseState(100), "legacy-a");
+  const right = recordFor(baseState(100), "legacy-b");
+  delete left.settingsClock;
+  delete right.settingsClock;
+  left.schemaVersion = right.schemaVersion = 10;
+  left.modifiedAt = 1000;
+  right.modifiedAt = 2000;
+  left.settings.rows = 7;
+  right.settings.rows = 6;
+  const ab = mergeSettingsRecords(left, right);
+  const ba = mergeSettingsRecords(right, left);
+  assert.equal(ab.settings.rows, 6);
+  assert.equal(stableStringify(ab), stableStringify(ba));
+});
+
+test("1.30.17 a lone legacy Settings record remains readable and republishes with fine clocks", () => {
+  const legacy = recordFor(baseState(777), "legacy-only");
+  delete legacy.settingsClock;
+  legacy.schemaVersion = 10;
+  legacy.settings.rows = 7;
+  const reconstructed = applyRecord(legacy, baseState());
+  const modernized = recordFor(reconstructed, "receiver");
+  assert.equal(reconstructed.settings.rows, 7);
+  assert.equal(Object.keys(modernized.settingsClock).length, SETTINGS_SYNC_CLOCK_KEYS.length);
+  assert.equal(modernized.settingsClock.r[0], 777);
+  assert.ok(modernized.settingsClock.r[1], "legacy owner must be retained in compact tie-break form");
 });
 
 test("1.30.15 merged Settings clocks survive state reconstruction and republish", () => {

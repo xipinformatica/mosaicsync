@@ -1287,16 +1287,6 @@ function settingsGroupProjection(record, groupKey) {
   return projected;
 }
 
-function settingsGroupCompatible(leftRecord, rightRecord, groupKey) {
-  const left = leftRecord?.settings || {};
-  const right = rightRecord?.settings || {};
-  for (const field of SETTINGS_SYNC_CLOCK_GROUPS[groupKey] || []) {
-    if (!Object.prototype.hasOwnProperty.call(left, field) || !Object.prototype.hasOwnProperty.call(right, field)) continue;
-    if (!jsonSemanticEqual(left[field], right[field])) return false;
-  }
-  return true;
-}
-
 function settingsStampInfo(record, groupKey) {
   const explicit = Boolean(record?.settingsClock && typeof record.settingsClock === "object" &&
     Object.prototype.hasOwnProperty.call(record.settingsClock, groupKey));
@@ -1310,13 +1300,18 @@ function settingsStampInfo(record, groupKey) {
 function compareSettingsGroup(leftRecord, rightRecord, groupKey) {
   const leftInfo = settingsStampInfo(leftRecord, groupKey);
   const rightInfo = settingsStampInfo(rightRecord, groupKey);
-  const compatible = settingsGroupCompatible(leftRecord, rightRecord, groupKey);
-
-  // If a legacy whole-record writer carries the same group value as a fine-clock
-  // peer, do not let its unrelated whole-record timestamp artificially advance
-  // this group's clock. This materially reduces rolling-version stale poisoning
-  // while remaining conservative when the values actually differ.
-  if (compatible && leftInfo.explicit !== rightInfo.explicit) {
+  // Mixed-version rule: once one peer carries an explicit fine-grained clock for
+  // this logical setting, a legacy whole-record timestamp is no longer evidence
+  // that the legacy peer intentionally changed this particular control. Always
+  // prefer the explicit clock, even when the values differ. Otherwise an old
+  // device can change unrelated setting B, re-stamp its entire stale Settings
+  // record, and silently revert newer setting A on a modern device.
+  //
+  // This deliberately makes Settings from a still-running pre-fine-clock client
+  // unable to override an explicit modern value during the rolling-upgrade
+  // window. There is no safe way to distinguish an intentional legacy edit from
+  // stale baggage because the old protocol never recorded per-setting intent.
+  if (leftInfo.explicit !== rightInfo.explicit) {
     return leftInfo.explicit ? { winner: leftRecord, loser: rightRecord, stamp: leftInfo.stamp } :
       { winner: rightRecord, loser: leftRecord, stamp: rightInfo.stamp };
   }

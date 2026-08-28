@@ -1,11 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.16.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.17.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+
+
+## 1.30.17 mixed-version Settings clock policy
+
+- A Settings record with an explicit fine-grained clock for a logical control always outranks a legacy record that has no clock for that control, even if the legacy whole-record `modifiedAt` is later and the values differ.
+- This is intentional rolling-upgrade behavior: a pre-1.30.15 client cannot prove which individual control caused its whole Settings timestamp to advance, so allowing it to override explicit modern intent would reintroduce stale-field clobbering.
+- Legacy-only Settings remain readable and are modernized with fine clocks when reconstructed/republished. Two legacy records retain the prior deterministic whole-record ordering. Modern-vs-modern fine-clock semantics are unchanged.
+- Permanent regressions exercise both raw legacy device-snapshot decoding and raw legacy shared-ledger Settings against modern fine-clock state on Firefox and Chrome.
 
 ## 1.30.16 browser/store release-contract policy
 
@@ -424,7 +432,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.16` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.17` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

@@ -299,14 +299,18 @@ async function completeProfileSnapshotFixture(baseState, {
   slot = "a",
   publishedAt = 500,
   chunkChars = 1400,
-  previousProfile = null
+  previousProfile = null,
+  transformSettings = null,
+  transformWorkSettings = null
 } = {}) {
   const personal = model.workspaceStateNormalized(baseState, "personal");
   const work = model.workspaceStateNormalized(baseState, "work");
   const personalRecords = model.flattenStateNormalized(personal, deviceId);
   const workRecords = model.flattenStateNormalized(work, deviceId);
-  const personalSettings = model.makeSettingsRecordNormalized(personal, deviceId);
-  const workSettings = model.makeSettingsRecordNormalized(work, deviceId);
+  let personalSettings = model.makeSettingsRecordNormalized(personal, deviceId);
+  let workSettings = model.makeSettingsRecordNormalized(work, deviceId);
+  if (typeof transformSettings === "function") personalSettings = transformSettings(clone(personalSettings));
+  if (typeof transformWorkSettings === "function") workSettings = transformWorkSettings(clone(workSettings));
   const payload = {
     version: constants.DEVICE_SNAPSHOT_SCHEMA_VERSION,
     records: [...personalRecords.values()],
@@ -1784,6 +1788,90 @@ else if (scenario === 'sync-loss-13014-recovering-restart-grace') {
   assert.equal(result?.pending,true);
   assert.equal(sync.stats.setCalls,setsBefore,'replacement worker must respect persisted recovering grace before another publication');
   console.log(JSON.stringify({ok:true,restartGrace:true}));
+}
+
+else if (scenario === 'sync-13017-legacy-snapshot-settings-protected') {
+  const waiting=stateWith();
+  await seedLocalState(waiting,{syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting'});
+
+  const legacyState=stateWith();
+  const legacyize = record => {
+    delete record.settingsClock;
+    record.schemaVersion = 10;
+    record.modifiedAt = 5000;
+    record.deviceId = 'legacy-device';
+    record.settings.rows = 6;
+    record.settings.columns = 10;
+    return record;
+  };
+  const legacyFixture=await completeProfileSnapshotFixture(legacyState,{
+    deviceId:'legacy-device',commitId:'legacy-profile',publishedAt:5000,
+    transformSettings:legacyize,transformWorkSettings:legacyize
+  });
+
+  const modernState=stateWith();
+  const modernPersonal=model.workspaceStateNormalized(modernState,'personal');
+  const modernSettings=model.makeSettingsRecordNormalized(modernPersonal,'modern-device');
+  modernSettings.settings.rows=7;
+  modernSettings.settingsClock.r=[1000,'modern-device'];
+  modernSettings.modifiedAt=1000;
+  await sync.set({
+    ...legacyFixture.entries,
+    [constants.SYNC_SETTINGS_KEY]:modernSettings,
+    [constants.SYNC_DATASET_KEY]:{
+      schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'dataset',updatedAt:1000,liveRecordCount:0,
+      settingsModifiedAt:1000,commitId:'modern-shared',originDeviceId:'modern-device'
+    }
+  });
+
+  const result=await send({type:'mosaicsync:wait-for-remote'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const normalized=model.normalizeState(raw);
+  assert.equal(result?.ok,true);
+  assert.equal(normalized.spaces.personal.settings.rows,7,'decoded raw legacy snapshot must not revert explicit modern rows');
+  assert.equal(normalized.spaces.personal.settings.columns,8,'legacy unrelated whole-record write must not override modern explicit columns');
+  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns}));
+}
+
+else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
+  const waiting=stateWith();
+  await seedLocalState(waiting,{syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting'});
+
+  const modernState=stateWith();
+  const modernize = record => {
+    record.settings.rows = 7;
+    record.settingsClock.r = [1000,'modern-device'];
+    record.modifiedAt = 1000;
+    return record;
+  };
+  const modernFixture=await completeProfileSnapshotFixture(modernState,{
+    deviceId:'modern-device',commitId:'modern-profile',publishedAt:1000,
+    transformSettings:modernize
+  });
+  const legacyPersonal=model.workspaceStateNormalized(stateWith(),'personal');
+  const legacySettings=model.makeSettingsRecordNormalized(legacyPersonal,'legacy-device');
+  delete legacySettings.settingsClock;
+  legacySettings.schemaVersion=10;
+  legacySettings.modifiedAt=5000;
+  legacySettings.settings.rows=6;
+  legacySettings.settings.columns=10;
+
+  await sync.set({
+    ...modernFixture.entries,
+    [constants.SYNC_SETTINGS_KEY]:legacySettings,
+    [constants.SYNC_DATASET_KEY]:{
+      schemaVersion:10,kind:'dataset',updatedAt:5000,liveRecordCount:0,
+      settingsModifiedAt:5000,commitId:'legacy-shared',originDeviceId:'legacy-device'
+    }
+  });
+
+  const result=await send({type:'mosaicsync:wait-for-remote'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const normalized=model.normalizeState(raw);
+  assert.equal(result?.ok,true);
+  assert.equal(normalized.spaces.personal.settings.rows,7,'raw legacy shared record must not revert explicit modern rows from a device snapshot');
+  assert.equal(normalized.spaces.personal.settings.columns,8,'legacy shared whole-record write must not claim unrelated modern settings');
+  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {

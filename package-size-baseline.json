@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.16",
-      "rawBytes": 2021599,
-      "deflatedBytes": 601762,
+      "version": "1.30.17",
+      "rawBytes": 2021542,
+      "deflatedBytes": 601868,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1687,
-          "deflatedBytes": 655
+          "deflatedBytes": 656
         },
         "manifest-localization": {
           "files": 33,
@@ -58,8 +58,8 @@
         },
         "shared-core": {
           "files": 22,
-          "rawBytes": 244856,
-          "deflatedBytes": 69551
+          "rawBytes": 244799,
+          "deflatedBytes": 69656
         },
         "wallpapers": {
           "files": 29,
@@ -100,8 +100,8 @@
         {
           "path": "core/model.js",
           "category": "shared-core",
-          "rawBytes": 84833,
-          "deflatedBytes": 20371
+          "rawBytes": 84776,
+          "deflatedBytes": 20476
         },
         {
           "path": "newtab/newtab-secondary.css",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.16",
-      "rawBytes": 2042161,
-      "deflatedBytes": 616306,
+      "version": "1.30.17",
+      "rawBytes": 2042104,
+      "deflatedBytes": 616412,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1364,
-          "deflatedBytes": 553
+          "deflatedBytes": 554
         },
         "manifest-localization": {
           "files": 33,
@@ -312,8 +312,8 @@
         },
         "shared-core": {
           "files": 23,
-          "rawBytes": 255920,
-          "deflatedBytes": 73100
+          "rawBytes": 255863,
+          "deflatedBytes": 73205
         },
         "wallpapers": {
           "files": 29,
@@ -354,8 +354,8 @@
         {
           "path": "core/model.js",
           "category": "shared-core",
-          "rawBytes": 84833,
-          "deflatedBytes": 20371
+          "rawBytes": 84776,
+          "deflatedBytes": 20476
         },
         {
           "path": "newtab/newtab-secondary.css",
