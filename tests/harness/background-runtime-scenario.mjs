@@ -1815,12 +1815,22 @@ else if (scenario === 'sync-13017-legacy-snapshot-settings-protected') {
   modernSettings.settings.rows=7;
   modernSettings.settingsClock.r=[1000,'modern-device'];
   modernSettings.modifiedAt=1000;
+  const modernWork=model.makeSettingsRecordNormalized(model.workspaceStateNormalized(modernState,'work'),'modern-device');
+  modernWork.settings.rows=5;
+  modernWork.settingsClock.r=[1100,'modern-device'];
+  modernWork.modifiedAt=1100;
+  const workPrefix=`${constants.SYNC_SPACE_PREFIX}work.`;
   await sync.set({
     ...legacyFixture.entries,
     [constants.SYNC_SETTINGS_KEY]:modernSettings,
     [constants.SYNC_DATASET_KEY]:{
       schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'dataset',updatedAt:1000,liveRecordCount:0,
       settingsModifiedAt:1000,commitId:'modern-shared',originDeviceId:'modern-device'
+    },
+    [`${workPrefix}settings`]:modernWork,
+    [`${workPrefix}dataset`]:{
+      schemaVersion:constants.SYNC_SCHEMA_VERSION,kind:'dataset',updatedAt:1100,liveRecordCount:0,
+      settingsModifiedAt:1100,commitId:'modern-work-shared',originDeviceId:'modern-device'
     }
   });
 
@@ -1830,7 +1840,9 @@ else if (scenario === 'sync-13017-legacy-snapshot-settings-protected') {
   assert.equal(result?.ok,true);
   assert.equal(normalized.spaces.personal.settings.rows,7,'decoded raw legacy snapshot must not revert explicit modern rows');
   assert.equal(normalized.spaces.personal.settings.columns,8,'legacy unrelated whole-record write must not override modern explicit columns');
-  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns}));
+  assert.equal(normalized.spaces.work.settings.rows,5,'decoded raw legacy Work snapshot must not revert explicit modern Work rows');
+  assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work whole-record write must not override unrelated modern Work columns');
+  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
 }
 
 else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
@@ -1844,9 +1856,15 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
     record.modifiedAt = 1000;
     return record;
   };
+  const modernizeWork = record => {
+    record.settings.rows = 5;
+    record.settingsClock.r = [1100,'modern-device'];
+    record.modifiedAt = 1100;
+    return record;
+  };
   const modernFixture=await completeProfileSnapshotFixture(modernState,{
     deviceId:'modern-device',commitId:'modern-profile',publishedAt:1000,
-    transformSettings:modernize
+    transformSettings:modernize,transformWorkSettings:modernizeWork
   });
   const legacyPersonal=model.workspaceStateNormalized(stateWith(),'personal');
   const legacySettings=model.makeSettingsRecordNormalized(legacyPersonal,'legacy-device');
@@ -1856,12 +1874,21 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
   legacySettings.settings.rows=6;
   legacySettings.settings.columns=10;
 
+  const legacyWork=clone(legacySettings);
+  legacyWork.settings.rows=6;
+  legacyWork.settings.columns=10;
+  const workPrefix=`${constants.SYNC_SPACE_PREFIX}work.`;
   await sync.set({
     ...modernFixture.entries,
     [constants.SYNC_SETTINGS_KEY]:legacySettings,
     [constants.SYNC_DATASET_KEY]:{
       schemaVersion:10,kind:'dataset',updatedAt:5000,liveRecordCount:0,
       settingsModifiedAt:5000,commitId:'legacy-shared',originDeviceId:'legacy-device'
+    },
+    [`${workPrefix}settings`]:legacyWork,
+    [`${workPrefix}dataset`]:{
+      schemaVersion:10,kind:'dataset',updatedAt:5000,liveRecordCount:0,
+      settingsModifiedAt:5000,commitId:'legacy-work-shared',originDeviceId:'legacy-device'
     }
   });
 
@@ -1871,7 +1898,9 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
   assert.equal(result?.ok,true);
   assert.equal(normalized.spaces.personal.settings.rows,7,'raw legacy shared record must not revert explicit modern rows from a device snapshot');
   assert.equal(normalized.spaces.personal.settings.columns,8,'legacy shared whole-record write must not claim unrelated modern settings');
-  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns}));
+  assert.equal(normalized.spaces.work.settings.rows,5,'raw legacy Work shared record must not revert explicit modern Work rows from a device snapshot');
+  assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work shared record must not claim unrelated modern Work settings');
+  console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {

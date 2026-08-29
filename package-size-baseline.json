@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.17",
-      "rawBytes": 2021542,
-      "deflatedBytes": 601868,
+      "version": "1.30.18",
+      "rawBytes": 2024757,
+      "deflatedBytes": 602565,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1687,
-          "deflatedBytes": 656
+          "deflatedBytes": 655
         },
         "manifest-localization": {
           "files": 33,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 9,
-          "rawBytes": 351736,
-          "deflatedBytes": 82551
+          "rawBytes": 354412,
+          "deflatedBytes": 83145
         },
         "other": {
           "files": 1,
@@ -58,8 +58,8 @@
         },
         "shared-core": {
           "files": 22,
-          "rawBytes": 244799,
-          "deflatedBytes": 69656
+          "rawBytes": 245338,
+          "deflatedBytes": 69760
         },
         "wallpapers": {
           "files": 29,
@@ -82,8 +82,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 310383,
-          "deflatedBytes": 67701
+          "rawBytes": 310639,
+          "deflatedBytes": 67700
         },
         {
           "path": "background/background.js",
@@ -118,8 +118,8 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 34123,
-          "deflatedBytes": 9111
+          "rawBytes": 34662,
+          "deflatedBytes": 9215
         },
         {
           "path": "core/i18n-locales/el.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.17",
-      "rawBytes": 2042104,
-      "deflatedBytes": 616412,
+      "version": "1.30.18",
+      "rawBytes": 2045319,
+      "deflatedBytes": 617109,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1364,
-          "deflatedBytes": 554
+          "deflatedBytes": 553
         },
         "manifest-localization": {
           "files": 33,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 9,
-          "rawBytes": 351736,
-          "deflatedBytes": 82551
+          "rawBytes": 354412,
+          "deflatedBytes": 83145
         },
         "other": {
           "files": 1,
@@ -312,8 +312,8 @@
         },
         "shared-core": {
           "files": 23,
-          "rawBytes": 255863,
-          "deflatedBytes": 73205
+          "rawBytes": 256402,
+          "deflatedBytes": 73309
         },
         "wallpapers": {
           "files": 29,
@@ -336,8 +336,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 310383,
-          "deflatedBytes": 67701
+          "rawBytes": 310639,
+          "deflatedBytes": 67700
         },
         {
           "path": "background/background.js",
@@ -372,8 +372,8 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 34123,
-          "deflatedBytes": 9111
+          "rawBytes": 34662,
+          "deflatedBytes": 9215
         },
         {
           "path": "core/i18n-locales/el.js",

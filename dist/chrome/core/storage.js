@@ -289,13 +289,25 @@ function projectRenderShortcut(item) {
 }
 
 export function createRenderSnapshot(state = DEFAULT_STATE) {
-  const settings = state?.settings || DEFAULT_STATE.settings;
+  const spacesDisabled = state?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
+  const personal = state?.spaces?.personal;
+  const source = spacesDisabled && state?.activeSpaceId !== "personal" && personal
+    ? {
+        ...state,
+        activeSpaceId: "personal",
+        shortcuts: personal.shortcuts || [],
+        settings: personal.settings || DEFAULT_STATE.settings,
+        settingsModifiedAt: Number(personal.settingsModifiedAt) || 0,
+        updatedAt: Number(personal.updatedAt) || 0
+      }
+    : state;
+  const settings = source?.settings || DEFAULT_STATE.settings;
   return {
     renderSnapshotVersion: RENDER_SNAPSHOT_SCHEMA_VERSION,
-    schemaVersion: state?.schemaVersion ?? DEFAULT_STATE.schemaVersion,
-    activeSpaceId: SPACE_IDS.includes(state?.activeSpaceId) ? state.activeSpaceId : "personal",
-    shortcuts: Array.isArray(state?.shortcuts)
-      ? state.shortcuts.map(projectRenderShortcut).filter(Boolean)
+    schemaVersion: source?.schemaVersion ?? DEFAULT_STATE.schemaVersion,
+    activeSpaceId: SPACE_IDS.includes(source?.activeSpaceId) ? source.activeSpaceId : "personal",
+    shortcuts: Array.isArray(source?.shortcuts)
+      ? source.shortcuts.map(projectRenderShortcut).filter(Boolean)
       : [],
     settings: {
       ...settings,
@@ -303,8 +315,8 @@ export function createRenderSnapshot(state = DEFAULT_STATE) {
       backgroundAssetId: "",
       backgroundImageDeferred: Boolean((settings.backgroundImage || settings.backgroundLocalAssetId) && !settings.backgroundPreset)
     },
-    settingsModifiedAt: Number(state?.settingsModifiedAt) || 0,
-    updatedAt: Number(state?.updatedAt) || 0
+    settingsModifiedAt: Number(source?.settingsModifiedAt) || 0,
+    updatedAt: Number(source?.updatedAt) || 0
   };
 }
 

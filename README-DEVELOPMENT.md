@@ -1,12 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.17.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
 
+
+## 1.30.18 state-consistency / render-efficiency policy
+
+- If Multiple Spaces is disabled, disposable session render snapshots project Personal even if a background write temporarily carries Work as the active Space. Authoritative storage materialization already enforces the same invariant.
+- External `storage.local` state changes may skip a full Manual-grid rebuild only when an exact, fail-closed render-input comparison proves the active visible grid is unchanged. Settings-open, open-folder, Recent-order and Sync-waiting cases keep the ordinary render path.
+- Inactive-Space wallpaper preloading is disabled while Multiple Spaces is off and resumes when the feature is enabled.
+- Profile import remains whole-profile authority: missing historical fields/Spaces migrate to current defaults rather than inheriting unrelated current Sync state.
 
 ## 1.30.17 mixed-version Settings clock policy
 
@@ -432,7 +439,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.17` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

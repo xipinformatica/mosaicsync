@@ -67,7 +67,7 @@ function applyRecord(record, local = baseState()) {
 }
 
 test("1.30.15 release and Settings clock schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.17");
+  assert.equal(VERSION, "1.30.18");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
   assert.equal(SETTINGS_SYNC_CLOCK_KEYS.length, 17);
@@ -154,7 +154,7 @@ test("1.30.15 same-setting equal-clock conflicts converge regardless of arrival 
   assert.deepEqual(ab.settingsClock.t, ba.settingsClock.t);
 });
 
-test("1.30.17 explicit fine clocks outrank later legacy whole-record timestamps", () => {
+test("1.30.18 explicit fine clocks outrank later legacy whole-record timestamps", () => {
   const base = baseState();
   const modern = mutateSetting(base, "rows", 7, 1000);
   const modernRecord = recordFor(modern, "new-device");
@@ -174,7 +174,7 @@ test("1.30.17 explicit fine clocks outrank later legacy whole-record timestamps"
   assert.equal(stableStringify(reversed), stableStringify(merged), "mixed-version merge must remain arrival-order independent");
 });
 
-test("1.30.17 legacy same-value writes do not artificially advance fine clocks", () => {
+test("1.30.18 legacy same-value writes do not artificially advance fine clocks", () => {
   const base = baseState();
   const modern = mutateSetting(base, "theme", "light", 500);
   const modernRecord = recordFor(modern, "new-device");
@@ -189,7 +189,7 @@ test("1.30.17 legacy same-value writes do not artificially advance fine clocks",
   assert.deepEqual(merged.settingsClock.t, modernRecord.settingsClock.t, "legacy equal-value write must not raise the fine clock");
 });
 
-test("1.30.17 two legacy Settings records retain deterministic whole-record compatibility", () => {
+test("1.30.18 two legacy Settings records retain deterministic whole-record compatibility", () => {
   const left = recordFor(baseState(100), "legacy-a");
   const right = recordFor(baseState(100), "legacy-b");
   delete left.settingsClock;
@@ -205,7 +205,7 @@ test("1.30.17 two legacy Settings records retain deterministic whole-record comp
   assert.equal(stableStringify(ab), stableStringify(ba));
 });
 
-test("1.30.17 a lone legacy Settings record remains readable and republishes with fine clocks", () => {
+test("1.30.18 a lone legacy Settings record remains readable and republishes with fine clocks", () => {
   const legacy = recordFor(baseState(777), "legacy-only");
   delete legacy.settingsClock;
   legacy.schemaVersion = 10;

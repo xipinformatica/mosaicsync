@@ -1,3 +1,11 @@
+## 1.30.18
+
+- Prevents a disabled Multiple Spaces configuration from producing a Work-space session render snapshot; Personal is now the only first-paint Space when Spaces are off.
+- Avoids unnecessary full shortcut-grid rebuilds for external state changes whose active Manual-order grid inputs are exactly unchanged; ambiguous cases still render normally.
+- Skips inactive-Space wallpaper preloading when Multiple Spaces is disabled and resumes preloading when Spaces are enabled.
+- Adds regressions for render-equivalence boundaries, disabled-Spaces first-paint state, profile-import whole-profile authority, and Work-space mixed-version Settings protection.
+- Removes one obsolete historical wallpaper-persistence comment. No Sync/state schema, permission, telemetry or backend change.
+
 ## 1.30.17
 
 - Fixed a mixed-version Settings Sync regression found by an independent adversarial audit: a still-running pre-1.30.15 client could publish an unrelated Settings change with a newer whole-record timestamp and silently revert a newer fine-clock setting from a modern device.

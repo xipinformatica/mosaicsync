@@ -87,7 +87,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, normalizeShortcutUrl, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import "./builtin-icons.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -1505,6 +1505,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function preloadOtherSpaceBackgrounds() {
+    if (!isMultipleSpacesEnabled()) return;
     for (const spaceId of SPACE_IDS) {
       if (spaceId === state.activeSpaceId) continue;
       const settings = state?.spaces?.[spaceId]?.settings;
@@ -2050,6 +2051,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     scheduleAppearanceHintRefresh(state.settings);
     scheduleRenderManifestRefresh(state, meta);
     void warmSessionRenderCache(state, meta);
+    if (enabled) preloadOtherSpaceBackgrounds();
   }
 
   async function switchActiveSpace(spaceId) {
@@ -5006,9 +5008,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function queueThemeWallpaperPersistence() {
-    // Use the ordinary, already-audited state writer. The 1.26.2/1.26.3 special
-    // three-field transaction duplicated concurrency/storage logic and did not fix
-    // the Firefox paint bug, so 1.26.5 deliberately removes it.
     scheduleBackgroundPersist(180);
   }
 
@@ -6881,7 +6880,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
               frequentCandidateCacheAt = 0;
               frequentCandidateCache = [];
             }
-            reconcileLauncherAfterExternalState();
+            const canSkipExternalGridRender =
+              !isSettingsOpen() &&
+              !activeFolderId &&
+              folderPopover.hidden &&
+              shortcutOrderMode !== "recent" &&
+              !isAwaitingRemote(meta) &&
+              manualGridRenderEquivalent(previousStateForSettingsRefresh, state);
+            reconcileLauncherAfterExternalState({ renderGrid: !canSkipExternalGridRender });
             updateSpaceSwitcher();
             scheduleAppearanceHintRefresh(state.settings);
             scheduleRenderManifestRefresh(state, meta);

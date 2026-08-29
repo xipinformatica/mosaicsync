@@ -141,7 +141,7 @@ for (const browser of ["firefox", "chrome"]) {
     // external path instead of calling an unguarded apply+render pair.
     const listenerStart = source.indexOf("browser.storage.onChanged.addListener");
     const listener = source.slice(listenerStart);
-    assert.match(listener, /writeBaseline = createWriteBaseline\(stateChange\.newValue\);[\s\S]*?applyPendingSettingsDraft\(\);[\s\S]*?refreshSettingsControlsAfterExternalState\([^)]*\);[\s\S]*?reconcileLauncherAfterExternalState\(\);/);
+    assert.match(listener, /writeBaseline = createWriteBaseline\(stateChange\.newValue\);[\s\S]*?applyPendingSettingsDraft\(\);[\s\S]*?refreshSettingsControlsAfterExternalState\([^)]*\);[\s\S]*?reconcileLauncherAfterExternalState\((?:\{[^)]*\})?\);/);
     assert.match(listener, /wasAwaitingRemote !== isAwaitingRemote\(meta\)\) requestLauncherRenderAfterExternalState\(\)/);
   });
 

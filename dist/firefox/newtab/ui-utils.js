@@ -109,6 +109,60 @@ export function normalizeShortcutUrl(raw) {
   return safeUrl;
 }
 
+
+function sameShortcutRenderInputs(left, right) {
+  if (!left || !right || left.type !== "shortcut" || right.type !== "shortcut") return false;
+  for (const key of [
+    "id", "title", "url", "image", "builtinIcon", "colorTag", "imageStyle",
+    "localImageAssetId", "imageAssetId", "imageSourceKind", "imageSourceUrl"
+  ]) {
+    if (!Object.is(left[key] ?? "", right[key] ?? "")) return false;
+  }
+  return Number(left.position) === Number(right.position);
+}
+
+function sameFolderRenderInputs(left, right) {
+  if (!left || !right || left.type !== "folder" || right.type !== "folder") return false;
+  if (left.id !== right.id || (left.title || "Folder") !== (right.title || "Folder") ||
+      Number(left.position) !== Number(right.position)) return false;
+  const leftItems = Array.isArray(left.items) ? left.items : [];
+  const rightItems = Array.isArray(right.items) ? right.items : [];
+  if (leftItems.length !== rightItems.length) return false;
+  const visible = Math.min(4, leftItems.length);
+  for (let index = 0; index < visible; index += 1) {
+    if (!sameShortcutRenderInputs(leftItems[index], rightItems[index])) return false;
+  }
+  return true;
+}
+
+export function manualGridRenderEquivalent(leftState, rightState) {
+  if (!leftState || !rightState || leftState.activeSpaceId !== rightState.activeSpaceId) return false;
+  const leftSettings = leftState.settings || {};
+  const rightSettings = rightState.settings || {};
+  for (const key of ["columns", "rows", "autoSiteIcons", "webAccessPrompted"]) {
+    if (!Object.is(leftSettings[key], rightSettings[key])) return false;
+  }
+  const leftItems = Array.isArray(leftState.shortcuts) ? leftState.shortcuts : [];
+  const rightItems = Array.isArray(rightState.shortcuts) ? rightState.shortcuts : [];
+  if (leftItems.length !== rightItems.length) return false;
+
+  const rightByPosition = new Map();
+  for (const item of rightItems) {
+    if (!Number.isInteger(item?.position) || rightByPosition.has(item.position)) return false;
+    rightByPosition.set(item.position, item);
+  }
+  for (const left of leftItems) {
+    if (!Number.isInteger(left?.position)) return false;
+    const right = rightByPosition.get(left.position);
+    if (!right || left.type !== right.type) return false;
+    const same = left.type === "folder"
+      ? sameFolderRenderInputs(left, right)
+      : sameShortcutRenderInputs(left, right);
+    if (!same) return false;
+  }
+  return true;
+}
+
 export function formatBytes(bytes) {
   const value = Math.max(0, Number(bytes) || 0);
   if (value < 1024) return `${value} B`;
