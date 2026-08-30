@@ -170,42 +170,44 @@ for (const browserName of ["firefox", "chrome"]) {
     assert.deepEqual([...bytes], [1, 2, 3]);
   });
 
-  test(`${browserName}: 1.30 complete-profile publication replaces only the inactive slot and keeps the previous generation as fallback`, async () => {
+  test(`${browserName}: 1.30.18.3 complete-profile publication commits an immutable generation root after its chunks`, async () => {
     const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
     const events = [];
     const prefix = "mosaicsync.sync.device.";
-    const rootKey = `${prefix}dev`;
+    const legacyRootKey = `${prefix}dev`;
+    const generationRootKey = `${legacyRootKey}.snapshot.new`;
     const store = {
-      [rootKey]: { kind: "device-snapshot-manifest", deviceId: "dev", slot: "a", parts: 2, commitId: "old" },
-      [`${rootKey}.chunk.a.0`]: { old: true },
-      [`${rootKey}.chunk.a.1`]: { old: true },
-      [`${rootKey}.chunk.b.5`]: { stale: true },
-      [`${rootKey}.chunk.b.9`]: { stale: true }
+      [legacyRootKey]: { kind: "device-snapshot-manifest", deviceId: "dev", slot: "a", parts: 2, commitId: "old", profileComplete: true },
+      [`${legacyRootKey}.chunk.a.0`]: { old: true },
+      [`${legacyRootKey}.chunk.a.1`]: { old: true }
     };
     const publication = {
-      rootKey,
-      rootValue: { kind: "device-snapshot-manifest", deviceId: "dev", slot: "b", parts: 2, commitId: "new", publishedAt: 1234 },
-      targetSlot: "b",
+      rootKey: generationRootKey,
+      rootValue: {
+        kind: "device-snapshot-manifest", chunkKeyMode: "generation", snapshotId: "new",
+        deviceId: "dev", parts: 2, commitId: "new", publishedAt: 1234, profileComplete: true
+      },
+      snapshotId: "new",
       chunkWrites: {
-        [`${rootKey}.chunk.b.0`]: { fresh: 0 },
-        [`${rootKey}.chunk.b.1`]: { fresh: 1 }
+        [`${generationRootKey}.chunk.0`]: { fresh: 0 },
+        [`${generationRootKey}.chunk.1`]: { fresh: 1 }
       }
     };
     const context = {
-      console, WORK_SPACE_ID: "work",
+      console, PRODUCT_NAME: "MosaicSync", WORK_SPACE_ID: "work",
       browser: { storage: { sync: { async get(keys) {
         if (keys == null) return structuredClone(store);
         const out = {};
         for (const key of (Array.isArray(keys) ? keys : [keys])) if (Object.hasOwn(store, key)) out[key] = structuredClone(store[key]);
         return out;
       } } } },
-      readOwnDeviceSnapshot: async () => ({ root: structuredClone(store[rootKey]), decoded: null }),
+      readOwnDeviceSnapshot: async () => ({ rootKey: legacyRootKey, root: structuredClone(store[legacyRootKey]), decoded: null }),
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
       writeSyncItems: async items => { events.push(["write", Object.keys(items)]); Object.assign(store, structuredClone(items)); },
       removeSyncItems: async keys => { events.push(["remove", [...keys]]); for (const key of keys) delete store[key]; },
       isQuotaError: () => false,
-      deviceSnapshotSlotKeys: (_deviceId, slot) => Object.keys(store).filter(key => key.startsWith(`${rootKey}.chunk.${slot}.`)),
+      pruneSupersededDeviceSnapshotGenerations: async () => { events.push(["prune", []]); return 0; },
       readDeviceSnapshots: async () => [],
       mergeProfileDeviceSnapshots: () => null
     };
@@ -214,55 +216,58 @@ for (const browserName of ["firefox", "chrome"]) {
 
     const result = await context.publishProfileDeviceSnapshot({ spaces: {} }, { deviceId: "dev" }, { force: true });
     assert.equal(result.written, true);
-    const chunkWriteIndex = events.findIndex(([kind, keys]) => kind === "write" && keys.some(key => key.endsWith("chunk.b.0")));
-    const rootWriteIndex = events.findIndex(([kind, keys]) => kind === "write" && keys.includes(rootKey));
-    const precleanIndex = events.findIndex(([kind, keys]) => kind === "remove" && keys.some(key => key.endsWith("chunk.b.5")));
-    assert.ok(precleanIndex >= 0 && precleanIndex < chunkWriteIndex, "stale inactive-slot chunks are reclaimed before the replacement generation");
-    assert.ok(chunkWriteIndex >= 0 && chunkWriteIndex < rootWriteIndex, "complete-profile chunks must commit before the root flips");
-    assert.ok(Object.hasOwn(store, `${rootKey}.chunk.a.0`) && Object.hasOwn(store, `${rootKey}.chunk.a.1`),
-      "the previous authoritative slot remains intact as the recovery fallback");
-    assert.ok(Object.hasOwn(store, `${rootKey}.chunk.b.0`) && Object.hasOwn(store, `${rootKey}.chunk.b.1`));
-    assert.equal(Object.keys(store).some(key => key.endsWith("chunk.b.5") || key.endsWith("chunk.b.9")), false);
+    const chunkWriteIndex = events.findIndex(([kind, keys]) => kind === "write" && keys.some(key => key.endsWith(".snapshot.new.chunk.0")));
+    const rootWriteIndex = events.findIndex(([kind, keys]) => kind === "write" && keys.includes(generationRootKey));
+    const pruneIndex = events.findIndex(([kind]) => kind === "prune");
+    assert.ok(chunkWriteIndex >= 0 && chunkWriteIndex < rootWriteIndex, "generation chunks must commit before their immutable root");
+    assert.ok(rootWriteIndex >= 0 && rootWriteIndex < pruneIndex, "superseded generations may only be pruned after the new root is authoritative");
+    assert.deepEqual(store[legacyRootKey].commitId, "old", "the copied legacy recovery root must not be overwritten by a new publication");
+    assert.ok(Object.hasOwn(store, `${legacyRootKey}.chunk.a.0`) && Object.hasOwn(store, `${legacyRootKey}.chunk.a.1`),
+      "the previous complete generation remains available during publication");
+    assert.ok(Object.hasOwn(store, `${generationRootKey}.chunk.0`) && Object.hasOwn(store, `${generationRootKey}.chunk.1`));
   });
 
-  test(`${browserName}: 1.30 failed complete-profile root flip leaves the previous generation authoritative`, async () => {
+  test(`${browserName}: 1.30.18.3 failed immutable root commit cleans only the new generation and preserves the previous root`, async () => {
     const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
     const prefix = "mosaicsync.sync.device.";
-    const rootKey = `${prefix}dev`;
-    const oldRoot = { kind: "device-snapshot-manifest", deviceId: "dev", slot: "a", parts: 2, commitId: "old" };
+    const legacyRootKey = `${prefix}dev`;
+    const generationRootKey = `${legacyRootKey}.snapshot.new`;
+    const oldRoot = { kind: "device-snapshot-manifest", deviceId: "dev", slot: "a", parts: 2, commitId: "old", profileComplete: true };
     const store = {
-      [rootKey]: structuredClone(oldRoot),
-      [`${rootKey}.chunk.a.0`]: { old: 0 },
-      [`${rootKey}.chunk.a.1`]: { old: 1 },
-      [`${rootKey}.chunk.b.7`]: { stale: true }
+      [legacyRootKey]: structuredClone(oldRoot),
+      [`${legacyRootKey}.chunk.a.0`]: { old: 0 },
+      [`${legacyRootKey}.chunk.a.1`]: { old: 1 }
     };
     const publication = {
-      rootKey,
-      rootValue: { kind: "device-snapshot-manifest", deviceId: "dev", slot: "b", parts: 2, commitId: "new", publishedAt: 1234 },
-      targetSlot: "b",
+      rootKey: generationRootKey,
+      rootValue: {
+        kind: "device-snapshot-manifest", chunkKeyMode: "generation", snapshotId: "new",
+        deviceId: "dev", parts: 2, commitId: "new", publishedAt: 1234, profileComplete: true
+      },
+      snapshotId: "new",
       chunkWrites: {
-        [`${rootKey}.chunk.b.0`]: { fresh: 0 },
-        [`${rootKey}.chunk.b.1`]: { fresh: 1 }
+        [`${generationRootKey}.chunk.0`]: { fresh: 0 },
+        [`${generationRootKey}.chunk.1`]: { fresh: 1 }
       }
     };
     const context = {
-      console, WORK_SPACE_ID: "work",
+      console, PRODUCT_NAME: "MosaicSync", WORK_SPACE_ID: "work",
       browser: { storage: { sync: { async get(keys) {
         if (keys == null) return structuredClone(store);
         const out = {};
         for (const key of (Array.isArray(keys) ? keys : [keys])) if (Object.hasOwn(store, key)) out[key] = structuredClone(store[key]);
         return out;
       } } } },
-      readOwnDeviceSnapshot: async () => ({ root: structuredClone(store[rootKey]), decoded: null }),
+      readOwnDeviceSnapshot: async () => ({ rootKey: legacyRootKey, root: structuredClone(store[legacyRootKey]), decoded: null }),
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
       writeSyncItems: async items => {
-        if (Object.hasOwn(items, rootKey)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
+        if (Object.hasOwn(items, generationRootKey)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
         Object.assign(store, structuredClone(items));
       },
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
       isQuotaError: error => error?.name === "QuotaExceededError",
-      deviceSnapshotSlotKeys: (_deviceId, slot) => Object.keys(store).filter(key => key.startsWith(`${rootKey}.chunk.${slot}.`)),
+      pruneSupersededDeviceSnapshotGenerations: async () => 0,
       readDeviceSnapshots: async () => [],
       mergeProfileDeviceSnapshots: () => null
     };
@@ -272,9 +277,10 @@ for (const browserName of ["firefox", "chrome"]) {
     const result = await context.publishProfileDeviceSnapshot({ spaces: {} }, { deviceId: "dev" }, { force: true });
     assert.equal(result.written, false);
     assert.equal(result.reason, "quota");
-    assert.deepEqual(store[rootKey], oldRoot, "failed root flip must not disturb the previous authoritative manifest");
-    assert.ok(Object.hasOwn(store, `${rootKey}.chunk.a.0`) && Object.hasOwn(store, `${rootKey}.chunk.a.1`), "previous authoritative chunks survive");
-    assert.equal(Object.keys(store).some(key => key.includes(".chunk.b.")), false, "failed inactive generation is cleaned without touching the active fallback");
+    assert.deepEqual(store[legacyRootKey], oldRoot, "failed generation root commit must not disturb the previous complete manifest");
+    assert.ok(Object.hasOwn(store, `${legacyRootKey}.chunk.a.0`) && Object.hasOwn(store, `${legacyRootKey}.chunk.a.1`), "previous complete chunks survive");
+    assert.equal(Object.keys(store).some(key => key.startsWith(`${generationRootKey}.chunk.`)), false,
+      "only chunks belonging to the failed immutable generation are rolled back");
   });
 
 }

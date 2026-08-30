@@ -1,10 +1,17 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+## 1.30.18.3 cloned-profile recovery-snapshot identity policy
 
+- `meta.deviceId` remains the stable identity used by ordinary Sync records, Settings tie-breaking and dataset origin. Cloning/restoring a browser profile may duplicate that value, so it must not also be the sole writable namespace for complete recovery snapshots.
+- New complete Personal+Work recovery snapshots publish to immutable commit-scoped roots (`deviceId + commitId`) with matching commit-scoped chunks. Two concurrently active clones sharing a copied `deviceId` therefore cannot overwrite each other's root or chunk keys during publication.
+- Publication remains root-last: chunks are written first, the unique root is the authority marker, and a failed root write removes only chunks belonging to that failed generation. An already complete recovery generation must remain untouched.
+- Legacy fixed per-device roots and their `a/b` chunks remain readable. During the first immutable publication, an available legacy complete root may be retained as the existing torn-delivery fallback. No device/profile snapshot payload schema bump is required.
+- Generation cleanup is bounded to the historical two-complete-generation footprint per logical `deviceId`, and stale-device retention remains age/cap based. Cleanup can occur only after a new root is complete.
+- The ordinary Sync/state/meta schemas, profile format, permissions, CSP, localization, UI, telemetry and backend behavior remain unchanged.
 
 
 
@@ -455,7 +462,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

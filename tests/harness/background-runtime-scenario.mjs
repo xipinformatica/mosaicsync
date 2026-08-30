@@ -365,6 +365,22 @@ function previousDescriptorForFixture(root) {
   return out;
 }
 
+function deviceSnapshotRootEntries(all, deviceId) {
+  const prefix = `${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent(deviceId)}`;
+  return Object.entries(all || {})
+    .filter(([key, value]) => key.startsWith(prefix) && !key.includes('.chunk.') &&
+      value?.deviceId === deviceId && ['device-snapshot', 'device-snapshot-manifest'].includes(value?.kind))
+    .sort(([, a], [, b]) =>
+      (Number(b?.publishedAt) || 0) - (Number(a?.publishedAt) || 0) ||
+      String(b?.commitId || '').localeCompare(String(a?.commitId || ''))
+    );
+}
+
+async function latestDeviceSnapshotRoot(syncArea, deviceId) {
+  const entries = deviceSnapshotRootEntries(await syncArea.get(null), deviceId);
+  return entries.length ? { key: entries[0][0], root: entries[0][1] } : { key: '', root: null };
+}
+
 if (scenario === 'favicon-preference-rehydrate-13014') {
   websiteAccess = true;
   const preferredBytes = tinyPng(64,64,4);
@@ -640,8 +656,9 @@ else if (scenario === 'sync-1278-fresh-waits-for-work') {
   assert.equal(finalMeta.syncStatus,'ready');
   assert.ok(finalMeta.lastAppliedWorkSyncRevision,'Work revision must be recorded before ready');
   assert.ok(finalMeta.lastAppliedProfileSnapshotRevision,'completed bootstrap must publish/record a full profile safety generation');
-  const ownRoot=(await sync.get(`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`))[`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`];
+  const ownRoot=(await latestDeviceSnapshotRoot(sync,'device-b')).root;
   assert.equal(ownRoot?.profileComplete,true,'fresh device should publish a full profile only after complete bootstrap');
+  assert.equal(ownRoot?.chunkKeyMode,'generation','new complete-profile recovery snapshots use immutable generation roots');
   assert.ok(syncWrites>0,'after completeness is proven the merged local delta/profile may be published');
   console.log(JSON.stringify({ok:true,waiting:waitingMeta.syncStatus,final:finalMeta.syncStatus,syncWrites,restored:restored?.ok===true}));
 }
@@ -706,22 +723,26 @@ else if (scenario === 'sync-12781-profile-root-quota-rollback') {
   await send({type:'mosaicsync:set-sync-enabled',enabled:true});
   const boot=await send({type:'mosaicsync:bootstrap-local'});
   assert.equal(boot?.ok,true);
-  const rootKey=`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`;
-  const beforeRoot=(await sync.get(rootKey))[rootKey];
+  const beforeSnapshot=await latestDeviceSnapshotRoot(sync,'device-b');
+  const beforeRoot=beforeSnapshot.root;
   assert.equal(beforeRoot?.profileComplete,true);
   const beforeCommit=beforeRoot.commitId;
-  const targetSlot=beforeRoot.slot==='a'?'b':'a';
 
   const normalSet=sync.set.bind(sync);
   let newChunkWrites=0;
+  let failedRootKey='';
   sync.set=async items=>{
     const entries=Object.entries(items||{});
-    if(entries.some(([key,value])=>key===rootKey && value?.commitId!==beforeCommit)){
-      const error=new Error('simulated quota failure on profile root flip');
+    const newRoot=entries.find(([key,value])=>
+      value?.kind==='device-snapshot-manifest' && value?.deviceId==='device-b' && value?.commitId!==beforeCommit && !key.includes('.chunk.')
+    );
+    if(newRoot){
+      failedRootKey=newRoot[0];
+      const error=new Error('simulated quota failure on immutable profile generation root');
       error.name='QuotaExceededError';
       throw error;
     }
-    if(entries.some(([key])=>key.startsWith(`${rootKey}.chunk.${targetSlot}.`))) newChunkWrites += 1;
+    if(entries.some(([,value])=>value?.kind==='device-snapshot-chunk' && value?.deviceId==='device-b' && value?.commitId!==beforeCommit)) newChunkWrites += 1;
     return normalSet(items);
   };
 
@@ -736,18 +757,19 @@ else if (scenario === 'sync-12781-profile-root-quota-rollback') {
   }
   await send({type:'mosaicsync:get-sync-status'});
 
-  const afterRoot=(await sync.get(rootKey))[rootKey];
-  assert.equal(afterRoot?.commitId,beforeCommit,'failed root flip must leave the previous complete generation authoritative');
-  assert.ok(newChunkWrites>0,'test must fail after at least one target-slot chunk write');
+  const afterSnapshot=await latestDeviceSnapshotRoot(sync,'device-b');
+  assert.equal(afterSnapshot.root?.commitId,beforeCommit,'failed immutable root commit must leave the previous complete generation authoritative');
+  assert.ok(newChunkWrites>0,'test must fail after at least one new-generation chunk write');
+  assert.ok(failedRootKey,'test must intercept the attempted immutable generation root');
   const all=await sync.get(null);
-  assert.equal(Object.keys(all).some(key=>key.startsWith(`${rootKey}.chunk.${targetSlot}.`)),false,'failed target generation chunks must be cleaned up');
+  assert.equal(Object.keys(all).some(key=>key.startsWith(`${failedRootKey}.chunk.`)),false,'failed generation chunks must be cleaned up');
   const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
   assert.equal(meta.syncProfileProtection,'limited');
   assert.equal(meta.syncProfileProtectionReason,'quota');
   assert.equal(meta.syncFastSnapshotFallback,true);
   const workItemKey=`${constants.SYNC_SPACE_PREFIX}work.item.${encodeURIComponent('work-new')}`;
   assert.ok(all[workItemKey],'ordinary Work ledger must retain the edit despite safety-root failure');
-  console.log(JSON.stringify({ok:true,beforeCommit,afterCommit:afterRoot.commitId,newChunkWrites,protection:meta.syncProfileProtection}));
+  console.log(JSON.stringify({ok:true,beforeCommit,afterCommit:afterSnapshot.root?.commitId,newChunkWrites,protection:meta.syncProfileProtection}));
 }
 
 else if (scenario === 'sync-1307-foreground-single-flight') {

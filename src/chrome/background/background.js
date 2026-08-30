@@ -23,6 +23,7 @@ import {
   DEVICE_SNAPSHOT_RETENTION_MS,
   DEVICE_SNAPSHOT_CAP_MIN_AGE_MS,
   DEVICE_SNAPSHOT_MAX_RECENT_DEVICES,
+  DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE,
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
   DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES,
   EXPECTATION_TTL_MS,
@@ -3439,11 +3440,33 @@ function hasSnapshotData(snapshot) {
 }
 
 function deviceSnapshotKey(deviceId) {
+  // Legacy fixed per-device root. 1.30.18.3 keeps this readable but never uses
+  // it for new publications because cloned/restored browser profiles can share
+  // the same persistent deviceId.
   return `${SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent(String(deviceId || ""))}`;
 }
 
+function deviceSnapshotGenerationKey(deviceId, snapshotId) {
+  return `${deviceSnapshotKey(deviceId)}.snapshot.${encodeURIComponent(String(snapshotId || ""))}`;
+}
+
+function deviceSnapshotGenerationChunkKey(deviceId, snapshotId, index) {
+  return `${deviceSnapshotGenerationKey(deviceId, snapshotId)}.chunk.${index}`;
+}
+
 function deviceSnapshotChunkKey(deviceId, slot, index) {
+  // Legacy v2 a/b chunk namespace retained for backward-compatible reads.
   return `${deviceSnapshotKey(deviceId)}.chunk.${slot}.${index}`;
+}
+
+function deviceSnapshotRootMatchesKey(key, value) {
+  if (!isDeviceSnapshotRootKey(key) || !value || typeof value.deviceId !== "string" || !value.deviceId) return false;
+  if (value.chunkKeyMode === "generation") {
+    const snapshotId = typeof value.snapshotId === "string" ? value.snapshotId : "";
+    if (!snapshotId || snapshotId !== value.commitId) return false;
+    return key === deviceSnapshotGenerationKey(value.deviceId, snapshotId);
+  }
+  return key === deviceSnapshotKey(value.deviceId);
 }
 
 function deviceSnapshotSlotKeys(deviceId, slot) {
@@ -3553,6 +3576,8 @@ function deviceSnapshotDecodeCacheKey(value) {
     Number(value.chunkSchemaVersion) || 0,
     typeof value.deviceId === "string" ? value.deviceId : "",
     typeof value.commitId === "string" ? value.commitId : "",
+    typeof value.chunkKeyMode === "string" ? value.chunkKeyMode : "",
+    typeof value.snapshotId === "string" ? value.snapshotId : "",
     Number(value.publishedAt) || 0,
     Number(value.updatedAt) || 0,
     Number(value.liveRecordCount) || 0,
@@ -3671,15 +3696,32 @@ async function decodeDeviceSnapshotCurrentPayload(value, all = null) {
 
   if (value.kind !== "device-snapshot-manifest" || value.chunkSchemaVersion !== DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION) return null;
   if (!all || typeof all !== "object") return null;
-  if (!value.deviceId || !value.commitId || !["a", "b"].includes(value.slot)) return null;
+  if (!value.deviceId || !value.commitId) return null;
+
+  const generationMode = value.chunkKeyMode === "generation";
+  const snapshotId = generationMode && typeof value.snapshotId === "string" ? value.snapshotId : "";
+  if (generationMode) {
+    if (!snapshotId || snapshotId !== value.commitId) return null;
+  } else if (!["a", "b"].includes(value.slot)) {
+    return null;
+  }
+
   const parts = Number(value.parts);
   if (!Number.isInteger(parts) || parts < 1 || parts > 96) return null;
 
   const chunks = [];
   for (let index = 0; index < parts; index += 1) {
-    const chunk = all[deviceSnapshotChunkKey(value.deviceId, value.slot, index)];
+    const key = generationMode
+      ? deviceSnapshotGenerationChunkKey(value.deviceId, snapshotId, index)
+      : deviceSnapshotChunkKey(value.deviceId, value.slot, index);
+    const chunk = all[key];
     if (!chunk || chunk.kind !== "device-snapshot-chunk" || chunk.schemaVersion !== DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION) return null;
-    if (chunk.deviceId !== value.deviceId || chunk.commitId !== value.commitId || chunk.slot !== value.slot) return null;
+    if (chunk.deviceId !== value.deviceId || chunk.commitId !== value.commitId) return null;
+    if (generationMode) {
+      if (chunk.chunkKeyMode !== "generation" || chunk.snapshotId !== snapshotId) return null;
+    } else if (chunk.slot !== value.slot) {
+      return null;
+    }
     if (Number(chunk.index) !== index || Number(chunk.total) !== parts || typeof chunk.data !== "string") return null;
     chunks.push(chunk.data);
   }
@@ -3732,9 +3774,9 @@ function retainTombstones(target, source) {
 async function readDeviceSnapshots(all) {
   const snapshots = [];
   for (const [key, value] of Object.entries(all || {})) {
-    if (!isDeviceSnapshotRootKey(key)) continue;
+    if (!isDeviceSnapshotRootKey(key) || !deviceSnapshotRootMatchesKey(key, value)) continue;
     const decoded = await decodeDeviceSnapshotPayload(value, all);
-    if (decoded) snapshots.push(decoded);
+    if (decoded) snapshots.push({ ...decoded, rootKey: key });
   }
   return snapshots;
 }
@@ -3842,10 +3884,11 @@ async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn
   const personalSettings = makeSettingsRecordNormalized(personalState, meta.deviceId);
   const workSettings = makeSettingsRecordNormalized(workState, meta.deviceId);
   const commitId = uid("profile-commit");
+  const snapshotId = commitId;
   const publishedAt = Date.now();
   const payload = {
-    // Intentionally remain payload v2 so 1.27.7 can read Personal while newer
-    // builds additionally validate/use the Work fields.
+    // Intentionally remain payload v2 so older MosaicSync versions can still
+    // understand the payload shape when they encounter a compatible root.
     version: DEVICE_SNAPSHOT_SCHEMA_VERSION,
     records: [...personalRecords.values()],
     settings: personalSettings,
@@ -3858,9 +3901,7 @@ async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn
     personalRecords, personalSettings, meta.deviceId, commitId, publishedAt, encoded,
     workRecords, workSettings
   );
-  const rootKey = deviceSnapshotKey(meta.deviceId);
-  const currentRoot = currentOwn?.root;
-  const slot = currentRoot?.kind === "device-snapshot-manifest" && currentRoot.slot === "a" ? "b" : "a";
+  const rootKey = deviceSnapshotGenerationKey(meta.deviceId, commitId);
   const dataChunks = [];
   for (let offset = 0; offset < encoded.data.length; offset += DEVICE_SNAPSHOT_CHUNK_DATA_CHARS) {
     dataChunks.push(encoded.data.slice(offset, offset + DEVICE_SNAPSHOT_CHUNK_DATA_CHARS));
@@ -3868,13 +3909,14 @@ async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn
   if (!dataChunks.length || dataChunks.length > 96) return null;
   const chunkWrites = {};
   dataChunks.forEach((data, index) => {
-    const key = deviceSnapshotChunkKey(meta.deviceId, slot, index);
+    const key = deviceSnapshotGenerationChunkKey(meta.deviceId, commitId, index);
     chunkWrites[key] = {
       schemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
       kind: "device-snapshot-chunk",
+      chunkKeyMode: "generation",
+      snapshotId,
       deviceId: meta.deviceId,
       commitId,
-      slot,
       index,
       total: dataChunks.length,
       data
@@ -3887,14 +3929,18 @@ async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn
     ...metadata,
     kind: "device-snapshot-manifest",
     chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-    slot,
+    chunkKeyMode: "generation",
+    snapshotId,
     parts: dataChunks.length,
     dataChars: encoded.data.length,
     dataFingerprint: fnv1a(encoded.data),
-    previousProfile: previousProfileDescriptor(currentRoot)
+    // During the first 1.30.18.3 publication, preserve the old fixed-root a/b
+    // generation as an additional torn-delivery fallback. Later immutable roots
+    // remain independently readable, so no pointer rewrite is required.
+    previousProfile: previousProfileDescriptor(currentOwn?.root)
   };
   if (syncEntryBytes(rootKey, rootValue) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
-  return { rootKey, rootValue, chunkWrites, targetSlot: slot };
+  return { rootKey, rootValue, chunkWrites, snapshotId };
 }
 
 async function publishProfileDeviceSnapshot(fullState, meta, { force = false } = {}) {
@@ -3937,12 +3983,9 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
   const publication = await buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn, sharedPersonal, sharedWork);
   if (!publication) return { written: false, reason: "too-large", setRevision: "" };
   try {
-    // The target slot is non-authoritative until the root flips. It may contain
-    // the older backup generation, so it is safe to replace while the current
-    // slot remains readable throughout this publication.
-    const staleTarget = await browser.storage.sync.get(deviceSnapshotSlotKeys(meta.deviceId, publication.targetSlot));
-    const staleKeys = Object.keys(staleTarget || {});
-    if (staleKeys.length) await removeSyncItems(staleKeys);
+    // Every publication has its own immutable root + chunk namespace. Root-last
+    // commit preserves atomic visibility without allowing a cloned profile with
+    // the same deviceId to overwrite another live clone's recovery generation.
     await writeSyncItems(publication.chunkWrites, { skipPreflight: true });
     await writeSyncItems({ [publication.rootKey]: publication.rootValue }, { skipPreflight: true });
   } catch (error) {
@@ -3950,7 +3993,14 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
     if (isQuotaError(error)) return { written: false, reason: "quota", setRevision: "" };
     throw error;
   }
-  const refreshedAll = await browser.storage.sync.get(null);
+
+  let refreshedAll = await browser.storage.sync.get(null);
+  try {
+    const removed = await pruneSupersededDeviceSnapshotGenerations(refreshedAll, meta.deviceId);
+    if (removed) refreshedAll = await browser.storage.sync.get(null);
+  } catch (error) {
+    console.warn(`${PRODUCT_NAME}: superseded device snapshot cleanup skipped`, error);
+  }
   const snapshots = await readDeviceSnapshots(refreshedAll);
   const mergedProfile = mergeProfileDeviceSnapshots(snapshots);
   return {
@@ -3962,18 +4012,18 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
 }
 
 async function readOwnDeviceSnapshot(deviceId) {
-  const rootKey = deviceSnapshotKey(deviceId);
-  const rootRead = await browser.storage.sync.get(rootKey);
-  const root = rootRead?.[rootKey];
-  if (!root) return { root: null, decoded: null };
-  if (root.kind !== "device-snapshot-manifest") {
-    return { root, decoded: await decodeDeviceSnapshotPayload(root, rootRead) };
-  }
-  const parts = Number(root.parts);
-  if (!Number.isInteger(parts) || parts < 1 || parts > 96 || !["a", "b"].includes(root.slot)) return { root, decoded: null };
-  const keys = Array.from({ length: parts }, (_, index) => deviceSnapshotChunkKey(deviceId, root.slot, index));
-  const chunks = await browser.storage.sync.get(keys);
-  return { root, decoded: await decodeDeviceSnapshotPayload(root, { ...rootRead, ...chunks }) };
+  if (!deviceId) return { rootKey: "", root: null, decoded: null };
+  const all = await browser.storage.sync.get(null);
+  const snapshots = (await readDeviceSnapshots(all))
+    .filter(snapshot => snapshot.deviceId === deviceId)
+    .sort((a, b) =>
+      (Number(b.publishedAt) || 0) - (Number(a.publishedAt) || 0) ||
+      (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) ||
+      compareStableText(String(b.commitId || ""), String(a.commitId || ""))
+    );
+  const decoded = snapshots[0] || null;
+  const rootKey = decoded?.rootKey || "";
+  return { rootKey, root: rootKey ? all[rootKey] || null : null, decoded };
 }
 
 async function readCoreSources(all = null, { includeAssets = true } = {}) {
@@ -3991,8 +4041,38 @@ async function readCoreSources(all = null, { includeAssets = true } = {}) {
 function deviceRootDescriptor(key, value) {
   if (!isDeviceSnapshotRootKey(key) || !value || !["device-snapshot", "device-snapshot-manifest"].includes(value.kind)) return null;
   const deviceId = typeof value.deviceId === "string" ? value.deviceId : "";
-  if (!deviceId) return null;
-  return { key, deviceId, publishedAt: Number(value.publishedAt) || 0 };
+  if (!deviceId || !deviceSnapshotRootMatchesKey(key, value)) return null;
+  return {
+    key,
+    deviceId,
+    commitId: typeof value.commitId === "string" ? value.commitId : "",
+    publishedAt: Number(value.publishedAt) || 0,
+    updatedAt: Number(value.updatedAt) || 0
+  };
+}
+
+async function pruneSupersededDeviceSnapshotGenerations(all, deviceId) {
+  const roots = Object.entries(all || {})
+    .map(([key, value]) => deviceRootDescriptor(key, value))
+    .filter(entry => entry?.deviceId === deviceId)
+    .sort((a, b) =>
+      b.publishedAt - a.publishedAt ||
+      b.updatedAt - a.updatedAt ||
+      compareStableText(b.commitId, a.commitId) ||
+      compareStableText(a.key, b.key)
+    );
+  if (roots.length <= DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE) return 0;
+
+  const staleRoots = new Set(roots.slice(DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE).map(entry => entry.key));
+  const keys = Object.keys(all || {}).filter(key => {
+    for (const root of staleRoots) {
+      if (key === root || key.startsWith(`${root}.chunk.`)) return true;
+    }
+    return false;
+  });
+  if (!keys.length) return 0;
+  await removeSyncItems(keys);
+  return keys.length;
 }
 
 async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } = {}) {
@@ -4004,24 +4084,48 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
     const all = await browser.storage.sync.get(null);
     const roots = Object.entries(all)
       .map(([key, value]) => deviceRootDescriptor(key, value))
-      .filter(Boolean)
+      .filter(Boolean);
+
+    const generationsByDevice = new Map();
+    for (const root of roots) {
+      const list = generationsByDevice.get(root.deviceId) || [];
+      list.push(root);
+      generationsByDevice.set(root.deviceId, list);
+    }
+    for (const list of generationsByDevice.values()) {
+      list.sort((a, b) =>
+        b.publishedAt - a.publishedAt ||
+        b.updatedAt - a.updatedAt ||
+        compareStableText(b.commitId, a.commitId) ||
+        compareStableText(a.key, b.key)
+      );
+    }
+
+    const newestPerDevice = [...generationsByDevice.entries()]
+      .map(([deviceId, list]) => ({ ...list[0], deviceId }))
       .sort((a, b) => b.publishedAt - a.publishedAt || compareStableText(a.deviceId, b.deviceId));
+    const keepRecentDevices = new Set(newestPerDevice.slice(0, DEVICE_SNAPSHOT_MAX_RECENT_DEVICES).map(entry => entry.deviceId));
+    keepRecentDevices.add(meta.deviceId);
 
-    const keepRecent = new Set(roots.slice(0, DEVICE_SNAPSHOT_MAX_RECENT_DEVICES).map(entry => entry.deviceId));
-    keepRecent.add(meta.deviceId);
-    const staleIds = new Set();
-    roots.forEach((entry, index) => {
-      if (entry.deviceId === meta.deviceId) return;
-      const age = now - entry.publishedAt;
-      const expired = entry.publishedAt > 0 && age >= DEVICE_SNAPSHOT_RETENTION_MS;
-      const overCapAndMature = index >= DEVICE_SNAPSHOT_MAX_RECENT_DEVICES && age >= DEVICE_SNAPSHOT_CAP_MIN_AGE_MS && !keepRecent.has(entry.deviceId);
-      if (expired || overCapAndMature) staleIds.add(entry.deviceId);
-    });
+    const staleRootKeys = new Set();
+    for (const [deviceId, list] of generationsByDevice) {
+      // Bound normal publication churn and clone collisions to the same storage
+      // footprint as the historical two-slot design: at most two complete roots
+      // for one logical deviceId.
+      list.slice(DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE).forEach(entry => staleRootKeys.add(entry.key));
 
-    if (staleIds.size) {
+      if (deviceId === meta.deviceId) continue;
+      const newest = list[0];
+      const age = now - newest.publishedAt;
+      const expired = newest.publishedAt > 0 && age >= DEVICE_SNAPSHOT_RETENTION_MS;
+      const rank = newestPerDevice.findIndex(entry => entry.deviceId === deviceId);
+      const overCapAndMature = rank >= DEVICE_SNAPSHOT_MAX_RECENT_DEVICES && age >= DEVICE_SNAPSHOT_CAP_MIN_AGE_MS && !keepRecentDevices.has(deviceId);
+      if (expired || overCapAndMature) list.forEach(entry => staleRootKeys.add(entry.key));
+    }
+
+    if (staleRootKeys.size) {
       const keys = Object.keys(all).filter(key => {
-        for (const deviceId of staleIds) {
-          const root = deviceSnapshotKey(deviceId);
+        for (const root of staleRootKeys) {
           if (key === root || key.startsWith(`${root}.chunk.`)) return true;
         }
         return false;

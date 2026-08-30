@@ -1,3 +1,11 @@
+## 1.30.18.3
+
+- Hardens complete Personal+Work recovery snapshots for browser profiles cloned/restored from the same source: new publications use immutable commit-scoped root and chunk namespaces instead of one writable root derived only from the copied `deviceId`.
+- Keeps ordinary Sync identity unchanged: the stable `deviceId` still owns normal shortcut/Settings records and dataset conflict semantics, while only the auxiliary recovery-snapshot namespace changes.
+- Preserves root-last atomicity and failure isolation: chunks commit first, a failed new root removes only its own chunks, and the previous complete generation remains available.
+- Retains backward-compatible reads of legacy fixed-root `a/b` recovery snapshots and bounds complete recovery generations to the historical two-generation storage footprint per logical device identity.
+- Adds Firefox/Chrome clone-collision, legacy-read, failed-publication and recovery-stress regressions. No Sync/state/meta schema, permission, CSP, UI/localization, telemetry or backend change.
+
 ## 1.30.18.2
 
 - Fixes the confusing state where **Frequently Visited** can remain enabled while this Firefox installation no longer has the optional Top Sites permission: the New Tab now shows a clear one-click **Grant permission** recovery action where the sites normally appear.
