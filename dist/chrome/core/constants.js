@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.3";
+export const VERSION = "1.30.18.4";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -124,6 +124,7 @@ export const SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS = 60_000;
 export const WEB_ACCESS_CACHE_MS = 5_000;
 export const DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES = 512 * 1024;
 export const DEVICE_SNAPSHOT_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const DEVICE_SNAPSHOT_ORPHAN_GRACE_MS = 60 * 60 * 1000;
 export const FREQUENT_CANDIDATE_CACHE_MS = 30_000;
 export const FREQUENT_TOP_SITES_LIMIT = 100;
 export const FREQUENT_HIDDEN_DOMAINS_MAX = 128;
@@ -274,7 +275,8 @@ export const DEFAULT_META = Object.freeze({
   lastRemoteReceiptRevision: "",
   lastRemoteReceiptUpdatedAt: 0,
   lastRemoteReceiptOriginDeviceId: "",
-  lastDeviceSnapshotGcAt: 0
+  lastDeviceSnapshotGcAt: 0,
+  deviceSnapshotOrphanSeenAt: {}
 });
 
 export const BACKGROUND_PRESETS = Object.freeze({

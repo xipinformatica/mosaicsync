@@ -53,8 +53,8 @@ class RemoteSync {
   keys(){return [...this.cloud.keys()].sort();}
 }
 
-function spawnDevice(browser,deviceId,role,remote){
-  const child=fork(childScript,[browser,deviceId,role],{cwd:root,stdio:['ignore','pipe','pipe','ipc']});
+function spawnDevice(browser,deviceId,role,remote,{profileDeviceId=deviceId}={}){
+  const child=fork(childScript,[browser,deviceId,role,profileDeviceId],{cwd:root,stdio:['ignore','pipe','pipe','ipc']});
   let stderr='';child.stderr.on('data',d=>stderr+=d);
   let seq=0;const pending=new Map();let readyResolve;const ready=new Promise(r=>readyResolve=r);
   child.on('message',async message=>{
@@ -158,4 +158,39 @@ for(const browser of ['firefox','chrome']){
       }
     }
   },{timeout:120000});
+}
+
+
+for(const browser of ['firefox','chrome']){
+  test(`1.30.18.4 ${browser} two independent cloned profiles sharing one persistent identity keep distinct complete recovery generations`,async t=>{
+    const remote=new RemoteSync();
+    const sharedProfileId='cloned-profile-identity';
+    const first=spawnDevice(browser,'clone-view-a','a',remote,{profileDeviceId:sharedProfileId});
+    const second=spawnDevice(browser,'clone-view-b','a',remote,{profileDeviceId:sharedProfileId});
+    t.after(()=>{first.close();second.close();});
+    await Promise.all([first.ready,second.ready]);
+
+    for(const device of [first,second]){
+      await device.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+      assert.equal((await device.command('call',{message:{type:'mosaicsync:bootstrap-local'}}))?.ok,true);
+    }
+
+    const rootPrefix=`mosaicsync.sync.device.${encodeURIComponent(sharedProfileId)}.snapshot.`;
+    const generationRoots=remote.keys().filter(key=>key.startsWith(rootPrefix)&&!key.includes('.chunk.'));
+    assert.equal(generationRoots.length,2,'the two physical profiles must not overwrite one recovery root merely because deviceId was cloned');
+    assert.equal(new Set(generationRoots).size,2);
+    for(const rootKey of generationRoots){
+      assert.ok(remote.keys().some(key=>key.startsWith(`${rootKey}.chunk.`)),`${rootKey} must retain its own chunk namespace`);
+    }
+
+    // Deliver both immutable generations to both physical views and let normal
+    // maintenance run. The two-generation retention bound must preserve both.
+    for(const device of [first,second]){
+      const changes=remote.deliver(device.id,remote.keys());
+      if(Object.keys(changes).length) await device.command('sync-changed',{changes});
+      await device.command('alarm',{name:'mosaicsync-sync-watch-v1'});
+    }
+    const rootsAfterMaintenance=remote.keys().filter(key=>key.startsWith(rootPrefix)&&!key.includes('.chunk.'));
+    assert.equal(rootsAfterMaintenance.length,2);
+  },{timeout:60000});
 }

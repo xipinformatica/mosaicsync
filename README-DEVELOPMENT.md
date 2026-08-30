@@ -1,8 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.30.18.4 first-paint truthfulness / recovery-maintenance policy
+
+- The first visible New Tab frame must be visually truthful. Static HTML must not expose default Space names before authoritative/custom names are known; a tiny synchronous render-manifest bootstrap may reveal saved custom names immediately, otherwise the Space switcher stays hidden until authoritative labels are available.
+- A shortcut that is already known to own artwork must not paint a fallback letter merely because the disposable first-frame preview is temporarily missing. Background artwork-only hydration also refreshes the first-frame manifest/preview so future tabs stay visually consistent without delaying the launcher.
+- Recovery-generation recency is based on the logical profile `updatedAt` before wall-clock publication time. A just-committed generation is protected from its own cleanup and must still decode as complete before MosaicSync reports recovery protection as healthy.
+- If two verified recovery generations fit but staging a third would exceed Sync quota, MosaicSync may retire only the oldest verified generation after proving one complete fallback remains and the new generation can fit. A failed replacement must never leave zero verified fallbacks.
+- Root-less recovery chunks are treated as potentially in-flight until this installation has observed the same root-less group across a local grace period. Cleanup must not infer abandonment from another publisher's wall clock.
+- The recovery publication path reuses its initial full Sync read rather than immediately fetching the same complete namespace again.
+- Regression harnesses must be able to model separate physical/browser Sync views that share one copied persistent MosaicSync `deviceId`; key-separation alone is not sufficient coverage for cloned-profile recovery.
+- These changes do not alter ordinary shortcut/Settings Sync identity, state/profile payload schemas, permissions, CSP, localization coverage, telemetry or backend behavior.
 
 ## 1.30.18.3 cloned-profile recovery-snapshot identity policy
 
@@ -462,7 +473,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.3` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

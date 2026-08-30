@@ -204,11 +204,14 @@ for (const browserName of ["firefox", "chrome"]) {
       readOwnDeviceSnapshot: async () => ({ rootKey: legacyRootKey, root: structuredClone(store[legacyRootKey]), decoded: null }),
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
+      prepareDeviceSnapshotPublicationCapacity: async all => all,
       writeSyncItems: async items => { events.push(["write", Object.keys(items)]); Object.assign(store, structuredClone(items)); },
       removeSyncItems: async keys => { events.push(["remove", [...keys]]); for (const key of keys) delete store[key]; },
       isQuotaError: () => false,
       pruneSupersededDeviceSnapshotGenerations: async () => { events.push(["prune", []]); return 0; },
-      readDeviceSnapshots: async () => [],
+      readDeviceSnapshots: async all => Object.hasOwn(all || {}, generationRootKey)
+        ? [{ rootKey: generationRootKey, profileComplete: true, deviceId: "dev", commitId: "new", updatedAt: 1, publishedAt: 1234 }]
+        : [],
       mergeProfileDeviceSnapshots: () => null
     };
     vm.createContext(context);
@@ -261,6 +264,7 @@ for (const browserName of ["firefox", "chrome"]) {
       readOwnDeviceSnapshot: async () => ({ rootKey: legacyRootKey, root: structuredClone(store[legacyRootKey]), decoded: null }),
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
+      prepareDeviceSnapshotPublicationCapacity: async all => all,
       writeSyncItems: async items => {
         if (Object.hasOwn(items, generationRootKey)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
         Object.assign(store, structuredClone(items));

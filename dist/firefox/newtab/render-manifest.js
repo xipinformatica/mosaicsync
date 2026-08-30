@@ -73,6 +73,10 @@ function cachedPreviews() {
   return previews;
 }
 
+function normalizedSpaceName(value) {
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 32) : "";
+}
+
 function sanitizeFrequentSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return null;
   const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
@@ -193,6 +197,11 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
     rows: source.settings.rows,
     tileSize: source.settings.tileSize,
     brandVisible: source.settings.brandVisible !== false,
+    multipleSpacesEnabled: currentState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false,
+    spaceNames: {
+      personal: normalizedSpaceName(currentState?.spaces?.personal?.settings?.spaceName),
+      work: normalizedSpaceName(currentState?.spaces?.work?.settings?.spaceName)
+    },
     frequent: frequentSnapshot === undefined
       ? sanitizeFrequentSnapshot(manifestCache?.frequent)
       : sanitizeFrequentSnapshot(frequentSnapshot),

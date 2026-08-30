@@ -1,10 +1,11 @@
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
-const [browserName, deviceId, role] = process.argv.slice(2);
+const [browserName, deviceId, role, profileDeviceIdArg] = process.argv.slice(2);
 if (!['firefox','chrome'].includes(browserName) || !deviceId || !['a','b'].includes(role)) {
-  throw new Error('usage: sync-device-process.mjs <firefox|chrome> <deviceId> <a|b>');
+  throw new Error('usage: sync-device-process.mjs <firefox|chrome> <viewId> <a|b> [profileDeviceId]');
 }
+const profileDeviceId = profileDeviceIdArg || deviceId;
 const root = resolve(import.meta.dirname, '../..');
 const clone = value => value === undefined ? undefined : structuredClone(value);
 const nativeDateNow = Date.now.bind(Date);
@@ -103,7 +104,7 @@ const initialState=role==='a'
 await local.set({
   [constants.LOCAL_STATE_KEY]:initialState,
   [constants.LOCAL_ACTIVE_SPACE_KEY]:'personal',
-  [constants.LOCAL_META_KEY]:{...constants.DEFAULT_META,deviceId,onboardingCompleted:true}
+  [constants.LOCAL_META_KEY]:{...constants.DEFAULT_META,deviceId:profileDeviceId,onboardingCompleted:true}
 });
 
 await import(`${pathToFileURL(resolve(root,`dist/${browserName}/background/background.js`)).href}?device=${deviceId}-${Date.now()}`);

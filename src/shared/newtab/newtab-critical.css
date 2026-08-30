@@ -192,7 +192,7 @@ select{ font: inherit; }button{ color: inherit; }.page{
   box-shadow: 0 8px 24px rgba(0,0,0,.12);
   backdrop-filter: blur(12px);
   transform: translateX(-50%);
-}.space-switcher[hidden]{ display: none !important; }.space-button{
+}.space-switcher.space-switcher-first-paint-pending{ visibility: hidden; }.space-switcher[hidden]{ display: none !important; }.space-button{
   appearance: none;
   min-width: 92px;
   height: 32px;

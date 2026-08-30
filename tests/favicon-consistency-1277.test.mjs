@@ -58,9 +58,11 @@ for (const browser of ["firefox", "chrome"]) {
     const context = {
       SPACE_IDS: ["personal", "work"],
       state: { activeSpaceId: "personal", spaces: { personal: workspace([shortcut]), work: workspace([]) } },
+      meta: { onboardingCompleted: true },
       localStateSyncClockSignature: () => "same-clock",
       localStateSyncRawSignature: () => "same-core",
-      patchLog: []
+      patchLog: [],
+      manifestRefreshes: 0
     };
     const incomingShortcut = structuredClone(shortcut);
     incomingShortcut.image = "data:image/png;base64,LEARNED";
@@ -69,12 +71,14 @@ for (const browser of ["firefox", "chrome"]) {
     incomingShortcut.imageSourceUrl = "https://xipinformatica.cat/favicon.png";
     const incoming = { activeSpaceId: "personal", spaces: { personal: workspace([incomingShortcut]), work: workspace([]) } };
     context.patchVisibleShortcutArtwork = (shortcutIds, folderIds) => context.patchLog.push({ shortcutIds: [...shortcutIds], folderIds: [...folderIds] });
+    context.refreshRenderManifestAfterArtworkChange = () => { context.manifestRefreshes += 1; };
     vm.createContext(context);
     vm.runInContext(`${code}; this.applyFast=tryApplyDeviceArtworkOnlyChange;`, context);
     assert.equal(context.applyFast(incoming, context.state), true);
     assert.equal(shortcut.image, "data:image/png;base64,LEARNED");
     assert.equal(shortcut.imageSourceKind, "favicon");
     assert.deepEqual(context.patchLog, [{ shortcutIds: ["mosaic"], folderIds: [] }]);
+    assert.equal(context.manifestRefreshes, 1, "device-local favicon changes must refresh the next-tab first-frame cache too");
   });
 
   test(`1.27.7 ${browser} manual chooser distinguishes page inspection failure`, async () => {

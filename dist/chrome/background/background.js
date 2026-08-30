@@ -25,6 +25,7 @@ import {
   DEVICE_SNAPSHOT_MAX_RECENT_DEVICES,
   DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE,
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
+  DEVICE_SNAPSHOT_ORPHAN_GRACE_MS,
   DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES,
   EXPECTATION_TTL_MS,
   FAVICON_QUALITY_AUDIT_MAX_ENTRIES,
@@ -3917,6 +3918,7 @@ async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn
       snapshotId,
       deviceId: meta.deviceId,
       commitId,
+      publishedAt,
       index,
       total: dataChunks.length,
       data
@@ -3953,7 +3955,8 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
     // recovery snapshot.
     return { written: false, reason: "untrusted-local-profile", setRevision: "" };
   }
-  const currentOwn = await readOwnDeviceSnapshot(meta.deviceId);
+  let all = await browser.storage.sync.get(null);
+  const currentOwn = await readOwnDeviceSnapshot(meta.deviceId, all);
   if (!force && currentOwn.decoded?.profileComplete === true) {
     const personalState = workspaceStateNormalized(fullState, PERSONAL_SPACE_ID);
     const workState = workspaceStateNormalized(fullState, WORK_SPACE_ID);
@@ -3975,13 +3978,13 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
       };
     }
   }
-  const all = await browser.storage.sync.get(null);
   const [sharedPersonal, sharedWork] = await Promise.all([
     readSyncSnapshot(all, { includeAssets: false }),
     readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID })
   ]);
   const publication = await buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn, sharedPersonal, sharedWork);
   if (!publication) return { written: false, reason: "too-large", setRevision: "" };
+  all = await prepareDeviceSnapshotPublicationCapacity(all, meta.deviceId, publication);
   try {
     // Every publication has its own immutable root + chunk namespace. Root-last
     // commit preserves atomic visibility without allowing a cloned profile with
@@ -3996,12 +3999,16 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
 
   let refreshedAll = await browser.storage.sync.get(null);
   try {
-    const removed = await pruneSupersededDeviceSnapshotGenerations(refreshedAll, meta.deviceId);
+    const removed = await pruneSupersededDeviceSnapshotGenerations(refreshedAll, meta.deviceId, { protectRootKey: publication.rootKey });
     if (removed) refreshedAll = await browser.storage.sync.get(null);
   } catch (error) {
     console.warn(`${PRODUCT_NAME}: superseded device snapshot cleanup skipped`, error);
   }
   const snapshots = await readDeviceSnapshots(refreshedAll);
+  const committedSnapshot = snapshots.find(snapshot => snapshot.rootKey === publication.rootKey && snapshot.profileComplete === true);
+  if (!committedSnapshot) {
+    return { written: false, reason: "verification", setRevision: "", publishedAt: 0 };
+  }
   const mergedProfile = mergeProfileDeviceSnapshots(snapshots);
   return {
     written: true,
@@ -4011,19 +4018,15 @@ async function publishProfileDeviceSnapshot(fullState, meta, { force = false } =
   };
 }
 
-async function readOwnDeviceSnapshot(deviceId) {
+async function readOwnDeviceSnapshot(deviceId, all = null) {
   if (!deviceId) return { rootKey: "", root: null, decoded: null };
-  const all = await browser.storage.sync.get(null);
-  const snapshots = (await readDeviceSnapshots(all))
+  const values = all && typeof all === "object" ? all : await browser.storage.sync.get(null);
+  const snapshots = (await readDeviceSnapshots(values))
     .filter(snapshot => snapshot.deviceId === deviceId)
-    .sort((a, b) =>
-      (Number(b.publishedAt) || 0) - (Number(a.publishedAt) || 0) ||
-      (Number(b.updatedAt) || 0) - (Number(a.updatedAt) || 0) ||
-      compareStableText(String(b.commitId || ""), String(a.commitId || ""))
-    );
+    .sort(compareDeviceSnapshotGenerationRecency);
   const decoded = snapshots[0] || null;
   const rootKey = decoded?.rootKey || "";
-  return { rootKey, root: rootKey ? all[rootKey] || null : null, decoded };
+  return { rootKey, root: rootKey ? values[rootKey] || null : null, decoded };
 }
 
 async function readCoreSources(all = null, { includeAssets = true } = {}) {
@@ -4051,19 +4054,82 @@ function deviceRootDescriptor(key, value) {
   };
 }
 
-async function pruneSupersededDeviceSnapshotGenerations(all, deviceId) {
+function compareDeviceSnapshotGenerationRecency(a, b) {
+  return (Number(b?.updatedAt) || 0) - (Number(a?.updatedAt) || 0) ||
+    (Number(b?.publishedAt) || 0) - (Number(a?.publishedAt) || 0) ||
+    compareStableText(String(b?.commitId || ""), String(a?.commitId || "")) ||
+    compareStableText(String(a?.rootKey || a?.key || ""), String(b?.rootKey || b?.key || ""));
+}
+
+function deviceSnapshotKeysForRoot(all, rootKey) {
+  if (!rootKey) return [];
+  return Object.keys(all || {}).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`));
+}
+
+function syncItemsFitInSnapshot(all, items) {
+  const current = all && typeof all === "object" ? all : {};
+  const nextItems = items && typeof items === "object" ? items : {};
+  let bytes = 0;
+  let count = 0;
+  for (const [key, value] of Object.entries(current)) {
+    if (Object.prototype.hasOwnProperty.call(nextItems, key)) continue;
+    bytes += syncEntryBytes(key, value);
+    count += 1;
+  }
+  for (const [key, value] of Object.entries(nextItems)) {
+    bytes += syncEntryBytes(key, value);
+    count += 1;
+  }
+  return bytes <= SYNC_QUOTA_BYTES && count <= SYNC_QUOTA_MAX_ITEMS;
+}
+
+async function prepareDeviceSnapshotPublicationCapacity(all, deviceId, publication) {
+  const publicationItems = { ...publication.chunkWrites, [publication.rootKey]: publication.rootValue };
+  if (syncItemsFitInSnapshot(all, publicationItems)) return all;
+
+  // Immutable generations normally retain two complete copies. If staging a
+  // third would exceed Sync quota, retire only verified older generations and
+  // only when the simulated result proves one complete fallback can remain while
+  // the new generation is staged. Never sacrifice the last known-good copy.
+  const valid = (await readDeviceSnapshots(all))
+    .filter(snapshot => snapshot.deviceId === deviceId && snapshot.profileComplete === true && snapshot.rootKey)
+    .sort(compareDeviceSnapshotGenerationRecency);
+  if (valid.length < 2) return all;
+
+  const simulated = { ...all };
+  const removeKeys = [];
+  for (let index = valid.length - 1; index >= 1; index -= 1) {
+    const keys = deviceSnapshotKeysForRoot(simulated, valid[index].rootKey);
+    if (!keys.length) continue;
+    for (const key of keys) {
+      delete simulated[key];
+      removeKeys.push(key);
+    }
+    if (syncItemsFitInSnapshot(simulated, publicationItems)) {
+      await removeSyncItems(removeKeys);
+      return simulated;
+    }
+  }
+  return all;
+}
+
+async function pruneSupersededDeviceSnapshotGenerations(all, deviceId, { protectRootKey = "" } = {}) {
   const roots = Object.entries(all || {})
     .map(([key, value]) => deviceRootDescriptor(key, value))
     .filter(entry => entry?.deviceId === deviceId)
-    .sort((a, b) =>
-      b.publishedAt - a.publishedAt ||
-      b.updatedAt - a.updatedAt ||
-      compareStableText(b.commitId, a.commitId) ||
-      compareStableText(a.key, b.key)
-    );
+    .sort(compareDeviceSnapshotGenerationRecency);
   if (roots.length <= DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE) return 0;
 
-  const staleRoots = new Set(roots.slice(DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE).map(entry => entry.key));
+  const keep = [];
+  const protectedRoot = protectRootKey ? roots.find(entry => entry.key === protectRootKey) : null;
+  if (protectedRoot) keep.push(protectedRoot);
+  for (const entry of roots) {
+    if (keep.length >= DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE) break;
+    if (protectedRoot && entry.key === protectedRoot.key) continue;
+    keep.push(entry);
+  }
+  const keepKeys = new Set(keep.map(entry => entry.key));
+  const staleRoots = new Set(roots.filter(entry => !keepKeys.has(entry.key)).map(entry => entry.key));
   const keys = Object.keys(all || {}).filter(key => {
     for (const root of staleRoots) {
       if (key === root || key.startsWith(`${root}.chunk.`)) return true;
@@ -4092,14 +4158,7 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
       list.push(root);
       generationsByDevice.set(root.deviceId, list);
     }
-    for (const list of generationsByDevice.values()) {
-      list.sort((a, b) =>
-        b.publishedAt - a.publishedAt ||
-        b.updatedAt - a.updatedAt ||
-        compareStableText(b.commitId, a.commitId) ||
-        compareStableText(a.key, b.key)
-      );
-    }
+    for (const list of generationsByDevice.values()) list.sort(compareDeviceSnapshotGenerationRecency);
 
     const newestPerDevice = [...generationsByDevice.entries()]
       .map(([deviceId, list]) => ({ ...list[0], deviceId }))
@@ -4123,17 +4182,55 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
       if (expired || overCapAndMature) list.forEach(entry => staleRootKeys.add(entry.key));
     }
 
-    if (staleRootKeys.size) {
-      const keys = Object.keys(all).filter(key => {
-        for (const root of staleRootKeys) {
-          if (key === root || key.startsWith(`${root}.chunk.`)) return true;
-        }
-        return false;
-      });
-      if (keys.length) await removeSyncItems(keys);
+    const orphanSeenAt = { ...(meta.deviceSnapshotOrphanSeenAt || {}) };
+    const orphanGroups = new Map();
+    for (const [key, value] of Object.entries(all)) {
+      if (!isDeviceSnapshotChunkKey(key)) continue;
+      const marker = key.indexOf(".chunk.");
+      if (marker <= 0) continue;
+      const rootKey = key.slice(0, marker);
+      if (Object.prototype.hasOwnProperty.call(all, rootKey)) {
+        delete orphanSeenAt[rootKey];
+        continue;
+      }
+      const group = orphanGroups.get(rootKey) || { keys: [] };
+      group.keys.push(key);
+      orphanGroups.set(rootKey, group);
     }
 
-    const next = { ...meta, lastDeviceSnapshotGcAt: now };
+    const orphanKeys = [];
+    const liveOrphanRoots = new Set();
+    for (const [rootKey, group] of orphanGroups) {
+      liveOrphanRoots.add(rootKey);
+      const firstSeen = Number(orphanSeenAt[rootKey]) || 0;
+      // Age orphan groups from when *this installation* first observed them, not
+      // from a publisher's wall clock. That keeps a clock-skewed concurrent
+      // publication from being mistaken for an abandoned one while its root
+      // is still propagating.
+      if (firstSeen > 0 && now - firstSeen >= DEVICE_SNAPSHOT_ORPHAN_GRACE_MS) {
+        orphanKeys.push(...group.keys);
+        delete orphanSeenAt[rootKey];
+      } else if (!firstSeen) {
+        orphanSeenAt[rootKey] = now;
+      }
+    }
+    for (const rootKey of Object.keys(orphanSeenAt)) {
+      if (!liveOrphanRoots.has(rootKey)) delete orphanSeenAt[rootKey];
+    }
+    const boundedOrphanSeenAt = Object.fromEntries(
+      Object.entries(orphanSeenAt).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 64)
+    );
+
+    const keys = Object.keys(all).filter(key => {
+      for (const root of staleRootKeys) {
+        if (key === root || key.startsWith(`${root}.chunk.`)) return true;
+      }
+      return false;
+    });
+    if (orphanKeys.length) keys.push(...orphanKeys);
+    if (keys.length) await removeSyncItems([...new Set(keys)]);
+
+    const next = { ...meta, lastDeviceSnapshotGcAt: now, deviceSnapshotOrphanSeenAt: boundedOrphanSeenAt };
     await writeLocalMeta(next);
     return next;
   } catch (error) {
@@ -6178,7 +6275,7 @@ function profileProtectionState(profilePublish, previousMeta = {}) {
   }
 
   const reason = String(profilePublish?.reason || "");
-  if (["too-large", "quota", "missing-device"].includes(reason)) {
+  if (["too-large", "quota", "missing-device", "verification"].includes(reason)) {
     return {
       syncProfileProtection: "limited",
       syncProfileProtectionReason: reason,

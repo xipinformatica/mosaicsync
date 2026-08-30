@@ -41,10 +41,11 @@
       </span>
     </header>
 
-    <nav id="spaceSwitcher" class="space-switcher" aria-label="Spaces">
-      <button class="space-button" type="button" data-space-id="personal" aria-pressed="true" data-i18n-skip>Personal</button>
-      <button class="space-button" type="button" data-space-id="work" aria-pressed="false" data-i18n-skip>Work</button>
+    <nav id="spaceSwitcher" class="space-switcher space-switcher-first-paint-pending" aria-label="Spaces">
+      <button class="space-button" type="button" data-space-id="personal" aria-pressed="true" data-i18n-skip></button>
+      <button class="space-button" type="button" data-space-id="work" aria-pressed="false" data-i18n-skip></button>
     </nav>
+    <script src="space-bootstrap.js"></script>
 
     <aside id="webAccessPrompt" class="web-access-prompt" hidden aria-live="polite">
       <div class="web-access-prompt-copy">
@@ -256,7 +257,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.30.18.3</p>
+          <p class="eyebrow">MosaicSync · 1.30.18.4</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

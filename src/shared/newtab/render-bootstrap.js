@@ -122,6 +122,11 @@
       return;
     }
     if (globalThis.__mosaicsyncBuiltinIcons?.append?.(target, item?.builtinIcon)) return;
+    // An imageKey means authoritative state already knows this shortcut has
+    // artwork. If its disposable tiny preview is temporarily stale/missing, an
+    // empty tile is truthful; a fallback letter is not and would visibly flash
+    // underneath the real favicon during authoritative hydration.
+    if (typeof item?.imageKey === "string" && item.imageKey) return;
     target.append(fallback(item?.title));
   }
   function shortcutSlot(item) {

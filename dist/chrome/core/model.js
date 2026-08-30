@@ -997,6 +997,18 @@ export function moveShortcutBetweenSpaces(state, options = {}) {
   return moveShortcutBetweenSpacesNormalized(normalizeState(state), options);
 }
 
+function normalizeDeviceSnapshotOrphanSeenAt(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const entries = [];
+  for (const [key, value] of Object.entries(raw)) {
+    const timestamp = Number(value);
+    if (!key || key.length > 512 || !Number.isFinite(timestamp) || timestamp <= 0) continue;
+    entries.push([key, Math.trunc(timestamp)]);
+  }
+  entries.sort((a, b) => b[1] - a[1]);
+  return Object.fromEntries(entries.slice(0, 64));
+}
+
 export function normalizeMeta(raw) {
   return {
     schemaVersion: META_SCHEMA_VERSION,
@@ -1015,7 +1027,7 @@ export function normalizeMeta(raw) {
     syncSkippedAssets: Number.isFinite(raw?.syncSkippedAssets) ? raw.syncSkippedAssets : 0,
     syncFastSnapshotFallback: raw?.syncFastSnapshotFallback === true,
     syncProfileProtection: ["unknown", "protected", "limited"].includes(raw?.syncProfileProtection) ? raw.syncProfileProtection : "unknown",
-    syncProfileProtectionReason: ["", "too-large", "quota", "missing-device"].includes(raw?.syncProfileProtectionReason) ? raw.syncProfileProtectionReason : "",
+    syncProfileProtectionReason: ["", "too-large", "quota", "missing-device", "verification"].includes(raw?.syncProfileProtectionReason) ? raw.syncProfileProtectionReason : "",
     lastSyncWarning: typeof raw?.lastSyncWarning === "string" ? raw.lastSyncWarning : "",
     syncUsageCoreBytes: Number.isFinite(raw?.syncUsageCoreBytes) ? raw.syncUsageCoreBytes : 0,
     syncUsageShortcutBytes: Number.isFinite(raw?.syncUsageShortcutBytes) ? raw.syncUsageShortcutBytes : 0,
@@ -1033,7 +1045,8 @@ export function normalizeMeta(raw) {
     lastRemoteReceiptRevision: typeof raw?.lastRemoteReceiptRevision === "string" ? raw.lastRemoteReceiptRevision : "",
     lastRemoteReceiptUpdatedAt: Number.isFinite(raw?.lastRemoteReceiptUpdatedAt) ? raw.lastRemoteReceiptUpdatedAt : 0,
     lastRemoteReceiptOriginDeviceId: typeof raw?.lastRemoteReceiptOriginDeviceId === "string" ? raw.lastRemoteReceiptOriginDeviceId : "",
-    lastDeviceSnapshotGcAt: Number.isFinite(raw?.lastDeviceSnapshotGcAt) ? raw.lastDeviceSnapshotGcAt : 0
+    lastDeviceSnapshotGcAt: Number.isFinite(raw?.lastDeviceSnapshotGcAt) ? raw.lastDeviceSnapshotGcAt : 0,
+    deviceSnapshotOrphanSeenAt: normalizeDeviceSnapshotOrphanSeenAt(raw?.deviceSnapshotOrphanSeenAt)
   };
 }
 

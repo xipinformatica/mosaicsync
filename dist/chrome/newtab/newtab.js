@@ -695,6 +695,28 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 900);
   }
 
+  function refreshRenderManifestAfterArtworkChange(currentState = state, currentMeta = meta) {
+    const generation = ++renderManifestGeneration;
+    const stateSnapshot = currentState;
+    const metaSnapshot = currentMeta;
+    void loadRenderManifestModule().then(async module => {
+      try {
+        // Do not first publish a manifest that knows about new artwork but lacks
+        // its tiny preview. Generate/reuse the preview first, then commit the
+        // complete first-frame projection.
+        await module.refreshRenderManifestPreviews(stateSnapshot, metaSnapshot, {
+          shouldCommit: () => generation === renderManifestGeneration &&
+            state.activeSpaceId === stateSnapshot.activeSpaceId &&
+            Number(state.updatedAt) === Number(stateSnapshot.updatedAt)
+        });
+        if (generation !== renderManifestGeneration ||
+            state.activeSpaceId !== stateSnapshot.activeSpaceId ||
+            Number(state.updatedAt) !== Number(stateSnapshot.updatedAt)) return;
+        module.persistRenderManifest(stateSnapshot, metaSnapshot, null, frequentRenderSnapshot);
+      } catch {}
+    }).catch(() => {});
+  }
+
   let deferredBackgroundHydrationGeneration = 0;
   function scheduleDeferredBackgroundHydration() {
     if (state?.settings?.backgroundImageDeferred !== true || !state.settings.backgroundLocalAssetId) return;
@@ -1892,7 +1914,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function updateSpaceSwitcher() {
     const enabled = isMultipleSpacesEnabled();
-    if (spaceSwitcher) spaceSwitcher.hidden = !enabled;
+    if (spaceSwitcher) {
+      spaceSwitcher.hidden = !enabled;
+      spaceSwitcher.classList.remove("space-switcher-first-paint-pending");
+    }
     for (const button of spaceButtons) {
       const spaceId = button.dataset.spaceId;
       button.textContent = displaySpaceName(spaceId);
@@ -6929,6 +6954,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     if (changedActiveShortcuts.size || changedActiveFolders.size) {
       patchVisibleShortcutArtwork(changedActiveShortcuts, changedActiveFolders);
+      refreshRenderManifestAfterArtworkChange(state, meta);
     }
     return true;
   }

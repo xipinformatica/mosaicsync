@@ -1,3 +1,12 @@
+## 1.30.18.4
+
+- Fixes two first-paint correctness regressions: customized Space names no longer briefly expose the built-in Personal/Work labels, and shortcuts with already-known artwork no longer flash a fallback letter before their favicon appears. The fast startup architecture remains intact; the disposable first frame is made visually truthful instead of being delayed.
+- Hardens immutable recovery-generation retention against clock skew: logical profile recency outranks wall-clock publication time, the just-committed generation is protected during cleanup, and protection is reported healthy only after that exact generation is still present and decodes completely.
+- Adds quota-aware recovery rotation for larger profiles. If two verified fallback generations fit but temporarily staging a third would exceed Sync quota, MosaicSync can safely retire only the oldest verified copy first while retaining one complete fallback throughout the replacement attempt.
+- Reclaims abandoned root-less recovery chunks left by a hard browser/service-worker interruption, but only after the local installation has observed the same incomplete group across a grace period so an in-flight publication from another device is not mistaken for garbage.
+- Removes one redundant complete `storage.sync` read from recovery publication and expands the regression harness so two genuinely independent browser views can share the same copied persistent device identity.
+- Preserves legacy fixed-root `a/b` recovery reads, ordinary Sync identity/conflict semantics, current state/meta/Sync/profile payload schema versions, permissions, CSP, privacy boundaries, telemetry policy and backend-free architecture.
+
 ## 1.30.18.3
 
 - Hardens complete Personal+Work recovery snapshots for browser profiles cloned/restored from the same source: new publications use immutable commit-scoped root and chunk namespaces instead of one writable root derived only from the copied `deviceId`.
