@@ -1009,6 +1009,18 @@ function normalizeDeviceSnapshotOrphanSeenAt(raw) {
   return Object.fromEntries(entries.slice(0, 64));
 }
 
+function normalizeDeviceSnapshotSeenPass(raw, limit = 256) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const entries = [];
+  for (const [key, value] of Object.entries(raw)) {
+    const pass = Number(value);
+    if (!key || key.length > 512 || !Number.isFinite(pass) || pass <= 0) continue;
+    entries.push([key, Math.trunc(pass)]);
+  }
+  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return Object.fromEntries(entries.slice(0, Math.max(1, Math.trunc(limit) || 1)));
+}
+
 export function normalizeMeta(raw) {
   return {
     schemaVersion: META_SCHEMA_VERSION,
@@ -1046,7 +1058,10 @@ export function normalizeMeta(raw) {
     lastRemoteReceiptUpdatedAt: Number.isFinite(raw?.lastRemoteReceiptUpdatedAt) ? raw.lastRemoteReceiptUpdatedAt : 0,
     lastRemoteReceiptOriginDeviceId: typeof raw?.lastRemoteReceiptOriginDeviceId === "string" ? raw.lastRemoteReceiptOriginDeviceId : "",
     lastDeviceSnapshotGcAt: Number.isFinite(raw?.lastDeviceSnapshotGcAt) ? raw.lastDeviceSnapshotGcAt : 0,
-    deviceSnapshotOrphanSeenAt: normalizeDeviceSnapshotOrphanSeenAt(raw?.deviceSnapshotOrphanSeenAt)
+    deviceSnapshotGcPass: Number.isFinite(raw?.deviceSnapshotGcPass) && raw.deviceSnapshotGcPass > 0 ? Math.trunc(raw.deviceSnapshotGcPass) : 0,
+    deviceSnapshotRootSeenPass: normalizeDeviceSnapshotSeenPass(raw?.deviceSnapshotRootSeenPass, 256),
+    deviceSnapshotOrphanSeenAt: normalizeDeviceSnapshotOrphanSeenAt(raw?.deviceSnapshotOrphanSeenAt),
+    deviceSnapshotOrphanSeenPass: normalizeDeviceSnapshotSeenPass(raw?.deviceSnapshotOrphanSeenPass, 64)
   };
 }
 

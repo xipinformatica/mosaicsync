@@ -1,3 +1,12 @@
+## 1.30.18.5
+
+- Fixes the remaining personalized-Space first-paint flash found by real visual testing: the fast browser.session render snapshot now carries both Space names, so the second startup layer cannot briefly replace already-correct custom labels with Personal/Work before authoritative storage.local hydration.
+- Advances the disposable session render-snapshot schema so older name-less acceleration entries are rejected rather than reused after upgrade; the authoritative profile and synchronized schemas are unchanged.
+- Makes foreign recovery-device retirement independent of the publisher's wall clock. Age/cap decisions now use this installation's own persisted GC-observation sequence, so a freshly observed recovery from a badly clock-skewed clone cannot be mistaken for a months-old abandoned device.
+- Hardens root-less recovery-fragment cleanup against local clock jumps by requiring two later GC observations as well as the existing wall-time grace before deletion; backward clock corrections restart the wall-time observation safely.
+- Adds end-to-end near-quota failure coverage proving that if one verified old generation is retired to create capacity and the new root then fails, another verified complete fallback survives.
+- Preserves the 1.30.18.4 favicon first-frame fix, immutable generation architecture, quota-safe rotation, post-publication verification, cloned-profile concurrency coverage, legacy `a/b` recovery, normal Sync semantics, permissions, CSP, privacy and backend-free operation.
+
 ## 1.30.18.4
 
 - Fixes two first-paint correctness regressions: customized Space names no longer briefly expose the built-in Personal/Work labels, and shortcuts with already-known artwork no longer flash a fallback letter before their favicon appears. The fast startup architecture remains intact; the disposable first frame is made visually truthful instead of being delayed.

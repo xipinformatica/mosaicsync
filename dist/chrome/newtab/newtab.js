@@ -1900,6 +1900,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function isMultipleSpacesEnabled(currentState = state) {
+    if (typeof currentState?.multipleSpacesEnabled === "boolean") return currentState.multipleSpacesEnabled;
     return currentState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
   }
 
@@ -1908,7 +1909,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function displaySpaceName(spaceId, currentState = state) {
-    const custom = normalizedCustomSpaceName(currentState?.spaces?.[spaceId]?.settings?.spaceName);
+    const authoritativeCustom = normalizedCustomSpaceName(currentState?.spaces?.[spaceId]?.settings?.spaceName);
+    const renderSnapshotCustom = normalizedCustomSpaceName(currentState?.spaceNames?.[spaceId]);
+    const custom = authoritativeCustom || renderSnapshotCustom;
     return custom || t(spaceId === "work" ? "work" : "personal");
   }
 

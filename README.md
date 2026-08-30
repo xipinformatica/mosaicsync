@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.4**
+**Current source release: 1.30.18.5**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.4 is a focused **first-paint correctness and recovery-maintenance hardening** release. Custom Space names can now be correct from the first visible frame instead of briefly exposing the Personal/Work defaults, and shortcuts with already-known artwork no longer flash a fallback letter while the tiny first-frame preview catches up. Recovery generation retention now prefers logical state recency over wall-clock publication time, safely makes room for a replacement when two retained copies already approach Sync quota, verifies the freshly committed copy before reporting protection, and reclaims incomplete root-less recovery fragments only after a local observation grace period. The real cloned-profile regression harness now models two independent browser views sharing one copied persistent identity. Ordinary Sync/state/profile schemas, permissions, CSP, telemetry and backend behavior remain unchanged.
+1.30.18.5 is a focused **first-paint continuity and recovery-observation hardening** release. The browser.session acceleration layer now carries both personalized Space names, so it cannot briefly overwrite an already-correct first frame with the built-in Personal/Work labels before authoritative state arrives. Recovery-device retirement is now based on this installation's own repeated observations rather than the publishing computer's wall clock, and root-less fragment cleanup requires multiple GC observations in addition to elapsed time so a single clock jump cannot turn a fresh in-flight publication into garbage. The near-quota failure path is also covered end-to-end: if the oldest verified recovery is retired to make room and the replacement then fails, one verified fallback must remain. Ordinary Sync/state/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free architecture remain unchanged.
 
 1.30.18.3 is a focused **recovery-snapshot identity hardening** release. Browser profiles that were cloned or restored from the same source can legitimately share MosaicSync's stable `deviceId`; their complete Personal+Work recovery snapshots now publish under immutable commit-scoped roots and chunk namespaces instead of overwriting one fixed per-device root. Legacy fixed-root `a/b` snapshots remain readable, failed root commits roll back only their new chunks, and cleanup keeps recovery storage bounded. Ordinary Sync record identity, conflict semantics and Sync/state/meta schema versions are unchanged, with no new permission, UI, telemetry or backend behavior.
 

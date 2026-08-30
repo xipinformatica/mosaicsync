@@ -26,6 +26,7 @@ import {
   DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE,
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
   DEVICE_SNAPSHOT_ORPHAN_GRACE_MS,
+  DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES,
   DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES,
   EXPECTATION_TTL_MS,
   FAVICON_QUALITY_AUDIT_MAX_ENTRIES,
@@ -4152,6 +4153,20 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
       .map(([key, value]) => deviceRootDescriptor(key, value))
       .filter(Boolean);
 
+    // Retention is based on this installation's own sequence of GC observations,
+    // never on a remote publisher's wall clock. A restored/cloned machine may be
+    // months wrong yet its freshly observed recovery generation must still be
+    // treated as fresh here.
+    const gcPass = Math.max(0, Math.trunc(Number(meta.deviceSnapshotGcPass) || 0)) + 1;
+    const rootSeenPass = { ...(meta.deviceSnapshotRootSeenPass || {}) };
+    const liveRootKeys = new Set(roots.map(root => root.key));
+    for (const root of roots) {
+      if (!(Number(rootSeenPass[root.key]) > 0)) rootSeenPass[root.key] = gcPass;
+    }
+    for (const rootKey of Object.keys(rootSeenPass)) {
+      if (!liveRootKeys.has(rootKey)) delete rootSeenPass[rootKey];
+    }
+
     const generationsByDevice = new Map();
     for (const root of roots) {
       const list = generationsByDevice.get(root.deviceId) || [];
@@ -4161,11 +4176,13 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
     for (const list of generationsByDevice.values()) list.sort(compareDeviceSnapshotGenerationRecency);
 
     const newestPerDevice = [...generationsByDevice.entries()]
-      .map(([deviceId, list]) => ({ ...list[0], deviceId }))
-      .sort((a, b) => b.publishedAt - a.publishedAt || compareStableText(a.deviceId, b.deviceId));
+      .map(([deviceId, list]) => ({ ...list[0], deviceId, observedPass: Number(rootSeenPass[list[0].key]) || gcPass }))
+      .sort((a, b) => b.observedPass - a.observedPass || compareStableText(a.deviceId, b.deviceId));
     const keepRecentDevices = new Set(newestPerDevice.slice(0, DEVICE_SNAPSHOT_MAX_RECENT_DEVICES).map(entry => entry.deviceId));
     keepRecentDevices.add(meta.deviceId);
 
+    const retentionPasses = Math.max(1, Math.ceil(DEVICE_SNAPSHOT_RETENTION_MS / DEVICE_SNAPSHOT_GC_INTERVAL_MS));
+    const capMinAgePasses = Math.max(1, Math.ceil(DEVICE_SNAPSHOT_CAP_MIN_AGE_MS / DEVICE_SNAPSHOT_GC_INTERVAL_MS));
     const staleRootKeys = new Set();
     for (const [deviceId, list] of generationsByDevice) {
       // Bound normal publication churn and clone collisions to the same storage
@@ -4175,22 +4192,26 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
 
       if (deviceId === meta.deviceId) continue;
       const newest = list[0];
-      const age = now - newest.publishedAt;
-      const expired = newest.publishedAt > 0 && age >= DEVICE_SNAPSHOT_RETENTION_MS;
+      const observedPass = Number(rootSeenPass[newest.key]) || gcPass;
+      const observedAgePasses = Math.max(0, gcPass - observedPass);
+      const expired = observedAgePasses >= retentionPasses;
       const rank = newestPerDevice.findIndex(entry => entry.deviceId === deviceId);
-      const overCapAndMature = rank >= DEVICE_SNAPSHOT_MAX_RECENT_DEVICES && age >= DEVICE_SNAPSHOT_CAP_MIN_AGE_MS && !keepRecentDevices.has(deviceId);
+      const overCapAndMature = rank >= DEVICE_SNAPSHOT_MAX_RECENT_DEVICES &&
+        observedAgePasses >= capMinAgePasses && !keepRecentDevices.has(deviceId);
       if (expired || overCapAndMature) list.forEach(entry => staleRootKeys.add(entry.key));
     }
 
     const orphanSeenAt = { ...(meta.deviceSnapshotOrphanSeenAt || {}) };
+    const orphanSeenPass = { ...(meta.deviceSnapshotOrphanSeenPass || {}) };
     const orphanGroups = new Map();
-    for (const [key, value] of Object.entries(all)) {
+    for (const [key] of Object.entries(all)) {
       if (!isDeviceSnapshotChunkKey(key)) continue;
       const marker = key.indexOf(".chunk.");
       if (marker <= 0) continue;
       const rootKey = key.slice(0, marker);
       if (Object.prototype.hasOwnProperty.call(all, rootKey)) {
         delete orphanSeenAt[rootKey];
+        delete orphanSeenPass[rootKey];
         continue;
       }
       const group = orphanGroups.get(rootKey) || { keys: [] };
@@ -4202,23 +4223,53 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
     const liveOrphanRoots = new Set();
     for (const [rootKey, group] of orphanGroups) {
       liveOrphanRoots.add(rootKey);
-      const firstSeen = Number(orphanSeenAt[rootKey]) || 0;
-      // Age orphan groups from when *this installation* first observed them, not
-      // from a publisher's wall clock. That keeps a clock-skewed concurrent
-      // publication from being mistaken for an abandoned one while its root
-      // is still propagating.
-      if (firstSeen > 0 && now - firstSeen >= DEVICE_SNAPSHOT_ORPHAN_GRACE_MS) {
+      let firstSeenAt = Number(orphanSeenAt[rootKey]) || 0;
+      let firstSeenPass = Number(orphanSeenPass[rootKey]) || 0;
+
+      // A backward wall-clock correction restarts the wall-time observation
+      // instead of retaining an impossible future timestamp indefinitely.
+      if (firstSeenAt > now) {
+        firstSeenAt = now;
+        firstSeenPass = gcPass;
+        orphanSeenAt[rootKey] = now;
+        orphanSeenPass[rootKey] = gcPass;
+        continue;
+      }
+
+      if (!firstSeenAt || !firstSeenPass) {
+        orphanSeenAt[rootKey] = now;
+        orphanSeenPass[rootKey] = gcPass;
+        continue;
+      }
+
+      // Require two later GC observations as well as elapsed wall time. A sudden
+      // forward clock correction therefore cannot turn a freshly observed,
+      // potentially in-flight remote publication into garbage on the next pass.
+      const observedPasses = Math.max(0, gcPass - firstSeenPass);
+      const elapsed = Math.max(0, now - firstSeenAt);
+      if (observedPasses >= DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES && elapsed >= DEVICE_SNAPSHOT_ORPHAN_GRACE_MS) {
         orphanKeys.push(...group.keys);
         delete orphanSeenAt[rootKey];
-      } else if (!firstSeen) {
-        orphanSeenAt[rootKey] = now;
+        delete orphanSeenPass[rootKey];
       }
     }
     for (const rootKey of Object.keys(orphanSeenAt)) {
       if (!liveOrphanRoots.has(rootKey)) delete orphanSeenAt[rootKey];
     }
-    const boundedOrphanSeenAt = Object.fromEntries(
-      Object.entries(orphanSeenAt).sort((a, b) => Number(b[1]) - Number(a[1])).slice(0, 64)
+    for (const rootKey of Object.keys(orphanSeenPass)) {
+      if (!liveOrphanRoots.has(rootKey)) delete orphanSeenPass[rootKey];
+    }
+    const boundedOrphanEntries = Object.entries(orphanSeenAt)
+      .sort((a, b) => Number(b[1]) - Number(a[1]) || compareStableText(a[0], b[0]))
+      .slice(0, 64);
+    const boundedOrphanSeenAt = Object.fromEntries(boundedOrphanEntries);
+    const boundedOrphanSeenPass = Object.fromEntries(
+      boundedOrphanEntries.map(([rootKey]) => [rootKey, Number(orphanSeenPass[rootKey]) || gcPass])
+    );
+    const boundedRootSeenPass = Object.fromEntries(
+      Object.entries(rootSeenPass)
+        .sort((a, b) => Number(b[1]) - Number(a[1]) || compareStableText(a[0], b[0]))
+        .slice(0, 256)
     );
 
     const keys = Object.keys(all).filter(key => {
@@ -4230,7 +4281,14 @@ async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } =
     if (orphanKeys.length) keys.push(...orphanKeys);
     if (keys.length) await removeSyncItems([...new Set(keys)]);
 
-    const next = { ...meta, lastDeviceSnapshotGcAt: now, deviceSnapshotOrphanSeenAt: boundedOrphanSeenAt };
+    const next = {
+      ...meta,
+      lastDeviceSnapshotGcAt: now,
+      deviceSnapshotGcPass: gcPass,
+      deviceSnapshotRootSeenPass: boundedRootSeenPass,
+      deviceSnapshotOrphanSeenAt: boundedOrphanSeenAt,
+      deviceSnapshotOrphanSeenPass: boundedOrphanSeenPass
+    };
     await writeLocalMeta(next);
     return next;
   } catch (error) {

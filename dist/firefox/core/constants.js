@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.4";
+export const VERSION = "1.30.18.5";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -25,7 +25,7 @@ export const LOCAL_ASSET_STORE_SCHEMA_VERSION = 1;
 export const LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX = "mosaicsync.pending-cross-space-sync.v1.";
 export const LOCAL_PENDING_SYNC_MUTATION_KEY = "mosaicsync.pending-sync-mutation.v1";
 export const SESSION_RENDER_STATE_KEY = "mosaicsync.session.render-state.v2";
-export const RENDER_SNAPSHOT_SCHEMA_VERSION = 2;
+export const RENDER_SNAPSHOT_SCHEMA_VERSION = 3;
 export const SESSION_RENDER_INLINE_IMAGE_MAX_CHARS = 24000;
 export const SESSION_RENDER_META_KEY = "mosaicsync.session.render-meta.v1";
 export const APPEARANCE_HINT_KEY = "mosaicsync.appearance.v1";
@@ -125,6 +125,7 @@ export const WEB_ACCESS_CACHE_MS = 5_000;
 export const DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES = 512 * 1024;
 export const DEVICE_SNAPSHOT_GC_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const DEVICE_SNAPSHOT_ORPHAN_GRACE_MS = 60 * 60 * 1000;
+export const DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES = 2;
 export const FREQUENT_CANDIDATE_CACHE_MS = 30_000;
 export const FREQUENT_TOP_SITES_LIMIT = 100;
 export const FREQUENT_HIDDEN_DOMAINS_MAX = 128;
@@ -276,7 +277,10 @@ export const DEFAULT_META = Object.freeze({
   lastRemoteReceiptUpdatedAt: 0,
   lastRemoteReceiptOriginDeviceId: "",
   lastDeviceSnapshotGcAt: 0,
-  deviceSnapshotOrphanSeenAt: {}
+  deviceSnapshotGcPass: 0,
+  deviceSnapshotRootSeenPass: {},
+  deviceSnapshotOrphanSeenAt: {},
+  deviceSnapshotOrphanSeenPass: {}
 });
 
 export const BACKGROUND_PRESETS = Object.freeze({

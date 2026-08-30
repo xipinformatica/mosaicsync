@@ -206,7 +206,7 @@ for (const browser of ["firefox", "chrome"]) {
     };
     const context = {
       console, PRODUCT_NAME: "MosaicSync", Date: { now: () => now },
-      DEVICE_SNAPSHOT_GC_INTERVAL_MS: 1000, DEVICE_SNAPSHOT_ORPHAN_GRACE_MS: 5000,
+      DEVICE_SNAPSHOT_GC_INTERVAL_MS: 1000, DEVICE_SNAPSHOT_ORPHAN_GRACE_MS: 5000, DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES: 2,
       DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE: 2, DEVICE_SNAPSHOT_MAX_RECENT_DEVICES: 8,
       DEVICE_SNAPSHOT_RETENTION_MS: 999999999, DEVICE_SNAPSHOT_CAP_MIN_AGE_MS: 999999999,
       browser: { storage: { sync: { get: async () => structuredClone(store) } } },
@@ -218,7 +218,7 @@ for (const browser of ["firefox", "chrome"]) {
       writeLocalMeta: async value => value
     };
     vm.createContext(context); vm.runInContext(`${fn}; this.gc=maybeGarbageCollectStaleDeviceSnapshots;`, context);
-    let meta = { syncEnabled: true, deviceId: "dev", lastDeviceSnapshotGcAt: 0, deviceSnapshotOrphanSeenAt: {} };
+    let meta = { syncEnabled: true, deviceId: "dev", lastDeviceSnapshotGcAt: 0, deviceSnapshotGcPass: 0, deviceSnapshotRootSeenPass: {}, deviceSnapshotOrphanSeenAt: {}, deviceSnapshotOrphanSeenPass: {} };
     meta = await context.gc(meta, { force: true });
     assert.ok(store[`${oldRoot}.chunk.0`], "even an apparently old orphan must first be observed locally before deletion");
     assert.ok(store[`${freshRoot}.chunk.0`], "an in-flight recent generation must not be touched");
@@ -230,8 +230,12 @@ for (const browser of ["firefox", "chrome"]) {
     store[freshRoot] = { completed: true };
     now += 6000;
     meta = await context.gc(meta, { force: true });
-    assert.equal(store[`${oldRoot}.chunk.0`], undefined, "an orphan still rootless beyond the local grace period should be reclaimed");
-    assert.equal(store[`${legacyRoot}.chunk.0`], undefined, "a legacy orphan that remains rootless beyond the grace period should eventually be reclaimed");
+    assert.ok(store[`${oldRoot}.chunk.0`], "a second observation is still not enough to reclaim a potentially in-flight generation");
+    assert.ok(store[`${legacyRoot}.chunk.0`]);
+    now += 1000;
+    meta = await context.gc(meta, { force: true });
+    assert.equal(store[`${oldRoot}.chunk.0`], undefined, "an orphan still rootless across two later GC observations should be reclaimed");
+    assert.equal(store[`${legacyRoot}.chunk.0`], undefined, "a legacy orphan that remains rootless across repeated observations should eventually be reclaimed");
     assert.ok(store[`${freshRoot}.chunk.0`], "chunks whose root subsequently arrives must be preserved");
   });
 

@@ -1,8 +1,17 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+
+## 1.30.18.5 first-frame continuity / local-observation retention policy
+
+- Every startup layer that is allowed to paint the Space switcher must carry the same personalized Space labels. The synchronous render manifest, the browser.session render snapshot and authoritative local state may differ in weight, but a faster cache must never downgrade a correct custom label to Personal/Work.
+- The session render snapshot remains disposable and lightweight; adding Space labels is a presentation-cache schema change only and does not change the authoritative MosaicSync state or Sync schemas.
+- Recovery retirement for other logical devices must be aged from local GC observations, never from a remote publisher's wall-clock timestamps. A newly observed generation is fresh on this installation even if the publishing computer's clock is badly wrong.
+- Root-less recovery fragments require multiple independent GC observations plus the existing wall-time grace before reclamation. A single forward clock correction cannot make the immediately following observation destructive. A backward correction restarts the wall-time observation safely.
+- Near-quota rotation must retain one verified complete fallback even if the attempted replacement fails after pre-retirement. This interaction is covered as one end-to-end failure test, not only as isolated helper tests.
 
 ## 1.30.18.4 first-paint truthfulness / recovery-maintenance policy
 
@@ -473,7 +482,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.4` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
