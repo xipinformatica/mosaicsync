@@ -361,6 +361,7 @@ for (const browser of ["firefox", "chrome"]) {
     const manifest = {
       version: 2,
       onboardingCompleted: true,
+      activeSpaceId: "personal",
       columns: 6, rows: 2, tileSize: 76, brandVisible: true,
       shortcuts: [
         { type: "shortcut", id: "good", title: "Good", url: "https://good.example/path", position: 0, imageStyle: "contain", preview: "" },
@@ -392,7 +393,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.17.6 ${browser} classic first-paint aborts cleanly when the shared URL helper is absent`, async () => {
     const manifest = {
-      version: 2, onboardingCompleted: true, columns: 6, rows: 2, tileSize: 76,
+      version: 2, onboardingCompleted: true, activeSpaceId: "personal", columns: 6, rows: 2, tileSize: 76,
       shortcuts: [{ type: "shortcut", id: "good", title: "Good", url: "https://good.example/", position: 0, imageStyle: "contain", preview: "" }]
     };
     const { context, grid } = fakeBootstrapContext(manifest, { withHelper: false });

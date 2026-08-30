@@ -159,8 +159,12 @@ for (const browserName of ["firefox", "chrome"]) {
     assert.match(src, /function bootGridMatchesState\(currentState\)/);
     assert.match(src, /Number\(manifest\.updatedAt\) !== Number\(currentState\.updatedAt\)/);
     assert.match(src, /Number\(manifest\.settingsModifiedAt\) !== Number\(currentState\.settingsModifiedAt\)/);
-    assert.match(src, /cells\[index\]\?\.dataset\?\.id !== expectedChildren\[index\]\?\.id/,
+    assert.match(src, /cells\[index\]\?\.dataset\?\.id !== expectedChild\?\.id/,
       "folder mosaic child identities must match before DOM adoption");
+    assert.match(src, /String\(cachedChild\?\.title \|\| ""\) !== String\(expectedChild\?\.title \|\| ""\)/,
+      "folder mosaic child titles must match before DOM adoption");
+    assert.match(src, /cachedUrl !== expectedUrl/,
+      "folder mosaic child navigation targets must match before DOM adoption");
     assert.match(src, /card\.getAttribute\("href"\) !== expectedUrl/,
       "shortcut navigation target must match before DOM adoption");
     assert.match(src, /if \(adoptBootGrid && adoptBootGridInPlace\(\)\)/);

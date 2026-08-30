@@ -656,6 +656,10 @@ export async function writeLocalMeta(meta) {
   return normalized;
 }
 
+export function rawStateMultipleSpacesEnabled(rawState) {
+  return rawState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
+}
+
 export async function readLocalStorageRaw() {
   const storageStartedAt = perfNow();
   const result = await browser.storage.local.get([
@@ -677,7 +681,7 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
     ? cloneCompactJson(result[LOCAL_STATE_KEY])
     : null;
 
-  const rawMultipleSpacesEnabled = rawState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
+  const rawMultipleSpacesEnabled = rawStateMultipleSpacesEnabled(rawState);
   const requestedActiveSpaceId = rawMultipleSpacesEnabled && SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
     ? result[LOCAL_ACTIVE_SPACE_KEY]
     : "personal";

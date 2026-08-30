@@ -169,22 +169,34 @@ function serializeWithinBudget(manifest) {
 
 export function persistRenderManifest(currentState, currentMeta, extraPreviews = null, frequentSnapshot = undefined) {
   if (!currentState?.settings || !currentMeta) return false;
+  const spacesDisabled = currentState?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
+  const personal = currentState?.spaces?.personal;
+  const source = spacesDisabled && currentState.activeSpaceId !== "personal" && personal
+    ? {
+        ...currentState,
+        activeSpaceId: "personal",
+        shortcuts: personal.shortcuts || [],
+        settings: personal.settings || currentState.settings,
+        settingsModifiedAt: Number(personal.settingsModifiedAt) || 0,
+        updatedAt: Number(personal.updatedAt) || 0
+      }
+    : currentState;
   const previews = cachedPreviews();
   if (extraPreviews) for (const [key, value] of extraPreviews) previews.set(key, value);
   const manifest = {
     version: 2,
     onboardingCompleted: currentMeta.onboardingCompleted === true,
-    activeSpaceId: currentState.activeSpaceId,
-    updatedAt: Number(currentState.updatedAt) || 0,
-    settingsModifiedAt: Number(currentState.settingsModifiedAt) || 0,
-    columns: currentState.settings.columns,
-    rows: currentState.settings.rows,
-    tileSize: currentState.settings.tileSize,
-    brandVisible: currentState.settings.brandVisible !== false,
+    activeSpaceId: source.activeSpaceId,
+    updatedAt: Number(source.updatedAt) || 0,
+    settingsModifiedAt: Number(source.settingsModifiedAt) || 0,
+    columns: source.settings.columns,
+    rows: source.settings.rows,
+    tileSize: source.settings.tileSize,
+    brandVisible: source.settings.brandVisible !== false,
     frequent: frequentSnapshot === undefined
       ? sanitizeFrequentSnapshot(manifestCache?.frequent)
       : sanitizeFrequentSnapshot(frequentSnapshot),
-    shortcuts: (currentState.shortcuts || []).map(item => projectItem(item, previews))
+    shortcuts: (source.shortcuts || []).map(item => projectItem(item, previews))
   };
   const serialized = serializeWithinBudget(manifest);
   if (serialized.length > RENDER_MANIFEST_MAX_CHARS) {

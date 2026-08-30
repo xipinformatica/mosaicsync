@@ -235,6 +235,7 @@ ${safeUrl}`;
       shown += 1;
     }
     if (!shown) return;
+    frequentSection.inert = true;
     frequentList.replaceChildren(fragment);
     frequentSection.hidden = false;
     root.dataset.bootFrequent = "true";
@@ -245,6 +246,10 @@ ${safeUrl}`;
     if (!raw) return;
     const manifest = JSON.parse(raw);
     if (!manifest || manifest.version !== 2 || manifest.onboardingCompleted !== true) return;
+    // A synchronous cache cannot prove that Work is still an allowed/active Space.
+    // Keep non-Personal first paint behind the asynchronous authoritative/session
+    // checks instead of exposing a stale Work layout from localStorage.
+    if (manifest.activeSpaceId !== "personal") return;
     if (!Array.isArray(manifest.shortcuts) || manifest.shortcuts.length > 96) return;
     const columns = Number(manifest.columns), rows = Number(manifest.rows), tileSize = Number(manifest.tileSize);
     if (!Number.isInteger(columns) || columns < 6 || columns > 12 ||
@@ -305,6 +310,11 @@ ${safeUrl}`;
       }
     }
     const hasShortcuts = byPosition.size > 0;
+    // The manifest is a visual acceleration cache only. Until newtab.js verifies
+    // or replaces it against authoritative storage.local state, cached shortcuts
+    // and the cached empty-state controls must not be actionable.
+    grid.inert = true;
+    emptyState.inert = true;
     grid.replaceChildren(fragment);
     grid.hidden = !hasShortcuts;
     emptyState.hidden = hasShortcuts;

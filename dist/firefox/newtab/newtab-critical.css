@@ -764,7 +764,7 @@ select{ font: inherit; }button{ color: inherit; }.page{
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
-}.frequent-site-card{
+}.frequent-permission-recovery{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 11px;border:1px solid var(--canvas-border);border-radius:12px;background:var(--canvas-control-bg);color:var(--canvas-text)}.frequent-permission-recovery[hidden]{display:none!important}.frequent-permission-recovery>span{min-width:0;font-size:11px;line-height:1.35}.frequent-permission-recovery-button{flex:0 0 auto;min-height:32px;padding:6px 10px;white-space:nowrap;font-size:10.5px}.frequent-site-card{
   min-width: 0;
   display: flex;
   align-items: center;

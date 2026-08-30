@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18**
+**Current source release: 1.30.18.2**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,9 +65,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.2** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.30.18.2 is a focused **Frequently Visited permission-recovery** follow-up. If the synchronized Show preference is ON but this browser installation no longer has the optional Top Sites permission, the New Tab now exposes a localized one-click **Grant permission** recovery state where the sites normally appear; Settings highlights the same prerequisite. Normal updates with an intact permission do not prompt again, and granting/restoring permission refreshes the sites automatically without forcing the user to toggle the feature OFF and back ON. No Sync/state schema, manifest permission, telemetry or backend behavior changes.
+
+1.30.18.1 is the focused **first-paint cache authority hardening** release. Disposable session and localStorage launcher caches remain visual accelerators only: non-Personal session state is cross-checked against the already-running authoritative local read, synchronous boot manifests never expose Work, cached shortcut/Frequently-Visited content stays inert until its own authoritative handoff, and failed startup verification discards rather than unlocks stale cached targets. The boot-manifest writer also projects Personal while Multiple Spaces is disabled and folder adoption validates cached child titles/URLs before reuse.
 
 1.30.18 is a focused **state-consistency and performance refinement** release. When Multiple Spaces is disabled, session first-paint state is forced to Personal; external state changes skip a full grid rebuild only when a conservative exact Manual-grid comparison proves the visible grid and its interaction wiring are unchanged; and inactive-Space wallpaper preloading is skipped while Spaces are off. Sync/state schemas, permissions, telemetry and backend behavior are unchanged.
 

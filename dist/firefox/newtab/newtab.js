@@ -66,7 +66,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -248,6 +248,37 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const addFirstButton = document.getElementById("addFirstButton");
   const frequentSitesSection = document.getElementById("frequentSitesSection");
   const frequentSitesList = document.getElementById("frequentSitesList");
+  const frequentPermissionRecovery = document.getElementById("frequentPermissionRecovery");
+  const frequentPermissionRecoveryText = document.getElementById("frequentPermissionRecoveryText");
+  const frequentPermissionRecoveryButton = document.getElementById("frequentPermissionRecoveryButton");
+  let launcherAuthorityVerified = false;
+
+  function keepLauncherCacheVisualOnly() {
+    if (grid) grid.inert = true;
+    if (emptyState) emptyState.inert = true;
+  }
+
+  function unlockLauncherInteractionIfVerified() {
+    if (!launcherAuthorityVerified) return;
+    if (grid) grid.inert = false;
+    if (emptyState) emptyState.inert = false;
+  }
+
+  function discardUnverifiedStartupCaches() {
+    // A startup failure must never turn an unverified cache into the fallback UI.
+    // If cached launcher/Frequently-Visited content is still inert, discard it and
+    // leave the existing error toast to explain that authoritative data did not load.
+    if (grid?.inert || emptyState?.inert) {
+      grid?.replaceChildren();
+      if (grid) grid.hidden = true;
+      if (emptyState) emptyState.hidden = true;
+    }
+    if (frequentSitesSection?.inert) {
+      frequentSitesList?.replaceChildren();
+      frequentSitesSection.hidden = true;
+    }
+  }
+
   const webAccessPrompt = document.getElementById("webAccessPrompt");
   const webAccessPromptAllow = document.getElementById("webAccessPromptAllow");
   const webAccessPromptDismiss = document.getElementById("webAccessPromptDismiss");
@@ -704,6 +735,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const byPosition = shortcutOrderMode === "recent"
       ? new Map(recentGridItems(capacity).map((item, index) => [index, item]))
       : new Map(currentState.shortcuts.map(item => [item.position, item]));
+    const manifestById = new Map((manifest.shortcuts || []).map(item => [item?.id, item]));
     for (let position = 0; position < capacity; position += 1) {
       const slot = slots[position];
       const item = byPosition.get(position);
@@ -721,9 +753,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         if (label.textContent !== (item.title || "Folder")) return false;
         const cells = [...card.querySelectorAll(".folder-mosaic-cell")];
         const expectedChildren = (item.items || []).slice(0, 4);
-        if (cells.length !== expectedChildren.length) return false;
+        const cachedChildren = Array.isArray(manifestById.get(item.id)?.items) ? manifestById.get(item.id).items : [];
+        if (cells.length !== expectedChildren.length || cachedChildren.length !== expectedChildren.length) return false;
         for (let index = 0; index < expectedChildren.length; index += 1) {
-          if (cells[index]?.dataset?.id !== expectedChildren[index]?.id) return false;
+          const expectedChild = expectedChildren[index];
+          const cachedChild = cachedChildren[index];
+          if (cells[index]?.dataset?.id !== expectedChild?.id || cachedChild?.id !== expectedChild?.id) return false;
+          if (String(cachedChild?.title || "") !== String(expectedChild?.title || "")) return false;
+          const expectedUrl = shortcutNavigationUrl(expectedChild);
+          const cachedUrl = safeShortcutNavigationUrl(cachedChild?.url);
+          if (!expectedUrl || cachedUrl !== expectedUrl) return false;
         }
       } else {
         if (slot.classList.contains("folder-slot") || card.classList.contains("folder-card")) return false;
@@ -766,6 +805,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     patchVisibleShortcutArtwork(changedShortcutIds, changedFolderIds);
     document.documentElement.dataset.bootGridAdopted = "true";
     bootGridNeedsAuthoritativeRender = false;
+    unlockLauncherInteractionIfVerified();
     startupPhase("bootGridAdopted");
     return true;
   }
@@ -872,6 +912,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       window.location.replace(browser.runtime.getURL("welcome/welcome.html"));
       return false;
     }
+    launcherAuthorityVerified = true;
 
     // The persistent read started before a possible session-cache paint. If an
     // actual storage/UI mutation lands while that read is in flight, never let
@@ -883,7 +924,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       Number(chosenState.updatedAt) !== Number(state.updatedAt) ||
       Number(chosenState.settingsModifiedAt) !== Number(state.settingsModifiedAt) ||
       chosenState.schemaVersion !== state.schemaVersion ||
-      stateVisualHydrationSignature(chosenState) !== stateVisualHydrationSignature(state);
+      stateVisualHydrationSignature(chosenState) !== stateVisualHydrationSignature(state) ||
+      !manualGridRenderEquivalent(chosenState, state);
     const metaChanged = stableStringify(chosenMeta) !== stableStringify(meta);
     const wasAwaitingRemote = isAwaitingRemote(meta);
 
@@ -915,6 +957,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     if (stateChanged) scheduleRenderPreviewRefresh(state, meta);
     if (metaChanged) updateSyncUi(meta);
+    unlockLauncherInteractionIfVerified();
     return true;
   }
 
@@ -1332,12 +1375,18 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     menu.querySelector("button")?.focus({ preventScroll: true });
   }
 
-  function renderFrequentlyVisited(sites) {
+  function renderFrequentlyVisited(sites, { authoritative = true } = {}) {
     if (!frequentSitesSection || !frequentSitesList) return;
     frequentSitesList.replaceChildren();
     const list = Array.isArray(sites) ? sites.slice(0, frequentlyVisitedCount) : [];
     frequentSitesSection.hidden = !frequentlyVisitedEnabled || list.length === 0;
-    if (frequentSitesSection.hidden) return;
+    if (frequentSitesSection.hidden) {
+      if (authoritative) {
+        frequentSitesSection.inert = false;
+        delete document.documentElement.dataset.bootFrequent;
+      }
+      return;
+    }
     const fragment = document.createDocumentFragment();
     for (const site of list) {
       const card = document.createElement("a");
@@ -1396,6 +1445,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       fragment.append(card);
     }
     frequentSitesList.append(fragment);
+    if (authoritative) {
+      frequentSitesSection.inert = false;
+      delete document.documentElement.dataset.bootFrequent;
+    }
   }
 
   function setFrequentlyVisitedOptionsVisibility(enabled) {
@@ -1415,6 +1468,23 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     frequentlyVisitedPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
   }
 
+  function setFrequentlyVisitedPermissionRecoveryVisible(visible) {
+    const show = visible === true && frequentlyVisitedEnabled === true;
+    if (frequentPermissionRecoveryText) frequentPermissionRecoveryText.textContent = t("frequentPermissionRequired");
+    if (frequentPermissionRecoveryButton) frequentPermissionRecoveryButton.textContent = t("grantFrequentlyVisitedPermission");
+    if (frequentPermissionRecovery) frequentPermissionRecovery.hidden = !show;
+    frequentOptions?.classList?.toggle?.("permission-required", show);
+    if (!show || !frequentSitesSection) return;
+    // This state comes from a live browser.permissions.contains() result, so the
+    // cached Frequently Visited projection is no longer authoritative. Replace it
+    // with an explicit, user-actionable recovery state instead of silently hiding
+    // the enabled feature or requiring an OFF -> ON toggle dance.
+    frequentSitesList?.replaceChildren();
+    frequentSitesSection.hidden = false;
+    frequentSitesSection.inert = false;
+    delete document.documentElement.dataset.bootFrequent;
+  }
+
   async function refreshFrequentlyVisited() {
     const generation = ++frequentRefreshGeneration;
     if (!frequentlyVisitedEnabled) {
@@ -1422,6 +1492,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentHidden");
       setFrequentlyVisitedPermissionActionVisible(false);
+      setFrequentlyVisitedPermissionRecoveryVisible(false);
       return;
     }
     let permitted = false;
@@ -1432,9 +1503,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       updateFrequentRenderSnapshot([]);
       setFrequentlyVisitedStatus("frequentPermissionRequired");
       setFrequentlyVisitedPermissionActionVisible(true);
+      setFrequentlyVisitedPermissionRecoveryVisible(true);
       return;
     }
     setFrequentlyVisitedPermissionActionVisible(false);
+    setFrequentlyVisitedPermissionRecoveryVisible(false);
     try {
       // Ask Firefox for a broad candidate pool first, then filter. Requesting only
       // a handful before removing explicit shortcuts could leave fewer than five
@@ -1457,7 +1530,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       setFrequentlyVisitedStatus("frequentDeviceLocalStatus");
     } catch {
       const cached = frequentRenderSnapshot?.enabled === true ? (frequentRenderSnapshot.sites || []) : [];
-      renderFrequentlyVisited(cached);
+      renderFrequentlyVisited(cached, { authoritative: false });
       setFrequentlyVisitedStatus("frequentReadFailed");
     }
   }
@@ -1557,8 +1630,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     bookmarkFolderColors = readBookmarkFolderColors();
     if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
     if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
-    if (frequentlyVisitedEnabled && frequentRenderSnapshot?.enabled === true) {
-      renderFrequentlyVisited(frequentRenderSnapshot.sites || []);
+    if (!frequentlyVisitedEnabled) {
+      renderFrequentlyVisited([]);
+    } else if (frequentRenderSnapshot?.enabled === true) {
+      renderFrequentlyVisited(frequentRenderSnapshot.sites || [], { authoritative: false });
     }
     scheduleFrequentlyVisitedRefresh(250);
     // The browser may briefly rehydrate optional-permission state while an updated
@@ -1640,6 +1715,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       startupPhase("localRawReady");
       return raw;
     });
+    let rawLocal = null;
 
     const sessionStartedAt = performance.now();
     const earlySessionRead = globalThis.__mosaicsyncEarlySessionRead || null;
@@ -1651,13 +1727,21 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     diagnostics.sessionValidationMs = sessionCache?.timings?.validationMs ?? null;
 
     let paintedSession = false;
+    let sessionBlockedByAuthoritativeSpaces = false;
+    if (sessionCache?.meta?.onboardingCompleted && sessionCache.state?.activeSpaceId !== "personal") {
+      rawLocal = await localRawPromise;
+      sessionBlockedByAuthoritativeSpaces = !rawStateMultipleSpacesEnabled(rawLocal?.result?.[LOCAL_STATE_KEY]);
+    }
     const sessionDefaultMismatch = Boolean(
       sessionCache?.meta?.onboardingCompleted &&
       deviceDefaultSpace !== "last" &&
       isMultipleSpacesEnabled(sessionCache.state) &&
       sessionCache.state.activeSpaceId !== deviceDefaultSpace
     );
-    if (sessionCache?.meta?.onboardingCompleted && !sessionDefaultMismatch) {
+    if (sessionCache?.meta?.onboardingCompleted && !sessionDefaultMismatch && !sessionBlockedByAuthoritativeSpaces) {
+      // storage.session is a disposable visual cache. Keep any grid it paints
+      // inert until the already-running authoritative storage.local read wins.
+      keepLauncherCacheVisualOnly();
       diagnostics.firstSource = "session";
       const bootManifest = bootRenderManifest;
       const sessionAwaitingRemote = Boolean(sessionCache.meta?.syncEnabled && !sessionCache.meta?.syncInitialized && sessionCache.meta?.syncBootstrapMode === "await-remote");
@@ -1670,7 +1754,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     try { delete globalThis.__mosaicsyncBootGrid; } catch {}
 
-    const rawLocal = await localRawPromise;
+    rawLocal ||= await localRawPromise;
 
     // If a structural bootstrap/session snapshot is already on screen, yield one
     // animation frame before touching the image-heavy authoritative state. That
@@ -1707,6 +1791,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
 
     if (!paintedSession) {
+      launcherAuthorityVerified = true;
       diagnostics.firstSource = "local";
       paintLoadedState(loaded, diagnostics, {
         deferHeavyAssets: loaded.state.settings?.backgroundImageDeferred === true,
@@ -2554,6 +2639,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       devMark("newtab:render:end");
       devMeasure("newtab:render", "newtab:render:start", "newtab:render:end");
       startupPhase("authoritativeGridRendered");
+      unlockLauncherInteractionIfVerified();
       return;
     }
     clearTimeout(syncWaitNoticeTimer);
@@ -2587,6 +2673,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     devMark("newtab:render:end");
     devMeasure("newtab:render", "newtab:render:start", "newtab:render:end");
     startupPhase("authoritativeGridRendered");
+    unlockLauncherInteractionIfVerified();
   }
 
   function createWaitingSlot(position) {
@@ -5333,6 +5420,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (settingsFrequentlyVisitedDescription) settingsFrequentlyVisitedDescription.textContent = t("frequentlyVisitedDescription");
     if (settingsFrequentlyVisitedCountLabel) settingsFrequentlyVisitedCountLabel.textContent = t("frequentCount");
     if (frequentlyVisitedPermissionButton) frequentlyVisitedPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
+    if (frequentPermissionRecoveryText) frequentPermissionRecoveryText.textContent = t("frequentPermissionRequired");
+    if (frequentPermissionRecoveryButton) frequentPermissionRecoveryButton.textContent = t("grantFrequentlyVisitedPermission");
     if (wallpaperGalleryDialog?.open) renderWallpaperGallery();
     render();
     updateSyncUi(meta, lastSyncStatus);
@@ -6448,6 +6537,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         setFrequentlyVisitedOptionsVisibility(wantsEnabled);
         if (!wantsEnabled) {
           setFrequentlyVisitedPermissionActionVisible(false);
+          setFrequentlyVisitedPermissionRecoveryVisible(false);
           frequentCandidateCacheAt = 0;
           frequentCandidateCache = [];
           frequentRefreshGeneration += 1;
@@ -6463,11 +6553,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         const granted = await permissionPromise;
         if (!granted) {
           setFrequentlyVisitedPermissionActionVisible(true);
+          setFrequentlyVisitedPermissionRecoveryVisible(true);
           updateFrequentRenderSnapshot([]);
           setFrequentlyVisitedStatus("frequentPermissionDenied");
           return;
         }
         setFrequentlyVisitedPermissionActionVisible(false);
+        setFrequentlyVisitedPermissionRecoveryVisible(false);
         frequentCandidateCacheAt = 0;
         frequentCandidateCache = [];
         await refreshFrequentlyVisited();
@@ -6483,12 +6575,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     })();
   });
 
-  frequentlyVisitedPermissionButton?.addEventListener("click", () => {
-    // Keep the permission request directly in the click handler so Firefox's
-    // user-gesture requirement is satisfied. The feature preference remains ON
-    // regardless of whether the browser grants the optional permission.
+  function requestFrequentlyVisitedPermissionRecoveryFromGesture(sourceButton) {
+    // permissions.request() must begin synchronously inside the user's click.
+    // Both the Settings action and the launcher recovery action share this exact
+    // path so an already-remembered ON preference never requires toggling OFF/ON.
     const permissionPromise = requestTopSitesPermissionFromGesture();
-    frequentlyVisitedPermissionButton.disabled = true;
+    if (sourceButton) sourceButton.disabled = true;
     void (async () => {
       try {
         const granted = await permissionPromise;
@@ -6497,20 +6589,30 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         setFrequentlyVisitedOptionsVisibility(true);
         if (!granted) {
           setFrequentlyVisitedPermissionActionVisible(true);
+          setFrequentlyVisitedPermissionRecoveryVisible(true);
           setFrequentlyVisitedStatus("frequentPermissionDenied");
           return;
         }
         setFrequentlyVisitedPermissionActionVisible(false);
+        setFrequentlyVisitedPermissionRecoveryVisible(false);
         frequentCandidateCacheAt = 0;
         frequentCandidateCache = [];
         await refreshFrequentlyVisited();
       } catch {
         setFrequentlyVisitedPermissionActionVisible(true);
+        setFrequentlyVisitedPermissionRecoveryVisible(true);
         setFrequentlyVisitedStatus("frequentEnableFailed");
       } finally {
-        frequentlyVisitedPermissionButton.disabled = false;
+        if (sourceButton) sourceButton.disabled = false;
       }
     })();
+  }
+
+  frequentlyVisitedPermissionButton?.addEventListener("click", () => {
+    requestFrequentlyVisitedPermissionRecoveryFromGesture(frequentlyVisitedPermissionButton);
+  });
+  frequentPermissionRecoveryButton?.addEventListener("click", () => {
+    requestFrequentlyVisitedPermissionRecoveryFromGesture(frequentPermissionRecoveryButton);
   });
 
   exportProfileButton?.addEventListener("click", async () => {
@@ -6927,6 +7029,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     devMeasure("newtab:load-state", "newtab:load-state:start", "newtab:load-state:end");
   }).catch(error => {
     console.error(error);
+    discardUnverifiedStartupCaches();
     showToast(t("localDataLoadFailed"));
   });
 })();

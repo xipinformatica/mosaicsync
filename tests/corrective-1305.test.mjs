@@ -70,6 +70,8 @@ test("1.30.5 locale refresh preserves the real outer Settings scroll owner", asy
     settingsFrequentlyVisitedDescription: null,
     settingsFrequentlyVisitedCountLabel: null,
     frequentlyVisitedPermissionButton: null,
+    frequentPermissionRecoveryText: null,
+    frequentPermissionRecoveryButton: null,
     wallpaperGalleryDialog: null,
     bookmarkTree: [],
     meta: {},

@@ -1,12 +1,28 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
 
+
+## 1.30.18.2 Frequently Visited permission-recovery policy
+
+- The synchronized `frequentlyVisitedEnabled` setting expresses user intent only. The browser's optional Top Sites permission remains installation-local and must never be inferred from the synchronized toggle value.
+- Startup and permission-change reconciliation quietly use `permissions.contains()`. If the preference is ON and the permission is present, no prompt or recovery UI appears. If the permission is missing, the launcher replaces any stale cached Frequent cards with an explicit localized recovery surface and Settings highlights the same one-click action.
+- `permissions.request()` remains user-gesture driven. The launcher and Settings recovery buttons share one synchronous request path; granting permission clears the device-local candidate cache and refreshes suggestions immediately without mutating the already-ON synchronized preference.
+- Missing permission never silently flips the synchronized setting OFF, and a browser update with an intact permission never asks again. Permission add/remove events continue to self-heal the live page.
+- 1.30.18.1 cache authority remains load-bearing: the live recovery state clears cached Frequently Visited targets before making the recovery button interactive. No new localization keys, Sync/state schema, manifest permissions, telemetry or backend behavior are introduced.
+
+## 1.30.18.1 first-paint cache authority policy
+
+- `storage.local` remains authoritative. A non-Personal `storage.session` snapshot cannot become actionable until the already-running raw local read confirms Multiple Spaces is still enabled; Personal session paint remains fast but is visual-only until authoritative reconciliation.
+- The synchronous localStorage render manifest never paints a non-Personal Space. When it paints Personal, both the shortcut grid/empty state and the cached Frequently Visited section are inert until their respective authoritative handoffs.
+- Authoritative grid adoption or a full authoritative render is the only normal path that unlocks cached launcher interaction. Frequently Visited unlocks independently only after its own authoritative refresh. A startup failure discards still-unverified cached targets instead of enabling them.
+- Render-manifest writes project Personal when Multiple Spaces is disabled, and boot-grid folder adoption validates the first four cached child IDs, titles and navigation URLs before DOM reuse.
+- These are cache/read-boundary changes only: no Sync/state schema, permissions, telemetry, backend or authoritative profile semantics change.
 
 ## 1.30.18 state-consistency / render-efficiency policy
 
@@ -439,7 +455,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.2` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

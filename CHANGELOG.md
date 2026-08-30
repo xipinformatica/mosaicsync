@@ -1,3 +1,19 @@
+## 1.30.18.2
+
+- Fixes the confusing state where **Frequently Visited** can remain enabled while this Firefox installation no longer has the optional Top Sites permission: the New Tab now shows a clear one-click **Grant permission** recovery action where the sites normally appear.
+- Keeps the synchronized **Show** preference ON when only the installation-local browser permission is missing; ordinary updates with an intact permission remain silent and never re-prompt.
+- Reuses the existing localized permission/status strings across all 33 UI locales and makes the existing Settings recovery state more visually prominent.
+- Permission restoration is still user-gesture driven and immediately refreshes Frequently Visited; permission add/remove events and startup reconciliation continue to self-heal without an OFF → ON toggle dance.
+- Preserves 1.30.18.1 first-paint cache authority: stale cached Frequently Visited cards are replaced before the live recovery control is unlocked. No Sync/state schema, manifest permission, telemetry or backend change.
+
+## 1.30.18.1
+
+- Hardens disposable first-paint caches so stale cached launcher data can never become an interactive substitute for authoritative `storage.local` state.
+- Cross-checks non-Personal session-cache first paint against the already-running raw local read; if Multiple Spaces is authoritatively disabled, the cached Work state is rejected before paint.
+- Stops the synchronous localStorage boot manifest from painting Work at all, keeps cached shortcut/empty-state and Frequently Visited content inert until independent authoritative handoffs, and discards still-unverified caches on startup failure rather than unlocking stale targets.
+- Makes render-manifest writes project Personal whenever Multiple Spaces is disabled and strengthens boot-grid folder adoption to verify cached first-four child titles and navigation URLs as well as IDs.
+- Preserves 1.30.18's conservative external-grid render skip and inactive-Space wallpaper preload optimization. No Sync/state schema, permission, telemetry or backend change.
+
 ## 1.30.18
 
 - Prevents a disabled Multiple Spaces configuration from producing a Work-space session render snapshot; Personal is now the only first-paint Space when Spaces are off.

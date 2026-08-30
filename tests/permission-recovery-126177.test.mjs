@@ -43,6 +43,7 @@ for (const browser of ["firefox", "chrome"]) {
       hasTopSitesPermission: async () => false,
       renderFrequentlyVisited: sites => rendered.push(sites),
       updateFrequentRenderSnapshot: () => {},
+      setFrequentlyVisitedPermissionRecoveryVisible: () => {},
       t: key => key,
       console
     };
@@ -81,6 +82,7 @@ for (const browser of ["firefox", "chrome"]) {
       frequentlyVisitedCount: 5,
       renderFrequentlyVisited: () => {},
       updateFrequentRenderSnapshot: () => {},
+      setFrequentlyVisitedPermissionRecoveryVisible: () => {},
       frequentRenderSnapshot: null,
       t: key => key,
       console
@@ -100,7 +102,9 @@ for (const browser of ["firefox", "chrome"]) {
     const src = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
     const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, "utf8");
     assert.match(html, /id="frequentlyVisitedPermissionButton"[^>]*type="button"[^>]*hidden/);
-    assert.match(src, /frequentlyVisitedPermissionButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?const permissionPromise = requestTopSitesPermissionFromGesture\(\);[\s\S]*?void \(async \(\) => \{/);
+    assert.match(src, /function requestFrequentlyVisitedPermissionRecoveryFromGesture\(sourceButton\)[\s\S]*?const permissionPromise = requestTopSitesPermissionFromGesture\(\);[\s\S]*?void \(async \(\) => \{/);
+    assert.match(src, /frequentlyVisitedPermissionButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?requestFrequentlyVisitedPermissionRecoveryFromGesture\(frequentlyVisitedPermissionButton\)/);
+    assert.match(src, /frequentPermissionRecoveryButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?requestFrequentlyVisitedPermissionRecoveryFromGesture\(frequentPermissionRecoveryButton\)/);
     assert.match(src, /const permissionPromise = wantsEnabled \? requestTopSitesPermissionFromGesture\(\) : null;[\s\S]*?await persistFrequentlyVisitedPreference\(\{ enabled: wantsEnabled \}\)/, "turning the feature on must start the permission request from the user gesture and persist synchronized intent independently");
     assert.match(src, /scheduleFrequentlyVisitedPermissionReconciliation\(\);/);
     assert.match(src, /browser\.permissions\?\.onRemoved[\s\S]*?permissionChangeAffectsTopSites\(change\)[\s\S]*?scheduleFrequentlyVisitedRefresh\(0\);/, "Top Sites removal must self-heal Frequently Visited without waking unrelated permission work");
