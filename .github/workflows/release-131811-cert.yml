@@ -17,19 +17,28 @@ jobs:
         shell: bash
         run: |
           echo '=== BASELINE ==='; git rev-parse HEAD; node --version
-          echo '=== writeLocalMeta contexts ==='
-          grep -RFn --exclude-dir=dist --exclude-dir=.git 'writeLocalMeta(' src || true
-          for f in src/shared/background/background.js src/shared/core/storage.js src/shared/newtab/newtab.js src/shared/sync/sync-engine.js; do
-            echo "--- $f"; grep -n -B8 -A10 'writeLocalMeta(' "$f" || true; done
-          echo '=== FV symbols ==='
-          grep -nEi -B8 -A18 'frequent.*icon|icon.*frequent|frequentRenderSnapshot|updateFrequent|renderFrequently|sanitizeFrequent|topSites' src/shared/newtab/newtab.js | head -900 || true
-          echo '=== image/decode helpers ==='
-          grep -n -B8 -A25 -E 'remoteImageViaCanvas|optimizeImageDataUrl|\.decode\(' src/shared/newtab/newtab.js | head -500 || true
-          echo '=== storage ownership ==='
-          grep -n -B15 -A35 -E 'withLocalAssetWriteLock|warmSessionRenderCache|needsAssetMigration|const writes = \{|writeActiveSpace|writeLocalMeta' src/shared/core/storage.js | head -1000 || true
-          echo '=== appearance ==='
-          grep -n -B20 -A65 'function applyPageBackgroundVisual' src/shared/newtab/newtab.js || true
-          echo '=== constants/version docs ==='
-          grep -RFn --exclude-dir=dist --exclude-dir=.git '1.30.18.10' src README.md README-DEVELOPMENT.md CHANGELOG.md docs tests package*.json || true
+          grep -RFn --exclude-dir=dist --exclude-dir=.git 'writeLocalMeta(' src > diagnostics.txt || true
+          for f in src/shared/background/background.js src/shared/core/storage.js src/shared/newtab/newtab.js src/shared/sync/sync-engine.js src/shared/welcome/welcome.js; do
+            echo "--- $f" >> diagnostics.txt; grep -n -B10 -A14 'writeLocalMeta(' "$f" >> diagnostics.txt || true; done
+          echo '=== FV symbols ===' >> diagnostics.txt
+          grep -nEi -B10 -A24 'frequent.*icon|icon.*frequent|frequentRenderSnapshot|updateFrequent|renderFrequently|sanitizeFrequent|topSites' src/shared/newtab/newtab.js | head -1200 >> diagnostics.txt || true
+          echo '=== image/decode helpers ===' >> diagnostics.txt
+          grep -n -B10 -A35 -E 'remoteImageViaCanvas|optimizeImageDataUrl|\.decode\(' src/shared/newtab/newtab.js | head -700 >> diagnostics.txt || true
+          echo '=== storage ownership ===' >> diagnostics.txt
+          grep -n -B20 -A50 -E 'withLocalAssetWriteLock|warmSessionRenderCache|needsAssetMigration|const writes = \{|writeActiveSpace|writeLocalMeta' src/shared/core/storage.js | head -1400 >> diagnostics.txt || true
+          echo '=== appearance ===' >> diagnostics.txt
+          grep -n -B30 -A90 'function applyPageBackgroundVisual' src/shared/newtab/newtab.js >> diagnostics.txt || true
+          echo '=== version refs ===' >> diagnostics.txt
+          grep -RFn --exclude-dir=dist --exclude-dir=.git '1.30.18.10' src README.md README-DEVELOPMENT.md CHANGELOG.md docs tests package*.json >> diagnostics.txt || true
+          zip -qr baseline-source.zip . -x '.git/*' -x 'baseline-source.zip'
       - name: Baseline test count
         run: npm test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: baseline-inspection
+          path: |
+            diagnostics.txt
+            baseline-source.zip
+          if-no-files-found: error
+          retention-days: 1
