@@ -83,7 +83,7 @@ test("1.26.13b first-frame render manifest carries a bounded Frequently Visited 
     const mod = await import(`../dist/firefox/newtab/render-manifest.js?12613-${Date.now()}`);
     const state = {
       activeSpaceId: "personal", updatedAt: 1, settingsModifiedAt: 1, shortcuts: [],
-      settings: { columns: 8, rows: 8, tileSize: 76, brandVisible: true }
+      settings: { columns: 8, rows: 8, tileSize: 76, brandVisible: true, frequentlyVisitedEnabled: true, frequentlyVisitedCount: 10 }
     };
     const meta = { onboardingCompleted: true };
     const sites = Array.from({ length: 12 }, (_, i) => ({ title: `Site ${i}`, host: `s${i}.example`, url: `https://s${i}.example/`, favicon: "" }));

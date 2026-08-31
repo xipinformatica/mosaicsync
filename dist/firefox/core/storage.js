@@ -58,6 +58,8 @@ import { createFirstPaintContract, isFirstPaintContractValid } from "./first-pai
 import "./http-url-safety.js";
 
 let lastSessionRenderCacheStatus = "unknown";
+let lastSessionRenderStateSerialized = null;
+let lastSessionRenderMetaSerialized = null;
 // Exact bytes already read from storage.local in this extension context. Keeping
 // this map lets routine writes verify immutable content-addressed assets without
 // re-reading every favicon/image on every shortcut edit. It is pruned to live IDs.
@@ -88,13 +90,35 @@ export function getSessionRenderCacheStatus() {
 }
 
 async function setSessionBestEffort(items) {
-  if (!browser.storage.session) return;
+  if (!browser.storage.session) return false;
   try {
     await browser.storage.session.set(items);
+    return true;
   } catch {
     // The RAM cache is an optimization only. Persistent local data must remain
     // fully usable even if session storage is unavailable or temporarily fails.
+    return false;
   }
+}
+
+function sessionSerialized(value) {
+  try { return JSON.stringify(value); } catch { return null; }
+}
+
+async function writeSessionRenderStateBestEffort(snapshot) {
+  const serialized = sessionSerialized(snapshot);
+  if (serialized && serialized === lastSessionRenderStateSerialized) return false;
+  const written = await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: snapshot });
+  if (written) lastSessionRenderStateSerialized = serialized;
+  return written;
+}
+
+async function writeSessionRenderMetaBestEffort(meta) {
+  const serialized = sessionSerialized(meta);
+  if (serialized && serialized === lastSessionRenderMetaSerialized) return false;
+  const written = await setSessionBestEffort({ [SESSION_RENDER_META_KEY]: meta });
+  if (written) lastSessionRenderMetaSerialized = serialized;
+  return written;
 }
 
 function localAssetStorageKey(assetId) {
@@ -391,6 +415,10 @@ export async function readSessionRenderCache(earlyRead = null) {
       return null;
     }
     const meta = ensureDeviceId(cachedMeta);
+    // Remember exactly what this context just read so the normal startup refresh
+    // does not immediately rewrite an identical disposable snapshot.
+    lastSessionRenderStateSerialized = sessionSerialized(cachedState);
+    lastSessionRenderMetaSerialized = sessionSerialized(meta);
     const validationMs = perfNow() - validationStartedAt;
     lastSessionRenderCacheStatus = "hit";
     return {
@@ -405,12 +433,45 @@ export async function readSessionRenderCache(earlyRead = null) {
 }
 
 export async function warmSessionRenderCache(state, meta, { frequentSnapshot = null } = {}) {
-  if (!browser.storage.session) return;
+  if (!browser.storage.session) return false;
   const normalizedMeta = ensureDeviceId(meta || DEFAULT_META);
-  await setSessionBestEffort({
-    [SESSION_RENDER_STATE_KEY]: createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot }),
-    [SESSION_RENDER_META_KEY]: normalizedMeta
-  });
+  const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot });
+  const stateSerialized = sessionSerialized(snapshot);
+  const metaSerialized = sessionSerialized(normalizedMeta);
+  const updates = {};
+  if (!stateSerialized || stateSerialized !== lastSessionRenderStateSerialized) updates[SESSION_RENDER_STATE_KEY] = snapshot;
+  if (!metaSerialized || metaSerialized !== lastSessionRenderMetaSerialized) updates[SESSION_RENDER_META_KEY] = normalizedMeta;
+  if (!Object.keys(updates).length) return false;
+  const written = await setSessionBestEffort(updates);
+  if (written) {
+    if (Object.hasOwn(updates, SESSION_RENDER_STATE_KEY)) lastSessionRenderStateSerialized = stateSerialized;
+    if (Object.hasOwn(updates, SESSION_RENDER_META_KEY)) lastSessionRenderMetaSerialized = metaSerialized;
+  }
+  return written;
+}
+
+export async function clearSessionFrequentlyVisitedSnapshot() {
+  if (!browser.storage.session) return false;
+  try {
+    const result = await browser.storage.session.get(SESSION_RENDER_STATE_KEY);
+    const snapshot = result?.[SESSION_RENDER_STATE_KEY];
+    if (!isRenderSnapshotValid(snapshot)) return false;
+    const countValue = Number(snapshot.settings?.frequentlyVisitedCount);
+    const count = [3, 5, 8, 10].includes(countValue) ? countValue : 5;
+    const enabled = snapshot.settings?.frequentlyVisitedEnabled === true;
+    const current = snapshot.firstPaint?.frequent;
+    if (current?.enabled === enabled && Number(current?.count) === count && Array.isArray(current?.sites) && current.sites.length === 0) return false;
+    const next = {
+      ...snapshot,
+      firstPaint: {
+        ...snapshot.firstPaint,
+        frequent: { enabled, count, sites: [] }
+      }
+    };
+    return writeSessionRenderStateBestEffort(next);
+  } catch {
+    return false;
+  }
 }
 
 async function withLocalAssetWriteLock(callback) {
@@ -638,7 +699,7 @@ async function writeLocalStateResult(state, {
     finalState = await hydrateLocalAssetsForSpaceNormalized(finalState, finalState.activeSpaceId);
     finalState = selectActiveSpaceNormalized(finalState, finalState.activeSpaceId);
   }
-  await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: createRenderSnapshot(finalState) });
+  await writeSessionRenderStateBestEffort(createRenderSnapshot(finalState));
   return { state: finalState, compactBaseline: persisted.compactBaseline };
 }
 
@@ -659,7 +720,7 @@ export async function readLocalMeta() {
 export async function writeLocalMeta(meta) {
   const normalized = ensureDeviceId(meta);
   await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
-  await setSessionBestEffort({ [SESSION_RENDER_META_KEY]: normalized });
+  await writeSessionRenderMetaBestEffort(normalized);
   return normalized;
 }
 

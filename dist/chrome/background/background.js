@@ -122,12 +122,13 @@ import {
   workspaceStateNormalized
 } from "../core/model.js";
 import {
+  clearSessionFrequentlyVisitedSnapshot,
   ensureLocalStorage,
   readLocalMeta,
   writeLocalMeta,
   writeLocalState
 } from "../core/storage.js";
-import { cleanupLegacyWebOriginPermissions } from "../core/permissions.js";
+import { cleanupLegacyWebOriginPermissions, permissionChangeAffectsTopSites } from "../core/permissions.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
@@ -3330,6 +3331,15 @@ browser.tabs?.onUpdated?.addListener((tabId, changeInfo, tab) => {
     if (!validPendingNavigation(pending)) return; // Ignore unrelated browsing tabs even with all-sites permission.
     scheduleTabFaviconLearning(tabId, tabSnapshot, pending.shortcutId);
   });
+});
+
+// Frequently Visited sites are device-local. If Top Sites permission disappears
+// while no New Tab is alive, clear only the disposable session copy so the next
+// startup layer cannot carry cached history cards forward before permission UI
+// reconciliation. The synchronized Show/Count preference is intentionally kept.
+browser.permissions?.onRemoved?.addListener?.(change => {
+  if (!permissionChangeAffectsTopSites(change)) return;
+  void clearSessionFrequentlyVisitedSnapshot();
 });
 
 browser.runtime.onMessage.addListener((message, sender) => {

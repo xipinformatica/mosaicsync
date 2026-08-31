@@ -53,12 +53,12 @@ function makeState(constants, model, { activeSpaceId = "work" } = {}) {
     spaces: {
       personal: {
         shortcuts: [{ id: "p", title: "Personal site", url: "https://personal.example/", position: 0 }],
-        settings: { ...constants.DEFAULT_SETTINGS, spaceName: "Home", multipleSpacesEnabled: true },
+        settings: { ...constants.DEFAULT_SETTINGS, spaceName: "Home", multipleSpacesEnabled: true, frequentlyVisitedEnabled: true, frequentlyVisitedCount: 5 },
         settingsModifiedAt: 10, updatedAt: 10
       },
       work: {
         shortcuts: [{ id: "w", title: "Work site", url: "https://work.example/", position: 0 }],
-        settings: { ...constants.DEFAULT_SETTINGS, spaceName: "Office", multipleSpacesEnabled: true },
+        settings: { ...constants.DEFAULT_SETTINGS, spaceName: "Office", multipleSpacesEnabled: true, frequentlyVisitedEnabled: true, frequentlyVisitedCount: 5 },
         settingsModifiedAt: 11, updatedAt: 11
       }
     }

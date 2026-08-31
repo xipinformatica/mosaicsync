@@ -760,7 +760,7 @@ select{ font: inherit; }button{ color: inherit; }.page{
   gap: 12px;
   margin: 0 4px 10px;
   color: var(--canvas-text);
-}.frequent-sites-heading > span{ font-size: 12.5px; font-weight: 700; }.frequent-sites-heading > small{ font-size: 10.5px; color: var(--canvas-muted); }.frequent-sites-list{
+}.frequent-sites-heading-first-paint-pending{ visibility: hidden; }.frequent-sites-heading > span{ font-size: 12.5px; font-weight: 700; }.frequent-sites-heading > small{ font-size: 10.5px; color: var(--canvas-muted); }.frequent-sites-list{
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;

@@ -1,3 +1,13 @@
+## 1.30.18.7
+
+- Hardens the Step-1 first-paint foundation before any Step-2 cache consolidation: restores warm boot-grid adoption for the current render-manifest schema after an obsolete schema-2 literal silently forced a second full render on session-warm New Tabs.
+- Makes Frequently Visited first-paint truth explicit when the synchronized setting is OFF, so a fresh session layer can immediately suppress an older cached strip; when the setting is ON but no fresh device-local site list exists, the contract keeps its preserve/no-op semantics rather than inventing browser-history data.
+- Reacts to removal of the optional Top Sites permission in the background context by clearing only the device-local session site projection, while preserving the synchronized Show preference and normal permission-recovery UX.
+- Prevents the static English Frequently Visited heading/subtitle from becoming visible before localization, preserving layout space while avoiding a first-frame language flash in non-English UIs.
+- Deduplicates unchanged browser.session render-state/meta writes and keeps storage-pressure warnings primary even when recovery and/or synchronized artwork are also limited.
+- Adds cross-browser regressions for current-schema boot-grid reuse, FV-disable projection, no-live-tab permission invalidation, idempotent session-cache writes, combined quota/limitation messaging, byte-conserving Sync usage classification including legacy recovery keys, and first-frame localization.
+- Preserves all existing features, Work shortcut-grid safety, 1.30.18.6 first-paint contract/cache formats, normal Sync/Recovery/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free operation.
+
 ## 1.30.18.6
 
 - Completes first-paint continuity for **Frequently Visited in Work**: the validated cached cards can paint from frame one while the stricter Work shortcut-grid authorization gate remains unchanged, so Work no longer visibly transitions from an empty Frequently Visited area to populated cards after startup hydration.

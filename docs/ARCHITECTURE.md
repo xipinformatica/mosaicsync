@@ -61,6 +61,9 @@ The shared `firstPaint` projection contains the fields that overlap the localSto
 Rules:
 - Fast startup must be **fast + truthful**, never fast + knowingly wrong.
 - `null`/missing optional data means “this layer has no opinion”; it must preserve an already-painted truthful value until authoritative state arrives.
+- For Frequently Visited specifically, authoritative synchronized OFF is explicit (`enabled: false`, empty sites) so a newer session layer can suppress an older visual snapshot; synchronized ON with no fresh device-local sites remains `null` and therefore does not invent or erase browser-derived candidates.
+- Removal of the optional Top Sites permission invalidates the device-local session site projection from the background context; it does not mutate the synchronized preference.
+- Identical session acceleration snapshots are not rewritten merely because a refresh path ran.
 - Work-specific shortcut-grid safety checks do not apply to global/device-local Frequently Visited data.
 - All startup cache formats are disposable and explicitly versioned.
 - Cache invalidation/refresh should go through centralized first-paint refresh paths rather than independent ad-hoc writers.

@@ -30,6 +30,7 @@ import {
   LOCAL_SYNC_RECOVERY_STATUS_KEY,
   PRODUCT_NAME,
   RENDER_MANIFEST_KEY,
+  RENDER_MANIFEST_SCHEMA_VERSION,
   RENDER_PREVIEW_MAX_CHARS,
   SHORTCUT_LOCAL_IMAGE_TARGET_BYTES,
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
@@ -111,6 +112,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => requestAnimationFrame(stamp));
     else setTimeout(stamp, 0);
   };
+
+  function canReuseBootGridForSession({ sessionAwaitingRemote, bootGridPainted, bootManifest, sessionState } = {}) {
+    return !sessionAwaitingRemote && bootGridPainted === true &&
+      bootManifest?.version === RENDER_MANIFEST_SCHEMA_VERSION &&
+      bootManifest.activeSpaceId === sessionState?.activeSpaceId &&
+      Number(bootManifest.updatedAt) === Number(sessionState?.updatedAt) &&
+      Number(bootManifest.settingsModifiedAt) === Number(sessionState?.settingsModifiedAt);
+  }
   try {
     const supported = globalThis.PerformanceObserver?.supportedEntryTypes || [];
     if (devMetricsEnabled() && supported.includes("longtask")) {
@@ -204,6 +213,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   // Translate only the always-visible New Tab shell on startup. Hidden dialogs
   // are localized when opened, avoiding a full hidden-UI tree walk on every tab.
   localizeDocument(document.getElementById("page") || document);
+  document.querySelector(".frequent-sites-heading-first-paint-pending")?.classList.remove("frequent-sites-heading-first-paint-pending");
   installViewportTooltips(document, { wrapperSelector: ".sync-help-wrap", tooltipSelector: ".sync-help-tooltip" });
 
   /*
@@ -887,7 +897,18 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function paintLoadedState(loaded, diagnostics, { deferHeavyAssets = false, reuseBootGrid = false, adoptBootGrid = false } = {}) {
     state = loaded.state;
     meta = loaded.meta;
-    if (state?.firstPaint?.frequent) frequentRenderSnapshot = state.firstPaint.frequent;
+    if (state?.firstPaint?.frequent) {
+      frequentRenderSnapshot = state.firstPaint.frequent;
+      // A fresh session snapshot may be newer than the synchronous Web Storage
+      // manifest (for example after a remote preference change while no New Tab
+      // was alive). Reconcile that tiny presentation field immediately rather
+      // than waiting for post-paint Top Sites maintenance.
+      renderFrequentlyVisited(frequentRenderSnapshot.sites || [], {
+        authoritative: false,
+        enabled: frequentRenderSnapshot.enabled === true,
+        count: frequentRenderSnapshot.count
+      });
+    }
 
     const settingsStartedAt = performance.now();
     applySettings({ deferHeavyAssets });
@@ -1410,11 +1431,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     menu.querySelector("button")?.focus({ preventScroll: true });
   }
 
-  function renderFrequentlyVisited(sites, { authoritative = true } = {}) {
+  function renderFrequentlyVisited(sites, {
+    authoritative = true,
+    enabled = frequentlyVisitedEnabled,
+    count = frequentlyVisitedCount
+  } = {}) {
     if (!frequentSitesSection || !frequentSitesList) return;
     frequentSitesList.replaceChildren();
-    const list = Array.isArray(sites) ? sites.slice(0, frequentlyVisitedCount) : [];
-    frequentSitesSection.hidden = !frequentlyVisitedEnabled || list.length === 0;
+    const visibleCount = [3, 5, 8, 10].includes(Number(count)) ? Number(count) : 5;
+    const list = Array.isArray(sites) ? sites.slice(0, visibleCount) : [];
+    frequentSitesSection.hidden = enabled !== true || list.length === 0;
     if (frequentSitesSection.hidden) {
       if (authoritative) {
         frequentSitesSection.inert = false;
@@ -1780,10 +1806,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       diagnostics.firstSource = "session";
       const bootManifest = bootRenderManifest;
       const sessionAwaitingRemote = Boolean(sessionCache.meta?.syncEnabled && !sessionCache.meta?.syncInitialized && sessionCache.meta?.syncBootstrapMode === "await-remote");
-      const canReuseBootGrid = !sessionAwaitingRemote && diagnostics.bootGrid && bootManifest?.version === 2 &&
-        bootManifest.activeSpaceId === sessionCache.state.activeSpaceId &&
-        Number(bootManifest.updatedAt) === Number(sessionCache.state.updatedAt) &&
-        Number(bootManifest.settingsModifiedAt) === Number(sessionCache.state.settingsModifiedAt);
+      const canReuseBootGrid = canReuseBootGridForSession({
+        sessionAwaitingRemote,
+        bootGridPainted: diagnostics.bootGrid,
+        bootManifest,
+        sessionState: sessionCache.state
+      });
       paintLoadedState(sessionCache, diagnostics, { deferHeavyAssets: true, reuseBootGrid: canReuseBootGrid });
       paintedSession = true;
     }
@@ -6004,6 +6032,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return "normal";
   }
 
+  function syncReadyHeadlineKey(rawMeta, pressure) {
+    const limitations = syncLimitationKinds(rawMeta);
+    if (pressure === "critical") return "syncStorageAlmostFull";
+    if (pressure === "warning") return "syncStorageGettingFull";
+    if (limitations.artwork && limitations.recovery) return "syncReadyStorageLimited";
+    if (limitations.recovery) return "syncReadyRecoveryLimited";
+    if (limitations.artwork) return "syncReadyLimited";
+    return "syncReady";
+  }
+
   function isSyncQuotaErrorText(value) {
     return /quota|storage\.sync.*full|storage.*full|exceeded/i.test(String(value || ""));
   }
@@ -6066,19 +6104,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       syncStatusDetail.textContent = t("preparingSyncCopy");
     } else {
       const warning = syncWarningDescription(meta);
-      if (warning) {
-        syncStatusText.textContent = limitations.artwork && limitations.recovery
-          ? t("syncReadyStorageLimited")
-          : limitations.recovery
-            ? t("syncReadyRecoveryLimited")
-            : t("syncReadyLimited");
-        syncStatusDetail.textContent = warning;
-      } else if (pressure === "critical") {
-        syncStatusText.textContent = t("syncStorageAlmostFull");
-        syncStatusDetail.textContent = t("syncStorageFreeRemaining", { free: formatBytes(usage.free) });
-      } else if (pressure === "warning") {
-        syncStatusText.textContent = t("syncStorageGettingFull");
-        syncStatusDetail.textContent = t("syncStorageFreeRemaining", { free: formatBytes(usage.free) });
+      if (warning || pressure !== "normal") {
+        // Storage pressure is the most actionable headline. Recovery/artwork
+        // degradation remains visible in the detail instead of masking an
+        // almost-full quota warning (or being masked by it).
+        syncStatusText.textContent = t(syncReadyHeadlineKey(meta, pressure));
+        const details = [];
+        if (pressure !== "normal") details.push(t("syncStorageFreeRemaining", { free: formatBytes(usage.free) }));
+        if (warning) details.push(warning);
+        syncStatusDetail.textContent = details.join(" ");
       } else {
         syncStatusText.textContent = t("syncReady");
         syncStatusDetail.textContent = remoteState === "partial" ? t("newerCopyDelivering") : t("changesPublishAuto");

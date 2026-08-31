@@ -19,10 +19,10 @@ for (const browser of ["firefox", "chrome"]) {
     const versionMatch = constants.match(/export const VERSION = "([^"]+)";/);
     assert.ok(versionMatch, "runtime VERSION constant must be present");
     const runtimeVersion = versionMatch[1];
-    assert.equal(runtimeVersion, "1.30.18.6");
+    assert.equal(runtimeVersion, "1.30.18.7");
 
     const manifest = JSON.parse(await readFile(`dist/${browser}/manifest.json`, "utf8"));
-    assert.equal(manifest.version, "1.30.18.6", "technical manifest version must match 1.30");
+    assert.equal(manifest.version, "1.30.18.7", "technical manifest version must match 1.30");
     if (browser === "chrome") assert.equal(manifest.version_name, runtimeVersion, "Chrome version_name must match public VERSION");
     else assert.equal(Object.hasOwn(manifest, "version_name"), false, "Firefox must not receive Chrome-only version_name");
 

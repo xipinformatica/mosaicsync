@@ -46,10 +46,25 @@ export function sanitizeFirstPaintFrequentSnapshot(snapshot) {
 }
 
 export function createFirstPaintContract(state, frequentSnapshot = null) {
-  const spacesDisabled = state?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
+  const personalSettings = state?.spaces?.personal?.settings || state?.settings || {};
+  const spacesDisabled = personalSettings.multipleSpacesEnabled === false;
   const activeSpaceId = spacesDisabled
     ? "personal"
     : (SPACE_IDS.includes(state?.activeSpaceId) ? state.activeSpaceId : "personal");
+  const frequentCount = [3, 5, 8, 10].includes(Number(personalSettings.frequentlyVisitedCount))
+    ? Number(personalSettings.frequentlyVisitedCount)
+    : 5;
+  const frequentEnabled = personalSettings.frequentlyVisitedEnabled === true;
+  const sanitizedFrequent = sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
+  // A disabled synchronized preference is authoritative enough to actively
+  // clear an older visual snapshot. When the feature is enabled but no current
+  // device-local Top Sites snapshot is available, null continues to mean
+  // "preserve an already-painted truthful snapshot until a newer layer knows".
+  const frequent = !frequentEnabled
+    ? { enabled: false, count: frequentCount, sites: [] }
+    : sanitizedFrequent
+      ? { enabled: true, count: frequentCount, sites: sanitizedFrequent.sites.slice(0, frequentCount) }
+      : null;
   return {
     version: FIRST_PAINT_CONTRACT_VERSION,
     activeSpaceId,
@@ -59,9 +74,9 @@ export function createFirstPaintContract(state, frequentSnapshot = null) {
       work: normalizeFirstPaintSpaceName(state?.spaces?.work?.settings?.spaceName)
     },
     // Frequently Visited is global/device-local rather than a workspace field.
-    // null explicitly means that this cache layer must preserve any already
-    // painted trustworthy Frequently Visited snapshot instead of hiding it.
-    frequent: sanitizeFirstPaintFrequentSnapshot(frequentSnapshot)
+    // null explicitly means that this cache layer has no newer device-local site
+    // list; false is an explicit synchronized preference and must clear stale UI.
+    frequent
   };
 }
 

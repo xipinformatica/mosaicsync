@@ -1,9 +1,21 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.7 Step 1.1 first-paint hardening policy
+
+- Do not begin physical cache consolidation yet. 1.30.18.7 exists to harden the Step-1 contract and tests before Step 2 removes duplication.
+- Current-schema render manifests must be eligible for warm boot-grid reuse when state clocks/Space identity match; schema-version checks must use the canonical version constant rather than duplicated literals.
+- The first-paint contract derives Frequently Visited enable/count truth from authoritative synchronized Settings. An explicit OFF projects an empty disabled snapshot even if a stale device-local candidate list is supplied; an enabled state with no fresh device-local list keeps `frequent: null`, meaning the layer has no opinion and must not invent sites.
+- Removing the optional Top Sites permission clears only the device-local `storage.session` Frequently Visited site projection. It does not silently change the synchronized Show preference or browser history.
+- Static English Frequently Visited heading text stays visually withheld until the locale pass completes, preventing a truthful-card fix from creating a non-English first-frame language flash.
+- Session acceleration writes are fingerprinted and unchanged state/meta snapshots are not rewritten.
+- Sync quota pressure is never hidden by recovery/artwork degradation: near-full pressure remains the headline and limitation detail is composed underneath.
+- Step-1.1 behavioral regressions must cover current-schema grid reuse, FV-disable truth, permission removal with no live New Tab, unchanged-session write suppression, quota byte conservation including legacy recovery keys, combined pressure/limitation messaging and first-frame localization.
+- Preserve all existing features and at least 1.30.18.6 startup performance. No normal Sync/Recovery/profile schema or permission-policy redesign belongs in this release.
 
 ## 1.30.18.6 first-paint contract / maintainability-foundation policy
 
@@ -493,7 +505,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.7` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 
