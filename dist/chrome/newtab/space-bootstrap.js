@@ -15,21 +15,13 @@
   const switcher = document.getElementById("spaceSwitcher");
   if (!switcher) return;
   try {
-    const raw = localStorage.getItem("mosaicsync.render-manifest.v1");
+    const config = globalThis.__mosaicsyncBootstrapConfig;
+    if (!config?.renderManifestKey || !Number.isInteger(config?.renderManifestVersion)) return;
+    const raw = localStorage.getItem(config.renderManifestKey);
     if (!raw) return;
     const manifest = JSON.parse(raw);
-    if (!manifest || ![2, 3].includes(manifest.version) || manifest.onboardingCompleted !== true) return;
-    // v2 is the one-release bridge from 1.30.18.5. New writes are v3 and
-    // carry the canonical firstPaint projection. Keeping the bridge here avoids
-    // one incorrect/empty first frame immediately after an extension update.
-    const firstPaint = manifest.firstPaint?.version === 1
-      ? manifest.firstPaint
-      : manifest.version === 2
-        ? {
-            multipleSpacesEnabled: manifest.multipleSpacesEnabled === true,
-            spaceNames: manifest.spaceNames || {}
-          }
-        : null;
+    if (!manifest || manifest.version !== config.renderManifestVersion || manifest.onboardingCompleted !== true) return;
+    const firstPaint = manifest.firstPaint?.version === 1 ? manifest.firstPaint : null;
     if (!firstPaint) return;
     if (firstPaint.multipleSpacesEnabled === false) {
       switcher.hidden = true;

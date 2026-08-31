@@ -67,6 +67,7 @@ if (/^sync-loss-1301[34]-/.test(scenario)) {
 }
 const alarms = new Map();
 let websiteAccess = false;
+let topSitesPermission = false;
 const createdTabs = [];
 let fetchHandler = async () => { throw new Error('unexpected fetch'); };
 const fetchLog = [];
@@ -113,10 +114,12 @@ const api = {
     onAdded: events.onPermissionAdded,
     onRemoved: events.onPermissionRemoved,
     async contains(request) {
+      if (Array.isArray(request?.permissions) && request.permissions.includes("topSites")) return topSitesPermission;
       if (Array.isArray(request?.origins) && request.origins.length) return websiteAccess;
       return false;
     },
     async request(request) {
+      if (Array.isArray(request?.permissions) && request.permissions.includes("topSites")) return topSitesPermission;
       if (Array.isArray(request?.origins) && request.origins.length) return websiteAccess;
       return false;
     },
@@ -1923,6 +1926,44 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
   assert.equal(normalized.spaces.work.settings.rows,5,'raw legacy Work shared record must not revert explicit modern Work rows from a device snapshot');
   assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work shared record must not claim unrelated modern Work settings');
   console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
+}
+
+else if (scenario === 'top-sites-permission-session-lifecycle') {
+  const s=stateWith();
+  // Frequently Visited intent is synchronized profile state; actual permission
+  // and suggestions are device-local. Keep the preference ON throughout.
+  s.spaces.personal.settings.frequentlyVisitedEnabled=true;
+  s.spaces.personal.settings.frequentlyVisitedCount=5;
+  s.spaces.work.settings.frequentlyVisitedEnabled=true;
+  s.spaces.work.settings.frequentlyVisitedCount=5;
+  await seedLocalState(s);
+  await storageCore.writeLocalState(s);
+  topSitesPermission=true;
+
+  const prefBefore=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces.personal.settings.frequentlyVisitedEnabled;
+  topSitesPermission=false;
+  for(const listener of events.onPermissionRemoved.listeners) listener({permissions:['topSites']});
+  const removedDeadline=Date.now()+1000;
+  while(Date.now()<removedDeadline && session.data.get(constants.SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY)!==true) {
+    await new Promise(r=>setTimeout(r,5));
+  }
+  const suppressed=session.data.get(constants.SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY)===true;
+  const afterRemove=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces.personal.settings.frequentlyVisitedEnabled;
+
+  topSitesPermission=true;
+  for(const listener of events.onPermissionAdded.listeners) listener({permissions:['topSites']});
+  const addedDeadline=Date.now()+1000;
+  while(Date.now()<addedDeadline && session.data.get(constants.SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY)===true) {
+    await new Promise(r=>setTimeout(r,5));
+  }
+  const cleared=session.data.get(constants.SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY)!==true;
+  const afterAdd=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces.personal.settings.frequentlyVisitedEnabled;
+  assert.equal(prefBefore,true);
+  assert.equal(suppressed,true,'permission removal must set the session tombstone');
+  assert.equal(afterRemove,true,'permission removal must not rewrite synchronized Show intent');
+  assert.equal(cleared,true,'permission restoration must clear the session tombstone');
+  assert.equal(afterAdd,true,'permission restoration must not rewrite synchronized Show intent');
+  console.log(JSON.stringify({ok:true,suppressed,cleared,prefBefore,afterRemove,afterAdd}));
 }
 
 else if (scenario === 'sync-same-marker-divergence') {

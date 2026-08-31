@@ -19,10 +19,12 @@
     const storage = globalThis.browser?.storage?.session;
     if (!storage?.get) return;
     const startedAt = (globalThis.performance?.now?.() ?? Date.now());
+    const config = globalThis.__mosaicsyncBootstrapConfig;
+    if (!config?.sessionRenderStateKey || !config?.sessionRenderMetaKey || !config?.sessionFrequentSuppressedKey) return;
     const promise = Promise.resolve(storage.get([
-      "mosaicsync.session.render-state.v2",
-      "mosaicsync.session.render-meta.v1",
-      "mosaicsync.session.frequent-suppressed.v1"
+      config.sessionRenderStateKey,
+      config.sessionRenderMetaKey,
+      config.sessionFrequentSuppressedKey
     ])).catch(() => null);
     globalThis.__mosaicsyncEarlySessionRead = { startedAt, promise };
   } catch {

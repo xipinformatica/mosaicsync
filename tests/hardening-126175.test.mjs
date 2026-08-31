@@ -90,9 +90,10 @@ test("1.26.17.5 synchronous first-paint uses the shared fail-closed URL helper a
   assert.match(bootstrap, /const safeShortcutNavigationUrl = globalThis\.__mosaicsyncSafeShortcutNavigationUrl;/);
   assert.match(bootstrap, /if \(typeof safeShortcutNavigationUrl !== "function"\) return;/);
   assert.match(bootstrap, /const safeUrl = safeShortcutNavigationUrl\(item\?\.url\);[\s\S]*?card\.href = safeUrl;/);
-  assert.match(bootstrap, /const safeUrl = safeShortcutNavigationUrl\(site\?\.url\);[\s\S]*?card\.href = safeUrl;/);
+  assert.doesNotMatch(bootstrap, /site\?\.url|frequentSitesList|paintFrequentSnapshot/,
+    "browser-derived Frequently Visited URLs must not be persistent first-frame href sinks");
   assert.doesNotMatch(bootstrap, /function validUrl\s*\(/);
-  assert.doesNotMatch(bootstrap, /card\.href\s*=\s*(?:item|site)\.url/);
+  assert.doesNotMatch(bootstrap, /card\.href\s*=\s*item\.url/);
 
   for (const browser of ["firefox", "chrome"]) {
     const html = await readFile(resolve(`src/${browser}/newtab/newtab.html`), "utf8");

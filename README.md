@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.8**
+**Current source release: 1.30.18.9**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.8** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.9** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.8 is the **Step 1.2 hardening** release for the maintainability transition. It makes Frequently Visited permission invalidation durable across the live browser session by storing a tiny session-only suppression tombstone even when no full render snapshot exists, preserves that suppression through later background profile writes, and clears it when Top Sites permission is granted again. Session-cache deduplication now verifies the actual shared `storage.session` bytes before skipping a write, so one extension context's stale in-memory fingerprint cannot masquerade as shared cache truth. New regressions also prove that background-only Space renames and favicon learning reach the session first-paint projection while no New Tab is alive. The remaining persistent localStorage-manifest ownership boundary is documented for Step 2 rather than hidden behind another cache layer. No feature, normal Sync/recovery/profile schema, permission, CSP, telemetry or backend change is introduced.
+1.30.18.9 is **Step 2.1** of the maintainability transition: it begins removing duplicated startup ownership without changing product features. Full shared `storage.session` startup snapshots are now published only from authoritative startup/persistence boundaries, while device-local Frequently Visited refreshes patch only their own field. A page-owned persistent render manifest may publish only while its structural state still matches the shared session projection, including artwork-preview refreshes, so an older open New Tab cannot downgrade a newer startup cache. Browser-history-derived Frequently Visited site candidates no longer persist in localStorage, the obsolete render-manifest v2 bridge is removed, and classic bootstrap key/schema knowledge is generated from canonical constants. Existing shortcut-grid behavior, artwork architecture, appearance/wallpaper paths, normal Sync, Recovery, permissions, CSP, privacy boundaries, telemetry policy and backend-free operation remain unchanged.
 
 1.30.18.6 is the first **maintainability-foundation / first-paint consistency** release. The disposable render-manifest and browser.session acceleration layers now share one small first-paint contract for active Space state, personalized Space names and Frequently Visited, so Work can paint its cached Frequently Visited cards continuously from frame one without weakening the stricter Work-grid authorization gate. Sync-storage reporting now separates Layout & settings, Recovery safety copies, Shortcut images and Metadata / cleanup, with progressive storage-pressure warnings before the browser quota is exhausted. First-paint cache creation/refresh is centralized, the disposable cache format is explicitly versioned with a one-release 1.30.18.5 bridge, and docs/ARCHITECTURE.md records the authoritative-state, Sync, Recovery, Artwork, First Paint and browser-adapter boundaries that future consolidation work must preserve. Ordinary Sync/state/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free architecture remain unchanged.
 

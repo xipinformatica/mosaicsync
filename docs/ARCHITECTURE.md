@@ -56,15 +56,17 @@ The contract covers, directly or through an established visual projection:
 - wallpaper/background appearance hint;
 - visibility of first-frame surfaces.
 
-The shared `firstPaint` projection contains the fields that overlap the localStorage render manifest and the session-speed snapshot. Appearance/wallpaper already have their own tiny hint cache; during Step 1 they remain physically separate, but they are governed by the same truthful-first-frame invariant. Consolidating physical cache layers is a later maintenance step, after behavioral protection is in place.
+The shared `firstPaint` projection contains the semantic fields used by startup accelerators. Step 2.1 now assigns clearer physical ownership: the shared `storage.session` snapshot is the cross-context fast structural projection and complete snapshots are published only from authoritative startup/persistence boundaries. The page localStorage render manifest remains a synchronous shortcut-grid fallback, but its runtime writers may publish only while the tab still matches shared session structural truth. Appearance/wallpaper retain their separate tiny hint cache for now.
 
 Rules:
 - Fast startup must be **fast + truthful**, never fast + knowingly wrong.
 - `null`/missing optional data means “this layer has no opinion”; it must preserve an already-painted truthful value until authoritative state arrives.
-- For Frequently Visited specifically, authoritative synchronized OFF is explicit (`enabled: false`, empty sites) so a newer session layer can suppress an older visual snapshot; synchronized ON with no fresh device-local sites remains `null` and therefore does not invent or erase browser-derived candidates.
+- For Frequently Visited specifically, authoritative synchronized OFF is explicit (`enabled: false`, empty sites). Browser-derived site candidates are device-local/session-owned and are never serialized into the persistent localStorage render manifest; that persistent layer may retain only enable/count truth with an empty site list.
 - Removal of the optional Top Sites permission writes a tiny session-only suppression tombstone as well as clearing any current session site projection. That tombstone survives a missing render snapshot and unrelated background state writes until Top Sites permission is granted again; it never mutates the synchronized preference.
-- Background contexts cannot synchronously rewrite a New Tab page's localStorage render manifest. A background-only Sync/artwork change therefore refreshes the shared session projection, and that newer session projection must win as soon as the New Tab module starts. Step 2 owns the decision about reducing or consolidating this remaining persistent-manifest ownership boundary rather than adding another permanent cache layer.
+- Complete shared session snapshots are published only from authoritative startup/persistence boundaries. Routine New Tab presentation updates may patch only the presentation field they own (currently Frequently Visited) and must not republish structural Space/grid state.
+- Background contexts cannot synchronously rewrite a New Tab page's localStorage render manifest. A page may therefore refresh that persistent manifest only after proving its structural projection still matches current shared `storage.session`; delayed preview/artwork writers obey the same gate.
 - Identical session acceleration snapshots are skipped only after the writer verifies that the actual shared `storage.session` bytes still match its local fingerprint; one extension context's memory is never treated as proof of shared-cache contents.
+- Classic startup scripts receive render/session key and render-manifest schema values from deterministic build-generated bootstrap configuration sourced from canonical core constants; do not duplicate schema literals in each classic script.
 - Work-specific shortcut-grid safety checks do not apply to global/device-local Frequently Visited data.
 - All startup cache formats are disposable and explicitly versioned.
 - Cache invalidation/refresh should go through centralized first-paint refresh paths rather than independent ad-hoc writers.

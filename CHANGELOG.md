@@ -1,3 +1,14 @@
+## 1.30.18.9
+
+- Begins **Step 2.1** of the maintainability program by assigning shared startup-cache ownership instead of adding another protection layer: complete `storage.session` render snapshots are now published only from authoritative startup/persistence boundaries, while routine New Tab presentation refreshes no longer republish potentially stale Space/grid state.
+- Makes Frequently Visited presentation explicitly field-owned: device-local site refreshes patch only `firstPaint.frequent` in the existing shared session snapshot, preserving newer Space/grid/artwork truth from other extension contexts. Browser-derived Frequently Visited site candidates are no longer stored in the persistent localStorage render manifest, eliminating their cold-restart stale-site resurrection path.
+- Gates every runtime page-local render-manifest publication against the current shared session structural projection, including delayed artwork-preview generation/fallback commits, so an older open New Tab cannot overwrite a newer persistent first-frame manifest after another tab/background context has advanced state.
+- Moves active-Space session publication to the persisted active-Space boundary, so the next-New-Tab accelerator follows the device preference rather than whichever older tab happened to refresh presentation last.
+- Retires the obsolete render-manifest v2 compatibility bridge and advances the disposable persistent manifest to schema v4; classic startup scripts now consume a generated bootstrap configuration produced from canonical core key/schema constants instead of duplicating version/key literals.
+- Replaces the Top Sites permission lifecycle source-regex check with a behavioral Firefox/Chrome background-runtime scenario that fires real mocked permission removal/addition events and proves the session suppression tombstone toggles without mutating the synchronized Show preference.
+- Removes dead persistent Frequently Visited bootstrap filtering/rendering code and updates security regressions to assert the stronger ownership rule: the persistent first frame has no browser-history-derived site URL/card painter at all.
+- Preserves shortcut/grid behavior, known-artwork first-paint protection, theme/appearance/wallpaper accelerators, normal Sync/Recovery/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free operation.
+
 ## 1.30.18.8
 
 - Completes Step 1.2 first-paint hardening before any Step-2 cache consolidation: Top Sites permission removal now writes a tiny device-local `storage.session` suppression tombstone as well as clearing any current Frequently Visited session projection, so invalidation survives both a missing render snapshot and later unrelated background state writes.

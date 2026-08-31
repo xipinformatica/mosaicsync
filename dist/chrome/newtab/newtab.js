@@ -32,6 +32,7 @@ import {
   RENDER_MANIFEST_KEY,
   RENDER_MANIFEST_SCHEMA_VERSION,
   RENDER_PREVIEW_MAX_CHARS,
+  SESSION_RENDER_STATE_KEY,
   SHORTCUT_LOCAL_IMAGE_TARGET_BYTES,
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
   SUPPORT_URL,
@@ -69,7 +70,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { clearSessionFrequentlyVisitedSuppression, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -685,21 +686,72 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 0);
   }
 
+  function sessionRenderCoreMatchesState(sessionSnapshot, currentState) {
+    if (!sessionSnapshot || typeof sessionSnapshot !== "object" || !currentState) return false;
+    try {
+      // Reuse the session-owned device-local FV projection only to remove that
+      // field from this comparison. Every structural/Space/artwork field must
+      // match the shared session truth before this page may rewrite localStorage.
+      const candidate = createRenderSnapshot(currentState, {
+        frequentSnapshot: sessionSnapshot.firstPaint?.frequent ?? null
+      });
+      return stableStringify(candidate) === stableStringify(sessionSnapshot);
+    } catch {
+      return false;
+    }
+  }
+
+  async function sharedSessionCoreMatchesState(currentState, { retryOnce = false } = {}) {
+    const readShared = async () => {
+      const result = await browser.storage.session?.get?.(SESSION_RENDER_STATE_KEY);
+      return result?.[SESSION_RENDER_STATE_KEY] || null;
+    };
+    let shared = await readShared();
+    if (!sessionRenderCoreMatchesState(shared, currentState) && retryOnce) {
+      // A storage.local commit and its session projection are separate IPC
+      // operations. Give the persistence boundary one short chance to publish
+      // before withholding this disposable page-owned cache.
+      await new Promise(resolve => setTimeout(resolve, 24));
+      shared = await readShared();
+    }
+    return sessionRenderCoreMatchesState(shared, currentState);
+  }
+
+  function pageManifestStateStillCurrent(stateSnapshot, generation = null) {
+    return (generation === null || generation === renderManifestGeneration) &&
+      state.activeSpaceId === stateSnapshot.activeSpaceId &&
+      Number(state.updatedAt) === Number(stateSnapshot.updatedAt) &&
+      Number(state.settingsModifiedAt) === Number(stateSnapshot.settingsModifiedAt);
+  }
+
   function scheduleRenderManifestRefresh(currentState = state, currentMeta = meta) {
     const stateSnapshot = currentState;
     const metaSnapshot = currentMeta;
     setTimeout(() => {
-      void loadRenderManifestModule().then(module => module.persistRenderManifest(stateSnapshot, metaSnapshot, null, frequentRenderSnapshot)).catch(() => {});
+      void (async () => {
+        try {
+          // Step 2 ownership rule: storage.session is the cross-context fast
+          // structural truth. Every runtime localStorage manifest publication,
+          // including preview refreshes below, is gated by that same truth.
+          if (!(await sharedSessionCoreMatchesState(stateSnapshot, { retryOnce: true }))) return;
+          const module = await loadRenderManifestModule();
+          if (!pageManifestStateStillCurrent(stateSnapshot)) return;
+          if (!(await sharedSessionCoreMatchesState(stateSnapshot))) return;
+          module.persistRenderManifest(stateSnapshot, metaSnapshot, null, null);
+        } catch {}
+      })();
     }, 0);
   }
 
   function warmFirstPaintSessionCache(currentState = state, currentMeta = meta) {
+    // Full session snapshots are published only from authoritative startup or
+    // persistence boundaries. Routine page presentation refreshes patch their
+    // own fields and never republish a stale Space/grid snapshot.
     return warmSessionRenderCache(currentState, currentMeta, { frequentSnapshot: frequentRenderSnapshot });
   }
 
   function refreshFirstPaintCaches(currentState = state, currentMeta = meta) {
     scheduleRenderManifestRefresh(currentState, currentMeta);
-    void warmFirstPaintSessionCache(currentState, currentMeta);
   }
 
   function scheduleRenderPreviewRefresh(currentState = state, currentMeta = meta) {
@@ -710,9 +762,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       try {
         const module = await loadRenderManifestModule();
         await module.refreshRenderManifestPreviews(stateSnapshot, metaSnapshot, {
-          shouldCommit: () => generation === renderManifestGeneration &&
-            state.activeSpaceId === stateSnapshot.activeSpaceId &&
-            Number(state.updatedAt) === Number(stateSnapshot.updatedAt)
+          shouldCommit: async () => pageManifestStateStillCurrent(stateSnapshot, generation) &&
+            await sharedSessionCoreMatchesState(stateSnapshot)
         });
       } catch {}
     }, 900);
@@ -725,17 +776,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void loadRenderManifestModule().then(async module => {
       try {
         // Do not first publish a manifest that knows about new artwork but lacks
-        // its tiny preview. Generate/reuse the preview first, then commit the
-        // complete first-frame projection.
-        await module.refreshRenderManifestPreviews(stateSnapshot, metaSnapshot, {
-          shouldCommit: () => generation === renderManifestGeneration &&
-            state.activeSpaceId === stateSnapshot.activeSpaceId &&
-            Number(state.updatedAt) === Number(stateSnapshot.updatedAt)
+        // its tiny preview. Generate/reuse the preview first. The manifest module
+        // asks this shared-session ownership guard immediately before committing,
+        // so an older open tab cannot overwrite a newer structural projection.
+        const refreshed = await module.refreshRenderManifestPreviews(stateSnapshot, metaSnapshot, {
+          shouldCommit: async () => pageManifestStateStillCurrent(stateSnapshot, generation) &&
+            await sharedSessionCoreMatchesState(stateSnapshot)
         });
-        if (generation !== renderManifestGeneration ||
-            state.activeSpaceId !== stateSnapshot.activeSpaceId ||
-            Number(state.updatedAt) !== Number(stateSnapshot.updatedAt)) return;
-        module.persistRenderManifest(stateSnapshot, metaSnapshot, null, frequentRenderSnapshot);
+        if (refreshed || !pageManifestStateStillCurrent(stateSnapshot, generation)) return;
+        if (!(await sharedSessionCoreMatchesState(stateSnapshot))) return;
+        module.persistRenderManifest(stateSnapshot, metaSnapshot, null, null);
       } catch {}
     }).catch(() => {});
   }
@@ -758,14 +808,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         state = hydrated;
         applyPageBackgroundVisual();
         scheduleAppearanceHintRefresh(state.settings);
-        void warmFirstPaintSessionCache(state, meta);
       }).catch(() => {});
     });
   }
 
   function bootGridMatchesState(currentState) {
     const manifest = bootRenderManifest;
-    if (!manifest || ![2, 3].includes(manifest.version) || document.documentElement.dataset.bootGrid !== "true") return false;
+    if (!manifest || manifest.version !== RENDER_MANIFEST_SCHEMA_VERSION || document.documentElement.dataset.bootGrid !== "true") return false;
     if (isAwaitingRemote(meta)) return false;
     if (manifest.activeSpaceId !== currentState.activeSpaceId ||
         Number(manifest.updatedAt) !== Number(currentState.updatedAt) ||
@@ -886,7 +935,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         });
         if (generation !== deferredFolderHydrationGeneration || state.activeSpaceId !== spaceId || Number(state.updatedAt) !== updatedAt) return;
         state = hydrated;
-        void warmFirstPaintSessionCache(state, meta);
         startupPhase("deferredFolderArtworkReady");
       } catch (error) {
         if (error?.message !== "DEFERRED_FOLDER_HYDRATION_CANCELLED") return;
@@ -1274,7 +1322,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function updateFrequentRenderSnapshot(sites = []) {
     frequentRenderSnapshot = projectFrequentRenderSnapshot(sites);
-    refreshFirstPaintCaches(state, meta);
+    // Top Sites candidates are session/live-owned presentation data. Updating
+    // them must never republish this tab's potentially stale Space/grid state or
+    // write browsing-history-derived sites into persistent localStorage.
+    void updateSessionFrequentlyVisitedSnapshot(frequentRenderSnapshot);
   }
 
   function readDeviceDefaultSpacePreference() {
@@ -1902,7 +1953,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // so a session-cache paint can never publish stale migration data.
     if (initializeThemeWallpaperDimsForState(state)) {
       state = normalizeState(state);
-      void saveState().then(() => warmFirstPaintSessionCache(state, meta)).catch(error => {
+      void saveState().catch(error => {
         console.warn(`${PRODUCT_NAME}: could not persist theme wallpaper darkness migration`, error);
       });
     }

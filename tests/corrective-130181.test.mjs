@@ -125,7 +125,11 @@ function runBootstrap(manifest, extraStorage = {}) {
     requestAnimationFrame: callback => { callback(); return 1; },
     setTimeout: callback => { callback(); return 1; },
     __mosaicsyncSafeShortcutNavigationUrl: safeUrl,
-    __mosaicsyncBuiltinIcons: { append: () => false, isValid: () => false }
+    __mosaicsyncBuiltinIcons: { append: () => false, isValid: () => false },
+    __mosaicsyncBootstrapConfig: {
+      renderManifestKey: "mosaicsync.render-manifest.v1",
+      renderManifestVersion: constants.RENDER_MANIFEST_SCHEMA_VERSION
+    }
   };
   context.globalThis = context;
   vm.createContext(context);
@@ -213,9 +217,9 @@ test("1.30.18.1 render-manifest persistence projects Personal while Multiple Spa
   }
 });
 
-test("1.30.18.1 synchronous boot manifest refuses the Work grid while global Frequently Visited remains visual-only", () => {
+test("1.30.18.1 synchronous boot manifest refuses the Work grid while persistent Frequently Visited stays session-owned", () => {
   const base = {
-    version: 2,
+    version: constants.RENDER_MANIFEST_SCHEMA_VERSION,
     onboardingCompleted: true,
     updatedAt: 10,
     settingsModifiedAt: 10,
@@ -232,15 +236,15 @@ test("1.30.18.1 synchronous boot manifest refuses the Work grid while global Fre
   const work = runBootstrap({ ...base, activeSpaceId: "work", firstPaint: firstPaint("work") });
   assert.equal(work.root.dataset.bootGrid, undefined);
   assert.equal(work.grid.children.length, 0, "Work cache must not synchronously paint shortcut slots");
-  assert.equal(work.frequentSection.hidden, false);
-  assert.equal(work.root.dataset.bootFrequent, "true", "global Frequently Visited should paint even while the Work grid stays gated");
+  assert.equal(work.root.dataset.bootFrequent, undefined, "persistent bootstrap must not paint browser-derived Frequently Visited sites");
+  assert.equal(work.frequentList.children.length, 0);
 
   const personal = runBootstrap({ ...base, activeSpaceId: "personal", firstPaint: firstPaint("personal") });
   assert.equal(personal.root.dataset.bootGrid, "true");
   assert.equal(personal.grid.inert, true);
   assert.equal(personal.empty.inert, true);
-  assert.equal(personal.frequentSection.inert, true);
-  assert.equal(personal.root.dataset.bootFrequent, "true");
+  assert.equal(personal.root.dataset.bootFrequent, undefined);
+  assert.equal(personal.frequentList.children.length, 0);
   assert.ok(personal.grid.children.length > 0, "Personal boot grid should retain synchronous visual acceleration");
 });
 
@@ -272,7 +276,7 @@ test("1.30.18.1 boot folder adoption rejects stale cached child title or URL", (
     shortcuts: [{ type: "folder", id: "folder", title: "Folder", position: 0, items: [currentChild] }]
   };
   const baseManifest = {
-    version: 2, activeSpaceId: "personal", updatedAt: 10, settingsModifiedAt: 10,
+    version: constants.RENDER_MANIFEST_SCHEMA_VERSION, activeSpaceId: "personal", updatedAt: 10, settingsModifiedAt: 10,
     columns: 6, rows: 2, tileSize: 76, brandVisible: true,
     shortcuts: [{ type: "folder", id: "folder", title: "Folder", position: 0, items: [{ id: "child", title: "Current child", url: "https://current.example/" }] }]
   };
@@ -291,7 +295,8 @@ test("1.30.18.1 boot folder adoption rejects stale cached child title or URL", (
     Number,
     String,
     Array,
-    Boolean
+    Boolean,
+    RENDER_MANIFEST_SCHEMA_VERSION: constants.RENDER_MANIFEST_SCHEMA_VERSION
   });
 
   let ctx = makeContext(structuredClone(baseManifest));

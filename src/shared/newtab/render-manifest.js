@@ -33,7 +33,7 @@ function ensureManifestCache() {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if ([2, RENDER_MANIFEST_SCHEMA_VERSION].includes(parsed?.version) && Array.isArray(parsed.shortcuts)) {
+    if (parsed?.version === RENDER_MANIFEST_SCHEMA_VERSION && Array.isArray(parsed.shortcuts)) {
       manifestCache = parsed;
       lastSerialized = raw;
     }
@@ -42,7 +42,7 @@ function ensureManifestCache() {
 }
 
 export function seedRenderManifest(manifest) {
-  if (!manifestCache && [2, RENDER_MANIFEST_SCHEMA_VERSION].includes(manifest?.version)) {
+  if (!manifestCache && manifest?.version === RENDER_MANIFEST_SCHEMA_VERSION) {
     manifestCache = manifest;
     lastSerialized = JSON.stringify(manifest);
   } else ensureManifestCache();
@@ -119,15 +119,6 @@ function serializeWithinBudget(manifest) {
   let serialized = JSON.stringify(manifest);
   if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) return serialized;
 
-  // Frequently Visited artwork is a convenience inside an already-disposable
-  // snapshot. Drop those previews before sacrificing shortcut/favicon previews.
-  for (const site of manifest.firstPaint?.frequent?.sites || []) {
-    if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) break;
-    if (!site.favicon) continue;
-    site.favicon = "";
-    serialized = JSON.stringify(manifest);
-  }
-
   const previewItems = [];
   const visit = item => {
     if (item?.preview) previewItems.push(item);
@@ -139,10 +130,6 @@ function serializeWithinBudget(manifest) {
     serialized = JSON.stringify(manifest);
   }
 
-  while (manifest.firstPaint?.frequent?.sites?.length && serialized.length > RENDER_MANIFEST_MAX_CHARS) {
-    manifest.firstPaint.frequent.sites.pop();
-    serialized = JSON.stringify(manifest);
-  }
   return serialized;
 }
 
@@ -172,9 +159,16 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
     rows: source.settings.rows,
     tileSize: source.settings.tileSize,
     brandVisible: source.settings.brandVisible !== false,
-    firstPaint: createFirstPaintContract(currentState, frequentSnapshot === undefined
-      ? sanitizeFirstPaintFrequentSnapshot(manifestCache?.firstPaint?.frequent ?? manifestCache?.frequent)
-      : frequentSnapshot),
+    // The persistent Web Storage manifest owns only synchronous structural
+    // fallback truth. Browser-derived Frequently Visited sites are session/live
+    // data and must never survive a cold browser restart in this layer. Preserve
+    // only the synchronized enabled/count semantics with an empty site list.
+    firstPaint: createFirstPaintContract(currentState, (() => {
+      const candidate = frequentSnapshot === undefined
+        ? sanitizeFirstPaintFrequentSnapshot(manifestCache?.firstPaint?.frequent)
+        : sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
+      return candidate ? { enabled: candidate.enabled, count: candidate.count, sites: [] } : null;
+    })()),
     shortcuts: (source.shortcuts || []).map(item => projectItem(item, previews))
   };
   const serialized = serializeWithinBudget(manifest);
@@ -233,6 +227,6 @@ export async function refreshRenderManifestPreviews(currentState, currentMeta, {
     }
   });
   await Promise.all(workers);
-  if (!generated.size || (shouldCommit && !shouldCommit())) return false;
+  if (!generated.size || (shouldCommit && !(await shouldCommit()))) return false;
   return persistRenderManifest(currentState, currentMeta, generated);
 }

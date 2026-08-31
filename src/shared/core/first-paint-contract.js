@@ -45,26 +45,31 @@ export function sanitizeFirstPaintFrequentSnapshot(snapshot) {
   return { enabled, count, sites };
 }
 
+export function createFirstPaintFrequentProjection(settings, frequentSnapshot = null) {
+  const source = settings && typeof settings === "object" ? settings : {};
+  const frequentCount = [3, 5, 8, 10].includes(Number(source.frequentlyVisitedCount))
+    ? Number(source.frequentlyVisitedCount)
+    : 5;
+  const frequentEnabled = source.frequentlyVisitedEnabled === true;
+  const sanitizedFrequent = sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
+  // A disabled synchronized preference is authoritative enough to actively
+  // clear an older visual snapshot. When the feature is enabled but no current
+  // device-local Top Sites snapshot is available, null continues to mean
+  // "preserve an already-painted truthful snapshot until a newer layer knows".
+  return !frequentEnabled
+    ? { enabled: false, count: frequentCount, sites: [] }
+    : sanitizedFrequent
+      ? { enabled: true, count: frequentCount, sites: sanitizedFrequent.sites.slice(0, frequentCount) }
+      : null;
+}
+
 export function createFirstPaintContract(state, frequentSnapshot = null) {
   const personalSettings = state?.spaces?.personal?.settings || state?.settings || {};
   const spacesDisabled = personalSettings.multipleSpacesEnabled === false;
   const activeSpaceId = spacesDisabled
     ? "personal"
     : (SPACE_IDS.includes(state?.activeSpaceId) ? state.activeSpaceId : "personal");
-  const frequentCount = [3, 5, 8, 10].includes(Number(personalSettings.frequentlyVisitedCount))
-    ? Number(personalSettings.frequentlyVisitedCount)
-    : 5;
-  const frequentEnabled = personalSettings.frequentlyVisitedEnabled === true;
-  const sanitizedFrequent = sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
-  // A disabled synchronized preference is authoritative enough to actively
-  // clear an older visual snapshot. When the feature is enabled but no current
-  // device-local Top Sites snapshot is available, null continues to mean
-  // "preserve an already-painted truthful snapshot until a newer layer knows".
-  const frequent = !frequentEnabled
-    ? { enabled: false, count: frequentCount, sites: [] }
-    : sanitizedFrequent
-      ? { enabled: true, count: frequentCount, sites: sanitizedFrequent.sites.slice(0, frequentCount) }
-      : null;
+  const frequent = createFirstPaintFrequentProjection(personalSettings, frequentSnapshot);
   return {
     version: FIRST_PAINT_CONTRACT_VERSION,
     activeSpaceId,

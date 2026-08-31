@@ -15,10 +15,8 @@
   const timing = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
   timing.phases ||= Object.create(null);
   timing.phases.bootGridStart = (globalThis.performance?.now?.() ?? Date.now());
-  const KEY = "mosaicsync.render-manifest.v1";
-  // Classic first-frame scripts cannot import the module constants registry. Build
-  // the already-centralized key without duplicating its exact persisted literal.
-  const HIDDEN_FREQUENT_KEY = ["mosaicsync", "frequently-visited-hidden-domains", "v1"].join(".");
+  const config = globalThis.__mosaicsyncBootstrapConfig;
+  const KEY = config?.renderManifestKey || "";
   const SHORTCUT_ORDER_KEY = ["mosaicsync", "shortcut-order", "v1"].join(".");
   const SHORTCUT_USAGE_KEY = ["mosaicsync", "shortcut-usage", "v1"].join(".");
   const COLOR_TAGS = new Set(["red", "orange", "amber", "green", "teal", "blue", "violet", "pink"]);
@@ -26,8 +24,6 @@
   const root = document.documentElement;
   const grid = document.getElementById("shortcutGrid");
   const emptyState = document.getElementById("emptyState");
-  const frequentSection = document.getElementById("frequentSitesSection");
-  const frequentList = document.getElementById("frequentSitesList");
   const brand = document.querySelector(".brand");
   if (!grid || !emptyState) return;
 
@@ -39,30 +35,6 @@
   function validPreview(value) {
     return typeof value === "string" && value.length <= MAX_PREVIEW_CHARS &&
       /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
-  }
-  function hiddenFrequentDomains() {
-    let raw;
-    try {
-      raw = localStorage.getItem(HIDDEN_FREQUENT_KEY);
-    } catch {
-      return null;
-    }
-    if (raw === null) return [];
-    try {
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return null;
-      return parsed.slice(-128).map(value => String(value || "").trim().toLowerCase().replace(/^\.+|\.+$/g, "")).filter(Boolean);
-    } catch {
-      return null;
-    }
-  }
-  function frequentUrlHidden(value, hidden) {
-    try {
-      const host = new URL(String(value || "")).hostname.toLowerCase().replace(/^\.+|\.+$/g, "");
-      return hidden.some(domain => host === domain || host.endsWith(`.${domain}`));
-    } catch {
-      return true;
-    }
   }
   function readShortcutUsage() {
     try {
@@ -180,91 +152,19 @@
     return slot;
   }
 
-  function frequentCard(site) {
-    const safeUrl = safeShortcutNavigationUrl(site?.url);
-    if (!safeUrl) return null;
-    const card = document.createElement("a");
-    card.className = "frequent-site-card";
-    card.href = safeUrl;
-    card.rel = "noreferrer";
-    card.title = `${site.title || site.host}
-${safeUrl}`;
-    if (validPreview(site.favicon)) {
-      const icon = document.createElement("img");
-      icon.className = "frequent-site-icon";
-      icon.decoding = "async";
-      icon.src = site.favicon;
-      icon.alt = "";
-      icon.setAttribute("aria-hidden", "true");
-      card.append(icon);
-    } else {
-      const fallbackIcon = document.createElement("span");
-      fallbackIcon.className = "frequent-site-fallback";
-      fallbackIcon.textContent = Array.from(String(site.title || site.host || "?").trim())[0]?.toUpperCase() || "?";
-      fallbackIcon.setAttribute("aria-hidden", "true");
-      card.append(fallbackIcon);
-    }
-    const copy = document.createElement("span");
-    copy.className = "frequent-site-copy";
-    const title = document.createElement("strong");
-    title.textContent = site.title || site.host;
-    const host = document.createElement("small");
-    host.textContent = site.host;
-    copy.append(title, host);
-    card.append(copy);
-    return card;
-  }
-
-  function paintFrequentSnapshot(snapshot) {
-    if (!frequentSection || !frequentList || !snapshot || snapshot.enabled !== true || !Array.isArray(snapshot.sites)) return;
-    const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
-    const fragment = document.createDocumentFragment();
-    const hidden = hiddenFrequentDomains();
-    // If the hide list exists but cannot be trusted, skip this disposable first
-    // frame rather than flashing a site the user may have explicitly hidden.
-    if (hidden === null) return;
-    let shown = 0;
-    for (const rawSite of snapshot.sites) {
-      if (shown >= count) break;
-      if (!rawSite || typeof rawSite !== "object" || !safeShortcutNavigationUrl(rawSite.url) || frequentUrlHidden(rawSite.url, hidden)) continue;
-      const site = {
-        title: String(rawSite.title || "").trim().slice(0, 120),
-        host: String(rawSite.host || "").trim().slice(0, 253),
-        url: safeShortcutNavigationUrl(rawSite.url),
-        favicon: validPreview(rawSite.favicon) ? rawSite.favicon : ""
-      };
-      if (!site.title || !site.host) continue;
-      const card = frequentCard(site);
-      if (!card) continue;
-      fragment.append(card);
-      shown += 1;
-    }
-    if (!shown) return;
-    frequentSection.inert = true;
-    frequentList.replaceChildren(fragment);
-    frequentSection.hidden = false;
-    root.dataset.bootFrequent = "true";
-  }
 
   try {
+    if (!KEY || !Number.isInteger(config?.renderManifestVersion)) return;
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
     const manifest = JSON.parse(raw);
-    if (!manifest || ![2, 3].includes(manifest.version) || manifest.onboardingCompleted !== true) return;
-    // v2 is the bounded upgrade bridge from 1.30.18.5. It is read-only and is
-    // overwritten by the v3 canonical contract after authoritative hydration.
-    const firstPaint = manifest.firstPaint?.version === 1
-      ? manifest.firstPaint
-      : manifest.version === 2
-        ? { activeSpaceId: manifest.activeSpaceId, frequent: manifest.frequent || null }
-        : null;
+    if (!manifest || manifest.version !== config.renderManifestVersion || manifest.onboardingCompleted !== true) return;
+    const firstPaint = manifest.firstPaint?.version === 1 ? manifest.firstPaint : null;
     if (!firstPaint) return;
 
-    // Frequently Visited is global/device-local, not a Work-layout payload. It is
-    // safe to paint its inert cached snapshot in either Space before deciding
-    // whether the synchronous shortcut grid itself is trustworthy. This prevents
-    // Work from visibly doing "nothing -> Frequently Visited" after first paint.
-    paintFrequentSnapshot(firstPaint.frequent);
+    // Browser-derived Frequently Visited sites are intentionally session/live
+    // owned from 1.30.18.9 onward. The persistent manifest never paints them, so
+    // a cold restart cannot resurrect stale browsing-history suggestions.
 
     // A synchronous cache cannot prove that Work is still an allowed/active Space.
     // Keep the non-Personal shortcut grid behind the asynchronous authoritative/

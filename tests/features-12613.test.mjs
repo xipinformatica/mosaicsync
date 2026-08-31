@@ -51,7 +51,10 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(js, /hideFrequentSite/);
     assert.match(js, /isFrequentHostHidden/);
     assert.match(js, /maybeShowWebAccessPrompt/);
-    assert.match(bootstrap, /paintFrequentSnapshot\(firstPaint\.frequent\)/);
+    assert.doesNotMatch(bootstrap, /paintFrequentSnapshot|frequentSitesList|frequentSitesSection/,
+      "persistent first-frame bootstrap must not own browser-derived Frequently Visited sites");
+    assert.match(js, /updateSessionFrequentlyVisitedSnapshot\(frequentRenderSnapshot\)/,
+      "device-local Frequently Visited sites should be owned by the session/live layer");
     assert.match(html, /id="webAccessPrompt"[^>]*hidden/);
   });
 }
@@ -71,7 +74,7 @@ test("1.26.13b registrable-domain hiding follows the bundled Public Suffix List"
   }
 });
 
-test("1.26.13b first-frame render manifest carries a bounded Frequently Visited snapshot", async () => {
+test("1.26.13b persistent first-frame manifest carries FV settings but no browser-derived site candidates", async () => {
   const data = new Map();
   const previousStorage = globalThis.localStorage;
   globalThis.localStorage = {
@@ -91,7 +94,8 @@ test("1.26.13b first-frame render manifest carries a bounded Frequently Visited 
     const manifest = JSON.parse(data.get("mosaicsync.render-manifest.v1"));
     assert.equal(manifest.firstPaint.frequent.enabled, true);
     assert.equal(manifest.firstPaint.frequent.count, 10);
-    assert.equal(manifest.firstPaint.frequent.sites.length, 10);
+    assert.equal(manifest.firstPaint.frequent.sites.length, 0);
+    assert.equal(JSON.stringify(manifest).includes("s0.example"), false, "browser-history candidates must not survive in persistent localStorage");
   } finally {
     globalThis.localStorage = previousStorage;
   }

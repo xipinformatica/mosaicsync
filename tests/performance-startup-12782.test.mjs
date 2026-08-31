@@ -138,9 +138,10 @@ for (const browserName of ["firefox", "chrome"]) {
       "preview-to-full swap must also complete while the tile is still inside a detached DocumentFragment");
   });
 
-  test(`1.27.8.2 ${browserName} first-frame previews request asynchronous image decoding`, () => {
+  test(`1.27.8.2 ${browserName} persistent first-frame shortcut previews request asynchronous image decoding`, () => {
     const src = fs.readFileSync(`dist/${browserName}/newtab/render-bootstrap.js`, "utf8");
     assert.match(src, /image\.decoding = "async"/);
-    assert.match(src, /icon\.decoding = "async"/);
+    assert.doesNotMatch(src, /frequentSitesList|paintFrequentSnapshot|icon\.decoding/,
+      "browser-derived Frequently Visited icon decoding belongs to the session/live layer");
   });
 }

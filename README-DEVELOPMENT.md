@@ -1,9 +1,18 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.9 Step 2.1 startup-cache ownership policy
+
+- Step 2 begins by removing duplicated ownership, not by rewriting the grid. Full shared session startup snapshots are published only at authoritative startup/persistence boundaries; routine New Tab presentation work must not republish structural Space/grid state.
+- Device-local Frequently Visited updates own only `firstPaint.frequent` in the shared session snapshot. Browser-history-derived site candidates must not be serialized into the persistent page localStorage render manifest.
+- Every runtime page-local render-manifest publication, including delayed artwork-preview refresh, must prove that the tab's structural projection still matches shared `storage.session` immediately before commit. A stale open New Tab must not downgrade a newer startup projection.
+- The render-manifest v2 upgrade bridge is retired. Current classic bootstrap scripts consume generated key/schema configuration emitted from canonical core constants; do not reintroduce duplicated schema literals.
+- Keep shortcut/grid bootstrap mechanics, favicon/artwork ownership, theme/appearance hints, wallpapers, normal Sync and Recovery otherwise unchanged in Step 2.1. Further consolidation requires another audit after this release.
+- Preserve or improve startup performance. Simplification is not accepted if it materially slows New Tab.
 
 ## 1.30.18.8 Step 1.2 first-paint hardening policy
 
@@ -504,7 +513,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.8` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.9` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

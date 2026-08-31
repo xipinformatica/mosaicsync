@@ -186,16 +186,19 @@ for (const browserName of ["firefox", "chrome"]) {
     const bg = fs.readFileSync(`src/${browserName}/background/background.js`, "utf8");
     const nt = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
     const boot = fs.readFileSync("src/shared/newtab/session-bootstrap.js", "utf8");
+    const config = fs.readFileSync(`dist/${browserName}/newtab/bootstrap-config.js`, "utf8");
     assert.match(bg, /permissionChangeAffectsTopSites\(permissions\)[\s\S]{0,160}clearSessionFrequentlyVisitedSuppression\(\)/);
     assert.match(bg, /permissionChangeAffectsTopSites\(change\)[\s\S]{0,160}clearSessionFrequentlyVisitedSnapshot\(\)/);
     assert.match(nt, /sessionCache\?\.frequentSuppressed[\s\S]{0,420}renderFrequentlyVisited\(\[\]/);
-    assert.match(boot, /mosaicsync\.session\.frequent-suppressed\.v1/);
+    assert.match(boot, /sessionFrequentSuppressedKey/);
+    assert.match(config, /mosaicsync\.session\.frequent-suppressed\.v1/);
   });
 }
 
 test("1.30.18.8 architecture documents the remaining persistent-manifest ownership boundary for Step 2", () => {
   const doc = fs.readFileSync("docs/ARCHITECTURE.md", "utf8");
   assert.match(doc, /background contexts cannot synchronously rewrite a New Tab page's localStorage render manifest/i);
-  assert.match(doc, /session projection must win/i);
+  assert.match(doc, /shared `storage\.session` snapshot is the cross-context fast structural projection/i);
+  assert.match(doc, /page localStorage render manifest remains a synchronous shortcut-grid fallback/i);
   assert.match(doc, /Step 2/i);
 });

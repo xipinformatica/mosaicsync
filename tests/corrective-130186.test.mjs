@@ -72,7 +72,7 @@ const frequent = {
 };
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.30.18.6 ${browser} Work paints cached Frequently Visited before the Work grid is authorized`, () => {
+  test(`1.30.18.9 ${browser} persistent Work manifest no longer paints browser-derived Frequently Visited sites`, () => {
     const root = new FakeElement("html");
     const grid = new FakeElement("div");
     const empty = new FakeElement("div");
@@ -84,7 +84,7 @@ for (const browser of ["firefox", "chrome"]) {
       ["frequentSitesSection", frequentSection], ["frequentSitesList", frequentList]
     ]);
     const manifest = {
-      version: 3, onboardingCompleted: true, activeSpaceId: "work", updatedAt: 11, settingsModifiedAt: 11,
+      version: 4, onboardingCompleted: true, activeSpaceId: "work", updatedAt: 11, settingsModifiedAt: 11,
       columns: 6, rows: 2, tileSize: 76, brandVisible: true,
       firstPaint: {
         version: 1, activeSpaceId: "work", multipleSpacesEnabled: true,
@@ -108,7 +108,8 @@ for (const browser of ["firefox", "chrome"]) {
       },
       performance: { now: () => 1 },
       requestAnimationFrame: cb => { cb(); return 1; },
-      setTimeout: cb => { cb(); return 1; }
+      setTimeout: cb => { cb(); return 1; },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 }
     };
     context.globalThis = context;
     vm.createContext(context);
@@ -116,13 +117,13 @@ for (const browser of ["firefox", "chrome"]) {
     context.__mosaicsyncBuiltinIcons = { append: () => false, isValid: () => false };
     vm.runInContext(fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8"), context);
 
-    assert.equal(frequentSection.hidden, false, "Work must not begin with an empty Frequently Visited area");
-    assert.equal(frequentList.children.length, 1, "cached Frequently Visited must be painted on frame one");
-    assert.equal(root.dataset.bootFrequent, "true");
+    assert.equal(frequentSection.hidden, true, "persistent manifest must not resurrect browser-derived Frequently Visited sites");
+    assert.equal(frequentList.children.length, 0);
+    assert.notEqual(root.dataset.bootFrequent, "true");
     assert.notEqual(root.dataset.bootGrid, "true", "Work grid safety gate must remain intact");
   });
 
-  test(`1.30.18.6 ${browser} a 1.30.18.5 v2 cache still paints Work Frequently Visited during the one-time upgrade bridge`, () => {
+  test(`1.30.18.9 ${browser} obsolete v2 persistent manifest bridge is retired`, () => {
     const root = new FakeElement("html");
     const grid = new FakeElement("div");
     const empty = new FakeElement("div");
@@ -142,18 +143,19 @@ for (const browser of ["firefox", "chrome"]) {
         createElement: tag => new FakeElement(tag), createDocumentFragment: () => { const f = new FakeElement("fragment"); f.__fragment = true; return f; }
       },
       localStorage: { getItem: key => key === "mosaicsync.render-manifest.v1" ? JSON.stringify(legacy) : (key.endsWith("hidden-domains.v1") ? "[]" : "{}") },
-      performance: { now: () => 1 }, requestAnimationFrame: cb => { cb(); return 1; }, setTimeout: cb => { cb(); return 1; }
+      performance: { now: () => 1 }, requestAnimationFrame: cb => { cb(); return 1; }, setTimeout: cb => { cb(); return 1; },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 }
     };
     context.globalThis = context; vm.createContext(context);
     vm.runInContext(fs.readFileSync(`dist/${browser}/core/http-url-safety.js`, "utf8"), context);
     context.__mosaicsyncBuiltinIcons = { append: () => false, isValid: () => false };
     vm.runInContext(fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8"), context);
-    assert.equal(root.dataset.bootFrequent, "true");
-    assert.equal(frequentList.children.length, 1);
+    assert.notEqual(root.dataset.bootFrequent, "true");
+    assert.equal(frequentList.children.length, 0);
     assert.notEqual(root.dataset.bootGrid, "true");
   });
 
-  test(`1.30.18.6 ${browser} render-manifest and session acceleration share one first-paint contract`, async () => {
+  test(`1.30.18.9 ${browser} persistent manifest shares structural first-paint truth while FV sites are session-owned`, async () => {
     const previous = globalThis.localStorage;
     const data = new Map();
     globalThis.localStorage = {
@@ -171,11 +173,12 @@ for (const browser of ["firefox", "chrome"]) {
       const session = storage.createRenderSnapshot(state, { frequentSnapshot: frequent });
       assert.equal(manifestModule.persistRenderManifest(state, { onboardingCompleted: true }, null, frequent), true);
       const manifest = JSON.parse(data.get(constants.RENDER_MANIFEST_KEY));
-      assert.deepEqual(manifest.firstPaint, session.firstPaint,
-        "fast layers must not invent different Space/Frequently-Visited truth");
-      assert.deepEqual(session.firstPaint.spaceNames, { personal: "Home", work: "Office" });
-      assert.equal(session.firstPaint.activeSpaceId, "work");
-      assert.equal(session.firstPaint.frequent.sites[0].url, "https://example.com/");
+      assert.equal(manifest.version, constants.RENDER_MANIFEST_SCHEMA_VERSION);
+      assert.deepEqual(manifest.firstPaint.spaceNames, session.firstPaint.spaceNames);
+      assert.equal(manifest.firstPaint.activeSpaceId, session.firstPaint.activeSpaceId);
+      assert.equal(manifest.firstPaint.multipleSpacesEnabled, session.firstPaint.multipleSpacesEnabled);
+      assert.deepEqual(manifest.firstPaint.frequent?.sites || [], [], "persistent manifest must never retain browser-derived site candidates");
+      assert.equal(session.firstPaint.frequent.sites[0].url, "https://example.com/", "session layer remains the device-local FV owner");
     } finally { globalThis.localStorage = previous; }
   });
 

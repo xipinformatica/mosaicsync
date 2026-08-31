@@ -66,8 +66,9 @@ for (const browser of ["firefox", "chrome"]) {
     switcher.append(personal, work);
     const context = {
       document: { getElementById: id => id === "spaceSwitcher" ? switcher : null },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
       localStorage: { getItem: () => JSON.stringify({
-        version: 2, onboardingCompleted: true,
+        version: 4, onboardingCompleted: true,
         firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
           spaceNames: { personal: "Home", work: "Office" }, frequent: null }
       }) }
@@ -92,8 +93,9 @@ for (const browser of ["firefox", "chrome"]) {
         createElement: tag => new FakeElement(tag),
         createDocumentFragment: () => { const f = new FakeElement("fragment"); f.__fragment = true; return f; }
       },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
       localStorage: { getItem: key => key === "mosaicsync.render-manifest.v1" ? JSON.stringify({
-        version: 2, onboardingCompleted: true, activeSpaceId: "personal", updatedAt: 1, settingsModifiedAt: 1,
+        version: 4, onboardingCompleted: true, activeSpaceId: "personal", updatedAt: 1, settingsModifiedAt: 1,
         columns: 6, rows: 2, tileSize: 76, brandVisible: true,
         firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
           spaceNames: { personal: "Home", work: "Office" }, frequent: null },

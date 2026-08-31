@@ -151,11 +151,14 @@ test("1.26.17 Chrome native favicon helper rejects the browser placeholder signa
   }
 });
 
-test("1.26.17 synchronous Frequently Visited bootstrap filters hidden domains before paint", () => {
-  const src = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
-  assert.match(src, /HIDDEN_FREQUENT_KEY/);
-  assert.match(src, /frequentUrlHidden\(rawSite\.url, hidden\)/);
-  assert.match(src, /host\.endsWith\(`\.\$\{domain\}`\)/);
+test("1.26.17 browser-derived Frequently Visited hiding stays in the live/session owner, not persistent bootstrap", () => {
+  const bootstrap = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
+  const live = fs.readFileSync(resolve(root, "dist/firefox/newtab/newtab.js"), "utf8");
+  assert.doesNotMatch(bootstrap, /HIDDEN_FREQUENT_KEY|hiddenFrequentDomains|frequentUrlHidden|frequentSitesList/,
+    "persistent localStorage bootstrap must not process browser-history-derived sites");
+  assert.match(live, /function readHiddenFrequentDomains\(\)/);
+  assert.match(live, /function isFrequentHostHidden\(hostname\)/);
+  assert.match(live, /isFrequentHostHidden\(canonicalSiteHost\(candidate\?\.url\)\)/);
 });
 
 test("1.26.17 Chrome placeholder sentinel failures fail closed and are retryable", async () => {
@@ -206,30 +209,13 @@ test("1.26.17 Chrome placeholder sentinel failures fail closed and are retryable
   }
 });
 
-test("1.26.17 synchronous Frequently Visited snapshot fails closed when hidden-domain storage is corrupt", () => {
-  const src = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
-  const hiddenCode = extract(src, "hiddenFrequentDomains");
-  const paintCode = extract(src, "paintFrequentSnapshot");
-  let replaceCalls = 0;
-  const ctx = {
-    console,
-    URL,
-    HIDDEN_FREQUENT_KEY: "hidden",
-    localStorage: { getItem: () => "{ definitely not json" },
-    frequentSection: {},
-    frequentList: { replaceChildren: () => { replaceCalls += 1; } },
-    document: { createDocumentFragment: () => ({ append() {} }) },
-    validUrl: value => /^https?:/.test(value),
-    frequentUrlHidden: () => false,
-    validPreview: () => false,
-    frequentCard: site => site,
-    root: { dataset: {} }
-  };
-  vm.createContext(ctx);
-  vm.runInContext(hiddenCode, ctx);
-  vm.runInContext(paintCode, ctx);
-  ctx.paintFrequentSnapshot({ enabled: true, count: 5, sites: [{ title: "Hidden", host: "hidden.test", url: "https://hidden.test/" }] });
-  assert.equal(replaceCalls, 0, "corrupt hide state must skip the disposable cached first frame");
+test("1.26.17 corrupt hidden-domain storage cannot leak through the persistent first frame", () => {
+  const bootstrap = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-bootstrap.js"), "utf8");
+  const manifest = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-manifest.js"), "utf8");
+  assert.doesNotMatch(bootstrap, /paintFrequentSnapshot|frequentSitesList|frequentCard/,
+    "persistent bootstrap has no Frequently Visited site painter to bypass hidden-domain filtering");
+  assert.match(manifest, /sites:\s*\[\]/,
+    "persistent manifest must serialize no browser-derived site candidates regardless of local hide-state corruption");
 });
 
 for (const browser of ["firefox", "chrome"]) {

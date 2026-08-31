@@ -35,7 +35,7 @@ test('first-frame manifest preserves tiny previews by content-addressed identity
   };
   const preview = 'data:image/png;base64,AAAA';
   memory.set('mosaicsync.render-manifest.v1', JSON.stringify({
-    version: 2,
+    version: 4,
     shortcuts: [{ type: 'shortcut', id: 'old', imageKey: 'asset-1', preview }]
   }));
   const moduleUrl = pathToFileURL(resolve(root, 'dist/firefox/newtab/render-manifest.js'));
@@ -48,6 +48,6 @@ test('first-frame manifest preserves tiny previews by content-addressed identity
   }, { onboardingCompleted: true });
   assert.equal(ok, true);
   const stored = JSON.parse(memory.get('mosaicsync.render-manifest.v1'));
-  assert.equal(stored.version, 3);
+  assert.equal(stored.version, 4);
   assert.equal(stored.shortcuts[0].preview, preview);
 });

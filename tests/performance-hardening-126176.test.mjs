@@ -338,6 +338,7 @@ function fakeBootstrapContext(manifest, { withHelper = true } = {}) {
   const context = {
     console,
     URL,
+    __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
     document: {
       documentElement: root,
       getElementById: id => ids.get(id) || null,
@@ -357,9 +358,9 @@ function allElements(node) {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.26.17.6 ${browser} classic first-paint behavior never creates hostile shortcut/Frequently Visited anchors`, async () => {
+  test(`1.26.17.6 ${browser} classic persistent first-paint never creates hostile shortcut anchors or FV anchors`, async () => {
     const manifest = {
-      version: 2,
+      version: 4,
       onboardingCompleted: true,
       activeSpaceId: "personal",
       columns: 6, rows: 2, tileSize: 76, brandVisible: true,
@@ -383,17 +384,16 @@ for (const browser of ["firefox", "chrome"]) {
     vm.runInContext(bootstrap, context);
 
     const anchors = [...allElements(grid), ...allElements(frequentList)].filter(node => node.tagName === "A");
-    assert.deepEqual(anchors.map(anchor => anchor.href).sort(), [
-      "https://freq.example/",
-      "https://good.example/path"
-    ]);
+    assert.deepEqual(anchors.map(anchor => anchor.href).sort(), ["https://good.example/path"]);
+    assert.equal(allElements(frequentList).filter(node => node.tagName === "A").length, 0,
+      "persistent bootstrap must not create browser-derived Frequently Visited anchors");
     assert.equal(anchors.some(anchor => /^(?:javascript|data|blob|file):/i.test(anchor.href)), false);
     assert.ok(context.__mosaicsyncBootGrid?.manifest, "safe manifest should still complete the disposable first paint");
   });
 
   test(`1.26.17.6 ${browser} classic first-paint aborts cleanly when the shared URL helper is absent`, async () => {
     const manifest = {
-      version: 2, onboardingCompleted: true, activeSpaceId: "personal", columns: 6, rows: 2, tileSize: 76,
+      version: 4, onboardingCompleted: true, activeSpaceId: "personal", columns: 6, rows: 2, tileSize: 76,
       shortcuts: [{ type: "shortcut", id: "good", title: "Good", url: "https://good.example/", position: 0, imageStyle: "contain", preview: "" }]
     };
     const { context, grid } = fakeBootstrapContext(manifest, { withHelper: false });
