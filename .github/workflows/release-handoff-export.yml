@@ -1,0 +1,31 @@
+name: Release handoff export
+
+on:
+  push:
+    branches:
+      - release-1301811-handoff
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch source
+        uses: actions/checkout@v4
+      - name: Remove Git metadata and handoff workflow
+        run: |
+          rm -rf .git
+          rm -f .github/workflows/release-handoff-export.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+      - name: Upload clean source tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosaicsync-1301810-clean-source
+          path: .
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 6
