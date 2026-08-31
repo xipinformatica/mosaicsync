@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Nuova scheda di Firefox orientata alla privacy, con cartelle, personalizzazione e Firefox Sync opzionale. Zero telemetria MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Apri MosaicSync"
+  }
+}

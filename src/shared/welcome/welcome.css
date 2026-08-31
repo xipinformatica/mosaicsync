@@ -1,0 +1,539 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+:root {
+  color-scheme: light dark;
+  --panel: #22152f;
+  --panel-soft: rgba(255,255,255,.055);
+  --panel-hover: rgba(255,255,255,.085);
+  --text: #f8f6fb;
+  --muted: rgba(248,246,251,.68);
+  --border: rgba(255,255,255,.12);
+  --border-strong: rgba(255,255,255,.22);
+  --accent: #8b5cf6;
+  --accent-2: #26b9f5;
+  --shadow: 0 28px 90px rgba(0,0,0,.38);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-width: 100%; min-height: 100%; }
+body {
+  color: var(--text);
+  background:
+    radial-gradient(circle at 12% 10%, rgba(121,76,255,.35), transparent 34%),
+    radial-gradient(circle at 88% 92%, rgba(25,151,238,.25), transparent 34%),
+    linear-gradient(145deg, #220039 0%, #140522 58%, #071624 100%);
+}
+button, input { font: inherit; }
+button { color: inherit; }
+
+.welcome-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 22px;
+}
+
+.welcome-card {
+  width: min(860px, 100%);
+  padding: 34px;
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  box-shadow: var(--shadow);
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+.hero-art {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 94px;
+}
+.hero-logo {
+  position: absolute;
+  left: 12px;
+  bottom: 0;
+  width: 72px;
+  height: 72px;
+}
+.hero-mascot {
+  position: absolute;
+  z-index: 2;
+  top: -2px;
+  left: 50%;
+  width: 48px;
+  height: 34px;
+  color: #fff;
+  pointer-events: none;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 2px 3px rgba(10, 7, 20, .25));
+}
+.hero-mascot svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: currentColor;
+}
+.hero-mascot-bubble {
+  position: absolute;
+  left: 50%;
+  top: -27px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 52px;
+  height: 25px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(32,22,49,.96);
+  border: 1px solid rgba(255,255,255,.14);
+  color: rgba(255,255,255,.96);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-50%, 3px, 0) scale(.94);
+  transform-origin: center bottom;
+  transition: opacity .22s ease, transform .22s ease;
+  box-shadow: 0 8px 22px rgba(10,7,20,.2);
+}
+.hero-art:hover .hero-mascot-bubble {
+  opacity: 1;
+  transform: translate3d(-50%, 0, 0) scale(1);
+}
+.hero-mascot-wave {
+  transform-origin: 16.2px 14.6px;
+  transform-box: fill-box;
+  animation: hero-mascot-wave 1.9s ease-in-out infinite;
+}
+.hero-copy { min-width: 0; }
+
+@keyframes hero-mascot-wave {
+  0%, 100% { transform: rotate(-8deg); }
+  20% { transform: rotate(7deg); }
+  40% { transform: rotate(-5deg); }
+  60% { transform: rotate(5deg); }
+  80% { transform: rotate(-6deg); }
+}
+.eyebrow, .step-number {
+  margin: 0 0 5px;
+  color: #bda5ff;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 750;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+h1 { margin: 0; font-size: clamp(32px, 5vw, 42px); line-height: 1.05; letter-spacing: -.035em; }
+.tagline { margin: 7px 0 0; color: var(--muted); font-size: 17px; }
+
+.wizard-step {
+  border-top: 1px solid var(--border);
+  padding-top: 26px;
+}
+.step-heading { margin-bottom: 18px; }
+.step-heading h2 { margin: 0; font-size: 24px; letter-spacing: -.02em; }
+.step-heading p:not(.step-number) { margin: 7px 0 0; color: var(--muted); line-height: 1.45; }
+
+.feature-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.feature-row > div {
+  min-height: 82px;
+  padding: 15px 16px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: var(--panel-soft);
+}
+.feature-row strong, .feature-row span { display: block; }
+.feature-row strong { font-size: 15px; }
+.feature-row span { margin-top: 5px; color: var(--muted); font-size: 13px; line-height: 1.35; }
+.compact-note { margin: 14px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+
+.choice-grid { display: grid; gap: 12px; margin-bottom: 18px; }
+.two-up { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.source-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.choice-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 12px;
+  min-height: 108px;
+  padding: 17px;
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: var(--panel-soft);
+  cursor: pointer;
+  user-select: none;
+  transition: transform 100ms ease, border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+.choice-card:hover { background: var(--panel-hover); border-color: var(--border-strong); transform: translateY(-1px); }
+.choice-card:focus-within { outline: 2px solid color-mix(in srgb, var(--accent-2) 70%, white); outline-offset: 2px; }
+.choice-card.selected {
+  border-color: color-mix(in srgb, var(--accent) 72%, white);
+  background: linear-gradient(135deg, rgba(139,92,246,.22), rgba(38,185,245,.10));
+  box-shadow: 0 0 0 1px rgba(139,92,246,.26), 0 10px 28px rgba(0,0,0,.16);
+}
+.choice-card.disabled { opacity: .48; cursor: not-allowed; transform: none; }
+.choice-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.choice-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: rgba(139,92,246,.16);
+  color: #d9ccff;
+  font-size: 24px;
+  font-weight: 600;
+}
+.choice-copy { min-width: 0; }
+.choice-copy strong, .choice-copy small { display: block; }
+.choice-copy strong { font-size: 15.5px; line-height: 1.25; }
+.choice-copy small { margin-top: 5px; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+.choice-check {
+  display: grid;
+  place-items: center;
+  width: 23px;
+  height: 23px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  opacity: 0;
+  transform: scale(.7);
+  transition: opacity 100ms ease, transform 100ms ease;
+}
+.choice-card.selected .choice-check { opacity: 1; transform: scale(1); }
+
+.sync-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 18px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.help-wrap { position: relative; display: inline-flex; }
+.help-button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: help;
+  font-size: 12px;
+  font-weight: 750;
+}
+.help-tooltip {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  width: 285px;
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: #15101d;
+  color: #f7f3fb;
+  box-shadow: 0 10px 32px rgba(0,0,0,.35);
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, 4px);
+  transition: opacity 100ms ease, transform 100ms ease;
+  pointer-events: none;
+}
+.help-wrap:hover .help-tooltip, .help-wrap:focus-within .help-tooltip { opacity: 1; visibility: visible; transform: translate(-50%, 0); }
+
+.action-button {
+  min-height: 52px;
+  padding: 0 24px;
+  border-radius: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 80ms ease, filter 100ms ease, border-color 100ms ease;
+}
+.action-button:active:not(:disabled) { transform: translateY(1px); }
+.action-button:disabled { opacity: .42; cursor: default; }
+.primary {
+  border: 0;
+  background: linear-gradient(135deg, #8257ed, #3aaef4);
+  color: white;
+  box-shadow: 0 8px 24px rgba(91,75,219,.20);
+}
+.primary:hover:not(:disabled) { filter: brightness(1.07); }
+.secondary { border: 1px solid var(--border); background: var(--panel-soft); }
+.secondary:hover:not(:disabled) { border-color: var(--border-strong); background: var(--panel-hover); }
+#introContinueButton, #syncContinueButton, #sourceFinishButton { display: block; width: 100%; margin-top: 18px; }
+.resolution-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.status {
+  min-height: 20px;
+  margin-top: 15px;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+}
+.status.error { color: #ff9aa8; }
+.status.warning { color: #f7c56c; }
+
+@media (max-width: 760px) {
+  .welcome-shell { padding: 20px 14px; }
+  .welcome-card { padding: 24px 20px; border-radius: 20px; }
+  .hero-art { width: 82px; height: 80px; }
+  .hero-logo { left: 11px; width: 58px; height: 58px; }
+  .hero-mascot { width: 44px; height: 31px; top: -3px; }
+  .hero-mascot-bubble { left: 50%; top: -28px; min-width: 50px; }
+  .feature-row, .two-up, .source-grid { grid-template-columns: 1fr; }
+  .feature-row > div { min-height: 0; }
+  .choice-card { min-height: 92px; }
+  .resolution-actions { grid-template-columns: 1fr; }
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --panel: #ffffff;
+    --panel-soft: rgba(46,25,67,.045);
+    --panel-hover: rgba(46,25,67,.075);
+    --text: #21172b;
+    --muted: rgba(33,23,43,.66);
+    --border: rgba(34,20,48,.12);
+    --border-strong: rgba(34,20,48,.22);
+    --shadow: 0 28px 80px rgba(55,29,73,.14);
+  }
+  body { background: radial-gradient(circle at 12% 10%, rgba(143,106,255,.24), transparent 35%), radial-gradient(circle at 90% 90%, rgba(67,184,255,.18), transparent 34%), #f5f2f8; }
+  .eyebrow, .step-number { color: #6840bd; }
+  .choice-icon { color: #5d3eb0; }
+  .help-tooltip { background: #2b2135; color: white; }
+
+  /* Release 1.20.12 — keep the white mascot unchanged while restoring contrast on bright surfaces. */
+  .hero-mascot {
+    filter: drop-shadow(0 2px 3px rgba(43,25,67,.34));
+  }
+  .hero-mascot::before {
+    content: "";
+    position: absolute;
+    z-index: 0;
+    left: 50%;
+    top: 48%;
+    width: 38px;
+    height: 27px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: radial-gradient(ellipse at center,
+      rgba(91,58,177,.72) 0%,
+      rgba(111,75,201,.48) 48%,
+      rgba(111,75,201,.16) 68%,
+      rgba(111,75,201,0) 82%);
+    filter: blur(1px);
+    pointer-events: none;
+  }
+}
+
+.welcome-footer {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+.welcome-footer a { color: var(--muted); text-decoration: none; }
+.welcome-footer a:hover, .welcome-footer a:focus-visible { color: var(--text); text-decoration: underline; }
+.development-support {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 15px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-soft);
+}
+.development-support > span { min-width: 0; }
+.development-support strong, .development-support small { display: block; }
+.development-support strong { font-size: 13px; }
+.development-support small { margin-top: 3px; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.development-donate-button {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 650;
+}
+.welcome-footer button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}
+.welcome-footer button:hover, .welcome-footer button:focus-visible { color: var(--text); text-decoration: underline; }
+@media (max-width: 560px) {
+  .development-support { grid-template-columns: 1fr; }
+  .development-donate-button { width: 100%; }
+}
+
+
+/* Release 1.4: keep help copy inside its anchored tooltip. */
+.help-tooltip {
+  max-width: min(285px, calc(100vw - 48px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+/* Release 1.9 — warm donate treatment with right-corner sitting mascot */
+.donate-button {
+  position: relative;
+  overflow: visible;
+  border-color: rgba(255, 223, 122, .72) !important;
+  background: linear-gradient(180deg, #e3b34d, #c9922f) !important;
+  color: #25190b !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.26), 0 5px 14px rgba(72,46,3,.18);
+  font-weight: 750;
+}
+.donate-button:hover {
+  background: linear-gradient(180deg, #edc263, #d39b38) !important;
+  border-color: rgba(255, 232, 154, .90) !important;
+}
+.donate-button:focus-visible {
+  outline: 2px solid rgba(255, 228, 139, .95);
+  outline-offset: 3px;
+}
+.donate-mascot {
+  position: absolute;
+  z-index: 2;
+  top: -17px;
+  left: auto;
+  right: -22px;
+  width: 39px;
+  height: 25px;
+  color: #fff;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(56,35,0,.24));
+}
+.donate-mascot svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  fill: currentColor;
+}
+
+
+/* Release 1.20.7 — Welcome donation interaction mirrors the Settings component. */
+.development-support .donate-button {
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 160ms ease, background 140ms ease, border-color 140ms ease;
+}
+.development-support .donate-button:hover,
+.development-support .donate-button:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.34),
+    0 7px 18px rgba(72,46,3,.24),
+    0 0 22px rgba(227,179,77,.30);
+}
+.donate-mascot-wave-arm {
+  transform-box: view-box;
+  transform-origin: 9.5px 15.1px;
+}
+.development-support .donate-button:hover .donate-mascot-wave-arm,
+.development-support .donate-button:focus-visible .donate-mascot-wave-arm {
+  animation: welcome-donate-mascot-wave 620ms ease-in-out infinite;
+}
+@keyframes welcome-donate-mascot-wave {
+  0%, 100% { transform: rotate(62deg); }
+  50% { transform: rotate(88deg); }
+}
+.donate-mascot-bubble {
+  position: absolute;
+  z-index: 3;
+  top: -38px;
+  right: -34px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: #261c35;
+  color: rgba(255,255,255,.96);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18), 0 7px 18px rgba(0,0,0,.20);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px) scale(.96);
+  transform-origin: center bottom;
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  transition: opacity 120ms ease, transform 140ms ease;
+}
+.development-support .donate-button:hover .donate-mascot-bubble,
+.development-support .donate-button:focus-visible .donate-mascot-bubble {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+@media (prefers-color-scheme: light) {
+  /* Release 1.20.13 — give the white Donate mascot contrast through the whole component,
+     not through a local halo or artificial shadow behind the character. */
+  .development-support {
+    background: linear-gradient(135deg, rgba(102,72,166,.16), rgba(116,82,186,.24));
+    border-color: rgba(75,48,117,.24);
+  }
+  .development-support .donate-mascot {
+    filter: none;
+  }
+}
+
+
+/* 1.24.14f — viewport-layer help tooltips remain visible at every window edge. */
+.help-tooltip.viewport-tooltip-active {
+  position: fixed;
+  z-index: 1000;
+  right: auto;
+  bottom: auto;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 100ms ease;
+  pointer-events: none;
+}

@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Test / coverage output
+coverage/
+.nyc_output/
+
+# Package artifacts
+*.zip
+*.xpi
+*.crx
+*.pem
+web-ext-artifacts/
+artifacts/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+tmp/
+temp/
+
+# IDE/editor metadata
+.vscode/
+.idea/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# NOTE: dist/ is intentionally tracked in this repository so reviewers can
+# compare generated Firefox/Chromium trees with source and build-manifest.json.
