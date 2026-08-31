@@ -1747,7 +1747,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     } else if (frequentRenderSnapshot?.enabled === true) {
       renderFrequentlyVisited(frequentRenderSnapshot.sites || [], { authoritative: false });
     }
-    scheduleFrequentlyVisitedRefresh(250);
+    // A warm session already painted valid device-local candidates, so refresh
+    // them after the normal post-paint delay. On a true cold browser start the
+    // session-only candidate key is empty by design; start the live Top Sites read
+    // immediately after authoritative startup instead of adding an avoidable 250ms.
+    const hasWarmFrequentSites = frequentRenderSnapshot?.enabled === true &&
+      Array.isArray(frequentRenderSnapshot.sites) && frequentRenderSnapshot.sites.length > 0;
+    scheduleFrequentlyVisitedRefresh(frequentlyVisitedEnabled && !hasWarmFrequentSites ? 0 : 250);
     // The browser may briefly rehydrate optional-permission state while an updated
     // extension context is starting. Reconcile once more after startup so an
     // already-granted Top Sites permission restores suggestions automatically.

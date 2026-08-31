@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Yksityisyyteen keskittyvä Chromen uusi välilehti kansioilla, mukautuksilla ja valinnaisella Chrome Syncillä. Ei MosaicSync-telemetriaa."
-  },
-  "actionOpenHome": {
-    "message": "Avaa MosaicSync"
-  }
-}

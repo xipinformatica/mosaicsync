@@ -20,10 +20,11 @@
     if (!storage?.get) return;
     const startedAt = (globalThis.performance?.now?.() ?? Date.now());
     const config = globalThis.__mosaicsyncBootstrapConfig;
-    if (!config?.sessionRenderStateKey || !config?.sessionRenderMetaKey || !config?.sessionFrequentSuppressedKey) return;
+    if (!config?.sessionRenderStateKey || !config?.sessionRenderMetaKey || !config?.sessionFrequentProjectionKey || !config?.sessionFrequentSuppressedKey) return;
     const promise = Promise.resolve(storage.get([
       config.sessionRenderStateKey,
       config.sessionRenderMetaKey,
+      config.sessionFrequentProjectionKey,
       config.sessionFrequentSuppressedKey
     ])).catch(() => null);
     globalThis.__mosaicsyncEarlySessionRead = { startedAt, promise };

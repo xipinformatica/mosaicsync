@@ -30,6 +30,7 @@ import {
   SESSION_RENDER_INLINE_IMAGE_MAX_CHARS,
   SESSION_RENDER_META_KEY,
   SESSION_RENDER_STATE_KEY,
+  SESSION_FREQUENTLY_VISITED_PROJECTION_KEY,
   SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY,
   SHORTCUT_COLOR_TAG_KEYS
 } from "./constants.js";
@@ -58,7 +59,8 @@ import { ERROR_CODES, codedError } from "./errors.js";
 import {
   createFirstPaintContract,
   createFirstPaintFrequentProjection,
-  isFirstPaintContractValid
+  isFirstPaintContractValid,
+  sanitizeFirstPaintFrequentSnapshot
 } from "./first-paint-contract.js";
 import "./http-url-safety.js";
 
@@ -119,15 +121,6 @@ async function sessionStoredValueMatches(key, serialized) {
     // A failed verification must never suppress a corrective cache write.
     return false;
   }
-}
-
-async function writeSessionRenderStateBestEffort(snapshot) {
-  const serialized = sessionSerialized(snapshot);
-  if (serialized && serialized === lastSessionRenderStateSerialized &&
-      await sessionStoredValueMatches(SESSION_RENDER_STATE_KEY, serialized)) return false;
-  const written = await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: snapshot });
-  if (written) lastSessionRenderStateSerialized = serialized;
-  return written;
 }
 
 async function writeSessionRenderMetaBestEffort(meta) {
@@ -418,7 +411,7 @@ export async function readSessionRenderCache(earlyRead = null) {
     const storageStartedAt = canUseEarly && Number.isFinite(earlyRead.startedAt) ? earlyRead.startedAt : perfNow();
     const result = canUseEarly
       ? await earlyRead.promise
-      : await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_RENDER_META_KEY, SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]);
+      : await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_RENDER_META_KEY, SESSION_FREQUENTLY_VISITED_PROJECTION_KEY, SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]);
     const storageMs = perfNow() - storageStartedAt;
     const frequentSuppressed = result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true;
     if (!result?.[SESSION_RENDER_STATE_KEY] || !result?.[SESSION_RENDER_META_KEY]) {
@@ -434,14 +427,27 @@ export async function readSessionRenderCache(earlyRead = null) {
       return null;
     }
     const meta = ensureDeviceId(cachedMeta);
-    // Remember exactly what this context just read so the normal startup refresh
-    // does not immediately rewrite an identical disposable snapshot.
+    const storedFrequent = sanitizeFirstPaintFrequentSnapshot(result?.[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]);
+    const frequent = frequentSuppressed
+      ? createFirstPaintFrequentProjection(cachedState.settings, {
+          enabled: true,
+          count: cachedState.settings?.frequentlyVisitedCount,
+          sites: []
+        })
+      : createFirstPaintFrequentProjection(cachedState.settings, storedFrequent);
+    const composedState = {
+      ...cachedState,
+      firstPaint: { ...cachedState.firstPaint, frequent }
+    };
+    // Remember the exact structural bytes stored under SESSION_RENDER_STATE_KEY.
+    // Frequently Visited has its own session key from 1.30.18.10 onward and is
+    // composed only for the returned presentation snapshot.
     lastSessionRenderStateSerialized = sessionSerialized(cachedState);
     lastSessionRenderMetaSerialized = sessionSerialized(meta);
     const validationMs = perfNow() - validationStartedAt;
     lastSessionRenderCacheStatus = "hit";
     return {
-      state: cachedState,
+      state: composedState,
       meta,
       frequentSuppressed,
       timings: { storageMs, validationMs }
@@ -452,59 +458,62 @@ export async function readSessionRenderCache(earlyRead = null) {
   }
 }
 
-async function readSessionPublicationContext() {
+async function readSessionFrequentContext() {
   if (!browser.storage.session) return {};
   try {
     return await browser.storage.session.get([
-      SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY,
-      SESSION_RENDER_STATE_KEY,
-      SESSION_RENDER_META_KEY
+      SESSION_FREQUENTLY_VISITED_PROJECTION_KEY,
+      SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY
     ]);
   } catch {
     return {};
   }
 }
 
-async function sessionFrequentSnapshotForWrite(state, frequentSnapshot = undefined, shared = null) {
-  if (!browser.storage.session) return frequentSnapshot === undefined ? null : frequentSnapshot;
-  try {
-    const result = shared || await readSessionPublicationContext();
-    if (result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true) {
-      const settings = state?.spaces?.personal?.settings || state?.settings || DEFAULT_STATE.settings;
-      return createFirstPaintFrequentProjection(settings, { enabled: true, count: settings?.frequentlyVisitedCount, sites: [] });
-    }
-    if (frequentSnapshot !== undefined) return frequentSnapshot;
-    const existing = result?.[SESSION_RENDER_STATE_KEY];
-    if (isRenderSnapshotValid(existing)) return existing.firstPaint?.frequent ?? null;
-  } catch {
-    // The cache is disposable. If the shared session store cannot be inspected,
-    // prefer the caller's explicit truth and otherwise write a no-op projection.
-  }
-  return frequentSnapshot === undefined ? null : frequentSnapshot;
+function sessionFrequentProjectionForWrite(frequentSnapshot, { suppressed = false } = {}) {
+  const candidate = sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
+  if (!candidate) return null;
+  return suppressed ? { ...candidate, sites: [] } : candidate;
 }
 
-/**
- * Publish a complete session render snapshot only from an authoritative state
- * boundary (startup storage.local materialization or a completed persistence
- * transaction). New Tab presentation refreshes must patch their own fields
- * instead of republishing a potentially stale full snapshot.
- */
-export async function warmSessionRenderCache(state, meta, { frequentSnapshot = undefined } = {}) {
+async function writeSessionFrequentProjectionBestEffort(frequentSnapshot, { suppressed = false } = {}) {
   if (!browser.storage.session) return false;
-  const normalizedMeta = ensureDeviceId(meta || DEFAULT_META);
-  const shared = await readSessionPublicationContext();
-  const resolvedFrequent = await sessionFrequentSnapshotForWrite(state || DEFAULT_STATE, frequentSnapshot, shared);
-  const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot: resolvedFrequent });
-  const stateSerialized = sessionSerialized(snapshot);
-  const metaSerialized = sessionSerialized(normalizedMeta);
+  const projection = sessionFrequentProjectionForWrite(frequentSnapshot, { suppressed });
+  if (!projection) return false;
+  const serialized = sessionSerialized(projection);
+  if (await sessionStoredValueMatches(SESSION_FREQUENTLY_VISITED_PROJECTION_KEY, serialized)) return false;
+  return setSessionBestEffort({ [SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]: projection });
+}
+
+async function publishSessionRenderSnapshotBestEffort(state, meta = null, { frequentSnapshot = undefined } = {}) {
+  if (!browser.storage.session) return false;
+  const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot: null });
   const updates = {};
-  if (sessionSerialized(shared?.[SESSION_RENDER_STATE_KEY]) !== stateSerialized) updates[SESSION_RENDER_STATE_KEY] = snapshot;
-  if (sessionSerialized(shared?.[SESSION_RENDER_META_KEY]) !== metaSerialized) updates[SESSION_RENDER_META_KEY] = normalizedMeta;
-  if (!Object.keys(updates).length) {
-    lastSessionRenderStateSerialized = stateSerialized;
-    lastSessionRenderMetaSerialized = metaSerialized;
-    return false;
+  const stateSerialized = sessionSerialized(snapshot);
+  if (!(stateSerialized && stateSerialized === lastSessionRenderStateSerialized &&
+        await sessionStoredValueMatches(SESSION_RENDER_STATE_KEY, stateSerialized))) {
+    updates[SESSION_RENDER_STATE_KEY] = snapshot;
   }
+  let normalizedMeta = null;
+  let metaSerialized = null;
+  if (meta) {
+    normalizedMeta = ensureDeviceId(meta);
+    metaSerialized = sessionSerialized(normalizedMeta);
+    if (!(metaSerialized && metaSerialized === lastSessionRenderMetaSerialized &&
+          await sessionStoredValueMatches(SESSION_RENDER_META_KEY, metaSerialized))) {
+      updates[SESSION_RENDER_META_KEY] = normalizedMeta;
+    }
+  }
+  if (frequentSnapshot !== undefined) {
+    const shared = await readSessionFrequentContext();
+    const projection = sessionFrequentProjectionForWrite(frequentSnapshot, {
+      suppressed: shared?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true
+    });
+    if (projection && sessionSerialized(shared?.[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]) !== sessionSerialized(projection)) {
+      updates[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY] = projection;
+    }
+  }
+  if (!Object.keys(updates).length) return false;
   const written = await setSessionBestEffort(updates);
   if (written) {
     if (Object.hasOwn(updates, SESSION_RENDER_STATE_KEY)) lastSessionRenderStateSerialized = stateSerialized;
@@ -514,60 +523,58 @@ export async function warmSessionRenderCache(state, meta, { frequentSnapshot = u
 }
 
 /**
- * Frequently Visited candidates are device-local presentation data. Patch only
- * that field in the shared session snapshot so a stale New Tab can never
- * republish its older Space/grid state merely because Top Sites changed.
+ * Public warm-up path. A caller may hold an older in-memory state, so this
+ * function acquires the same cross-context persistence lock and republishes
+ * from the state that is authoritative in storage.local *inside* that lock.
+ */
+export async function warmSessionRenderCache(_state, _meta, { frequentSnapshot = undefined } = {}) {
+  if (!browser.storage.session) return false;
+  return withLocalAssetWriteLock(async () => {
+    const local = browser.storage.local;
+    if (!local?.get) {
+      return publishSessionRenderSnapshotBestEffort(_state || DEFAULT_STATE, _meta || DEFAULT_META, { frequentSnapshot });
+    }
+    const result = await local.get([LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_META_KEY]);
+    const hasPersistedState = result?.[LOCAL_STATE_KEY] && typeof result[LOCAL_STATE_KEY] === "object";
+    let current = normalizeState(hasPersistedState ? result[LOCAL_STATE_KEY] : (_state || DEFAULT_STATE));
+    const activeSpace = SPACE_IDS.includes(result?.[LOCAL_ACTIVE_SPACE_KEY])
+      ? result[LOCAL_ACTIVE_SPACE_KEY]
+      : (SPACE_IDS.includes(_state?.activeSpaceId) ? _state.activeSpaceId : current.activeSpaceId);
+    current = selectActiveSpaceNormalized(current, activeSpace);
+    const currentMeta = ensureDeviceId(result?.[LOCAL_META_KEY] || _meta || DEFAULT_META);
+    return publishSessionRenderSnapshotBestEffort(current, currentMeta, { frequentSnapshot });
+  });
+}
+
+/**
+ * Frequently Visited candidates physically own a dedicated session key. Their
+ * updates can no longer replace structural Space/grid/artwork session state.
  */
 export async function updateSessionFrequentlyVisitedSnapshot(frequentSnapshot = null) {
   if (!browser.storage.session) return false;
-  const shared = await readSessionPublicationContext();
-  const snapshot = shared?.[SESSION_RENDER_STATE_KEY];
-  if (!isRenderSnapshotValid(snapshot)) return false;
-  const suppressed = shared?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true;
-  const frequent = createFirstPaintFrequentProjection(
-    snapshot.settings,
-    suppressed ? { enabled: true, count: snapshot.settings?.frequentlyVisitedCount, sites: [] } : frequentSnapshot
-  );
-  if (sessionSerialized(snapshot.firstPaint?.frequent ?? null) === sessionSerialized(frequent)) return false;
-  const next = {
-    ...snapshot,
-    firstPaint: { ...snapshot.firstPaint, frequent }
-  };
-  const written = await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: next });
-  if (written) lastSessionRenderStateSerialized = sessionSerialized(next);
-  return written;
+  const shared = await readSessionFrequentContext();
+  return writeSessionFrequentProjectionBestEffort(frequentSnapshot, {
+    suppressed: shared?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true
+  });
 }
 
 export async function clearSessionFrequentlyVisitedSnapshot() {
   if (!browser.storage.session) return false;
   try {
-    const result = await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]);
+    const result = await browser.storage.session.get([
+      SESSION_FREQUENTLY_VISITED_PROJECTION_KEY,
+      SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY
+    ]);
+    const emptyProjection = { enabled: true, count: 5, sites: [] };
     const updates = {};
     if (result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] !== true) {
       updates[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] = true;
     }
-    const snapshot = result?.[SESSION_RENDER_STATE_KEY];
-    if (isRenderSnapshotValid(snapshot)) {
-      const countValue = Number(snapshot.settings?.frequentlyVisitedCount);
-      const count = [3, 5, 8, 10].includes(countValue) ? countValue : 5;
-      const enabled = snapshot.settings?.frequentlyVisitedEnabled === true;
-      const current = snapshot.firstPaint?.frequent;
-      if (!(current?.enabled === enabled && Number(current?.count) === count && Array.isArray(current?.sites) && current.sites.length === 0)) {
-        updates[SESSION_RENDER_STATE_KEY] = {
-          ...snapshot,
-          firstPaint: {
-            ...snapshot.firstPaint,
-            frequent: { enabled, count, sites: [] }
-          }
-        };
-      }
+    if (sessionSerialized(result?.[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]) !== sessionSerialized(emptyProjection)) {
+      updates[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY] = emptyProjection;
     }
     if (!Object.keys(updates).length) return false;
-    const written = await setSessionBestEffort(updates);
-    if (written && Object.hasOwn(updates, SESSION_RENDER_STATE_KEY)) {
-      lastSessionRenderStateSerialized = sessionSerialized(updates[SESSION_RENDER_STATE_KEY]);
-    }
-    return written;
+    return setSessionBestEffort(updates);
   } catch {
     return false;
   }
@@ -752,6 +759,12 @@ async function persistNormalizedState(normalized, {
       throw wrapped;
     }
 
+    // Structural session publication is part of the same cross-context write
+    // transaction as storage.local. An older transaction can therefore never
+    // release the persistence lock and publish its stale first-paint snapshot
+    // after a newer transaction has already won. FV candidates are separate.
+    await publishSessionRenderSnapshotBestEffort(finalState);
+
     if (canCollectStale && pendingGcIds.size) {
       try {
         await browser.storage.local.remove([...pendingGcIds].map(localAssetStorageKey));
@@ -809,8 +822,6 @@ async function writeLocalStateResult(state, {
     finalState = await hydrateLocalAssetsForSpaceNormalized(finalState, finalState.activeSpaceId);
     finalState = selectActiveSpaceNormalized(finalState, finalState.activeSpaceId);
   }
-  const sessionFrequent = await sessionFrequentSnapshotForWrite(finalState);
-  await writeSessionRenderStateBestEffort(createRenderSnapshot(finalState, { frequentSnapshot: sessionFrequent }));
   return { state: finalState, compactBaseline: persisted.compactBaseline };
 }
 
@@ -951,25 +962,30 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
 }
 
 export async function writeActiveSpace(spaceId) {
-  const normalized = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
-  await browser.storage.local.set({ [LOCAL_ACTIVE_SPACE_KEY]: normalized });
+  const requested = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
+  return withLocalAssetWriteLock(async () => {
+    await browser.storage.local.set({ [LOCAL_ACTIVE_SPACE_KEY]: requested });
 
-  // The active-Space pointer is device-local authoritative state. Refresh the
-  // shared session accelerator from the persisted compact profile here, rather
-  // than letting whichever New Tab happens to be alive publish its private view.
-  // Compact local-asset IDs are enough to preserve "artwork exists" truth; no
-  // image hydration is needed on this persistence path.
-  try {
-    const result = await browser.storage.local.get([LOCAL_STATE_KEY, LOCAL_META_KEY]);
-    let current = normalizeState(result?.[LOCAL_STATE_KEY] || DEFAULT_STATE);
-    current = selectActiveSpaceNormalized(current, normalized);
-    const currentMeta = ensureDeviceId(result?.[LOCAL_META_KEY] || DEFAULT_META);
-    await warmSessionRenderCache(current, currentMeta);
-  } catch {
-    // Active-space persistence is authoritative even if the disposable session
-    // accelerator cannot be refreshed. The next New Tab falls back to local.
-  }
-  return normalized;
+    // Read the persisted pointer back while the same cross-context persistence
+    // lock is still held. Session startup truth is therefore derived from the
+    // authoritative pointer that will survive this transaction, never merely
+    // from a stale caller's requested Space.
+    try {
+      const result = await browser.storage.local.get([LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_META_KEY]);
+      const persistedActive = SPACE_IDS.includes(result?.[LOCAL_ACTIVE_SPACE_KEY])
+        ? result[LOCAL_ACTIVE_SPACE_KEY]
+        : "personal";
+      let current = normalizeState(result?.[LOCAL_STATE_KEY] || DEFAULT_STATE);
+      current = selectActiveSpaceNormalized(current, persistedActive);
+      const currentMeta = ensureDeviceId(result?.[LOCAL_META_KEY] || DEFAULT_META);
+      await publishSessionRenderSnapshotBestEffort(current, currentMeta);
+      return persistedActive;
+    } catch {
+      // The active-Space pointer is authoritative even if the disposable session
+      // accelerator cannot be refreshed. The next New Tab falls back to local.
+      return requested;
+    }
+  });
 }
 
 export async function ensureLocalStorage({ withTimings = false, hydrateAssets = "all" } = {}) {

@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Privaatsust esikohale seadev Firefoxi uue vahelehe leht kaustade, kohandatava paigutuse ja valikulise Firefox Synciga. MosaicSync ei kogu telemeetriat."
-  },
-  "actionOpenHome": {
-    "message": "Ava MosaicSync"
-  }
-}

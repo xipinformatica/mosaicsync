@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Privatlivsfokuseret ny fane i Chrome med mapper, tilpasning og valgfri Chrome Sync. Ingen MosaicSync-telemetri."
-  },
-  "actionOpenHome": {
-    "message": "Åbn MosaicSync"
-  }
-}

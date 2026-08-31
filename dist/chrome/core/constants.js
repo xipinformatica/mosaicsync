@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.9";
+export const VERSION = "1.30.18.10";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -29,6 +29,7 @@ export const RENDER_SNAPSHOT_SCHEMA_VERSION = 4;
 export const RENDER_MANIFEST_SCHEMA_VERSION = 4;
 export const SESSION_RENDER_INLINE_IMAGE_MAX_CHARS = 24000;
 export const SESSION_RENDER_META_KEY = "mosaicsync.session.render-meta.v1";
+export const SESSION_FREQUENTLY_VISITED_PROJECTION_KEY = "mosaicsync.session.frequent-projection.v1";
 export const SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY = "mosaicsync.session.frequent-suppressed.v1";
 export const APPEARANCE_HINT_KEY = "mosaicsync.appearance.v1";
 export const RENDER_MANIFEST_KEY = "mosaicsync.render-manifest.v1";

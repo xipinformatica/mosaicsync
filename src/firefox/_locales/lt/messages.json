@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Privatumui skirtas Firefox naujo skirtuko puslapis su aplankais, pritaikomu išdėstymu ir pasirenkamu Firefox Sync. MosaicSync nerenka telemetrijos."
-  },
-  "actionOpenHome": {
-    "message": "Atverti MosaicSync"
-  }
-}
