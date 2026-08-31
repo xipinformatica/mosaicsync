@@ -1,0 +1,41 @@
+name: MosaicSync 1.30.18.11 certification
+on:
+  push:
+    branches: ["release/1.30.18.11-certification"]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect frozen .10 baseline targets
+        shell: bash
+        run: |
+          echo '=== BASELINE ==='
+          git rev-parse HEAD
+          node --version
+          echo '=== writeLocalMeta callsites ==='
+          grep -RFn --exclude-dir=dist --exclude-dir=.git 'writeLocalMeta(' src tests || true
+          echo '=== warmSessionRenderCache callsites ==='
+          grep -RFn --exclude-dir=dist --exclude-dir=.git 'warmSessionRenderCache' src tests || true
+          echo '=== materialize repair context ==='
+          grep -n -B12 -A18 'needsAssetMigration' src/shared/core/storage.js || true
+          echo '=== structural writes context ==='
+          grep -n -B10 -A20 'const writes = {' src/shared/core/storage.js || true
+          echo '=== FV render context ==='
+          grep -n -B12 -A70 'function renderFrequentlyVisited' src/shared/newtab/newtab.js || true
+          echo '=== FV snapshot context ==='
+          grep -n -B12 -A45 'function updateFrequentRenderSnapshot' src/shared/newtab/newtab.js || true
+          echo '=== appearance context ==='
+          grep -n -B20 -A55 'function applyPageBackgroundVisual' src/shared/newtab/newtab.js || true
+          echo '=== optimize/decode helpers ==='
+          grep -n -E 'optimizeImage|decode\(|prepare.*Image|wait.*Image|FAVICON_LOCAL' src/shared/newtab/newtab.js | head -120 || true
+          echo '=== size baseline ==='
+          cat package-size-baseline.json
+      - name: Baseline test count
+        run: npm test
