@@ -18,13 +18,25 @@
     const raw = localStorage.getItem("mosaicsync.render-manifest.v1");
     if (!raw) return;
     const manifest = JSON.parse(raw);
-    if (!manifest || manifest.version !== 2 || manifest.onboardingCompleted !== true) return;
-    if (manifest.multipleSpacesEnabled === false) {
+    if (!manifest || ![2, 3].includes(manifest.version) || manifest.onboardingCompleted !== true) return;
+    // v2 is the one-release bridge from 1.30.18.5. New writes are v3 and
+    // carry the canonical firstPaint projection. Keeping the bridge here avoids
+    // one incorrect/empty first frame immediately after an extension update.
+    const firstPaint = manifest.firstPaint?.version === 1
+      ? manifest.firstPaint
+      : manifest.version === 2
+        ? {
+            multipleSpacesEnabled: manifest.multipleSpacesEnabled === true,
+            spaceNames: manifest.spaceNames || {}
+          }
+        : null;
+    if (!firstPaint) return;
+    if (firstPaint.multipleSpacesEnabled === false) {
       switcher.hidden = true;
       switcher.classList.remove("space-switcher-first-paint-pending");
       return;
     }
-    const names = manifest.spaceNames;
+    const names = firstPaint.spaceNames;
     const personal = typeof names?.personal === "string" ? names.personal.trim().replace(/\s+/g, " ").slice(0, 32) : "";
     const work = typeof names?.work === "string" ? names.work.trim().replace(/\s+/g, " ").slice(0, 32) : "";
     // Only reveal synchronously when both visible labels are known. Empty custom

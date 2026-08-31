@@ -1,3 +1,13 @@
+## 1.30.18.6
+
+- Completes first-paint continuity for **Frequently Visited in Work**: the validated cached cards can paint from frame one while the stricter Work shortcut-grid authorization gate remains unchanged, so Work no longer visibly transitions from an empty Frequently Visited area to populated cards after startup hydration.
+- Introduces one explicit first-paint contract shared by the synchronous render manifest and the browser.session acceleration snapshot for active Space state, Multiple Spaces enablement, personalized Space labels and the bounded Frequently Visited snapshot. Fast startup layers no longer maintain slightly different visible truth for those fields.
+- Centralizes refresh/invalidation of that first-paint representation and explicitly versions the disposable cache format, while retaining a bounded read-only 1.30.18.5 compatibility bridge so the first New Tab after upgrade does not regress Space-name or Frequently-Visited continuity.
+- Improves Sync-quota communication before the browser-native ~100 KiB ceiling is reached: usage now separates **Layout & settings**, **Recovery safety copies**, **Shortcut images** and **Metadata / cleanup**; 10–25 KiB free warns that storage is getting full, below 10 KiB warns that it is almost full, and an essential quota failure clearly states that recent changes remain local until capacity is available.
+- Distinguishes recovery-limited, artwork-limited and broader storage-limited Sync states instead of attributing every degraded condition to artwork. All new user-facing messages are localized across the complete locale set.
+- Adds behavioral Firefox/Chrome regressions for Work first-frame Frequently Visited, one-release cache upgrade continuity, shared first-paint projection, Sync usage categorization and quota-warning thresholds, and adds `docs/ARCHITECTURE.md` as the maintained subsystem/ownership map for the staged maintainability program.
+- Preserves 1.30.18.5 first-paint Space continuity, favicon first-frame behavior, recovery hardening, normal Sync semantics, recovery/state/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free operation.
+
 ## 1.30.18.5
 
 - Fixes the remaining personalized-Space first-paint flash found by real visual testing: the fast browser.session render snapshot now carries both Space names, so the second startup layer cannot briefly replace already-correct custom labels with Personal/Work before authoritative storage.local hydration.

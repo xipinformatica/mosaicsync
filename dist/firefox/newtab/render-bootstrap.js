@@ -250,11 +250,26 @@ ${safeUrl}`;
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
     const manifest = JSON.parse(raw);
-    if (!manifest || manifest.version !== 2 || manifest.onboardingCompleted !== true) return;
+    if (!manifest || ![2, 3].includes(manifest.version) || manifest.onboardingCompleted !== true) return;
+    // v2 is the bounded upgrade bridge from 1.30.18.5. It is read-only and is
+    // overwritten by the v3 canonical contract after authoritative hydration.
+    const firstPaint = manifest.firstPaint?.version === 1
+      ? manifest.firstPaint
+      : manifest.version === 2
+        ? { activeSpaceId: manifest.activeSpaceId, frequent: manifest.frequent || null }
+        : null;
+    if (!firstPaint) return;
+
+    // Frequently Visited is global/device-local, not a Work-layout payload. It is
+    // safe to paint its inert cached snapshot in either Space before deciding
+    // whether the synchronous shortcut grid itself is trustworthy. This prevents
+    // Work from visibly doing "nothing -> Frequently Visited" after first paint.
+    paintFrequentSnapshot(firstPaint.frequent);
+
     // A synchronous cache cannot prove that Work is still an allowed/active Space.
-    // Keep non-Personal first paint behind the asynchronous authoritative/session
-    // checks instead of exposing a stale Work layout from localStorage.
-    if (manifest.activeSpaceId !== "personal") return;
+    // Keep the non-Personal shortcut grid behind the asynchronous authoritative/
+    // session checks without unnecessarily withholding the global Frequent strip.
+    if (firstPaint.activeSpaceId !== "personal") return;
     if (!Array.isArray(manifest.shortcuts) || manifest.shortcuts.length > 96) return;
     const columns = Number(manifest.columns), rows = Number(manifest.rows), tileSize = Number(manifest.tileSize);
     if (!Number.isInteger(columns) || columns < 6 || columns > 12 ||
@@ -267,8 +282,6 @@ ${safeUrl}`;
     root.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     root.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
     if (brand) brand.hidden = manifest.brandVisible === false;
-    paintFrequentSnapshot(manifest.frequent);
-
     const validItems = [];
     for (const source of manifest.shortcuts) {
       if (!source || typeof source !== "object" || typeof source.id !== "string" || !source.id ||

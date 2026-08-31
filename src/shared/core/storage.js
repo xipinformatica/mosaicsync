@@ -54,6 +54,7 @@ import {
   LOCAL_ASSET_COLLISION_ERROR_CODE
 } from "./local-assets.js";
 import { ERROR_CODES, codedError } from "./errors.js";
+import { createFirstPaintContract, isFirstPaintContractValid } from "./first-paint-contract.js";
 import "./http-url-safety.js";
 
 let lastSessionRenderCacheStatus = "unknown";
@@ -288,11 +289,7 @@ function projectRenderShortcut(item) {
   };
 }
 
-function renderSnapshotSpaceName(value) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 32) : "";
-}
-
-export function createRenderSnapshot(state = DEFAULT_STATE) {
+export function createRenderSnapshot(state = DEFAULT_STATE, { frequentSnapshot = null } = {}) {
   const spacesDisabled = state?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
   const personal = state?.spaces?.personal;
   const source = spacesDisabled && state?.activeSpaceId !== "personal" && personal
@@ -310,14 +307,10 @@ export function createRenderSnapshot(state = DEFAULT_STATE) {
     renderSnapshotVersion: RENDER_SNAPSHOT_SCHEMA_VERSION,
     schemaVersion: source?.schemaVersion ?? DEFAULT_STATE.schemaVersion,
     activeSpaceId: SPACE_IDS.includes(source?.activeSpaceId) ? source.activeSpaceId : "personal",
-    // Session acceleration must carry the labels it is allowed to paint. Omitting
-    // these made the session layer briefly overwrite the synchronous custom names
-    // with localized defaults before authoritative storage.local hydration.
-    multipleSpacesEnabled: state?.spaces?.personal?.settings?.multipleSpacesEnabled !== false,
-    spaceNames: {
-      personal: renderSnapshotSpaceName(state?.spaces?.personal?.settings?.spaceName),
-      work: renderSnapshotSpaceName(state?.spaces?.work?.settings?.spaceName)
-    },
+    // Every startup accelerator now carries the same small visual contract.
+    // A null Frequent snapshot means this session layer has no opinion and must
+    // preserve any trustworthy synchronous Frequent paint already on screen.
+    firstPaint: createFirstPaintContract(state, frequentSnapshot),
     shortcuts: Array.isArray(source?.shortcuts)
       ? source.shortcuts.map(projectRenderShortcut).filter(Boolean)
       : [],
@@ -361,12 +354,8 @@ function isRenderSnapshotValid(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return false;
   if (snapshot.renderSnapshotVersion !== RENDER_SNAPSHOT_SCHEMA_VERSION) return false;
   if (!SPACE_IDS.includes(snapshot.activeSpaceId)) return false;
-  if (typeof snapshot.multipleSpacesEnabled !== "boolean") return false;
-  if (!snapshot.spaceNames || typeof snapshot.spaceNames !== "object" || Array.isArray(snapshot.spaceNames)) return false;
-  for (const id of SPACE_IDS) {
-    const name = snapshot.spaceNames[id];
-    if (typeof name !== "string" || name.length > 32) return false;
-  }
+  if (!isFirstPaintContractValid(snapshot.firstPaint)) return false;
+  if (snapshot.firstPaint.activeSpaceId !== snapshot.activeSpaceId) return false;
   if (!Array.isArray(snapshot.shortcuts) || snapshot.shortcuts.length > 96) return false;
   if (!snapshot.shortcuts.every(item => isRenderShortcutValid(item))) return false;
   const settings = snapshot.settings;
@@ -415,11 +404,11 @@ export async function readSessionRenderCache(earlyRead = null) {
   }
 }
 
-export async function warmSessionRenderCache(state, meta) {
+export async function warmSessionRenderCache(state, meta, { frequentSnapshot = null } = {}) {
   if (!browser.storage.session) return;
   const normalizedMeta = ensureDeviceId(meta || DEFAULT_META);
   await setSessionBestEffort({
-    [SESSION_RENDER_STATE_KEY]: createRenderSnapshot(state || DEFAULT_STATE),
+    [SESSION_RENDER_STATE_KEY]: createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot }),
     [SESSION_RENDER_META_KEY]: normalizedMeta
   });
 }

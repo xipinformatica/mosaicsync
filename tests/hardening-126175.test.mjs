@@ -71,10 +71,12 @@ test("1.26.17.5 one shared HTTP(S) validator owns model/cache/bootstrap/UI short
   const storageSource = await readFile(resolve("src/shared/core/storage.js"), "utf8");
   const uiSource = await readFile(resolve("src/shared/newtab/ui-utils.js"), "utf8");
   const manifestSource = await readFile(resolve("src/shared/newtab/render-manifest.js"), "utf8");
+  const firstPaintSource = await readFile(resolve("src/shared/core/first-paint-contract.js"), "utf8");
   assert.match(modelSource, /__mosaicsyncSafeShortcutNavigationUrl/);
   assert.match(storageSource, /__mosaicsyncSafeShortcutNavigationUrl/);
   assert.match(uiSource, /__mosaicsyncSafeShortcutNavigationUrl/);
-  assert.match(manifestSource, /__mosaicsyncSafeShortcutNavigationUrl/);
+  assert.match(manifestSource, /first-paint-contract/);
+  assert.match(firstPaintSource, /__mosaicsyncSafeShortcutNavigationUrl/);
   assert.doesNotMatch(modelSource, /\["http:",\s*"https:"\]\.includes\(parsed\.protocol\)/);
   assert.doesNotMatch(storageSource, /\^https\?:\\\/\\\//i);
 });

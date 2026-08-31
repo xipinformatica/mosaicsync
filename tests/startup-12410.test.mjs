@@ -48,6 +48,6 @@ test('first-frame manifest preserves tiny previews by content-addressed identity
   }, { onboardingCompleted: true });
   assert.equal(ok, true);
   const stored = JSON.parse(memory.get('mosaicsync.render-manifest.v1'));
-  assert.equal(stored.version, 2);
+  assert.equal(stored.version, 3);
   assert.equal(stored.shortcuts[0].preview, preview);
 });

@@ -1,8 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+
+## 1.30.18.6 first-paint contract / maintainability-foundation policy
+
+- The fast launcher paths share one explicit first-paint contract for the subset of state they are allowed to paint before authoritative `storage.local` hydration: active Space, Multiple Spaces enablement, sanitized Personal/Work labels and the bounded Frequently Visited snapshot. Fast layers may differ in transport/storage, but they must not invent different visible truth.
+- Work keeps its conservative shortcut-grid authorization gate. Frequently Visited is global browser-derived presentation data and may paint from the validated disposable first-paint contract in Work without authorizing the Work shortcut grid early.
+- First-paint cache creation and invalidation are centralized. State/Frequently-Visited changes refresh the render manifest and session acceleration snapshot through the same projection rules instead of independent partial writers.
+- Disposable startup-cache formats are explicit and versioned. The current format has a bounded read-only 1.30.18.5 compatibility bridge so the first tab after upgrade can remain visually continuous; authoritative state rewrites the current format. Deleting all startup caches must remain correctness-safe.
+- Sync-storage UX must distinguish core layout/settings bytes, complete recovery-safety-copy bytes, synchronized shortcut artwork and metadata/cleanup overhead. Healthy Sync remains green; 10–25 KiB free warns that storage is getting full, under 10 KiB warns that it is almost full, and an essential quota failure explicitly states that recent local changes remain on this device until capacity is available.
+- `docs/ARCHITECTURE.md` is the maintained ownership map for Authoritative state, Normal Sync, Recovery, Artwork, First Paint, UI, Browser adapters and Import/export. New work should simplify or replace existing layers rather than add parallel representations without retiring older complexity.
+- Step 1 intentionally does not collapse the existing startup caches. Consolidation belongs to the next maintainability stage after this contract and its behavioral regressions have soaked. No maintainability refactor is accepted if the startup/performance gates materially regress.
 
 
 ## 1.30.18.5 first-frame continuity / local-observation retention policy
@@ -482,7 +493,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.5` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.6` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

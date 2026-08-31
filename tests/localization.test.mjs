@@ -11,7 +11,7 @@ for (const browser of ["firefox", "chrome"]) {
     const files = (await readdir(dir)).filter(name => name.endsWith(".js")).sort();
     const en = (await import(`../dist/${browser}/core/i18n-locales/en.js?${Date.now()}`)).MESSAGES;
     const keys = Object.keys(en).sort();
-    assert.equal(keys.length, 409);
+    assert.equal(keys.length, 418);
     const sourceValues = new Map();
     for (const [key,value] of Object.entries(en)) {
       assert.ok(String(value).trim(), `${key}: empty English value`);

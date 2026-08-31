@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.5**
+**Current source release: 1.30.18.6**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,9 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.30.18.6 is the first **maintainability-foundation / first-paint consistency** release. The disposable render-manifest and browser.session acceleration layers now share one small first-paint contract for active Space state, personalized Space names and Frequently Visited, so Work can paint its cached Frequently Visited cards continuously from frame one without weakening the stricter Work-grid authorization gate. Sync-storage reporting now separates Layout & settings, Recovery safety copies, Shortcut images and Metadata / cleanup, with progressive storage-pressure warnings before the browser quota is exhausted. First-paint cache creation/refresh is centralized, the disposable cache format is explicitly versioned with a one-release 1.30.18.5 bridge, and docs/ARCHITECTURE.md records the authoritative-state, Sync, Recovery, Artwork, First Paint and browser-adapter boundaries that future consolidation work must preserve. Ordinary Sync/state/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free architecture remain unchanged.
 
 1.30.18.5 is a focused **first-paint continuity and recovery-observation hardening** release. The browser.session acceleration layer now carries both personalized Space names, so it cannot briefly overwrite an already-correct first frame with the built-in Personal/Work labels before authoritative state arrives. Recovery-device retirement is now based on this installation's own repeated observations rather than the publishing computer's wall clock, and root-less fragment cleanup requires multiple GC observations in addition to elapsed time so a single clock jump cannot turn a fresh in-flight publication into garbage. The near-quota failure path is also covered end-to-end: if the oldest verified recovery is retired to make room and the replacement then fails, one verified fallback must remain. Ordinary Sync/state/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free architecture remain unchanged.
 

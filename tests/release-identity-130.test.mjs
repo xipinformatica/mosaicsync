@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const VERSION = "1.30.18.5";
+const VERSION = "1.30.18.6";
 
 test("1.30 has one exact release identity across public/runtime surfaces", () => {
   const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
@@ -12,8 +12,8 @@ test("1.30 has one exact release identity across public/runtime surfaces", () =>
   const chromeHtml = fs.readFileSync("dist/chrome/newtab/newtab.html", "utf8");
   const readme = fs.readFileSync("README.md", "utf8");
   const devReadme = fs.readFileSync("README-DEVELOPMENT.md", "utf8");
-  const releaseNotes = fs.readFileSync("docs/RELEASE-1.30.18.5.md", "utf8");
-  const qa = fs.readFileSync("docs/QA-1.30.18.5.md", "utf8");
+  const releaseNotes = fs.readFileSync("docs/RELEASE-1.30.18.6.md", "utf8");
+  const qa = fs.readFileSync("docs/QA-1.30.18.6.md", "utf8");
   const baseline = JSON.parse(fs.readFileSync("package-size-baseline.json", "utf8"));
   const buildManifest = JSON.parse(fs.readFileSync("build-manifest.json", "utf8"));
   assert.equal(ff.version, VERSION);
@@ -40,5 +40,5 @@ test("1.30 public changelog keeps internal candidates out of the public release 
     assert.doesNotMatch(changelog, new RegExp(`^## ${unpublished.replaceAll(".", "\\.")}(?:\\s|$)`, "m"));
   }
   const headings = [...changelog.matchAll(/^## ([^\n]+)$/gm)].map(match => match[1]);
-  assert.deepEqual(headings.slice(0, 20), [VERSION, "1.30.18.4", "1.30.18.3", "1.30.18.2", "1.30.18.1", "1.30.18", "1.30.17", "1.30.16", "1.30.15", "1.30.14", "1.30.13", "1.30.12", "1.30.11", "1.30.10", "1.30.9", "1.30.8", "1.30.7", "1.30.6", "1.30.5", "1.30.4"]);
+  assert.deepEqual(headings.slice(0, 20), [VERSION, "1.30.18.5", "1.30.18.4", "1.30.18.3", "1.30.18.2", "1.30.18.1", "1.30.18", "1.30.17", "1.30.16", "1.30.15", "1.30.14", "1.30.13", "1.30.12", "1.30.11", "1.30.10", "1.30.9", "1.30.8", "1.30.7", "1.30.6", "1.30.5"]);
 });

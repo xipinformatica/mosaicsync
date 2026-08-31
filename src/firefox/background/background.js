@@ -4419,13 +4419,18 @@ function assetIdsByUsage(all) {
 async function syncUsageBreakdown(all, totalBytes) {
   const { shortcut } = assetIdsByUsage(all);
   const coreKeys = [];
+  const recoveryKeys = [];
   const shortcutKeys = [];
   const overheadKeys = [];
 
   for (const [key, value] of Object.entries(all || {})) {
     if (!key.startsWith(SYNC_PREFIX)) continue;
     const workNamespace = syncNamespace(WORK_SPACE_ID);
-    if (key === SYNC_SETTINGS_KEY || key.startsWith(SYNC_ITEM_PREFIX) || isDeviceSnapshotKey(key) ||
+    if (isDeviceSnapshotKey(key)) {
+      recoveryKeys.push(key);
+      continue;
+    }
+    if (key === SYNC_SETTINGS_KEY || key.startsWith(SYNC_ITEM_PREFIX) ||
         key === workNamespace.settingsKey || key === workNamespace.datasetKey || key.startsWith(workNamespace.itemPrefix)) {
       coreKeys.push(key);
       continue;
@@ -4441,12 +4446,13 @@ async function syncUsageBreakdown(all, totalBytes) {
   }
 
   const bytesFor = keys => keys.length ? browser.storage.sync.getBytesInUse(keys) : Promise.resolve(0);
-  const [core, shortcutArtwork, overhead] = await Promise.all([
-    bytesFor(coreKeys), bytesFor(shortcutKeys), bytesFor(overheadKeys)
+  const [core, recovery, shortcutArtwork, overhead] = await Promise.all([
+    bytesFor(coreKeys), bytesFor(recoveryKeys), bytesFor(shortcutKeys), bytesFor(overheadKeys)
   ]);
   const total = Math.max(0, Number(totalBytes) || 0);
   return {
     core: Math.max(0, Number(core) || 0),
+    recovery: Math.max(0, Number(recovery) || 0),
     shortcutArtwork: Math.max(0, Number(shortcutArtwork) || 0),
     overhead: Math.max(0, Number(overhead) || 0),
     free: Math.max(0, SYNC_QUOTA_BYTES - total),

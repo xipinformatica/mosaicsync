@@ -35,6 +35,8 @@ import {
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
   SUPPORT_URL,
   SYNC_QUOTA_BYTES,
+  SYNC_QUOTA_WARNING_FREE_BYTES,
+  SYNC_QUOTA_CRITICAL_FREE_BYTES,
   SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS,
   TIPS_URL,
   VERSION,
@@ -406,7 +408,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const syncQuotaText = document.getElementById("syncQuotaText");
   const syncRevisionLabel = document.getElementById("syncRevisionLabel");
   const syncRevisionText = document.getElementById("syncRevisionText");
+  const syncStorageBreakdown = document.querySelector(".sync-storage-breakdown");
   const syncUsageCore = document.getElementById("syncUsageCore");
+  const syncUsageRecovery = document.getElementById("syncUsageRecovery");
   const syncUsageShortcuts = document.getElementById("syncUsageShortcuts");
   const syncUsageOverhead = document.getElementById("syncUsageOverhead");
   const syncUsageFree = document.getElementById("syncUsageFree");
@@ -507,7 +511,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentCandidateCache = [];
   let hiddenFrequentDomains = new Set();
   let frequentDragSite = null;
-  let frequentRenderSnapshot = bootRenderManifest?.frequent || null;
+  let frequentRenderSnapshot = bootRenderManifest?.firstPaint?.frequent || null;
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
@@ -679,6 +683,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 0);
   }
 
+  function warmFirstPaintSessionCache(currentState = state, currentMeta = meta) {
+    return warmSessionRenderCache(currentState, currentMeta, { frequentSnapshot: frequentRenderSnapshot });
+  }
+
+  function refreshFirstPaintCaches(currentState = state, currentMeta = meta) {
+    scheduleRenderManifestRefresh(currentState, currentMeta);
+    void warmFirstPaintSessionCache(currentState, currentMeta);
+  }
+
   function scheduleRenderPreviewRefresh(currentState = state, currentMeta = meta) {
     const generation = ++renderManifestGeneration;
     const stateSnapshot = currentState;
@@ -735,14 +748,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         state = hydrated;
         applyPageBackgroundVisual();
         scheduleAppearanceHintRefresh(state.settings);
-        void warmSessionRenderCache(state, meta);
+        void warmFirstPaintSessionCache(state, meta);
       }).catch(() => {});
     });
   }
 
   function bootGridMatchesState(currentState) {
     const manifest = bootRenderManifest;
-    if (!manifest || manifest.version !== 2 || document.documentElement.dataset.bootGrid !== "true") return false;
+    if (!manifest || ![2, 3].includes(manifest.version) || document.documentElement.dataset.bootGrid !== "true") return false;
     if (isAwaitingRemote(meta)) return false;
     if (manifest.activeSpaceId !== currentState.activeSpaceId ||
         Number(manifest.updatedAt) !== Number(currentState.updatedAt) ||
@@ -863,7 +876,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         });
         if (generation !== deferredFolderHydrationGeneration || state.activeSpaceId !== spaceId || Number(state.updatedAt) !== updatedAt) return;
         state = hydrated;
-        void warmSessionRenderCache(state, meta);
+        void warmFirstPaintSessionCache(state, meta);
         startupPhase("deferredFolderArtworkReady");
       } catch (error) {
         if (error?.message !== "DEFERRED_FOLDER_HYDRATION_CANCELLED") return;
@@ -874,6 +887,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function paintLoadedState(loaded, diagnostics, { deferHeavyAssets = false, reuseBootGrid = false, adoptBootGrid = false } = {}) {
     state = loaded.state;
     meta = loaded.meta;
+    if (state?.firstPaint?.frequent) frequentRenderSnapshot = state.firstPaint.frequent;
 
     const settingsStartedAt = performance.now();
     applySettings({ deferHeavyAssets });
@@ -895,7 +909,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     diagnostics.firstUsableMs = performance.now() - startupStartedAt;
     scheduleRenderReady();
     scheduleAppearanceHintRefresh(state.settings);
-    scheduleRenderManifestRefresh(state, meta);
+    refreshFirstPaintCaches(state, meta);
     scheduleRenderPreviewRefresh(state, meta);
   }
 
@@ -969,7 +983,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (stateChanged) {
       applySettings({ deferHeavyAssets: state.settings?.backgroundImageDeferred === true });
       scheduleAppearanceHintRefresh(state.settings);
-      scheduleRenderManifestRefresh(state, meta);
+      refreshFirstPaintCaches(state, meta);
     }
     const awaitingChanged = wasAwaitingRemote !== isAwaitingRemote(meta);
     if (stateChanged || awaitingChanged || bootGridNeedsAuthoritativeRender) {
@@ -1075,8 +1089,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
     syncFrequentlyVisitedLocalsFromState(state);
-    scheduleRenderManifestRefresh(state, meta);
-    void warmSessionRenderCache(state, meta);
+    refreshFirstPaintCaches(state, meta);
     return { enabled: frequentlyVisitedEnabled, count: frequentlyVisitedCount };
   }
 
@@ -1240,7 +1253,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function updateFrequentRenderSnapshot(sites = []) {
     frequentRenderSnapshot = projectFrequentRenderSnapshot(sites);
-    scheduleRenderManifestRefresh(state, meta);
+    refreshFirstPaintCaches(state, meta);
   }
 
   function readDeviceDefaultSpacePreference() {
@@ -1820,12 +1833,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         adoptBootGrid: diagnostics.bootGrid
       });
       // Warm only the lightweight projection after the authoritative first load.
-      void warmSessionRenderCache(state, meta);
+      void warmFirstPaintSessionCache(state, meta);
     } else {
       const reconcileStartedAt = performance.now();
       if (!reconcileAuthoritativeLocal(loaded, stateGenerationAtRead, metaGenerationAtRead)) return;
       diagnostics.authoritativeReconcileMs = performance.now() - reconcileStartedAt;
-      void warmSessionRenderCache(state, meta);
+      void warmFirstPaintSessionCache(state, meta);
     }
     scheduleDeferredBackgroundHydration();
     scheduleDeferredFolderHydration();
@@ -1854,7 +1867,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // so a session-cache paint can never publish stale migration data.
     if (initializeThemeWallpaperDimsForState(state)) {
       state = normalizeState(state);
-      void saveState().then(() => warmSessionRenderCache(state, meta)).catch(error => {
+      void saveState().then(() => warmFirstPaintSessionCache(state, meta)).catch(error => {
         console.warn(`${PRODUCT_NAME}: could not persist theme wallpaper darkness migration`, error);
       });
     }
@@ -1900,7 +1913,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   }
 
   function isMultipleSpacesEnabled(currentState = state) {
-    if (typeof currentState?.multipleSpacesEnabled === "boolean") return currentState.multipleSpacesEnabled;
+    if (typeof currentState?.firstPaint?.multipleSpacesEnabled === "boolean") return currentState.firstPaint.multipleSpacesEnabled;
     return currentState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false;
   }
 
@@ -1910,7 +1923,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   function displaySpaceName(spaceId, currentState = state) {
     const authoritativeCustom = normalizedCustomSpaceName(currentState?.spaces?.[spaceId]?.settings?.spaceName);
-    const renderSnapshotCustom = normalizedCustomSpaceName(currentState?.spaceNames?.[spaceId]);
+    const renderSnapshotCustom = normalizedCustomSpaceName(currentState?.firstPaint?.spaceNames?.[spaceId]);
     const custom = authoritativeCustom || renderSnapshotCustom;
     return custom || t(spaceId === "work" ? "work" : "personal");
   }
@@ -2134,8 +2147,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     writeBaseline = persisted.compactBaseline;
     updateSpaceSwitcher();
     refreshSpacesSettings();
-    scheduleRenderManifestRefresh(state, meta);
-    void warmSessionRenderCache(state, meta);
+    refreshFirstPaintCaches(state, meta);
   }
 
   async function setMultipleSpacesEnabled(enabled) {
@@ -2162,8 +2174,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     updateSpaceSwitcher();
     refreshSpacesSettings();
     scheduleAppearanceHintRefresh(state.settings);
-    scheduleRenderManifestRefresh(state, meta);
-    void warmSessionRenderCache(state, meta);
+    refreshFirstPaintCaches(state, meta);
     if (enabled) preloadOtherSpaceBackgrounds();
   }
 
@@ -2202,8 +2213,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     updateSpaceSwitcher();
     scheduleFrequentlyVisitedRefresh();
     scheduleAppearanceHintRefresh(state.settings);
-    scheduleRenderManifestRefresh(state, meta);
-    void warmSessionRenderCache(state, meta);
+    refreshFirstPaintCaches(state, meta);
     requestMissingSiteIcons();
     preloadOtherSpaceBackgrounds();
     devMark("newtab:space-switch:end");
@@ -2236,7 +2246,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     writeBaseline = persisted.compactBaseline;
     settlePersistedSettingsDraft();
     scheduleAppearanceHintRefresh(state.settings);
-    scheduleRenderManifestRefresh(state, meta);
+    refreshFirstPaintCaches(state, meta);
   }
 
   function markSettingsChanged() {
@@ -5966,17 +5976,36 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return pieces.length ? pieces.join(" · ") : t("completeCopyAvailable");
   }
 
+  function syncLimitationKinds(rawMeta = meta) {
+    return {
+      artwork: Math.max(0, Number(rawMeta?.syncSkippedAssets) || 0) > 0,
+      recovery: rawMeta?.syncProfileProtection === "limited" || rawMeta?.syncFastSnapshotFallback === true
+    };
+  }
+
   function syncWarningDescription(rawMeta = meta) {
     const parts = [];
     const skipped = Math.max(0, Number(rawMeta?.syncSkippedAssets) || 0);
     if (skipped === 1) parts.push(t("syncAssetQuotaWarningOne"));
     else if (skipped > 1) parts.push(t("syncAssetQuotaWarningMany", { count: skipped }));
-    if (rawMeta?.syncFastSnapshotFallback === true) parts.push(t("syncFastSnapshotFallbackWarning"));
+    if (rawMeta?.syncProfileProtection === "limited") parts.push(t("syncRecoveryLimitedWarning"));
+    else if (rawMeta?.syncFastSnapshotFallback === true) parts.push(t("syncFastSnapshotFallbackWarning"));
     // Compatibility only: old builds persisted English warning prose. Translate
     // it when it exactly matches a known catalog source; new code persists
     // structured warning state instead.
     if (!parts.length && rawMeta?.lastSyncWarning) parts.push(translateText(rawMeta.lastSyncWarning));
     return parts.join(" ");
+  }
+
+  function syncStoragePressure(freeBytes) {
+    const free = Math.max(0, Number(freeBytes) || 0);
+    if (free < SYNC_QUOTA_CRITICAL_FREE_BYTES) return "critical";
+    if (free <= SYNC_QUOTA_WARNING_FREE_BYTES) return "warning";
+    return "normal";
+  }
+
+  function isSyncQuotaErrorText(value) {
+    return /quota|storage\.sync.*full|storage.*full|exceeded/i.test(String(value || ""));
   }
 
   function updateSyncUi(rawMeta = meta, status = null) {
@@ -5994,13 +6023,26 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const remoteTime = Number(status?.remoteUpdatedAt) || 0;
     const remoteReceiptAt = Number(status?.remoteReceiptAt) || 0;
 
+    const usage = status?.usage || {
+      core: meta.syncUsageCoreBytes,
+      recovery: 0,
+      shortcutArtwork: meta.syncUsageShortcutBytes,
+      overhead: meta.syncUsageOverheadBytes,
+      free: Math.max(0, SYNC_QUOTA_BYTES - meta.syncBytesInUse)
+    };
+    const pressure = syncStoragePressure(usage.free);
+    const limitations = syncLimitationKinds(meta);
+    const quotaError = errored && isSyncQuotaErrorText(meta.lastSyncError);
+
     if (settingsSyncEnabled) settingsSyncEnabled.checked = enabled;
-    syncStatusDot?.classList.remove("off", "ready", "syncing", "waiting", "error");
+    syncStatusDot?.classList.remove("off", "ready", "syncing", "waiting", "error", "storage-warning", "storage-critical");
     syncStatusDot?.classList.add(
       !enabled ? "off" :
       errored ? "error" :
       syncing ? "syncing" :
       waiting ? "waiting" :
+      pressure === "critical" ? "storage-critical" :
+      pressure === "warning" || limitations.artwork || limitations.recovery ? "storage-warning" :
       "ready"
     );
 
@@ -6015,17 +6057,32 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           ? t("syncStillDelivering")
           : t("noSyncCopyYet");
     } else if (errored) {
-      syncStatusText.textContent = t("syncNeedsAttention");
-      syncStatusDetail.textContent = meta.lastSyncError ? translateText(meta.lastSyncError) : t("firefoxSyncError");
+      syncStatusText.textContent = quotaError ? t("syncStorageFull") : t("syncNeedsAttention");
+      syncStatusDetail.textContent = quotaError
+        ? t("syncStorageFullLocalSafe")
+        : (meta.lastSyncError ? translateText(meta.lastSyncError) : t("firefoxSyncError"));
     } else if (syncing) {
       syncStatusText.textContent = t("updatingSync");
       syncStatusDetail.textContent = t("preparingSyncCopy");
     } else {
       const warning = syncWarningDescription(meta);
-      syncStatusText.textContent = warning ? t("syncReadyLimited") : t("syncReady");
-      syncStatusDetail.textContent = warning || (remoteState === "partial"
-        ? t("newerCopyDelivering")
-        : t("changesPublishAuto"));
+      if (warning) {
+        syncStatusText.textContent = limitations.artwork && limitations.recovery
+          ? t("syncReadyStorageLimited")
+          : limitations.recovery
+            ? t("syncReadyRecoveryLimited")
+            : t("syncReadyLimited");
+        syncStatusDetail.textContent = warning;
+      } else if (pressure === "critical") {
+        syncStatusText.textContent = t("syncStorageAlmostFull");
+        syncStatusDetail.textContent = t("syncStorageFreeRemaining", { free: formatBytes(usage.free) });
+      } else if (pressure === "warning") {
+        syncStatusText.textContent = t("syncStorageGettingFull");
+        syncStatusDetail.textContent = t("syncStorageFreeRemaining", { free: formatBytes(usage.free) });
+      } else {
+        syncStatusText.textContent = t("syncReady");
+        syncStatusDetail.textContent = remoteState === "partial" ? t("newerCopyDelivering") : t("changesPublishAuto");
+      }
     }
 
     if (syncSetupCard) syncSetupCard.hidden = !(enabled && !initialized);
@@ -6047,16 +6104,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
     syncQuotaText.textContent = `${formatBytes(meta.syncBytesInUse)} / ${formatBytes(SYNC_QUOTA_BYTES)}`;
     syncQuotaText.title = t("syncItemsUsed", { count: meta.syncItemCount || 0 });
-    const usage = status?.usage || {
-      core: meta.syncUsageCoreBytes,
-      shortcutArtwork: meta.syncUsageShortcutBytes,
-      overhead: meta.syncUsageOverheadBytes,
-      free: Math.max(0, SYNC_QUOTA_BYTES - meta.syncBytesInUse)
-    };
     if (syncUsageCore) syncUsageCore.textContent = formatBytes(usage.core);
+    if (syncUsageRecovery) syncUsageRecovery.textContent = formatBytes(usage.recovery);
     if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatBytes(usage.shortcutArtwork);
     if (syncUsageOverhead) syncUsageOverhead.textContent = formatBytes(usage.overhead);
     if (syncUsageFree) syncUsageFree.textContent = formatBytes(usage.free);
+    if (syncStorageBreakdown) syncStorageBreakdown.dataset.pressure = quotaError ? "full" : pressure;
     if (syncRevisionText) {
       syncRevisionText.hidden = false;
       if (syncRevisionLabel) syncRevisionLabel.textContent = !enabled
@@ -6721,8 +6774,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       scheduleFrequentlyVisitedRefresh();
       preloadOtherSpaceBackgrounds();
       scheduleAppearanceHintRefresh(state.settings);
-      scheduleRenderManifestRefresh(state, meta);
-      void warmSessionRenderCache(state, meta);
+      refreshFirstPaintCaches(state, meta);
       if (meta?.syncEnabled && meta?.syncInitialized) {
         const published = await sendSyncMessage("mosaicsync:bootstrap-local");
         if (!published?.ok) throw new Error("PROFILE_SYNC_PUBLISH_FAILED");
@@ -7021,7 +7073,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             reconcileLauncherAfterExternalState({ renderGrid: !canSkipExternalGridRender });
             updateSpaceSwitcher();
             scheduleAppearanceHintRefresh(state.settings);
-            scheduleRenderManifestRefresh(state, meta);
+            refreshFirstPaintCaches(state, meta);
             scheduleRenderPreviewRefresh(state, meta);
             scheduleFrequentlyVisitedRefresh();
             if (state.settings.autoSiteIcons) scheduleIdleWork(() => requestMissingSiteIcons(), 700);

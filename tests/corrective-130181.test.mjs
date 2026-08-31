@@ -213,7 +213,7 @@ test("1.30.18.1 render-manifest persistence projects Personal while Multiple Spa
   }
 });
 
-test("1.30.18.1 synchronous boot manifest refuses Work and keeps Personal cache visual-only", () => {
+test("1.30.18.1 synchronous boot manifest refuses the Work grid while global Frequently Visited remains visual-only", () => {
   const base = {
     version: 2,
     onboardingCompleted: true,
@@ -223,17 +223,19 @@ test("1.30.18.1 synchronous boot manifest refuses Work and keeps Personal cache 
     rows: 2,
     tileSize: 76,
     brandVisible: true,
-    shortcuts: [{ type: "shortcut", id: "a", title: "A", url: "https://a.example/", position: 0, imageStyle: "contain" }],
-    frequent: { enabled: true, count: 3, sites: [{ title: "Site", host: "site.example", url: "https://site.example/", favicon: "" }] }
+    shortcuts: [{ type: "shortcut", id: "a", title: "A", url: "https://a.example/", position: 0, imageStyle: "contain" }]
   };
 
-  const work = runBootstrap({ ...base, activeSpaceId: "work" });
+  const frequent = { enabled: true, count: 3, sites: [{ title: "Site", host: "site.example", url: "https://site.example/", favicon: "" }] };
+  const firstPaint = activeSpaceId => ({ version: 1, activeSpaceId, multipleSpacesEnabled: true, spaceNames: { personal: "Home", work: "Office" }, frequent });
+
+  const work = runBootstrap({ ...base, activeSpaceId: "work", firstPaint: firstPaint("work") });
   assert.equal(work.root.dataset.bootGrid, undefined);
   assert.equal(work.grid.children.length, 0, "Work cache must not synchronously paint shortcut slots");
-  assert.equal(work.frequentSection.hidden, false, "initial HTML fake default is irrelevant");
-  assert.equal(work.root.dataset.bootFrequent, undefined, "Work cache must not synchronously paint Frequently Visited either");
+  assert.equal(work.frequentSection.hidden, false);
+  assert.equal(work.root.dataset.bootFrequent, "true", "global Frequently Visited should paint even while the Work grid stays gated");
 
-  const personal = runBootstrap({ ...base, activeSpaceId: "personal" });
+  const personal = runBootstrap({ ...base, activeSpaceId: "personal", firstPaint: firstPaint("personal") });
   assert.equal(personal.root.dataset.bootGrid, "true");
   assert.equal(personal.grid.inert, true);
   assert.equal(personal.empty.inert, true);

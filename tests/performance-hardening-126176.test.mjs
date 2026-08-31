@@ -371,10 +371,10 @@ for (const browser of ["firefox", "chrome"]) {
           { type: "shortcut", id: "child-bad", title: "Bad child", url: "data:text/html,bad", imageStyle: "contain", preview: "" }
         ] }
       ],
-      frequent: { enabled: true, count: 5, sites: [
+      firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true, spaceNames: { personal: "", work: "" }, frequent: { enabled: true, count: 5, sites: [
         { title: "Frequent good", host: "freq.example", url: "https://freq.example/", favicon: "" },
         { title: "Frequent bad", host: "bad.example", url: "javascript:alert(2)", favicon: "" }
-      ] }
+      ] } }
     };
     const { context, grid, frequentList } = fakeBootstrapContext(manifest);
     const safety = fs.readFileSync(`dist/${browser}/core/http-url-safety.js`, "utf8");

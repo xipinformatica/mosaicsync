@@ -51,7 +51,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(js, /hideFrequentSite/);
     assert.match(js, /isFrequentHostHidden/);
     assert.match(js, /maybeShowWebAccessPrompt/);
-    assert.match(bootstrap, /paintFrequentSnapshot\(manifest\.frequent\)/);
+    assert.match(bootstrap, /paintFrequentSnapshot\(firstPaint\.frequent\)/);
     assert.match(html, /id="webAccessPrompt"[^>]*hidden/);
   });
 }
@@ -89,9 +89,9 @@ test("1.26.13b first-frame render manifest carries a bounded Frequently Visited 
     const sites = Array.from({ length: 12 }, (_, i) => ({ title: `Site ${i}`, host: `s${i}.example`, url: `https://s${i}.example/`, favicon: "" }));
     assert.equal(mod.persistRenderManifest(state, meta, null, { enabled: true, count: 10, sites }), true);
     const manifest = JSON.parse(data.get("mosaicsync.render-manifest.v1"));
-    assert.equal(manifest.frequent.enabled, true);
-    assert.equal(manifest.frequent.count, 10);
-    assert.equal(manifest.frequent.sites.length, 10);
+    assert.equal(manifest.firstPaint.frequent.enabled, true);
+    assert.equal(manifest.firstPaint.frequent.count, 10);
+    assert.equal(manifest.firstPaint.frequent.sites.length, 10);
   } finally {
     globalThis.localStorage = previousStorage;
   }

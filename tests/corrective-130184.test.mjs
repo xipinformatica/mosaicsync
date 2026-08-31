@@ -67,8 +67,9 @@ for (const browser of ["firefox", "chrome"]) {
     const context = {
       document: { getElementById: id => id === "spaceSwitcher" ? switcher : null },
       localStorage: { getItem: () => JSON.stringify({
-        version: 2, onboardingCompleted: true, multipleSpacesEnabled: true,
-        spaceNames: { personal: "Home", work: "Office" }
+        version: 2, onboardingCompleted: true,
+        firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
+          spaceNames: { personal: "Home", work: "Office" }, frequent: null }
       }) }
     };
     context.globalThis = context;
@@ -94,6 +95,8 @@ for (const browser of ["firefox", "chrome"]) {
       localStorage: { getItem: key => key === "mosaicsync.render-manifest.v1" ? JSON.stringify({
         version: 2, onboardingCompleted: true, activeSpaceId: "personal", updatedAt: 1, settingsModifiedAt: 1,
         columns: 6, rows: 2, tileSize: 76, brandVisible: true,
+        firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
+          spaceNames: { personal: "Home", work: "Office" }, frequent: null },
         shortcuts: [{ type: "shortcut", id: "meneame", title: "Meneame", url: "https://meneame.net/", position: 0, imageStyle: "contain", imageKey: "asset-known", preview: "" }]
       }) : (key.endsWith("hidden-domains.v1") ? "[]" : "{}") },
       performance: { now: () => 1 }, requestAnimationFrame: cb => { cb(); return 1; }, setTimeout: cb => { cb(); return 1; }
@@ -127,8 +130,8 @@ test("1.30.18.4 render manifest stores custom Space names for synchronous first 
     } });
     assert.equal(module.persistRenderManifest(state, { onboardingCompleted: true }), true);
     const manifest = JSON.parse(data.get(constants.RENDER_MANIFEST_KEY));
-    assert.deepEqual(manifest.spaceNames, { personal: "Home", work: "Office" });
-    assert.equal(manifest.multipleSpacesEnabled, true);
+    assert.deepEqual(manifest.firstPaint.spaceNames, { personal: "Home", work: "Office" });
+    assert.equal(manifest.firstPaint.multipleSpacesEnabled, true);
   } finally { globalThis.localStorage = previous; }
 });
 

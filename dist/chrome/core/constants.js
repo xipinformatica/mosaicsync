@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.5";
+export const VERSION = "1.30.18.6";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -25,7 +25,8 @@ export const LOCAL_ASSET_STORE_SCHEMA_VERSION = 1;
 export const LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX = "mosaicsync.pending-cross-space-sync.v1.";
 export const LOCAL_PENDING_SYNC_MUTATION_KEY = "mosaicsync.pending-sync-mutation.v1";
 export const SESSION_RENDER_STATE_KEY = "mosaicsync.session.render-state.v2";
-export const RENDER_SNAPSHOT_SCHEMA_VERSION = 3;
+export const RENDER_SNAPSHOT_SCHEMA_VERSION = 4;
+export const RENDER_MANIFEST_SCHEMA_VERSION = 3;
 export const SESSION_RENDER_INLINE_IMAGE_MAX_CHARS = 24000;
 export const SESSION_RENDER_META_KEY = "mosaicsync.session.render-meta.v1";
 export const APPEARANCE_HINT_KEY = "mosaicsync.appearance.v1";
@@ -83,6 +84,8 @@ export const DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION = 1;
 export const SYNC_QUOTA_BYTES = 102400;
 export const SYNC_QUOTA_BYTES_PER_ITEM = 8192;
 export const SYNC_QUOTA_MAX_ITEMS = 512;
+export const SYNC_QUOTA_WARNING_FREE_BYTES = 25 * 1024;
+export const SYNC_QUOTA_CRITICAL_FREE_BYTES = 10 * 1024;
 export const DEVICE_SNAPSHOT_CHUNK_DATA_CHARS = 5600;
 export const DEVICE_SNAPSHOT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 export const DEVICE_SNAPSHOT_CAP_MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;

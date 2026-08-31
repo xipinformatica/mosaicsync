@@ -11,8 +11,10 @@
  */
 import "../core/http-url-safety.js";
 import { optimizeImageDataUrl } from "../core/image-optimizer.js";
+import { createFirstPaintContract, sanitizeFirstPaintFrequentSnapshot } from "../core/first-paint-contract.js";
 import {
   RENDER_MANIFEST_KEY,
+  RENDER_MANIFEST_SCHEMA_VERSION,
   RENDER_MANIFEST_MAX_CHARS,
   RENDER_PREVIEW_CONCURRENCY,
   RENDER_PREVIEW_DIMENSION,
@@ -31,7 +33,7 @@ function ensureManifestCache() {
   try {
     const raw = localStorage.getItem(KEY);
     const parsed = raw ? JSON.parse(raw) : null;
-    if (parsed?.version === 2 && Array.isArray(parsed.shortcuts)) {
+    if ([2, RENDER_MANIFEST_SCHEMA_VERSION].includes(parsed?.version) && Array.isArray(parsed.shortcuts)) {
       manifestCache = parsed;
       lastSerialized = raw;
     }
@@ -40,7 +42,7 @@ function ensureManifestCache() {
 }
 
 export function seedRenderManifest(manifest) {
-  if (!manifestCache && manifest?.version === 2) {
+  if (!manifestCache && [2, RENDER_MANIFEST_SCHEMA_VERSION].includes(manifest?.version)) {
     manifestCache = manifest;
     lastSerialized = JSON.stringify(manifest);
   } else ensureManifestCache();
@@ -71,33 +73,6 @@ function cachedPreviews() {
   };
   for (const item of manifestCache?.shortcuts || []) visit(item);
   return previews;
-}
-
-function normalizedSpaceName(value) {
-  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 32) : "";
-}
-
-function sanitizeFrequentSnapshot(snapshot) {
-  if (!snapshot || typeof snapshot !== "object") return null;
-  const count = [3, 5, 8, 10].includes(Number(snapshot.count)) ? Number(snapshot.count) : 5;
-  const enabled = snapshot.enabled === true;
-  const sites = [];
-  if (enabled && Array.isArray(snapshot.sites)) {
-    for (const site of snapshot.sites.slice(0, 10)) {
-      if (!site || typeof site !== "object") continue;
-      const safeUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(site.url) || "";
-      if (!safeUrl) continue;
-      const parsed = new URL(safeUrl);
-      const title = String(site.title || parsed.hostname).trim().slice(0, 120);
-      const host = String(site.host || parsed.hostname).trim().slice(0, 253);
-      const favicon = typeof site.favicon === "string" && site.favicon.length <= RENDER_PREVIEW_MAX_CHARS &&
-        /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(site.favicon)
-        ? site.favicon
-        : "";
-      sites.push({ title, url: safeUrl, host, favicon });
-    }
-  }
-  return { enabled, count, sites };
 }
 
 function projectItem(item, previews) {
@@ -146,7 +121,7 @@ function serializeWithinBudget(manifest) {
 
   // Frequently Visited artwork is a convenience inside an already-disposable
   // snapshot. Drop those previews before sacrificing shortcut/favicon previews.
-  for (const site of manifest.frequent?.sites || []) {
+  for (const site of manifest.firstPaint?.frequent?.sites || []) {
     if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) break;
     if (!site.favicon) continue;
     site.favicon = "";
@@ -164,8 +139,8 @@ function serializeWithinBudget(manifest) {
     serialized = JSON.stringify(manifest);
   }
 
-  while (manifest.frequent?.sites?.length && serialized.length > RENDER_MANIFEST_MAX_CHARS) {
-    manifest.frequent.sites.pop();
+  while (manifest.firstPaint?.frequent?.sites?.length && serialized.length > RENDER_MANIFEST_MAX_CHARS) {
+    manifest.firstPaint.frequent.sites.pop();
     serialized = JSON.stringify(manifest);
   }
   return serialized;
@@ -188,7 +163,7 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
   const previews = cachedPreviews();
   if (extraPreviews) for (const [key, value] of extraPreviews) previews.set(key, value);
   const manifest = {
-    version: 2,
+    version: RENDER_MANIFEST_SCHEMA_VERSION,
     onboardingCompleted: currentMeta.onboardingCompleted === true,
     activeSpaceId: source.activeSpaceId,
     updatedAt: Number(source.updatedAt) || 0,
@@ -197,14 +172,9 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
     rows: source.settings.rows,
     tileSize: source.settings.tileSize,
     brandVisible: source.settings.brandVisible !== false,
-    multipleSpacesEnabled: currentState?.spaces?.personal?.settings?.multipleSpacesEnabled !== false,
-    spaceNames: {
-      personal: normalizedSpaceName(currentState?.spaces?.personal?.settings?.spaceName),
-      work: normalizedSpaceName(currentState?.spaces?.work?.settings?.spaceName)
-    },
-    frequent: frequentSnapshot === undefined
-      ? sanitizeFrequentSnapshot(manifestCache?.frequent)
-      : sanitizeFrequentSnapshot(frequentSnapshot),
+    firstPaint: createFirstPaintContract(currentState, frequentSnapshot === undefined
+      ? sanitizeFirstPaintFrequentSnapshot(manifestCache?.firstPaint?.frequent ?? manifestCache?.frequent)
+      : frequentSnapshot),
     shortcuts: (source.shortcuts || []).map(item => projectItem(item, previews))
   };
   const serialized = serializeWithinBudget(manifest);

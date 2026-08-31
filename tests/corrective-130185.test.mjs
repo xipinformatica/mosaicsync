@@ -47,8 +47,8 @@ for (const browser of ["firefox", "chrome"]) {
     const state = model.normalizeState({ activeSpaceId: "personal", spaces: { personal, work } });
     const snapshot = storage.createRenderSnapshot(state);
     assert.equal(snapshot.renderSnapshotVersion, constants.RENDER_SNAPSHOT_SCHEMA_VERSION);
-    assert.deepEqual(snapshot.spaceNames, { personal: "Home", work: "Office" });
-    assert.equal(snapshot.multipleSpacesEnabled, true);
+    assert.deepEqual(snapshot.firstPaint.spaceNames, { personal: "Home", work: "Office" });
+    assert.equal(snapshot.firstPaint.multipleSpacesEnabled, true);
 
     const source = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const code = ["isMultipleSpacesEnabled", "normalizedCustomSpaceName", "displaySpaceName", "updateSpaceSwitcher"]
