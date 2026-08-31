@@ -69,7 +69,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { clearSessionFrequentlyVisitedSuppression, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -1786,6 +1786,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     diagnostics.sessionCacheStatus = getSessionRenderCacheStatus();
     diagnostics.sessionStorageMs = sessionCache?.timings?.storageMs ?? null;
     diagnostics.sessionValidationMs = sessionCache?.timings?.validationMs ?? null;
+    if (sessionCache?.frequentSuppressed) {
+      // A background permission-removal event can arrive while no New Tab exists.
+      // The shared session tombstone is intentionally smaller than a full render
+      // snapshot and must be able to clear an older localStorage FV strip even
+      // when the normal session render state is absent.
+      renderFrequentlyVisited([], { authoritative: false, enabled: false, count: frequentlyVisitedCount });
+    }
 
     let paintedSession = false;
     let sessionBlockedByAuthoritativeSpaces = false;
@@ -5900,9 +5907,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // If the browser restores/grants Top Sites permission, suggestions should
     // return automatically without rebuilding or waking unrelated Settings work.
     if (permissionChangeAffectsTopSites(change) && frequentlyVisitedEnabled) {
-      frequentCandidateCacheAt = 0;
-      frequentCandidateCache = [];
-      scheduleFrequentlyVisitedRefresh(0);
+      void clearSessionFrequentlyVisitedSuppression().finally(() => {
+        frequentCandidateCacheAt = 0;
+        frequentCandidateCache = [];
+        scheduleFrequentlyVisitedRefresh(0);
+      });
     }
   });
 

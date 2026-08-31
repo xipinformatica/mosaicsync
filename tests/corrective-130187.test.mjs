@@ -110,7 +110,7 @@ for (const browser of ["firefox", "chrome"]) {
       const { constants, model, storage } = await modulesFor(browser, "dedupe");
       const state = stateWithFrequent(constants, model, { enabled: true, count: 5 });
       const frequent = { enabled: true, count: 5, sites: [{ title: "Example", host: "example.com", url: "https://example.com/", favicon: "" }] };
-      const meta = { deviceId: "device-a", onboardingCompleted: true, syncEnabled: false };
+      const meta = { ...constants.DEFAULT_META, deviceId: "device-a", onboardingCompleted: true, syncEnabled: false };
       store[constants.SESSION_RENDER_STATE_KEY] = storage.createRenderSnapshot(state, { frequentSnapshot: frequent });
       store[constants.SESSION_RENDER_META_KEY] = structuredClone(meta);
       const read = await storage.readSessionRenderCache();
@@ -129,7 +129,10 @@ for (const browser of ["firefox", "chrome"]) {
     const store = {};
     const writes = [];
     globalThis.browser = { storage: { session: {
-      get: async key => Object.hasOwn(store, key) ? { [key]: structuredClone(store[key]) } : {},
+      get: async keys => {
+        const wanted = Array.isArray(keys) ? keys : [keys];
+        return Object.fromEntries(wanted.filter(key => Object.hasOwn(store, key)).map(key => [key, structuredClone(store[key])]));
+      },
       set: async items => { writes.push(structuredClone(items)); Object.assign(store, structuredClone(items)); }
     } } };
     try {

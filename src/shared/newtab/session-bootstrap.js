@@ -21,7 +21,8 @@
     const startedAt = (globalThis.performance?.now?.() ?? Date.now());
     const promise = Promise.resolve(storage.get([
       "mosaicsync.session.render-state.v2",
-      "mosaicsync.session.render-meta.v1"
+      "mosaicsync.session.render-meta.v1",
+      "mosaicsync.session.frequent-suppressed.v1"
     ])).catch(() => null);
     globalThis.__mosaicsyncEarlySessionRead = { startedAt, promise };
   } catch {

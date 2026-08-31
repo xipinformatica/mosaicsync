@@ -30,6 +30,7 @@ import {
   SESSION_RENDER_INLINE_IMAGE_MAX_CHARS,
   SESSION_RENDER_META_KEY,
   SESSION_RENDER_STATE_KEY,
+  SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY,
   SHORTCUT_COLOR_TAG_KEYS
 } from "./constants.js";
 import {
@@ -105,9 +106,21 @@ function sessionSerialized(value) {
   try { return JSON.stringify(value); } catch { return null; }
 }
 
+async function sessionStoredValueMatches(key, serialized) {
+  if (!browser.storage.session || !serialized) return false;
+  try {
+    const result = await browser.storage.session.get(key);
+    return sessionSerialized(result?.[key]) === serialized;
+  } catch {
+    // A failed verification must never suppress a corrective cache write.
+    return false;
+  }
+}
+
 async function writeSessionRenderStateBestEffort(snapshot) {
   const serialized = sessionSerialized(snapshot);
-  if (serialized && serialized === lastSessionRenderStateSerialized) return false;
+  if (serialized && serialized === lastSessionRenderStateSerialized &&
+      await sessionStoredValueMatches(SESSION_RENDER_STATE_KEY, serialized)) return false;
   const written = await setSessionBestEffort({ [SESSION_RENDER_STATE_KEY]: snapshot });
   if (written) lastSessionRenderStateSerialized = serialized;
   return written;
@@ -115,7 +128,8 @@ async function writeSessionRenderStateBestEffort(snapshot) {
 
 async function writeSessionRenderMetaBestEffort(meta) {
   const serialized = sessionSerialized(meta);
-  if (serialized && serialized === lastSessionRenderMetaSerialized) return false;
+  if (serialized && serialized === lastSessionRenderMetaSerialized &&
+      await sessionStoredValueMatches(SESSION_RENDER_META_KEY, serialized)) return false;
   const written = await setSessionBestEffort({ [SESSION_RENDER_META_KEY]: meta });
   if (written) lastSessionRenderMetaSerialized = serialized;
   return written;
@@ -400,11 +414,12 @@ export async function readSessionRenderCache(earlyRead = null) {
     const storageStartedAt = canUseEarly && Number.isFinite(earlyRead.startedAt) ? earlyRead.startedAt : perfNow();
     const result = canUseEarly
       ? await earlyRead.promise
-      : await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_RENDER_META_KEY]);
+      : await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_RENDER_META_KEY, SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]);
     const storageMs = perfNow() - storageStartedAt;
+    const frequentSuppressed = result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true;
     if (!result?.[SESSION_RENDER_STATE_KEY] || !result?.[SESSION_RENDER_META_KEY]) {
       lastSessionRenderCacheStatus = "miss";
-      return null;
+      return frequentSuppressed ? { state: null, meta: null, frequentSuppressed: true, timings: { storageMs, validationMs: 0 } } : null;
     }
 
     const validationStartedAt = perfNow();
@@ -424,6 +439,7 @@ export async function readSessionRenderCache(earlyRead = null) {
     return {
       state: cachedState,
       meta,
+      frequentSuppressed,
       timings: { storageMs, validationMs }
     };
   } catch {
@@ -432,15 +448,48 @@ export async function readSessionRenderCache(earlyRead = null) {
   }
 }
 
-export async function warmSessionRenderCache(state, meta, { frequentSnapshot = null } = {}) {
+async function sessionFrequentSnapshotForWrite(state, frequentSnapshot = undefined) {
+  if (!browser.storage.session) return frequentSnapshot === undefined ? null : frequentSnapshot;
+  try {
+    const result = await browser.storage.session.get([
+      SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY,
+      SESSION_RENDER_STATE_KEY
+    ]);
+    if (result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true) {
+      const settings = state?.spaces?.personal?.settings || state?.settings || DEFAULT_STATE.settings;
+      const countValue = Number(settings?.frequentlyVisitedCount);
+      const count = [3, 5, 8, 10].includes(countValue) ? countValue : 5;
+      return { enabled: settings?.frequentlyVisitedEnabled === true, count, sites: [] };
+    }
+    if (frequentSnapshot !== undefined) return frequentSnapshot;
+    const existing = result?.[SESSION_RENDER_STATE_KEY];
+    if (isRenderSnapshotValid(existing)) return existing.firstPaint?.frequent ?? null;
+  } catch {
+    // The cache is disposable. If the shared session store cannot be inspected,
+    // prefer the caller's explicit truth and otherwise write a no-op projection.
+  }
+  return frequentSnapshot === undefined ? null : frequentSnapshot;
+}
+
+export async function warmSessionRenderCache(state, meta, { frequentSnapshot = undefined } = {}) {
   if (!browser.storage.session) return false;
   const normalizedMeta = ensureDeviceId(meta || DEFAULT_META);
-  const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot });
+  const resolvedFrequent = await sessionFrequentSnapshotForWrite(state || DEFAULT_STATE, frequentSnapshot);
+  const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot: resolvedFrequent });
   const stateSerialized = sessionSerialized(snapshot);
   const metaSerialized = sessionSerialized(normalizedMeta);
+  const localStateMatch = Boolean(stateSerialized && stateSerialized === lastSessionRenderStateSerialized);
+  const localMetaMatch = Boolean(metaSerialized && metaSerialized === lastSessionRenderMetaSerialized);
+  let shared = {};
+  if (localStateMatch || localMetaMatch) {
+    const verifyKeys = [];
+    if (localStateMatch) verifyKeys.push(SESSION_RENDER_STATE_KEY);
+    if (localMetaMatch) verifyKeys.push(SESSION_RENDER_META_KEY);
+    try { shared = await browser.storage.session.get(verifyKeys); } catch { shared = {}; }
+  }
   const updates = {};
-  if (!stateSerialized || stateSerialized !== lastSessionRenderStateSerialized) updates[SESSION_RENDER_STATE_KEY] = snapshot;
-  if (!metaSerialized || metaSerialized !== lastSessionRenderMetaSerialized) updates[SESSION_RENDER_META_KEY] = normalizedMeta;
+  if (!localStateMatch || sessionSerialized(shared?.[SESSION_RENDER_STATE_KEY]) !== stateSerialized) updates[SESSION_RENDER_STATE_KEY] = snapshot;
+  if (!localMetaMatch || sessionSerialized(shared?.[SESSION_RENDER_META_KEY]) !== metaSerialized) updates[SESSION_RENDER_META_KEY] = normalizedMeta;
   if (!Object.keys(updates).length) return false;
   const written = await setSessionBestEffort(updates);
   if (written) {
@@ -453,22 +502,44 @@ export async function warmSessionRenderCache(state, meta, { frequentSnapshot = n
 export async function clearSessionFrequentlyVisitedSnapshot() {
   if (!browser.storage.session) return false;
   try {
-    const result = await browser.storage.session.get(SESSION_RENDER_STATE_KEY);
+    const result = await browser.storage.session.get([SESSION_RENDER_STATE_KEY, SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]);
+    const updates = {};
+    if (result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] !== true) {
+      updates[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] = true;
+    }
     const snapshot = result?.[SESSION_RENDER_STATE_KEY];
-    if (!isRenderSnapshotValid(snapshot)) return false;
-    const countValue = Number(snapshot.settings?.frequentlyVisitedCount);
-    const count = [3, 5, 8, 10].includes(countValue) ? countValue : 5;
-    const enabled = snapshot.settings?.frequentlyVisitedEnabled === true;
-    const current = snapshot.firstPaint?.frequent;
-    if (current?.enabled === enabled && Number(current?.count) === count && Array.isArray(current?.sites) && current.sites.length === 0) return false;
-    const next = {
-      ...snapshot,
-      firstPaint: {
-        ...snapshot.firstPaint,
-        frequent: { enabled, count, sites: [] }
+    if (isRenderSnapshotValid(snapshot)) {
+      const countValue = Number(snapshot.settings?.frequentlyVisitedCount);
+      const count = [3, 5, 8, 10].includes(countValue) ? countValue : 5;
+      const enabled = snapshot.settings?.frequentlyVisitedEnabled === true;
+      const current = snapshot.firstPaint?.frequent;
+      if (!(current?.enabled === enabled && Number(current?.count) === count && Array.isArray(current?.sites) && current.sites.length === 0)) {
+        updates[SESSION_RENDER_STATE_KEY] = {
+          ...snapshot,
+          firstPaint: {
+            ...snapshot.firstPaint,
+            frequent: { enabled, count, sites: [] }
+          }
+        };
       }
-    };
-    return writeSessionRenderStateBestEffort(next);
+    }
+    if (!Object.keys(updates).length) return false;
+    const written = await setSessionBestEffort(updates);
+    if (written && Object.hasOwn(updates, SESSION_RENDER_STATE_KEY)) {
+      lastSessionRenderStateSerialized = sessionSerialized(updates[SESSION_RENDER_STATE_KEY]);
+    }
+    return written;
+  } catch {
+    return false;
+  }
+}
+
+export async function clearSessionFrequentlyVisitedSuppression() {
+  if (!browser.storage.session) return false;
+  try {
+    const result = await browser.storage.session.get(SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY);
+    if (result?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] !== true) return false;
+    return setSessionBestEffort({ [SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY]: false });
   } catch {
     return false;
   }
@@ -699,7 +770,8 @@ async function writeLocalStateResult(state, {
     finalState = await hydrateLocalAssetsForSpaceNormalized(finalState, finalState.activeSpaceId);
     finalState = selectActiveSpaceNormalized(finalState, finalState.activeSpaceId);
   }
-  await writeSessionRenderStateBestEffort(createRenderSnapshot(finalState));
+  const sessionFrequent = await sessionFrequentSnapshotForWrite(finalState);
+  await writeSessionRenderStateBestEffort(createRenderSnapshot(finalState, { frequentSnapshot: sessionFrequent }));
   return { state: finalState, compactBaseline: persisted.compactBaseline };
 }
 

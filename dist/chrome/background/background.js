@@ -123,6 +123,7 @@ import {
 } from "../core/model.js";
 import {
   clearSessionFrequentlyVisitedSnapshot,
+  clearSessionFrequentlyVisitedSuppression,
   ensureLocalStorage,
   readLocalMeta,
   writeLocalMeta,
@@ -1122,6 +1123,9 @@ browser.alarms?.onAlarm?.addListener(alarm => {
 });
 
 browser.permissions?.onAdded?.addListener(permissions => {
+  if (permissionChangeAffectsTopSites(permissions)) {
+    void clearSessionFrequentlyVisitedSuppression();
+  }
   const origins = Array.isArray(permissions?.origins) ? permissions.origins : [];
   const webAccessChanged = origins.some(origin => WEB_ORIGINS.includes(origin));
   if (!webAccessChanged) return;

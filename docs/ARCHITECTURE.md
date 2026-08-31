@@ -62,8 +62,9 @@ Rules:
 - Fast startup must be **fast + truthful**, never fast + knowingly wrong.
 - `null`/missing optional data means “this layer has no opinion”; it must preserve an already-painted truthful value until authoritative state arrives.
 - For Frequently Visited specifically, authoritative synchronized OFF is explicit (`enabled: false`, empty sites) so a newer session layer can suppress an older visual snapshot; synchronized ON with no fresh device-local sites remains `null` and therefore does not invent or erase browser-derived candidates.
-- Removal of the optional Top Sites permission invalidates the device-local session site projection from the background context; it does not mutate the synchronized preference.
-- Identical session acceleration snapshots are not rewritten merely because a refresh path ran.
+- Removal of the optional Top Sites permission writes a tiny session-only suppression tombstone as well as clearing any current session site projection. That tombstone survives a missing render snapshot and unrelated background state writes until Top Sites permission is granted again; it never mutates the synchronized preference.
+- Background contexts cannot synchronously rewrite a New Tab page's localStorage render manifest. A background-only Sync/artwork change therefore refreshes the shared session projection, and that newer session projection must win as soon as the New Tab module starts. Step 2 owns the decision about reducing or consolidating this remaining persistent-manifest ownership boundary rather than adding another permanent cache layer.
+- Identical session acceleration snapshots are skipped only after the writer verifies that the actual shared `storage.session` bytes still match its local fingerprint; one extension context's memory is never treated as proof of shared-cache contents.
 - Work-specific shortcut-grid safety checks do not apply to global/device-local Frequently Visited data.
 - All startup cache formats are disposable and explicitly versioned.
 - Cache invalidation/refresh should go through centralized first-paint refresh paths rather than independent ad-hoc writers.

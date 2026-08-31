@@ -1,3 +1,13 @@
+## 1.30.18.8
+
+- Completes Step 1.2 first-paint hardening before any Step-2 cache consolidation: Top Sites permission removal now writes a tiny device-local `storage.session` suppression tombstone as well as clearing any current Frequently Visited session projection, so invalidation survives both a missing render snapshot and later unrelated background state writes.
+- Carries that suppression marker in the already-existing early session read and applies it before session/local authoritative hydration, allowing the next New Tab to clear an older synchronous Frequently Visited strip even when no full session render snapshot existed when permission was removed; granting Top Sites permission clears the tombstone without changing the synchronized Show preference.
+- Hardens shared session-cache deduplication across multiple extension contexts: a tab/background context may skip an apparently identical render-state/meta write only after verifying that the actual shared `storage.session` bytes still match its local fingerprint, rather than treating context-local memory as proof of shared cache contents.
+- Preserves the existing device-local Frequently Visited projection through generic background profile writes instead of transiently replacing it with `frequent: null`; an active permission-suppression tombstone always wins until the permission is restored.
+- Adds explicit Firefox/Chrome regressions for permission removal with no session snapshot, suppression survival across generic background writes, cross-context session deduplication, true identical-byte no-write behavior, background-only Space renames, and background favicon learning while no New Tab context is alive.
+- Documents the remaining ownership boundary honestly: MV3/background contexts cannot synchronously rewrite a New Tab page's persistent localStorage render manifest, so background-only changes refresh the newer session projection and Step 2 will decide how to reduce/consolidate that remaining persistent-manifest layer instead of adding another permanent cache.
+- Preserves all existing features, 1.30.18.7 warm-grid reuse/localization/quota fixes, Work shortcut-grid safety, normal Sync/Recovery/profile schemas, permissions, CSP, privacy boundaries, telemetry policy and backend-free operation.
+
 ## 1.30.18.7
 
 - Hardens the Step-1 first-paint foundation before any Step-2 cache consolidation: restores warm boot-grid adoption for the current render-manifest schema after an obsolete schema-2 literal silently forced a second full render on session-warm New Tabs.
