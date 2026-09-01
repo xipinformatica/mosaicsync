@@ -1,0 +1,217 @@
+name: MosaicSync 1.30.18.16 certification
+
+on:
+  push:
+    branches:
+      - release/1.30.18.16
+
+permissions:
+  contents: read
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply canonical 1.30.18.16 release identity
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          old = "1.30.18.15"
+          version = "1.30.18.16"
+
+          def replace_required(path, before, after, count=None):
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              if before not in text:
+                  raise SystemExit(f"required release-identity marker missing in {path}: {before!r}")
+              text = text.replace(before, after, -1 if count is None else count)
+              p.write_text(text, encoding="utf-8")
+
+          replace_required("src/shared/core/constants.js", f'export const VERSION = "{old}";', f'export const VERSION = "{version}";', 1)
+
+          for path in ("src/firefox/manifest.json", "src/chrome/manifest.json"):
+              p = Path(path)
+              data = json.loads(p.read_text(encoding="utf-8"))
+              if data.get("version") != old:
+                  raise SystemExit(f"unexpected starting version in {path}: {data.get('version')!r}")
+              data["version"] = version
+              if path.endswith("chrome/manifest.json"):
+                  if data.get("version_name") != old:
+                      raise SystemExit(f"unexpected starting version_name in {path}")
+                  data["version_name"] = version
+              p.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+          for path in ("src/firefox/newtab/newtab.html", "src/chrome/newtab/newtab.html"):
+              replace_required(path, f"MosaicSync · {old}", f"MosaicSync · {version}")
+
+          replace_required("README.md", f"**Current source release: {old}**", f"**Current source release: {version}**", 1)
+          replace_required("README.md", f"The active source release is **{old}**", f"The active source release is **{version}**", 1)
+          replace_required(
+              "README-DEVELOPMENT.md",
+              f"> **Current release: {old}.**",
+              f"> **Current release: {version}.**",
+              1
+          )
+          dev = Path("README-DEVELOPMENT.md")
+          dev_text = dev.read_text(encoding="utf-8")
+          marker = "\n\n## 1.30.18.15 Step 3.1 shared-background policy\n"
+          if marker not in dev_text:
+              raise SystemExit("1.30.18.15 development-policy insertion marker missing")
+          section = """
+
+## 1.30.18.16 Step 3.1 adapter-boundary hardening policy
+
+- Keep the 1.30.18.15 shared background architecture unchanged: one semantic core plus thin Firefox/Chromium capability adapters.
+- Production favicon policy is unchanged because post-release audits found the shared-core-to-adapter wiring correct.
+- Behavioral coverage must execute the generated production background with the real platform adapter for Firefox open-tab cached favicon recovery and `tabs.onUpdated` learning.
+- Chromium coverage must preserve the protected Chrome Web Store `_favicon` path, prohibit remote protected-page favicon fetches, and strip protected remote provenance.
+- The intentional two `permissions.onRemoved` listeners remain unchanged; they serve separate permission-cleanup concerns.
+- Do not reopen Step 2, Sync/Recovery semantics, schemas, permissions, CSP, telemetry or backend behavior in this release.
+"""
+          dev.write_text(dev_text.replace(marker, section + marker, 1), encoding="utf-8")
+
+          changelog = Path("CHANGELOG.md")
+          changelog_text = changelog.read_text(encoding="utf-8")
+          if changelog_text.startswith(f"## {version}\n"):
+              pass
+          else:
+              heading = f"## {old}\n"
+              index = changelog_text.find(heading)
+              if index < 0:
+                  raise SystemExit("current CHANGELOG heading missing")
+              entry = f"""## {version}
+
+- Hardened the Step 3.1 shared-background adapter boundary with production-runtime tests rather than source-shape or mocked-adapter checks.
+- Firefox now has an end-to-end regression proving a matching open tab can provide cached `favIconUrl` artwork through the real adapter with network discovery disabled.
+- Firefox now has an end-to-end regression for expected shortcut navigation -> `tabs.onUpdated` -> native favicon learning -> device-local artwork persistence.
+- Chromium now has a protected Chrome Web Store regression proving favicon learning stays on the browser-local `_favicon` path, does not fetch a protected remote favicon URL, and stores no protected remote provenance.
+- Production favicon behavior is unchanged: the audits and new tests confirm 1.30.18.15 already passed the required adapter capabilities correctly. No feature, Sync/Recovery/state/meta schema, Step-2 ownership, permission, CSP, telemetry or backend change.
+
+"""
+              changelog.write_text(changelog_text[:index] + entry + changelog_text[index:], encoding="utf-8")
+
+          baseline_path = Path("package-size-baseline.json")
+          baseline = json.loads(baseline_path.read_text(encoding="utf-8"))
+          for browser in ("firefox", "chrome"):
+              if baseline["browsers"][browser].get("version") != old:
+                  raise SystemExit(f"unexpected package-size baseline version for {browser}")
+              baseline["browsers"][browser]["version"] = version
+          baseline_path.write_text(json.dumps(baseline, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+          architecture = Path("docs/ARCHITECTURE.md")
+          arch_text = architecture.read_text(encoding="utf-8")
+          if "## 1.30.18.16 Step 3.1 adapter-boundary hardening" not in arch_text:
+              arch_text += """
+
+## 1.30.18.16 Step 3.1 adapter-boundary hardening
+
+1.30.18.16 does not change the Step 3.1 ownership boundary. It adds production-runtime behavioral locks at the real shared-core/browser-adapter seam before further Step-3 consolidation proceeds. Firefox open-tab cached favicon recovery and expected-navigation `tabs.onUpdated` learning must execute through the real Firefox adapter; Chromium protected-store learning must remain browser-local and provenance-safe. Step 2 and shared Sync/Recovery semantics remain frozen.
+"""
+              architecture.write_text(arch_text, encoding="utf-8")
+          PY
+
+      - name: Full automated suite
+        run: npm test
+
+      - name: Performance benchmark
+        run: npm run bench
+
+      - name: Runtime size report
+        run: npm run size
+
+      - name: Mark automated QA gates certified
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("docs/QA-1.30.18.16.md")
+          text = path.read_text(encoding="utf-8")
+          for label in (
+              "Full automated suite passes from final versioned source.",
+              "Performance benchmark passes.",
+              "Package-size report reviewed.",
+              "Firefox and Chrome deterministic runtime ZIPs generated and validated.",
+              "GitHub-ready source archive generated and validated.",
+              "Fresh extraction reruns the full test suite, benchmark and size checks.",
+              "Fresh extraction rebuilds byte-for-byte identical Firefox/Chrome and GitHub-ready ZIPs.",
+              "SHA-256 checksums recorded."
+          ):
+              text = text.replace(f"- [ ] {label}", f"- [x] {label}")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Remove temporary certification workflow from release source
+        run: |
+          rm -f .github/workflows/release-131816.yml
+          rmdir .github/workflows 2>/dev/null || true
+          rmdir .github 2>/dev/null || true
+
+      - name: Build and package deterministic release artifacts
+        run: |
+          npm run build
+          python tools/package.py
+          cp docs/RELEASE-1.30.18.16.md artifacts/mosaicsync-1.30.18.16-release-notes.md
+          (
+            cd artifacts
+            sha256sum mosaicsync-1.30.18.16-firefox.zip \
+                      mosaicsync-1.30.18.16-chrome.zip \
+                      mosaicsync-1.30.18.16-github-ready.zip \
+                      mosaicsync-1.30.18.16-release-notes.md \
+                      package-size-report.json > mosaicsync-1.30.18.16-SHA256SUMS.txt
+          )
+
+      - name: Fresh-extraction certification
+        shell: bash
+        run: |
+          mkdir -p /tmp/mosaicsync-131816-original /tmp/mosaicsync-131816-clean
+          cp artifacts/mosaicsync-1.30.18.16-firefox.zip /tmp/mosaicsync-131816-original/
+          cp artifacts/mosaicsync-1.30.18.16-chrome.zip /tmp/mosaicsync-131816-original/
+          cp artifacts/mosaicsync-1.30.18.16-github-ready.zip /tmp/mosaicsync-131816-original/
+          unzip -q artifacts/mosaicsync-1.30.18.16-github-ready.zip -d /tmp/mosaicsync-131816-clean
+          cd /tmp/mosaicsync-131816-clean
+          npm test
+          npm run bench
+          npm run size
+          python tools/package.py
+          cmp artifacts/mosaicsync-1.30.18.16-firefox.zip /tmp/mosaicsync-131816-original/mosaicsync-1.30.18.16-firefox.zip
+          cmp artifacts/mosaicsync-1.30.18.16-chrome.zip /tmp/mosaicsync-131816-original/mosaicsync-1.30.18.16-chrome.zip
+          cmp artifacts/mosaicsync-1.30.18.16-github-ready.zip /tmp/mosaicsync-131816-original/mosaicsync-1.30.18.16-github-ready.zip
+
+      - name: Write certification record
+        shell: bash
+        run: |
+          cat > artifacts/mosaicsync-1.30.18.16-CERTIFICATION.txt <<'EOF'
+          MosaicSync 1.30.18.16 release certification
+          - Started from audited 1.30.18.15 commit 21d01a38f90ea1411eee6ec90ce134dc2090b744.
+          - Full automated suite passed on final versioned source.
+          - Performance benchmark and size report passed.
+          - Firefox and Chrome runtime ZIP release-contract validation passed.
+          - GitHub-ready source archive was freshly extracted.
+          - Fresh extraction reran the full automated suite, benchmark and size report successfully.
+          - Fresh extraction reproduced Firefox, Chrome and GitHub-ready ZIPs byte-for-byte.
+          - Step 2 ownership, Sync/Recovery schemas, permissions, CSP, telemetry and backend behavior were unchanged.
+          EOF
+          (
+            cd artifacts
+            sha256sum mosaicsync-1.30.18.16-CERTIFICATION.txt >> mosaicsync-1.30.18.16-SHA256SUMS.txt
+          )
+
+      - name: Upload certified 1.30.18.16 bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosaicsync-1.30.18.16-certified
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 30
