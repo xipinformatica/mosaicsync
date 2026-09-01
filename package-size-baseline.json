@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.15",
+      "version": "1.30.18.16",
       "rawBytes": 2152061,
-      "deflatedBytes": 633396,
+      "deflatedBytes": 633395,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1690,
-          "deflatedBytes": 659
+          "deflatedBytes": 658
         },
         "manifest-localization": {
           "files": 33,
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.15",
+      "version": "1.30.18.16",
       "rawBytes": 2173798,
-      "deflatedBytes": 648043,
+      "deflatedBytes": 648042,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1370,
-          "deflatedBytes": 556
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,

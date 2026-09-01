@@ -1,9 +1,13 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.15.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.16.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.16 Step 3 adapter-boundary hardening policy
+
+1.30.18.16 is test-first boundary hardening on the accepted 1.30.18.15 architecture. Production favicon behavior must remain unchanged unless a production-runtime regression demonstrates a defect. Permanent regressions execute generated Firefox/Chrome backgrounds with their real adapters: Firefox open-tab `tabs.query()` cache hydration, Firefox `tabs.onUpdated` expected-navigation-gated learning and marker cleanup, and Chromium protected Chrome Web Store `_favicon` handling with sentinel rejection and stripped remote provenance. Automatic/browser-learned favicon pixels remain device-local and must project to `imageKind: "none"` / no synchronized image provenance. Step-2 first-paint/cache/session ownership, state/meta/Sync/Recovery schemas, permissions, CSP, browser-history persistence and UI behavior remain frozen.
 
 ## 1.30.18.15 Step 3.1 shared-background policy
 

@@ -71,6 +71,8 @@ let topSitesPermission = false;
 const createdTabs = [];
 let fetchHandler = async () => { throw new Error('unexpected fetch'); };
 const fetchLog = [];
+let tabQueryHandler = async () => [];
+const tabQueryLog = [];
 
 let decompressionStreamCount = 0;
 const nativeDecompressionStream = globalThis.DecompressionStream;
@@ -129,7 +131,7 @@ const api = {
     onUpdated: events.onTabUpdated,
     onRemoved: events.onTabRemoved,
     async create(options = {}) { createdTabs.push(clone(options)); return { id: createdTabs.length }; },
-    async query() { return []; }
+    async query(options = {}) { tabQueryLog.push(clone(options)); return clone(await tabQueryHandler(options)); }
   },
   topSites: { async get() { return []; } },
   bookmarks: {}
@@ -384,7 +386,136 @@ async function latestDeviceSnapshotRoot(syncArea, deviceId) {
   return entries.length ? { key: entries[0][0], root: entries[0][1] } : { key: '', root: null };
 }
 
-if (scenario === 'step3-listener-topology') {
+if (scenario === 'firefox-open-tab-cache-1301816') {
+  assert.equal(browserName, 'firefox');
+  websiteAccess = true;
+  const pageUrl = 'https://cached.test/path';
+  const iconBytes = tinyPng(48, 48, 16);
+  const iconDataUrl = `data:image/png;base64,${Buffer.from(iconBytes).toString('base64')}`;
+  await seedLocalState(stateWith({ personal: [shortcut('cached', pageUrl)] }), {
+    syncEnabled: true,
+    syncInitialized: true,
+    syncBootstrapMode: 'local',
+    syncStatus: 'ready'
+  });
+  tabQueryHandler = async options => {
+    assert.ok(Array.isArray(options?.url) || typeof options?.url === 'string');
+    const patterns = Array.isArray(options.url) ? options.url : [options.url];
+    return patterns.some(pattern => String(pattern).includes('cached.test'))
+      ? [{ id: 7, url: pageUrl, favIconUrl: iconDataUrl }]
+      : [];
+  };
+  fetchHandler = async url => { throw new Error(`network fallback must not run: ${url}`); };
+
+  const result = await send({ type:'mosaicsync:hydrate-missing-icons', shortcutIds:['cached'], force:true });
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const item=findCompactShortcut(raw,'cached');
+  assert.equal(result.hydrated, 1, 'real Firefox open-tab favicon cache must hydrate the shortcut');
+  assert.ok(tabQueryLog.length >= 1, 'Firefox adapter must execute tabs.query');
+  assert.ok(tabQueryLog.some(entry => String(entry?.url || '').includes('cached.test')), 'tabs.query must be host-scoped to the shortcut site');
+  assert.equal(fetchLog.length, 0, 'no website/network fallback may make the test pass');
+  assert.equal(item.imageSyncKind, 'device');
+  assert.equal(item.imageSourceKind, 'favicon');
+  assert.equal(item.imageSourceUrl, '', 'data: tab favicon must not persist remote provenance');
+  assert.ok(item.localImageAssetId, 'browser-cached favicon must materialize only into local assets');
+  const assetKey=`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`;
+  assert.equal((await local.get(assetKey))[assetKey], iconDataUrl);
+  const normalized=model.normalizeState(raw);
+  const record=model.flattenStateNormalized(model.workspaceStateNormalized(normalized,'personal'),'device-b').get('cached');
+  assert.equal(record.imageKind, 'none', 'automatic favicon pixels must be absent from Sync records');
+  assert.equal(record.imageSourceKind, 'none');
+  assert.equal(record.imageSourceUrl, '');
+  assert.doesNotMatch(JSON.stringify(await sync.get(null)), /data:image\//, 'automatic favicon bytes must not enter storage.sync');
+  console.log(JSON.stringify({ok:true,hydrated:result.hydrated,tabQueries:tabQueryLog.length,networkFetches:fetchLog.length,imageKind:record.imageKind}));
+}
+else if (scenario === 'firefox-tab-updated-learning-1301816') {
+  assert.equal(browserName, 'firefox');
+  websiteAccess = false;
+  const tabId = 42;
+  const pageUrl = 'https://learned.test/page';
+  const iconBytes = tinyPng(32, 32, 17);
+  const iconDataUrl = `data:image/png;base64,${Buffer.from(iconBytes).toString('base64')}`;
+  await seedLocalState(stateWith({ personal: [shortcut('learned', pageUrl)] }));
+  fetchHandler = async url => { throw new Error(`network must stay unavailable: ${url}`); };
+  assert.equal(events.onTabUpdated.listeners.length, 1, 'production background must register one tabs.onUpdated listener');
+  const onUpdated = events.onTabUpdated.listeners[0];
+
+  onUpdated(tabId, { favIconUrl: iconDataUrl }, { id: tabId, url: pageUrl, favIconUrl: iconDataUrl });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  let raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(findCompactShortcut(raw,'learned').localImageAssetId, '', 'unrelated tab updates must be gated by expected-navigation state');
+
+  const expected = await events.onMessage.listeners[0]({ type:'mosaicsync:expect-shortcut-navigation', shortcutId:'learned' }, { id: runtimeId, tab: { id: tabId } });
+  assert.equal(expected?.ok, true);
+  let pending=(await session.get(constants.SESSION_PENDING_NAVIGATIONS_KEY))[constants.SESSION_PENDING_NAVIGATIONS_KEY];
+  assert.equal(pending?.[String(tabId)]?.shortcutId, 'learned', 'expected navigation must be durably/session marked before learning');
+
+  onUpdated(tabId, { status:'complete', favIconUrl: iconDataUrl }, { id: tabId, url: pageUrl, favIconUrl: iconDataUrl });
+  const deadline = Date.now() + 1500;
+  let item = findCompactShortcut(raw,'learned');
+  while (Date.now() < deadline && !item?.localImageAssetId) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    item=findCompactShortcut(raw,'learned');
+  }
+  assert.ok(item?.localImageAssetId, 'real tabs.onUpdated path must learn the Firefox tab favicon');
+  assert.equal(item.imageSyncKind, 'device');
+  assert.equal(item.imageSourceKind, 'firefox', 'real Firefox resolveTabNativeFavicon adapter must supply the learned source');
+  assert.equal(item.imageSourceUrl, '');
+  assert.equal(fetchLog.length, 0, 'native data favicon learning must not depend on network fallback');
+  pending=(await session.get(constants.SESSION_PENDING_NAVIGATIONS_KEY))[constants.SESSION_PENDING_NAVIGATIONS_KEY];
+  assert.ok(!pending?.[String(tabId)], 'successful learning must clear the durable/session expected-navigation marker');
+  const record=model.flattenStateNormalized(model.workspaceStateNormalized(model.normalizeState(raw),'personal'),'device-b').get('learned');
+  assert.equal(record.imageKind, 'none');
+  assert.equal(record.imageSourceKind, 'none');
+  console.log(JSON.stringify({ok:true,gated:true,learned:true,markerCleared:true,networkFetches:fetchLog.length}));
+}
+else if (scenario === 'chrome-protected-native-1301816') {
+  assert.equal(browserName, 'chrome');
+  websiteAccess = true;
+  const storeUrl = 'https://chromewebstore.google.com/detail/example/abcdefghijklmnop';
+  const placeholderUrl = 'https://chromewebstore.google.com/detail/unknown/ponmlkjihgfedcba';
+  const nativeBytes = tinyPng(64, 64, 18);
+  const globeBytes = tinyPng(64, 64, 19);
+  await seedLocalState(stateWith({ personal: [shortcut('store',storeUrl), shortcut('store-placeholder',placeholderUrl)] }));
+  fetchHandler = async (url, options) => {
+    if (!url.startsWith(`chrome-extension://${runtimeId}/_favicon/`)) {
+      throw new Error(`protected remote URL must never be fetched: ${url}`);
+    }
+    assert.equal(options?.cache, 'no-store');
+    const decoded = decodeURIComponent(url);
+    if (decoded.includes('mosaicsync-placeholder-')) return responseBytes(globeBytes,'image/png',url);
+    if (decoded.includes(storeUrl)) return responseBytes(nativeBytes,'image/png',url);
+    if (decoded.includes(placeholderUrl)) return responseBytes(globeBytes,'image/png',url);
+    throw new Error(`unexpected _favicon URL ${url}`);
+  };
+
+  const real = await send({ type:'mosaicsync:hydrate-missing-icons', shortcutIds:['store'], force:true });
+  let raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  let item=findCompactShortcut(raw,'store');
+  assert.equal(real.hydrated,1,'Chrome Web Store favicon must hydrate from Chromium _favicon');
+  assert.ok(item.localImageAssetId);
+  assert.equal(item.imageSyncKind,'device');
+  assert.equal(item.imageSourceKind,'favicon');
+  assert.equal(item.imageSourceUrl,'','protected Chrome Web Store remote provenance must be stripped');
+  assert.ok(fetchLog.length >= 2, 'native page and sentinel reads must execute');
+  assert.ok(fetchLog.every(entry => entry.url.startsWith(`chrome-extension://${runtimeId}/_favicon/`)), 'only Chromium-local _favicon may be read for protected pages');
+
+  const beforePlaceholderFetches = fetchLog.length;
+  const blocked = await send({ type:'mosaicsync:hydrate-missing-icons', shortcutIds:['store-placeholder'], force:true });
+  raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  item=findCompactShortcut(raw,'store-placeholder');
+  assert.equal(item.localImageAssetId,'','sentinel-equivalent Chrome placeholder must never become durable artwork');
+  assert.equal(blocked.hydrated,0);
+  assert.ok(fetchLog.length > beforePlaceholderFetches, 'placeholder case must still consult _favicon');
+  assert.ok(fetchLog.every(entry => entry.url.startsWith(`chrome-extension://${runtimeId}/_favicon/`)), 'protected placeholder path must not fall back to remote fetches');
+  const storeRecord=model.flattenStateNormalized(model.workspaceStateNormalized(model.normalizeState(raw),'personal'),'device-b').get('store');
+  assert.equal(storeRecord.imageKind,'none');
+  assert.equal(storeRecord.imageSourceKind,'none');
+  assert.doesNotMatch(JSON.stringify(await sync.get(null)), /data:image\//);
+  console.log(JSON.stringify({ok:true,nativeHydrated:true,protectedRemoteFetches:0,provenanceStripped:true,placeholderBlocked:true,faviconFetches:fetchLog.length}));
+}
+else if (scenario === 'step3-listener-topology') {
   console.log(JSON.stringify({
     ok: true,
     onInstalled: events.onInstalled.listeners.length,

@@ -1,3 +1,12 @@
+## 1.30.18.16
+
+- Hardens the new shared Firefox/Chromium background boundary with production-runtime behavioral regressions; no new product feature is introduced.
+- Exercises Firefox open-tab favicon recovery through the real generated Firefox background, shared core and `browser.tabs.query()` adapter, while forcing website/network fallback to remain unavailable.
+- Exercises the real Firefox `tabs.onUpdated` → expected-navigation gate → favicon-learning queue → `resolveTabNativeFavicon()` chain and verifies successful learning clears the durable/session navigation marker.
+- Adds a Chromium protected Chrome Web Store regression proving `_favicon` remains browser-local, protected remote favicon URLs are never fetched, remote provenance stays stripped, and the generic-placeholder sentinel is still rejected.
+- Permanently asserts that automatic/browser-learned favicon artwork remains device-local and is projected out of synchronized shortcut records.
+- The new regressions pass against the existing 1.30.18.15 production favicon implementation, so no favicon runtime logic, state/meta/Sync/Recovery schema, permission, CSP, Step-2 ownership, Frequently Visited persistence, UI, telemetry or backend behavior is changed.
+
 ## 1.30.18.15
 
 - Begins **Step 3.1** by consolidating the previously duplicated Firefox and Chrome MV3 background implementations into one canonical shared background core.
