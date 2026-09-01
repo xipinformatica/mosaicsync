@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -66,11 +67,11 @@ for (const browser of ["firefox", "chrome"]) {
     switcher.append(personal, work);
     const context = {
       document: { getElementById: id => id === "spaceSwitcher" ? switcher : null },
-      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 5 },
       localStorage: { getItem: () => JSON.stringify({
-        version: 4, onboardingCompleted: true,
-        firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
-          spaceNames: { personal: "Home", work: "Office" }, frequent: null }
+        version: 5, ready: true, paintSpaceId: "personal",
+        spaceSwitcher: { visible: true, personal: "Home", work: "Office" },
+        layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true }, shortcuts: []
       }) }
     };
     context.globalThis = context;
@@ -93,13 +94,12 @@ for (const browser of ["firefox", "chrome"]) {
         createElement: tag => new FakeElement(tag),
         createDocumentFragment: () => { const f = new FakeElement("fragment"); f.__fragment = true; return f; }
       },
-      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
+      __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 5 },
       localStorage: { getItem: key => key === "mosaicsync.render-manifest.v1" ? JSON.stringify({
-        version: 4, onboardingCompleted: true, activeSpaceId: "personal", updatedAt: 1, settingsModifiedAt: 1,
-        columns: 6, rows: 2, tileSize: 76, brandVisible: true,
-        firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true,
-          spaceNames: { personal: "Home", work: "Office" }, frequent: null },
-        shortcuts: [{ type: "shortcut", id: "meneame", title: "Meneame", url: "https://meneame.net/", position: 0, imageStyle: "contain", imageKey: "asset-known", preview: "" }]
+        version: 5, ready: true, paintSpaceId: "personal",
+        spaceSwitcher: { visible: true, personal: "Home", work: "Office" },
+        layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
+        shortcuts: [{ type: "shortcut", id: "meneame", title: "Meneame", position: 0, imageStyle: "contain", imageKey: "asset-known", preview: "" }]
       }) : (key.endsWith("hidden-domains.v1") ? "[]" : "{}") },
       performance: { now: () => 1 }, requestAnimationFrame: cb => { cb(); return 1; }, setTimeout: cb => { cb(); return 1; }
     };
@@ -132,14 +132,14 @@ test("1.30.18.4 render manifest stores custom Space names for synchronous first 
     } });
     assert.equal(module.persistRenderManifest(state, { onboardingCompleted: true }), true);
     const manifest = JSON.parse(data.get(constants.RENDER_MANIFEST_KEY));
-    assert.deepEqual(manifest.firstPaint.spaceNames, { personal: "Home", work: "Office" });
-    assert.equal(manifest.firstPaint.multipleSpacesEnabled, true);
+    assert.deepEqual(manifest.spaceSwitcher, { visible: true, personal: "Home", work: "Office" });
+    assert.equal(Object.hasOwn(manifest, "firstPaint"), false);
   } finally { globalThis.localStorage = previous; }
 });
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.4 ${browser} recovery cleanup keeps the logically newest generation even when its wall clock is behind`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = ["compareDeviceSnapshotGenerationRecency", "pruneSupersededDeviceSnapshotGenerations"].map(name => extractFunction(src, name)).join("\n");
     const roots = [
       { key: "root-a", deviceId: "clone", commitId: "a", updatedAt: 100, publishedAt: 300 },
@@ -164,7 +164,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.4 ${browser} quota-aware recovery rotation keeps one verified fallback while making room for the new copy`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = ["compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "syncItemsFitInSnapshot", "prepareDeviceSnapshotPublicationCapacity"]
       .map(name => extractFunction(src, name)).join("\n");
     const pad = size => "x".repeat(size);
@@ -198,7 +198,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.4 ${browser} abandoned recovery chunks are reclaimed only after a safe grace period`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extractFunction(src, "maybeGarbageCollectStaleDeviceSnapshots");
     let now = 10_000_000;
     const oldRoot = "mosaicsync.sync.device.dev.snapshot.old";
@@ -245,7 +245,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.4 ${browser} snapshot publication reuses its initial full Sync read`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const publish = extractFunction(src, "publishProfileDeviceSnapshot");
     assert.match(publish, /let all = await browser\.storage\.sync\.get\(null\);[\s\S]*readOwnDeviceSnapshot\(meta\.deviceId, all\)/);
     assert.doesNotMatch(publish, /readOwnDeviceSnapshot\(meta\.deviceId\);[\s\S]*storage\.sync\.get\(null\)/,

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -173,7 +174,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.9 ${browser} favicon winner scoring values suitability over unbounded icon size`, () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const context = vm.createContext({ Math, Number, String });
     for (const name of ["faviconQualitySide", "faviconCandidateSuitability", "faviconCandidatePreference", "betterFaviconCandidate"]) {
       vm.runInContext(extractFunction(source, name), context);

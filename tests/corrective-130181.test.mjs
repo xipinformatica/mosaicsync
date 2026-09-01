@@ -207,11 +207,14 @@ test("1.30.18.1 render-manifest persistence projects Personal while Multiple Spa
     assert.equal(state.activeSpaceId, "work");
     assert.equal(manifestModule.persistRenderManifest(state, { onboardingCompleted: true }), true);
     const stored = JSON.parse(localStorage.getItem(constants.RENDER_MANIFEST_KEY));
-    assert.equal(stored.activeSpaceId, "personal");
+    assert.equal(stored.paintSpaceId, "personal");
     assert.deepEqual(stored.shortcuts.map(item => item.id), ["personal-item"]);
-    assert.equal(stored.columns, 6);
-    assert.equal(stored.rows, 2);
-    assert.equal(stored.tileSize, 76);
+    assert.equal(stored.layout.columns, 6);
+    assert.equal(stored.layout.rows, 2);
+    assert.equal(stored.layout.tileSize, 76);
+    for (const forbidden of ["activeSpaceId", "updatedAt", "settingsModifiedAt", "firstPaint"]) {
+      assert.equal(Object.hasOwn(stored, forbidden), false, `${forbidden} must not be a persistent visual-cache authority`);
+    }
   } finally {
     globalThis.localStorage = previousLocalStorage;
   }
@@ -220,37 +223,34 @@ test("1.30.18.1 render-manifest persistence projects Personal while Multiple Spa
 test("1.30.18.1 synchronous boot manifest refuses the Work grid while persistent Frequently Visited stays session-owned", () => {
   const base = {
     version: constants.RENDER_MANIFEST_SCHEMA_VERSION,
-    onboardingCompleted: true,
-    updatedAt: 10,
-    settingsModifiedAt: 10,
-    columns: 6,
-    rows: 2,
-    tileSize: 76,
-    brandVisible: true,
-    shortcuts: [{ type: "shortcut", id: "a", title: "A", url: "https://a.example/", position: 0, imageStyle: "contain" }]
+    ready: true,
+    spaceSwitcher: { visible: true, personal: "Home", work: "Office" },
+    layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
+    shortcuts: [{ type: "shortcut", id: "a", title: "A", position: 0, imageStyle: "contain", imageKey: "", preview: "" }]
   };
 
-  const frequent = { enabled: true, count: 3, sites: [{ title: "Site", host: "site.example", url: "https://site.example/", favicon: "" }] };
-  const firstPaint = activeSpaceId => ({ version: 1, activeSpaceId, multipleSpacesEnabled: true, spaceNames: { personal: "Home", work: "Office" }, frequent });
-
-  const work = runBootstrap({ ...base, activeSpaceId: "work", firstPaint: firstPaint("work") });
+  const work = runBootstrap({ ...base, paintSpaceId: "work", layout: null, shortcuts: [] });
   assert.equal(work.root.dataset.bootGrid, undefined);
   assert.equal(work.grid.children.length, 0, "Work cache must not synchronously paint shortcut slots");
-  assert.equal(work.root.dataset.bootFrequent, undefined, "persistent bootstrap must not paint browser-derived Frequently Visited sites");
+  assert.equal(work.root.dataset.bootFrequent, undefined);
   assert.equal(work.frequentList.children.length, 0);
 
-  const personal = runBootstrap({ ...base, activeSpaceId: "personal", firstPaint: firstPaint("personal") });
+  const personal = runBootstrap({ ...base, paintSpaceId: "personal" });
   assert.equal(personal.root.dataset.bootGrid, "true");
   assert.equal(personal.grid.inert, true);
   assert.equal(personal.empty.inert, true);
   assert.equal(personal.root.dataset.bootFrequent, undefined);
   assert.equal(personal.frequentList.children.length, 0);
   assert.ok(personal.grid.children.length > 0, "Personal boot grid should retain synchronous visual acceleration");
+  const card = personal.grid.children.flatMap(slot => slot.children || []).find(node => node.tagName === "A");
+  assert.ok(card, "visual bootstrap still paints an inert shortcut card");
+  assert.equal(card.getAttribute("href"), null, "persistent visual bootstrap must not carry navigation targets");
 });
 
-test("1.30.18.1 boot folder adoption rejects stale cached child title or URL", () => {
+test("1.30.18.1 boot folder adoption rejects stale cached child title or artwork identity", async () => {
   const source = fs.readFileSync("dist/firefox/newtab/newtab.js", "utf8");
   const fn = extractFunction(source, "bootGridMatchesState");
+  const projection = await import(`${pathToFileURL(resolve("dist/firefox/newtab/ui-utils.js")).href}?130181-projection=${Date.now()}`);
 
   const makeSlot = (folderTitle, childId) => {
     const label = { textContent: folderTitle };
@@ -260,58 +260,41 @@ test("1.30.18.1 boot folder adoption rejects stale cached child title or URL", (
       querySelector: selector => selector.includes("shortcut-label") ? label : null,
       querySelectorAll: selector => selector === ".folder-mosaic-cell" ? [cell] : []
     };
-    return {
-      dataset: { id: "folder" },
-      classList: { contains: name => name === "folder-slot" },
-      querySelector: selector => selector.includes("shortcut-card") ? card : null
-    };
+    return { dataset: { id: "folder" }, classList: { contains: name => name === "folder-slot" }, querySelector: selector => selector.includes("shortcut-card") ? card : null };
   };
   const emptySlot = { classList: { contains: name => name === "empty-slot" }, dataset: {}, querySelector: () => null };
-  const currentChild = shortcut("child", 0, { title: "Current child", url: "https://current.example/" });
+  const currentChild = shortcut("child", 0, { title: "Current child", localImageAssetId: "asset-current" });
   const state = {
     activeSpaceId: "personal",
-    updatedAt: 10,
-    settingsModifiedAt: 10,
     settings: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
     shortcuts: [{ type: "folder", id: "folder", title: "Folder", position: 0, items: [currentChild] }]
   };
   const baseManifest = {
-    version: constants.RENDER_MANIFEST_SCHEMA_VERSION, activeSpaceId: "personal", updatedAt: 10, settingsModifiedAt: 10,
-    columns: 6, rows: 2, tileSize: 76, brandVisible: true,
-    shortcuts: [{ type: "folder", id: "folder", title: "Folder", position: 0, items: [{ id: "child", title: "Current child", url: "https://current.example/" }] }]
+    version: constants.RENDER_MANIFEST_SCHEMA_VERSION, ready: true, paintSpaceId: "personal",
+    spaceSwitcher: { visible: true, personal: "Home", work: "Office" },
+    layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
+    shortcuts: [{ type: "folder", id: "folder", title: "Folder", position: 0, items: [{ id: "child", title: "Current child", builtinIcon: "", colorTag: "", imageStyle: "contain", imageKey: "asset-current", preview: "data:image/png;base64,AAAA" }] }]
   };
   const slots = [makeSlot("Folder", "child"), ...Array.from({ length: 11 }, () => emptySlot)];
   const makeContext = manifest => ({
     bootRenderManifest: manifest,
-    document: { documentElement: { dataset: { bootGrid: "true" } } },
-    meta: {},
-    isAwaitingRemote: () => false,
-    shortcutOrderMode: "manual",
-    recentGridItems: () => [],
-    grid: { children: slots },
-    shortcutNavigationUrl: item => safeUrl(item?.url),
-    safeShortcutNavigationUrl: safeUrl,
-    Map,
-    Number,
-    String,
-    Array,
-    Boolean,
-    RENDER_MANIFEST_SCHEMA_VERSION: constants.RENDER_MANIFEST_SCHEMA_VERSION
+    document: { documentElement: { dataset: { bootGrid: "true" } } }, meta: {}, isAwaitingRemote: () => false,
+    shortcutOrderMode: "manual", recentGridItems: () => [], grid: { children: slots },
+    renderCacheGridMatchesState: projection.renderCacheGridMatchesState,
+    Map, Number, String, Array, Boolean, RENDER_MANIFEST_SCHEMA_VERSION: constants.RENDER_MANIFEST_SCHEMA_VERSION
   });
 
   let ctx = makeContext(structuredClone(baseManifest));
   vm.createContext(ctx); vm.runInContext(`${fn}; this.check=bootGridMatchesState;`, ctx);
   assert.equal(ctx.check(state), true, "exact cached folder child should be adoptable");
 
-  const staleTitle = structuredClone(baseManifest);
-  staleTitle.shortcuts[0].items[0].title = "Old child";
+  const staleTitle = structuredClone(baseManifest); staleTitle.shortcuts[0].items[0].title = "Old child";
   ctx = makeContext(staleTitle); vm.createContext(ctx); vm.runInContext(`${fn}; this.check=bootGridMatchesState;`, ctx);
   assert.equal(ctx.check(state), false, "stale child title must reject adoption");
 
-  const staleUrl = structuredClone(baseManifest);
-  staleUrl.shortcuts[0].items[0].url = "https://old.example/";
-  ctx = makeContext(staleUrl); vm.createContext(ctx); vm.runInContext(`${fn}; this.check=bootGridMatchesState;`, ctx);
-  assert.equal(ctx.check(state), false, "stale child URL must reject adoption");
+  const staleArtwork = structuredClone(baseManifest); staleArtwork.shortcuts[0].items[0].imageKey = "asset-old";
+  ctx = makeContext(staleArtwork); vm.createContext(ctx); vm.runInContext(`${fn}; this.check=bootGridMatchesState;`, ctx);
+  assert.equal(ctx.check(state), false, "stale child artwork identity must reject adoption");
 });
 
 test("1.30.18.1 cached Frequently Visited unlocks independently only on authoritative repaint", () => {

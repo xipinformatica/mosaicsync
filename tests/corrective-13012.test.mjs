@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -49,7 +50,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.30.12 browser lifecycle handlers never reset durable MosaicSync state from reason=install", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("browser.runtime.onInstalled.addListener");
     const end = source.indexOf("browser.action?.onClicked", start);
     assert.ok(start >= 0 && end > start, `${browser} lifecycle block must exist`);

@@ -153,28 +153,34 @@ for (const browserName of ["firefox", "chrome"]) {
     assert.match(src, /materializeLocalStorage\(rawLocal, \{ withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 \}\)/);
   });
 
-  test(`1.27.8.3 ${browserName} cold boot-grid adoption is strict and keeps the full renderer as fallback`, () => {
+  test(`1.27.8.3 ${browserName} cold visual-cache adoption is strict and keeps the full renderer as fallback`, () => {
     const src = fs.readFileSync(`dist/${browserName}/newtab/newtab.js`, "utf8");
     const boot = fs.readFileSync(`dist/${browserName}/newtab/render-bootstrap.js`, "utf8");
+    const projection = fs.readFileSync(`dist/${browserName}/newtab/ui-utils.js`, "utf8");
     assert.match(src, /function bootGridMatchesState\(currentState\)/);
-    assert.match(src, /Number\(manifest\.updatedAt\) !== Number\(currentState\.updatedAt\)/);
-    assert.match(src, /Number\(manifest\.settingsModifiedAt\) !== Number\(currentState\.settingsModifiedAt\)/);
+    assert.match(src, /renderCacheGridMatchesState\(manifest, currentState\)/,
+      "cache adoption must use canonical visual equivalence rather than revision clocks");
+    assert.doesNotMatch(src, /Number\(manifest\.updatedAt\) !== Number\(currentState\.updatedAt\)/);
+    assert.doesNotMatch(src, /Number\(manifest\.settingsModifiedAt\) !== Number\(currentState\.settingsModifiedAt\)/);
     assert.match(src, /cells\[index\]\?\.dataset\?\.id !== expectedChild\?\.id/,
       "folder mosaic child identities must match before DOM adoption");
     assert.match(src, /String\(cachedChild\?\.title \|\| ""\) !== String\(expectedChild\?\.title \|\| ""\)/,
       "folder mosaic child titles must match before DOM adoption");
-    assert.match(src, /cachedUrl !== expectedUrl/,
-      "folder mosaic child navigation targets must match before DOM adoption");
-    assert.match(src, /card\.getAttribute\("href"\) !== expectedUrl/,
-      "shortcut navigation target must match before DOM adoption");
+    assert.doesNotMatch(src, /cachedUrl !== expectedUrl|card\.getAttribute\("href"\) !== expectedUrl/,
+      "persistent visual-cache adoption must not compare navigation data it no longer stores");
+    assert.match(projection, /String\(cached\.imageKey \|\| ""\) !== renderPreviewIdentity\(item\)/,
+      "artwork identity remains part of visual equivalence");
+    assert.match(projection, /Number\(layout\.columns\).*state\.settings\.columns/s,
+      "grid geometry remains part of visual equivalence");
     assert.match(src, /if \(adoptBootGrid && adoptBootGridInPlace\(\)\)/);
     assert.match(src, /else \{\s*render\(\);\s*\}/s, "any adoption uncertainty must fall back to the established renderer");
     assert.match(src, /configureShortcutSlotInteractions\(slot, item\)/);
     assert.match(src, /configureFolderSlotInteractions\(slot, item\)/);
     assert.match(boot, /cell\.dataset\.id = child\.id/,
-      "bootstrap must expose the minimum structural identity needed for safe folder adoption");
+      "bootstrap must expose the minimum visual identity needed for safe folder adoption");
+    assert.doesNotMatch(boot, /card\.href\s*=|item\?\.url|item\.url/,
+      "synchronous persistent cache must stay inert and URL-free");
   });
-
   test(`1.27.8.3 ${browserName} startup timing remains local-only and non-persistent`, () => {
     const src = fs.readFileSync(`dist/${browserName}/newtab/newtab.js`, "utf8");
     const session = fs.readFileSync(`dist/${browserName}/newtab/session-bootstrap.js`, "utf8");

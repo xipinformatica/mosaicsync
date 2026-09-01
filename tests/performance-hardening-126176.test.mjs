@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -50,7 +51,7 @@ function installQueueMutationStub(ctx) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17.6 ${browser} favicon recovery single-flights exact URL + quality work without merging distinct pages`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const queue = {
       version: 2,
       items: [
@@ -115,7 +116,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17.6 ${browser} a shared favicon failure still advances durable backoff per shortcut record`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const queue = {
       version: 2,
       items: [
@@ -158,7 +159,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17.7 ${browser} shared favicon fan-out still applies the real per-ID stale revalidation`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const sharedUrl = "https://shared.example/app";
     const currentState = {
       activeSpaceId: "personal",
@@ -338,7 +339,7 @@ function fakeBootstrapContext(manifest, { withHelper = true } = {}) {
   const context = {
     console,
     URL,
-    __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 4 },
+    __mosaicsyncBootstrapConfig: { renderManifestKey: "mosaicsync.render-manifest.v1", renderManifestVersion: 5 },
     document: {
       documentElement: root,
       getElementById: id => ids.get(id) || null,
@@ -358,49 +359,46 @@ function allElements(node) {
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.26.17.6 ${browser} classic persistent first-paint never creates hostile shortcut anchors or FV anchors`, async () => {
+  test(`1.26.17.6 ${browser} classic persistent first-paint remains visual-only and creates no navigation/FV anchors`, async () => {
     const manifest = {
-      version: 4,
-      onboardingCompleted: true,
-      activeSpaceId: "personal",
-      columns: 6, rows: 2, tileSize: 76, brandVisible: true,
+      version: 5, ready: true, paintSpaceId: "personal",
+      spaceSwitcher: { visible: true, personal: "", work: "" },
+      layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
       shortcuts: [
-        { type: "shortcut", id: "good", title: "Good", url: "https://good.example/path", position: 0, imageStyle: "contain", preview: "" },
-        { type: "shortcut", id: "bad", title: "Bad", url: "javascript:alert(1)", position: 1, imageStyle: "contain", preview: "" },
+        { type: "shortcut", id: "good", title: "Good", position: 0, imageStyle: "contain", imageKey: "", preview: "" },
+        { type: "shortcut", id: "second", title: "Second", position: 1, imageStyle: "contain", imageKey: "", preview: "" },
         { type: "folder", id: "folder", title: "Folder", position: 2, items: [
-          { type: "shortcut", id: "child-good", title: "Child", url: "https://child.example/", imageStyle: "contain", preview: "" },
-          { type: "shortcut", id: "child-bad", title: "Bad child", url: "data:text/html,bad", imageStyle: "contain", preview: "" }
+          { id: "child-good", title: "Child", imageStyle: "contain", imageKey: "", preview: "" },
+          { id: "child-two", title: "Child two", imageStyle: "contain", imageKey: "", preview: "" }
         ] }
-      ],
-      firstPaint: { version: 1, activeSpaceId: "personal", multipleSpacesEnabled: true, spaceNames: { personal: "", work: "" }, frequent: { enabled: true, count: 5, sites: [
-        { title: "Frequent good", host: "freq.example", url: "https://freq.example/", favicon: "" },
-        { title: "Frequent bad", host: "bad.example", url: "javascript:alert(2)", favicon: "" }
-      ] } }
+      ]
     };
     const { context, grid, frequentList } = fakeBootstrapContext(manifest);
-    const safety = fs.readFileSync(`dist/${browser}/core/http-url-safety.js`, "utf8");
     const bootstrap = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
-    vm.runInContext(safety, context);
     vm.runInContext(bootstrap, context);
 
     const anchors = [...allElements(grid), ...allElements(frequentList)].filter(node => node.tagName === "A");
-    assert.deepEqual(anchors.map(anchor => anchor.href).sort(), ["https://good.example/path"]);
+    assert.ok(anchors.length >= 2, "visual cache should still render inert shortcut cards");
+    assert.ok(anchors.every(anchor => !anchor.href && !anchor.attributes?.href),
+      "persistent visual cache must install no navigation target at all");
     assert.equal(allElements(frequentList).filter(node => node.tagName === "A").length, 0,
       "persistent bootstrap must not create browser-derived Frequently Visited anchors");
-    assert.equal(anchors.some(anchor => /^(?:javascript|data|blob|file):/i.test(anchor.href)), false);
-    assert.ok(context.__mosaicsyncBootGrid?.manifest, "safe manifest should still complete the disposable first paint");
+    assert.ok(context.__mosaicsyncBootGrid?.manifest, "visual manifest should still complete the disposable first paint");
   });
-
-  test(`1.26.17.6 ${browser} classic first-paint aborts cleanly when the shared URL helper is absent`, async () => {
+  test(`1.26.17.6 ${browser} classic visual first-paint no longer depends on the URL helper`, async () => {
     const manifest = {
-      version: 4, onboardingCompleted: true, activeSpaceId: "personal", columns: 6, rows: 2, tileSize: 76,
-      shortcuts: [{ type: "shortcut", id: "good", title: "Good", url: "https://good.example/", position: 0, imageStyle: "contain", preview: "" }]
+      version: 5, ready: true, paintSpaceId: "personal",
+      spaceSwitcher: { visible: false, personal: "", work: "" },
+      layout: { columns: 6, rows: 2, tileSize: 76, brandVisible: true },
+      shortcuts: [{ type: "shortcut", id: "good", title: "Good", position: 0, imageStyle: "contain", imageKey: "", preview: "" }]
     };
     const { context, grid } = fakeBootstrapContext(manifest, { withHelper: false });
     const bootstrap = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
     vm.runInContext(bootstrap, context);
-    assert.equal(allElements(grid).filter(node => node.tagName === "A").length, 0);
-    assert.equal(context.__mosaicsyncBootGrid, undefined);
+    const anchors = allElements(grid).filter(node => node.tagName === "A");
+    assert.equal(anchors.length, 1, "visual cache should render without any navigation helper");
+    assert.equal(anchors[0].href, "", "rendered card must remain inert until authoritative handoff");
+    assert.ok(context.__mosaicsyncBootGrid?.manifest);
   });
 }
 

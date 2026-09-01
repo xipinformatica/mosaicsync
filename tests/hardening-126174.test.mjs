@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -79,7 +80,7 @@ test("1.26.17.4 checksum-valid hostile profile keys cannot pollute Object.protot
 
 test("1.26.17.4 source keeps profile restore explicitly authoritative while hardening file reads", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const background = await readFile(resolve(`src/${browser}/background/background.js`), "utf8");
+    const background = readBackgroundSource(browser, { built: false });
     const start = background.indexOf("async function bootstrapLocal(");
     const end = background.indexOf("async function", start + 30);
     const section = background.slice(start, end > start ? end : undefined);
@@ -98,7 +99,7 @@ test("1.26.17.4 source keeps profile restore explicitly authoritative while hard
 
 test("1.26.17.4 removes the obsolete current-version migration gate and contradictory mobile CSS", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const background = await readFile(resolve(`src/${browser}/background/background.js`), "utf8");
+    const background = readBackgroundSource(browser, { built: false });
     assert.doesNotMatch(background, /VERSION\s*===\s*["']1\.24\.7b["']/);
     assert.match(background, /force:\s*resolverQualityUpgrade/);
 

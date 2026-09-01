@@ -4,12 +4,13 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Tiny classic/module-compatible HTTP(S) URL safety primitive.
+ * Tiny shared HTTP(S) URL safety primitive.
  *
- * `render-bootstrap.js` must remain a synchronous classic script for the first
- * frame, while the authoritative UI/model/storage code is ES-module based.
- * Keeping this file free of import/export syntax lets both worlds execute the
- * exact same validator without duplicating security-sensitive scheme logic.
+ * Keeping this file free of import/export syntax preserves compatibility with
+ * every existing shared caller while centralizing security-sensitive scheme
+ * validation. Step 2.3 no longer needs navigation URLs in the synchronous
+ * persistent render cache, so the classic first-frame grid does not execute this
+ * helper at all; authoritative/session code still does.
  */
 (() => {
   "use strict";

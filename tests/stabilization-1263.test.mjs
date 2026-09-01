@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -27,7 +28,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.5 ${browser} theme wallpaper persistence reuses the ordinary audited state path`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
-    const bg = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const bg = readBackgroundSource(browser);
     const storage = await readFile(`dist/${browser}/core/storage.js`, "utf8");
     assert.match(js, /function queueThemeWallpaperPersistence\(\)[\s\S]*?scheduleBackgroundPersist\(180\)/,
       `${browser}: theme wallpaper changes should use the existing debounced save path`);

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -53,17 +54,18 @@ function stateWithFrequent(constants, model, { enabled = true, count = 5, person
 }
 
 for (const browser of ["firefox", "chrome"]) {
-  test(`1.30.18.7 ${browser} current v3 boot grid is reusable on a matching warm session path`, () => {
+  test(`1.30.18.7 ${browser} current visual-cache boot grid is reusable on a matching warm session path`, () => {
     const source = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
     const fn = extractFunction(source, "canReuseBootGridForSession");
-    const context = { RENDER_MANIFEST_SCHEMA_VERSION: 3 };
+    const context = { RENDER_MANIFEST_SCHEMA_VERSION: 5, renderCacheGridMatchesState: (manifest, state) => manifest?.marker === state?.marker };
     vm.createContext(context);
     vm.runInContext(`${fn}; this.canReuse=canReuseBootGridForSession;`, context);
-    const bootManifest = { version: 3, activeSpaceId: "personal", updatedAt: 42, settingsModifiedAt: 41 };
-    const sessionState = { activeSpaceId: "personal", updatedAt: 42, settingsModifiedAt: 41 };
+    const bootManifest = { version: 5, marker: "same" };
+    const sessionState = { marker: "same" };
     assert.equal(context.canReuse({ sessionAwaitingRemote: false, bootGridPainted: true, bootManifest, sessionState }), true);
-    assert.equal(context.canReuse({ sessionAwaitingRemote: false, bootGridPainted: true, bootManifest: { ...bootManifest, version: 2 }, sessionState }), false,
-      "the bounded .5 bridge is readable but must not masquerade as the current reusable grid format");
+    assert.equal(context.canReuse({ sessionAwaitingRemote: false, bootGridPainted: true, bootManifest: { ...bootManifest, version: 4 }, sessionState }), false,
+      "an obsolete persistent-cache schema must never masquerade as the current reusable visual cache");
+    assert.equal(context.canReuse({ sessionAwaitingRemote: false, bootGridPainted: true, bootManifest: { ...bootManifest, marker: "old" }, sessionState }), false);
     assert.equal(context.canReuse({ sessionAwaitingRemote: true, bootGridPainted: true, bootManifest, sessionState }), false);
   });
 
@@ -171,7 +173,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.7 ${browser} Sync usage buckets conserve bytes including legacy and generation recovery keys`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const code = ["assetIdsByUsage", "isDeviceSnapshotKey", "syncUsageBreakdown"].map(name => extractFunction(source, name)).join("\n");
     const sizes = new Map([
       ["mosaicsync.sync.settings", 100],
@@ -223,7 +225,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.7 ${browser} background permission listener invalidates only the session FV projection`, () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.match(source, /permissions\?\.onRemoved\?\.addListener/);
     assert.match(source, /permissionChangeAffectsTopSites\(change\)/);
     assert.match(source, /clearSessionFrequentlyVisitedSnapshot\(\)/);
@@ -235,7 +237,8 @@ test("1.30.18.7 architecture contract is tied to the actual canonical projection
   const manifest = fs.readFileSync("src/shared/newtab/render-manifest.js", "utf8");
   const storage = fs.readFileSync("src/shared/core/storage.js", "utf8");
   assert.match(doc, /First Paint is a semantic contract/i);
-  assert.match(manifest, /createFirstPaintContract\(/);
+  assert.doesNotMatch(manifest, /createFirstPaintContract\(/, "persistent visual cache must not duplicate the semantic First-Paint Contract");
+  assert.match(manifest, /projectRenderCacheItem/);
   assert.match(storage, /createFirstPaintContract\(/);
   assert.match(storage, /clearSessionFrequentlyVisitedSnapshot/);
 });

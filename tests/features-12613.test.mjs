@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -34,7 +35,7 @@ test("1.26.13b SVG root parsing is quote-aware and exposes huge declared geometr
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.13b ${browser} remote image dimensions fail closed when unknown`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const ctx = { REMOTE_IMAGE_MAX_DECODE_DIMENSION: 4096, REMOTE_IMAGE_MAX_DECODED_PIXELS: 8_000_000 };
     vm.createContext(ctx);
     vm.runInContext(extract(src, "imageDimensionsSafeForRemoteDecode"), ctx);
@@ -74,7 +75,7 @@ test("1.26.13b registrable-domain hiding follows the bundled Public Suffix List"
   }
 });
 
-test("1.26.13b persistent first-frame manifest carries FV settings but no browser-derived site candidates", async () => {
+test("1.26.13b persistent first-frame manifest carries no FV settings or browser-derived site candidates", async () => {
   const data = new Map();
   const previousStorage = globalThis.localStorage;
   globalThis.localStorage = {
@@ -89,13 +90,10 @@ test("1.26.13b persistent first-frame manifest carries FV settings but no browse
       settings: { columns: 8, rows: 8, tileSize: 76, brandVisible: true, frequentlyVisitedEnabled: true, frequentlyVisitedCount: 10 }
     };
     const meta = { onboardingCompleted: true };
-    const sites = Array.from({ length: 12 }, (_, i) => ({ title: `Site ${i}`, host: `s${i}.example`, url: `https://s${i}.example/`, favicon: "" }));
-    assert.equal(mod.persistRenderManifest(state, meta, null, { enabled: true, count: 10, sites }), true);
+    assert.equal(mod.persistRenderManifest(state, meta), true);
     const manifest = JSON.parse(data.get("mosaicsync.render-manifest.v1"));
-    assert.equal(manifest.firstPaint.frequent.enabled, true);
-    assert.equal(manifest.firstPaint.frequent.count, 10);
-    assert.equal(manifest.firstPaint.frequent.sites.length, 0);
-    assert.equal(JSON.stringify(manifest).includes("s0.example"), false, "browser-history candidates must not survive in persistent localStorage");
+    assert.equal(Object.hasOwn(manifest, "firstPaint"), false);
+    assert.doesNotMatch(JSON.stringify(manifest), /frequent|s0\.example/i, "browser-history FV state and candidates must not survive in persistent localStorage");
   } finally {
     globalThis.localStorage = previousStorage;
   }

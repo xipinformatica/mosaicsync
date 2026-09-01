@@ -4,14 +4,19 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Disposable synchronous-first-frame manifest maintenance.
+ * Disposable synchronous-first-frame visual-cache maintenance.
  * Loaded only after first paint; none of this code sits on the New Tab's static
  * module graph. Preview images are tiny visual derivatives, never authoritative
  * profile assets.
+ *
+ * Step 2.3 narrows this persistent Web Storage layer to presentation only:
+ * Personal-grid geometry/labels, Space-switcher labels and bounded artwork
+ * previews. Navigation URLs, revision clocks, Frequently Visited candidates and
+ * the shared semantic First-Paint Contract belong to newer authoritative/session
+ * layers and are intentionally absent here.
  */
-import "../core/http-url-safety.js";
 import { optimizeImageDataUrl } from "../core/image-optimizer.js";
-import { createFirstPaintContract, sanitizeFirstPaintFrequentSnapshot } from "../core/first-paint-contract.js";
+import { normalizeFirstPaintSpaceName } from "../core/first-paint-contract.js";
 import {
   RENDER_MANIFEST_KEY,
   RENDER_MANIFEST_SCHEMA_VERSION,
@@ -19,10 +24,9 @@ import {
   RENDER_PREVIEW_CONCURRENCY,
   RENDER_PREVIEW_DIMENSION,
   RENDER_PREVIEW_MAX_CHARS,
-  RENDER_PREVIEW_TARGET_BYTES,
-  BUILTIN_SHORTCUT_ICON_KEYS,
-  SHORTCUT_COLOR_TAG_KEYS
+  RENDER_PREVIEW_TARGET_BYTES
 } from "../core/constants.js";
+import { projectRenderCacheItem, renderPreviewIdentity, renderCachePreviewUsable } from "./ui-utils.js";
 
 const KEY = RENDER_MANIFEST_KEY;
 let manifestCache = null;
@@ -48,70 +52,34 @@ export function seedRenderManifest(manifest) {
   } else ensureManifestCache();
 }
 
-function previewIdentity(item) {
-  const assetId = item?.localImageAssetId || item?.imageAssetId || "";
-  if (assetId) return assetId;
-  const image = typeof item?.image === "string" ? item.image : "";
-  if (!image) return "";
-  let hash = 0x811c9dc5;
-  const samples = 8;
-  for (let index = 0; index < samples; index += 1) {
-    const offset = Math.min(image.length - 1, Math.floor(index * Math.max(1, image.length - 1) / Math.max(1, samples - 1)));
-    hash ^= image.charCodeAt(offset) || 0;
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `inline:${image.length}:${(hash >>> 0).toString(36)}`;
-}
-
 function cachedPreviews() {
   ensureManifestCache();
   const previews = new Map();
   const visit = item => {
     if (!item || typeof item !== "object") return;
-    if (item.imageKey && typeof item.preview === "string" && item.preview.length <= RENDER_PREVIEW_MAX_CHARS) previews.set(item.imageKey, item.preview);
+    if (item.imageKey && renderCachePreviewUsable(item.preview)) previews.set(item.imageKey, item.preview);
     if (item.type === "folder") for (const child of item.items || []) visit(child);
   };
   for (const item of manifestCache?.shortcuts || []) visit(item);
   return previews;
 }
 
-function projectItem(item, previews) {
-  const imageKey = previewIdentity(item);
-  if (item?.type === "folder") {
-    return {
-      type: "folder",
-      id: item.id,
-      title: item.title || "Folder",
-      position: item.position,
-      // A closed folder can show at most four cells. Keep the synchronous
-      // first-frame manifest proportional to what is actually visible instead of
-      // spending localStorage/JSON/preview budget on hidden children.
-      items: (item.items || []).slice(0, 4).map(child => {
-        const childKey = previewIdentity(child);
-        return {
-          id: child.id,
-          title: child.title,
-          url: child.url,
-          builtinIcon: BUILTIN_SHORTCUT_ICON_KEYS.includes(child.builtinIcon) ? child.builtinIcon : "",
-          colorTag: SHORTCUT_COLOR_TAG_KEYS.includes(child.colorTag) ? child.colorTag : "",
-          imageStyle: child.imageStyle === "cover" ? "cover" : "contain",
-          imageKey: childKey,
-          preview: childKey ? (previews.get(childKey) || "") : ""
-        };
-      })
-    };
-  }
+function effectivePaintSpaceId(currentState) {
+  const spacesDisabled = currentState?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
+  if (spacesDisabled) return "personal";
+  return currentState?.activeSpaceId === "work" ? "work" : "personal";
+}
+
+function personalGridSource(currentState, paintSpaceId) {
+  if (paintSpaceId !== "personal") return null;
+  const personal = currentState?.spaces?.personal;
+  if (!personal) return currentState;
+  if (currentState?.activeSpaceId === "personal") return currentState;
   return {
-    type: "shortcut",
-    id: item.id,
-    title: item.title,
-    url: item.url,
-    builtinIcon: BUILTIN_SHORTCUT_ICON_KEYS.includes(item.builtinIcon) ? item.builtinIcon : "",
-    colorTag: SHORTCUT_COLOR_TAG_KEYS.includes(item.colorTag) ? item.colorTag : "",
-    position: item.position,
-    imageStyle: item.imageStyle === "cover" ? "cover" : "contain",
-    imageKey,
-    preview: imageKey ? (previews.get(imageKey) || "") : ""
+    ...currentState,
+    activeSpaceId: "personal",
+    shortcuts: personal.shortcuts || [],
+    settings: personal.settings || currentState.settings
   };
 }
 
@@ -133,43 +101,35 @@ function serializeWithinBudget(manifest) {
   return serialized;
 }
 
-export function persistRenderManifest(currentState, currentMeta, extraPreviews = null, frequentSnapshot = undefined) {
+export function persistRenderManifest(currentState, currentMeta, extraPreviews = null) {
   if (!currentState?.settings || !currentMeta) return false;
-  const spacesDisabled = currentState?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
-  const personal = currentState?.spaces?.personal;
-  const source = spacesDisabled && currentState.activeSpaceId !== "personal" && personal
-    ? {
-        ...currentState,
-        activeSpaceId: "personal",
-        shortcuts: personal.shortcuts || [],
-        settings: personal.settings || currentState.settings,
-        settingsModifiedAt: Number(personal.settingsModifiedAt) || 0,
-        updatedAt: Number(personal.updatedAt) || 0
-      }
-    : currentState;
+  const paintSpaceId = effectivePaintSpaceId(currentState);
+  const gridSource = personalGridSource(currentState, paintSpaceId);
+  const personalSettings = currentState?.spaces?.personal?.settings || currentState.settings || {};
   const previews = cachedPreviews();
   if (extraPreviews) for (const [key, value] of extraPreviews) previews.set(key, value);
   const manifest = {
     version: RENDER_MANIFEST_SCHEMA_VERSION,
-    onboardingCompleted: currentMeta.onboardingCompleted === true,
-    activeSpaceId: source.activeSpaceId,
-    updatedAt: Number(source.updatedAt) || 0,
-    settingsModifiedAt: Number(source.settingsModifiedAt) || 0,
-    columns: source.settings.columns,
-    rows: source.settings.rows,
-    tileSize: source.settings.tileSize,
-    brandVisible: source.settings.brandVisible !== false,
-    // The persistent Web Storage manifest owns only synchronous structural
-    // fallback truth. Browser-derived Frequently Visited sites are session/live
-    // data and must never survive a cold browser restart in this layer. Preserve
-    // only the synchronized enabled/count semantics with an empty site list.
-    firstPaint: createFirstPaintContract(currentState, (() => {
-      const candidate = frequentSnapshot === undefined
-        ? sanitizeFirstPaintFrequentSnapshot(manifestCache?.firstPaint?.frequent)
-        : sanitizeFirstPaintFrequentSnapshot(frequentSnapshot);
-      return candidate ? { enabled: candidate.enabled, count: candidate.count, sites: [] } : null;
-    })()),
-    shortcuts: (source.shortcuts || []).map(item => projectItem(item, previews))
+    ready: currentMeta.onboardingCompleted === true,
+    // This is a visual paint authorization marker, not the active-Space owner.
+    // storage.local + storage.session retain authoritative active-Space ownership.
+    paintSpaceId,
+    spaceSwitcher: {
+      visible: personalSettings.multipleSpacesEnabled !== false,
+      personal: normalizeFirstPaintSpaceName(currentState?.spaces?.personal?.settings?.spaceName),
+      work: normalizeFirstPaintSpaceName(currentState?.spaces?.work?.settings?.spaceName)
+    },
+    // Work has never been authorized for synchronous persistent grid paint. Do
+    // not retain a dormant Work shortcut copy in localStorage merely to refuse it.
+    layout: gridSource ? {
+      columns: gridSource.settings.columns,
+      rows: gridSource.settings.rows,
+      tileSize: gridSource.settings.tileSize,
+      brandVisible: gridSource.settings.brandVisible !== false
+    } : null,
+    shortcuts: gridSource
+      ? (gridSource.shortcuts || []).map(item => projectRenderCacheItem(item, key => previews.get(key) || "")).filter(Boolean)
+      : []
   };
   const serialized = serializeWithinBudget(manifest);
   if (serialized.length > RENDER_MANIFEST_MAX_CHARS) {
@@ -191,17 +151,20 @@ export function persistRenderManifest(currentState, currentMeta, extraPreviews =
 
 export async function refreshRenderManifestPreviews(currentState, currentMeta, { shouldCommit = null } = {}) {
   if (!currentState?.settings || currentMeta?.onboardingCompleted !== true) return false;
+  const paintSpaceId = effectivePaintSpaceId(currentState);
+  const gridSource = personalGridSource(currentState, paintSpaceId);
+  if (!gridSource) return false;
   const existing = cachedPreviews();
   const generated = new Map();
   const jobs = new Map();
   const visit = item => {
     if (!item || item.type !== "shortcut") return;
     const image = typeof item.image === "string" ? item.image : "";
-    const key = previewIdentity(item);
+    const key = renderPreviewIdentity(item);
     if (!image || !key || existing.has(key) || jobs.has(key)) return;
     jobs.set(key, image);
   };
-  for (const item of currentState.shortcuts || []) {
+  for (const item of gridSource.shortcuts || []) {
     if (item?.type === "folder") {
       for (const child of (item.items || []).slice(0, 4)) visit(child);
     } else visit(item);
@@ -222,7 +185,7 @@ export async function refreshRenderManifestPreviews(currentState, currentMeta, {
           targetBytes: RENDER_PREVIEW_TARGET_BYTES,
           initialQuality: 0.78
         });
-        if (typeof preview === "string" && preview.length <= RENDER_PREVIEW_MAX_CHARS) generated.set(key, preview);
+        if (renderCachePreviewUsable(preview)) generated.set(key, preview);
       } catch {}
     }
   });

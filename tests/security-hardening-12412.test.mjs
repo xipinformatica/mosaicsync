@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir, stat } from "node:fs/promises";
@@ -40,12 +41,12 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: privileged runtime message handler asserts same-extension sender`, async () => {
-    const source = await readFile(resolve(root, "dist", browser, "background/background.js"), "utf8");
+    const source = readBackgroundSource(browser);
     assert.match(source, /sender\?\.id\s*&&\s*sender\.id\s*!==\s*browser\.runtime\.id/);
   });
 
   test(`${browser}: failed silent local writes roll back durable suppression markers`, async () => {
-    const source = await readFile(resolve(root, "dist", browser, "background/background.js"), "utf8");
+    const source = readBackgroundSource(browser);
     assert.match(source, /async function forgetDurableLocalSignature\(signature\)/);
     assert.match(source, /ignoredLocalStateSignatures\.delete\(signature\);\s*await forgetDurableLocalSignature\(signature\);/);
   });

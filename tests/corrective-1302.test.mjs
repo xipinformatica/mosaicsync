@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -40,7 +41,7 @@ function resolverCode(src) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.2 ${browser} redirected-origin partial declared scan stays provisional after timeout`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const strong = icon("STRONG192", 192, "https://fixture.test/strong.png");
     const timeoutUrl = "https://fixture.test/late.png";
     const ctx = {
@@ -50,6 +51,8 @@ for (const browser of ["firefox", "chrome"]) {
       FAVICON_AUTHORITATIVE_SUITABILITY:375,
       hasWebAccess:async()=>true,
       isProtectedChromeStoreUrl:()=>false,
+      isProtectedFaviconUrl:()=>false,
+      platformHasPermissionFreeFaviconSource:()=>browser === "chrome",
       resolveBrowserCachedFavicon:async()=>null,
       discoverPageIconInfo:async url => {
         if (url === "https://fixture.test/") {
@@ -81,7 +84,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.2 ${browser} favicon quality ledger rejects non-finite timestamps and policy versions`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const ctx = { URL, FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256 };
     vm.createContext(ctx);
     vm.runInContext(extract(src, "normalizeFaviconQualityAuditLedger"), ctx);
@@ -96,7 +99,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.2 ${browser} concurrent favicon quality ledger completions preserve both URLs`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const key = "ledger";
     let stored = { version:1, items:[] };
     const ctx = {
@@ -151,7 +154,7 @@ test("1.30.2 Settings refresh-domain regression uses the production key definiti
 
 test("1.30.2 older installations with no quality ledger reopen automatic favicons for the one-time audit", () => {
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const ctx={URL,Date,FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256,FAVICON_QUALITY_AUDIT_POLICY_VERSION:1,FAVICON_QUALITY_AUDIT_TTL_MS:30*24*60*60*1000};
     vm.createContext(ctx);
     vm.runInContext(`${extract(src,"normalizeFaviconQualityAuditLedger")}\n${extract(src,"faviconQualityAuditNeeded")}\n${extract(src,"automaticFaviconArtwork")}`,ctx);

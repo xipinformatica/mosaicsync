@@ -537,3 +537,9 @@ h1 { margin: 0; font-size: clamp(32px, 5vw, 42px); line-height: 1.05; letter-spa
   transition: opacity 100ms ease;
   pointer-events: none;
 }
+
+/* 1.30.18.13 — optional device identity for Sync attribution. */
+.device-name-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(210px,.72fr);gap:18px;align-items:center;margin:2px 0 18px;padding:16px 17px;border:1px solid var(--border);border-radius:15px;background:linear-gradient(135deg,rgba(139,92,246,.10),rgba(38,185,245,.05));}
+.device-name-card[hidden]{display:none;}
+.device-name-copy strong,.device-name-copy small{display:block}.device-name-copy strong{font-size:14.5px;line-height:1.3}.device-name-copy small{margin-top:4px;color:var(--muted);font-size:12.5px;line-height:1.4}.device-name-field{display:grid;gap:6px}.device-name-field span{color:var(--muted);font-size:11.5px;font-weight:700}.device-name-field input{width:100%;min-height:42px;box-sizing:border-box;padding:0 12px;border:1px solid var(--border-strong);border-radius:10px;background:rgba(255,255,255,.055);color:var(--text);font:inherit;font-size:13.5px;outline:none}.device-name-field input:focus{border-color:color-mix(in srgb,var(--accent) 72%,white);box-shadow:0 0 0 3px rgba(139,92,246,.13)}.device-name-field input::placeholder{color:var(--muted);opacity:.72}
+@media(max-width:620px){.device-name-card{grid-template-columns:1fr;gap:10px}}

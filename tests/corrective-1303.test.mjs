@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -184,7 +185,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.3 ${browser} conventional favicon timeout keeps the quality scan incomplete`, async () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const fn = extractFunction(source, "probeConventionalFaviconQualityUpgrade");
     let index = 0;
     const context = vm.createContext({
@@ -205,7 +206,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.3 ${browser} recovery queue rejects non-finite persisted timestamps`, () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const context = vm.createContext({ ICON_RECOVERY_QUEUE_VERSION: 2, ICON_RECOVERY_MAX_ATTEMPTS: 5, Number, Math, Set, normalizeFaviconPreference });
     vm.runInContext(extractFunction(source, "normalizeIconRecoveryQueue"), context);
     const normalized = context.normalizeIconRecoveryQueue({
@@ -219,7 +220,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.3 ${browser} serialized recovery queue mutations preserve concurrent additions`, async () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     let stored = { version: 2, items: [] };
     const context = vm.createContext({
       Promise,

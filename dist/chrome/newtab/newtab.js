@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
-import { getNativeTopSites } from "../core/platform.js";
+import { getNativeTopSites, PLATFORM_ID } from "../core/platform.js";
 import {
   APPEARANCE_HINT_KEY,
   BACKGROUND_PRESETS,
@@ -31,7 +31,9 @@ import {
   PRODUCT_NAME,
   RENDER_MANIFEST_KEY,
   RENDER_MANIFEST_SCHEMA_VERSION,
+  RENDER_PREVIEW_DIMENSION,
   RENDER_PREVIEW_MAX_CHARS,
+  RENDER_PREVIEW_TARGET_BYTES,
   SESSION_RENDER_STATE_KEY,
   SHORTCUT_LOCAL_IMAGE_TARGET_BYTES,
   SHORTCUT_SYNC_IMAGE_TARGET_BYTES,
@@ -56,6 +58,8 @@ import {
   localStateSyncClockSignature,
   localStateSyncRawSignature,
   normalizeMeta,
+  normalizeDeviceName,
+  defaultDeviceName,
   normalizeState,
   moveShortcutBetweenSpacesNormalized,
   moveShortcutOutOfFolder,
@@ -70,7 +74,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, writeLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -91,7 +95,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import "./builtin-icons.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -117,9 +121,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function canReuseBootGridForSession({ sessionAwaitingRemote, bootGridPainted, bootManifest, sessionState } = {}) {
     return !sessionAwaitingRemote && bootGridPainted === true &&
       bootManifest?.version === RENDER_MANIFEST_SCHEMA_VERSION &&
-      bootManifest.activeSpaceId === sessionState?.activeSpaceId &&
-      Number(bootManifest.updatedAt) === Number(sessionState?.updatedAt) &&
-      Number(bootManifest.settingsModifiedAt) === Number(sessionState?.settingsModifiedAt);
+      renderCacheGridMatchesState(bootManifest, sessionState);
   }
   try {
     const supported = globalThis.PerformanceObserver?.supportedEntryTypes || [];
@@ -419,6 +421,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const syncQuotaText = document.getElementById("syncQuotaText");
   const syncRevisionLabel = document.getElementById("syncRevisionLabel");
   const syncRevisionText = document.getElementById("syncRevisionText");
+  const settingsDeviceNameText = document.getElementById("settingsDeviceNameText");
+  const editDeviceNameButton = document.getElementById("editDeviceNameButton");
+  const deviceNameEditor = document.getElementById("deviceNameEditor");
+  const settingsDeviceNameInput = document.getElementById("settingsDeviceNameInput");
+  const cancelDeviceNameButton = document.getElementById("cancelDeviceNameButton");
+  const saveDeviceNameButton = document.getElementById("saveDeviceNameButton");
+  const syncSourceText = document.getElementById("syncSourceText");
+  const syncSourceDetail = document.getElementById("syncSourceDetail");
   const syncStorageBreakdown = document.querySelector(".sync-storage-breakdown");
   const syncUsageCore = document.getElementById("syncUsageCore");
   const syncUsageRecovery = document.getElementById("syncUsageRecovery");
@@ -523,6 +533,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let hiddenFrequentDomains = new Set();
   let frequentDragSite = null;
   let frequentRenderSnapshot = bootRenderManifest?.firstPaint?.frequent || null;
+  let frequentLiveSites = Array.isArray(frequentRenderSnapshot?.sites) ? frequentRenderSnapshot.sites.slice() : [];
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
@@ -737,7 +748,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           const module = await loadRenderManifestModule();
           if (!pageManifestStateStillCurrent(stateSnapshot)) return;
           if (!(await sharedSessionCoreMatchesState(stateSnapshot))) return;
-          module.persistRenderManifest(stateSnapshot, metaSnapshot, null, null);
+          module.persistRenderManifest(stateSnapshot, metaSnapshot);
         } catch {}
       })();
     }, 0);
@@ -747,7 +758,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // Full session snapshots are published only from authoritative startup or
     // persistence boundaries. Routine page presentation refreshes patch their
     // own fields and never republish a stale Space/grid snapshot.
-    return warmSessionRenderCache(currentState, currentMeta, { frequentSnapshot: frequentRenderSnapshot });
+    return warmSessionRenderCache(currentState, currentMeta);
   }
 
   function refreshFirstPaintCaches(currentState = state, currentMeta = meta) {
@@ -785,7 +796,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         });
         if (refreshed || !pageManifestStateStillCurrent(stateSnapshot, generation)) return;
         if (!(await sharedSessionCoreMatchesState(stateSnapshot))) return;
-        module.persistRenderManifest(stateSnapshot, metaSnapshot, null, null);
+        module.persistRenderManifest(stateSnapshot, metaSnapshot);
       } catch {}
     }).catch(() => {});
   }
@@ -815,14 +826,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   function bootGridMatchesState(currentState) {
     const manifest = bootRenderManifest;
     if (!manifest || manifest.version !== RENDER_MANIFEST_SCHEMA_VERSION || document.documentElement.dataset.bootGrid !== "true") return false;
-    if (isAwaitingRemote(meta)) return false;
-    if (manifest.activeSpaceId !== currentState.activeSpaceId ||
-        Number(manifest.updatedAt) !== Number(currentState.updatedAt) ||
-        Number(manifest.settingsModifiedAt) !== Number(currentState.settingsModifiedAt)) return false;
-    if (Number(manifest.columns) !== Number(currentState.settings.columns) ||
-        Number(manifest.rows) !== Number(currentState.settings.rows) ||
-        Number(manifest.tileSize) !== Number(currentState.settings.tileSize) ||
-        Boolean(manifest.brandVisible !== false) !== Boolean(currentState.settings.brandVisible !== false)) return false;
+    if (isAwaitingRemote(meta) || !renderCacheGridMatchesState(manifest, currentState)) return false;
     const capacity = currentState.settings.columns * currentState.settings.rows;
     const slots = [...grid.children];
     if (slots.length !== capacity) return false;
@@ -854,15 +858,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           const cachedChild = cachedChildren[index];
           if (cells[index]?.dataset?.id !== expectedChild?.id || cachedChild?.id !== expectedChild?.id) return false;
           if (String(cachedChild?.title || "") !== String(expectedChild?.title || "")) return false;
-          const expectedUrl = shortcutNavigationUrl(expectedChild);
-          const cachedUrl = safeShortcutNavigationUrl(cachedChild?.url);
-          if (!expectedUrl || cachedUrl !== expectedUrl) return false;
         }
       } else {
         if (slot.classList.contains("folder-slot") || card.classList.contains("folder-card")) return false;
         if (label.textContent !== item.title) return false;
-        const expectedUrl = shortcutNavigationUrl(item);
-        if (!expectedUrl || card.getAttribute("href") !== expectedUrl) return false;
       }
     }
     return true;
@@ -947,6 +946,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     meta = loaded.meta;
     if (state?.firstPaint?.frequent) {
       frequentRenderSnapshot = state.firstPaint.frequent;
+      frequentLiveSites = Array.isArray(frequentRenderSnapshot.sites) ? frequentRenderSnapshot.sites.slice() : [];
       // A fresh session snapshot may be newer than the synchronous Web Storage
       // manifest (for example after a remote preference change while no New Tab
       // was alive). Reconcile that tiny presentation field immediately rather
@@ -1305,6 +1305,33 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return false;
   }
 
+  async function prepareFrequentFaviconForSession(favicon) {
+    if (typeof favicon !== "string" || !favicon.startsWith("data:image/")) return "";
+    if (favicon.length <= RENDER_PREVIEW_MAX_CHARS) return favicon;
+    try {
+      const derivative = await optimizeImageDataUrl(favicon, {
+        maxWidth: RENDER_PREVIEW_DIMENSION,
+        maxHeight: RENDER_PREVIEW_DIMENSION,
+        minWidth: 16,
+        minHeight: 16,
+        targetBytes: RENDER_PREVIEW_TARGET_BYTES,
+        maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES,
+        initialQuality: 0.90
+      });
+      return typeof derivative === "string" && derivative.length <= RENDER_PREVIEW_MAX_CHARS ? derivative : "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function prepareFrequentlyVisitedSites(sites = []) {
+    const input = Array.isArray(sites) ? sites.slice(0, frequentlyVisitedCount) : [];
+    return Promise.all(input.map(async site => ({
+      ...site,
+      favicon: await prepareFrequentFaviconForSession(site?.favicon)
+    })));
+  }
+
   function projectFrequentRenderSnapshot(sites = []) {
     return {
       enabled: frequentlyVisitedEnabled === true,
@@ -1314,13 +1341,14 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
             title: String(site?.title || frequentHostLabel(site?.url) || "").trim().slice(0, 120),
             host: frequentHostLabel(site?.url),
             url: String(site?.url || ""),
-            favicon: typeof site?.favicon === "string" ? site.favicon : ""
+            favicon: typeof site?.favicon === "string" && site.favicon.length <= RENDER_PREVIEW_MAX_CHARS ? site.favicon : ""
           })) : [])
         : []
     };
   }
 
   function updateFrequentRenderSnapshot(sites = []) {
+    if (!Array.isArray(sites) || sites.length === 0) frequentLiveSites = [];
     frequentRenderSnapshot = projectFrequentRenderSnapshot(sites);
     // Top Sites candidates are session/live-owned presentation data. Updating
     // them must never republish this tab's potentially stale Space/grid state or
@@ -1410,7 +1438,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     render();
     const host = canonicalSiteHost(url);
     const remaining = (frequentRenderSnapshot?.sites || []).filter(candidate => canonicalSiteHost(candidate?.url) !== host);
-    renderFrequentlyVisited(remaining);
+    await renderFrequentlyVisited(remaining);
     updateFrequentRenderSnapshot(remaining);
     scheduleFrequentlyVisitedRefresh(0);
     requestMissingSiteIcons([shortcut.id]);
@@ -1428,7 +1456,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     hiddenFrequentDomains.add(domain);
     writeHiddenFrequentDomains();
     const remaining = (frequentRenderSnapshot?.sites || []).filter(candidate => !isFrequentHostHidden(canonicalSiteHost(candidate?.url)));
-    renderFrequentlyVisited(remaining);
+    await renderFrequentlyVisited(remaining);
     updateFrequentRenderSnapshot(remaining);
     scheduleFrequentlyVisitedRefresh(0);
     showToast(t("frequentHidden"));
@@ -1482,31 +1510,65 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     menu.querySelector("button")?.focus({ preventScroll: true });
   }
 
-  function renderFrequentlyVisited(sites, {
+  let frequentRenderCommitGeneration = 0;
+
+  function frequentFallbackFor(site) {
+    const fallback = document.createElement("span");
+    fallback.className = "frequent-site-fallback";
+    fallback.textContent = (site.title || frequentHostLabel(site.url) || "?").trim().slice(0, 1).toUpperCase();
+    fallback.setAttribute("aria-hidden", "true");
+    return fallback;
+  }
+
+  async function settleFrequentIconBeforeCommit(icon) {
+    try {
+      if (typeof icon.decode === "function") {
+        await icon.decode();
+        return true;
+      }
+      if (icon.complete) return Number(icon.naturalWidth) > 0;
+      return await new Promise(resolve => {
+        const done = value => resolve(value);
+        icon.addEventListener("load", () => done(true), { once: true });
+        icon.addEventListener("error", () => done(false), { once: true });
+      });
+    } catch {
+      return false;
+    }
+  }
+
+  async function renderFrequentlyVisited(sites, {
     authoritative = true,
     enabled = frequentlyVisitedEnabled,
     count = frequentlyVisitedCount
   } = {}) {
-    if (!frequentSitesSection || !frequentSitesList) return;
-    frequentSitesList.replaceChildren();
+    if (!frequentSitesSection || !frequentSitesList) return false;
     const visibleCount = [3, 5, 8, 10].includes(Number(count)) ? Number(count) : 5;
     const list = Array.isArray(sites) ? sites.slice(0, visibleCount) : [];
-    frequentSitesSection.hidden = enabled !== true || list.length === 0;
-    if (frequentSitesSection.hidden) {
+    const generation = typeof frequentRenderCommitGeneration === "number"
+      ? ++frequentRenderCommitGeneration
+      : 0;
+    const hidden = enabled !== true || list.length === 0;
+    if (hidden) {
+      frequentSitesList.replaceChildren();
+      frequentSitesSection.hidden = true;
       if (authoritative) {
         frequentSitesSection.inert = false;
         delete document.documentElement.dataset.bootFrequent;
       }
-      return;
+      return true;
     }
+
     const fragment = document.createDocumentFragment();
+    const decodeJobs = [];
     for (const site of list) {
       const card = document.createElement("a");
       card.className = "frequent-site-card";
       card.href = site.url;
       card.rel = "noreferrer";
       card.draggable = shortcutOrderMode !== "recent";
-      card.title = `${site.title || frequentHostLabel(site.url)}\n${site.url}`;
+      card.title = `${site.title || frequentHostLabel(site.url)}
+${site.url}`;
       card.addEventListener("dragstart", event => {
         if (shortcutOrderMode === "recent") {
           event.preventDefault();
@@ -1535,16 +1597,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       if (typeof site.favicon === "string" && site.favicon.startsWith("data:image/")) {
         const icon = document.createElement("img");
         icon.className = "frequent-site-icon";
+        icon.decoding = "async";
         icon.src = site.favicon;
         icon.alt = "";
         icon.setAttribute("aria-hidden", "true");
         card.append(icon);
+        decodeJobs.push(settleFrequentIconBeforeCommit(icon).then(decoded => {
+          if (!decoded) icon.replaceWith(frequentFallbackFor(site));
+        }));
       } else {
-        const fallback = document.createElement("span");
-        fallback.className = "frequent-site-fallback";
-        fallback.textContent = (site.title || frequentHostLabel(site.url) || "?").trim().slice(0, 1).toUpperCase();
-        fallback.setAttribute("aria-hidden", "true");
-        card.append(fallback);
+        card.append(frequentFallbackFor(site));
       }
       const copy = document.createElement("span");
       copy.className = "frequent-site-copy";
@@ -1556,11 +1618,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       card.append(copy);
       fragment.append(card);
     }
-    frequentSitesList.append(fragment);
+
+    // Keep the previous truthful strip (or the initially hidden section) until
+    // every favicon that will be visible has either decoded or been replaced by
+    // its fallback. The fragment is detached, so slow decoding can never expose
+    // an intermediate card with a missing icon.
+    await Promise.all(decodeJobs);
+    if (generation && generation !== frequentRenderCommitGeneration) return false;
+    frequentSitesList.replaceChildren(fragment);
+    frequentSitesSection.hidden = false;
     if (authoritative) {
       frequentSitesSection.inert = false;
       delete document.documentElement.dataset.bootFrequent;
     }
+    return true;
   }
 
   function setFrequentlyVisitedOptionsVisibility(enabled) {
@@ -1637,8 +1708,18 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         filtered.push(site);
         if (filtered.length >= frequentlyVisitedCount) break;
       }
-      renderFrequentlyVisited(filtered);
-      updateFrequentRenderSnapshot(filtered);
+      // Live rendering keeps the browser's original favicon candidate. The tiny
+      // first-paint derivative is a disposable session-only copy and must never
+      // become a prerequisite for, or downgrade, the live strip.
+      frequentLiveSites = filtered.slice(0, frequentlyVisitedCount);
+      const sessionProjectionPromise = typeof prepareFrequentlyVisitedSites === "function"
+        ? prepareFrequentlyVisitedSites(frequentLiveSites)
+        : Promise.resolve(frequentLiveSites);
+      const committed = await renderFrequentlyVisited(frequentLiveSites);
+      if (committed === false || generation !== frequentRefreshGeneration) return;
+      const prepared = await sessionProjectionPromise;
+      if (generation !== frequentRefreshGeneration) return;
+      updateFrequentRenderSnapshot(prepared);
       setFrequentlyVisitedStatus("frequentDeviceLocalStatus");
     } catch {
       const cached = frequentRenderSnapshot?.enabled === true ? (frequentRenderSnapshot.sites || []) : [];
@@ -1793,6 +1874,21 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }, 2500);
   }
 
+  const devicePlatformInfoPromise = Promise.resolve(browser.runtime.getPlatformInfo?.()).catch(() => null);
+
+  async function suggestedDeviceName() {
+    const info = await devicePlatformInfoPromise;
+    return defaultDeviceName(PLATFORM_ID, info?.os);
+  }
+
+  async function ensureLocalDeviceName(rawMeta) {
+    const existing = normalizeDeviceName(rawMeta?.deviceName);
+    if (existing) return rawMeta;
+    const deviceName = await suggestedDeviceName();
+    const response = await sendSyncMessage("mosaicsync:set-device-name", { deviceName });
+    return response.meta || { ...rawMeta, deviceName };
+  }
+
   async function loadState() {
     deviceDefaultSpace = readDeviceDefaultSpacePreference();
     shortcutOrderMode = readShortcutOrderPreference();
@@ -1846,8 +1942,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     if (sessionCache?.frequentSuppressed) {
       // A background permission-removal event can arrive while no New Tab exists.
       // The shared session tombstone is intentionally smaller than a full render
-      // snapshot and must be able to clear an older localStorage FV strip even
-      // when the normal session render state is absent.
+      // snapshot and must be able to suppress FV presentation even when the
+      // normal session render state is absent. Persistent Web Storage no longer
+      // contains any FV field in the Step-2.3 visual-cache schema.
       renderFrequentlyVisited([], { authoritative: false, enabled: false, count: frequentlyVisitedCount });
     }
 
@@ -1965,6 +2062,16 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
 
     schedulePostPaintMaintenance();
+
+    // Device naming is attribution metadata, never a first-paint dependency.
+    // Existing installations receive a friendly fallback only after the launcher
+    // and authoritative state have already painted.
+    if (!normalizeDeviceName(meta?.deviceName)) {
+      void ensureLocalDeviceName(meta).then(next => {
+        meta = normalizeMeta(next);
+        if (settingsDialog?.open) updateSyncUi(meta);
+      }).catch(error => console.warn(`${PRODUCT_NAME}: could not initialize device name`, error));
+    }
 
     startupPhase("startupMaintenanceScheduled", {
       diagnostics: {
@@ -2305,6 +2412,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     updateSpaceSwitcher();
     scheduleFrequentlyVisitedRefresh();
     scheduleAppearanceHintRefresh(state.settings);
+    // The persistent grid cache is Personal-only. Invalidate it synchronously
+    // when moving to Work so a browser close in this same task cannot leave a
+    // stale Personal grid authorized for the next cold start. The normal
+    // post-paint refresh will replace it with a tiny Work-scoped label hint.
+    if (spaceId === "work") {
+      try { localStorage.removeItem(RENDER_MANIFEST_KEY); } catch {}
+    }
     refreshFirstPaintCaches(state, meta);
     requestMissingSiteIcons();
     preloadOtherSpaceBackgrounds();
@@ -2590,6 +2704,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     // paint-contained preview surface and defer one authoritative page commit.
     if (isSettingsOpen()) {
       paintAppearancePreviewLayer(renderedBackgroundColor, resolvedBackground, { deferCustomBackground });
+      // Canvas text/shadow treatment is a lightweight presentation attribute, not
+      // a full-viewport wallpaper paint. Keep it in lockstep with the isolated
+      // Settings preview while the expensive page background remains deferred.
+      document.documentElement.dataset.canvasText = effectiveCanvasText();
       deferredAppearanceVisual = true;
       return;
     }
@@ -6046,6 +6164,31 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return clean ? clean.slice(-6).toUpperCase() : "";
   }
 
+  function syncSourceLabel(status, rawMeta = meta) {
+    const sourceId = status?.remoteOriginDeviceId || status?.lastRemoteReceiptOriginDeviceId || "";
+    const sourceName = normalizeDeviceName(status?.remoteOriginDeviceName || status?.lastRemoteReceiptOriginDeviceName);
+    if (sourceId && sourceId === rawMeta?.deviceId) {
+      const ownName = normalizeDeviceName(rawMeta?.deviceName) || sourceName;
+      return ownName ? t("thisDeviceNamed", { name: ownName }) : t("thisDevice");
+    }
+    if (sourceName) return sourceName;
+    const shortId = shortSyncId(sourceId);
+    return shortId ? `${t("anotherDevice")} · ${shortId}` : t("anotherDevice");
+  }
+
+  function syncReceiptSourceLabel(status, rawMeta = meta) {
+    const sourceId = String(status?.lastRemoteReceiptOriginDeviceId || "");
+    const sourceName = normalizeDeviceName(status?.lastRemoteReceiptOriginDeviceName);
+    if (sourceId && sourceId === rawMeta?.deviceId) {
+      const ownName = normalizeDeviceName(rawMeta?.deviceName) || sourceName;
+      return t("receivedFromDevice", { name: ownName ? t("thisDeviceNamed", { name: ownName }) : t("thisDevice") });
+    }
+    if (sourceName) return t("receivedFromDevice", { name: sourceName });
+    const shortId = shortSyncId(sourceId);
+    if (shortId) return t("receivedFromDevice", { name: `${t("anotherDevice")} · ${shortId}` });
+    return t("received");
+  }
+
   function syncCopyDescription(status) {
     const remoteState = status?.remoteState || "none";
     if (remoteState === "partial") {
@@ -6126,6 +6269,20 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const remoteState = status?.remoteState || (hasRemoteData ? "complete" : (hasRemoteSignal ? "partial" : "none"));
     const remoteTime = Number(status?.remoteUpdatedAt) || 0;
     const remoteReceiptAt = Number(status?.remoteReceiptAt) || 0;
+
+    if (settingsDeviceNameText) settingsDeviceNameText.textContent = normalizeDeviceName(meta.deviceName) || t("nameThisDevice");
+    if (syncSourceText) {
+      const sourceId = String(status?.remoteOriginDeviceId || "");
+      const receiptSourceId = String(status?.lastRemoteReceiptOriginDeviceId || "");
+      syncSourceText.textContent = enabled && remoteTime > 0
+        ? `${syncSourceLabel(status, meta)} · ${formatSyncTime(remoteTime)}`
+        : t("notSynchronizedYet");
+      if (syncSourceDetail) {
+        const showReceipt = enabled && remoteReceiptAt > 0 && sourceId && sourceId !== meta.deviceId && sourceId === receiptSourceId;
+        syncSourceDetail.hidden = !showReceipt;
+        syncSourceDetail.textContent = showReceipt ? t("receivedHereAt", { time: formatSyncTime(remoteReceiptAt) }) : "";
+      }
+    }
 
     const usage = status?.usage || {
       core: meta.syncUsageCoreBytes,
@@ -6217,7 +6374,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         : remoteState === "partial"
           ? t("remoteCopy")
           : remoteReceiptAt
-            ? t("received")
+            ? syncReceiptSourceLabel(status, meta)
             : t("firefoxSync");
       syncRevisionText.textContent = !enabled
         ? t("syncOff")
@@ -6391,6 +6548,47 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void persistWorkspaceSetting("work", "spaceName", stored).catch(error => { refreshSpacesSettings(); showToast(error.message || t("spacesUpdateFailed")); });
   });
 
+  function closeDeviceNameEditor() {
+    if (deviceNameEditor) deviceNameEditor.hidden = true;
+  }
+
+  editDeviceNameButton?.addEventListener("click", () => {
+    if (!deviceNameEditor || !settingsDeviceNameInput) return;
+    deviceNameEditor.hidden = false;
+    settingsDeviceNameInput.value = normalizeDeviceName(meta?.deviceName) || "";
+    void (async () => {
+      if (!settingsDeviceNameInput.value) settingsDeviceNameInput.value = await suggestedDeviceName();
+      settingsDeviceNameInput.focus();
+      settingsDeviceNameInput.select();
+    })();
+  });
+
+  cancelDeviceNameButton?.addEventListener("click", closeDeviceNameEditor);
+
+  async function saveCurrentDeviceName() {
+    const deviceName = normalizeDeviceName(settingsDeviceNameInput?.value);
+    if (!deviceName) { showSyncFeedback(t("enterDeviceName")); return; }
+    if (saveDeviceNameButton) saveDeviceNameButton.disabled = true;
+    try {
+      const response = await sendSyncMessage("mosaicsync:set-device-name", { deviceName });
+      meta = normalizeMeta(response.meta || { ...meta, deviceName });
+      closeDeviceNameEditor();
+      updateSyncUi(meta);
+      showSyncFeedback(t("deviceNameSaved"));
+      void refreshSyncStatus().catch(() => {});
+    } catch (error) {
+      showSyncFeedback(error.message || t("operationFailed"));
+    } finally {
+      if (saveDeviceNameButton) saveDeviceNameButton.disabled = false;
+    }
+  }
+
+  saveDeviceNameButton?.addEventListener("click", () => { void saveCurrentDeviceName(); });
+  settingsDeviceNameInput?.addEventListener("keydown", event => {
+    if (event.key === "Enter") { event.preventDefault(); void saveCurrentDeviceName(); }
+    else if (event.key === "Escape") { event.preventDefault(); closeDeviceNameEditor(); }
+  });
+
   settingsSyncEnabled?.addEventListener("click", event => {
     const wantsSync = event.currentTarget.checked;
     const permissionPromise = wantsSync
@@ -6551,15 +6749,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
   syncPendingChooseSource?.addEventListener("click", async () => {
     try {
-      const loaded = await ensureLocalStorage();
-      meta = normalizeMeta({
-        ...loaded.meta,
+      await ensureLocalStorage();
+      meta = await updateLocalMeta(current => ({
         onboardingCompleted: false,
         onboardingVersion: "",
         syncBootstrapMode: "none",
-        syncStatus: loaded.meta.syncEnabled ? "waiting" : "off"
-      });
-      meta = await writeLocalMeta(meta);
+        syncStatus: current.syncEnabled ? "waiting" : "off"
+      }));
       window.location.replace(browser.runtime.getURL("welcome/welcome.html"));
     } catch (error) {
       showToast(error.message || t("couldNotResume"));
@@ -6898,15 +7094,13 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   settingsRunSetup?.addEventListener("click", async () => {
     const confirmed = window.confirm(`${t("setupWizard")}?\n\n${t("setupWizardDescription")}`);
     if (!confirmed) return;
-    const loaded = await ensureLocalStorage();
-    meta = normalizeMeta({
-      ...loaded.meta,
+    await ensureLocalStorage();
+    meta = await updateLocalMeta(current => ({
       onboardingCompleted: false,
       onboardingVersion: "",
-      syncBootstrapMode: loaded.meta.syncInitialized ? loaded.meta.syncBootstrapMode : "none",
-      syncStatus: loaded.meta.syncEnabled && !loaded.meta.syncInitialized ? "waiting" : loaded.meta.syncStatus
-    });
-    meta = await writeLocalMeta(meta);
+      syncBootstrapMode: current.syncInitialized ? current.syncBootstrapMode : "none",
+      syncStatus: current.syncEnabled && !current.syncInitialized ? "waiting" : current.syncStatus
+    }));
     try { localStorage.removeItem(RENDER_MANIFEST_KEY); } catch {}
     window.location.replace(browser.runtime.getURL("welcome/welcome.html"));
   });

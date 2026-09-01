@@ -1,9 +1,58 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.10.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.15.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.15 Step 3.1 shared-background policy
+
+- One canonical `src/shared/background/background-core.js` owns Sync, Recovery, persistence orchestration, metadata transitions, alarms, queues and shared favicon policy.
+- Firefox and Chrome background entrypoints stay tiny; browser adapters contain only genuine platform capabilities such as Firefox data-collection permission handling, Firefox tab favicon lookup, Chromium `_favicon`, and Chrome Web Store protection.
+- Do not duplicate shared background semantics back into browser overlays. Fix shared policy once in the canonical core.
+- This release is extraction-only: no Step 2 reopening, feature work, schema changes, permission changes or behavioral redesign.
+
+## 1.30.18.14 Step 2.3 / Step 2 completion policy
+
+- Step 2.3 narrows the persistent `mosaicsync.render-manifest.v1` payload to a **presentation-only visual cache**. It is not a profile/state replica and must not acquire new authoritative fields.
+- The v5 persistent cache may contain only: a readiness gate, a Personal/Work paint-authorization hint, Space-switcher labels/visibility, Personal-grid geometry, visual shortcut/folder identity, and bounded artwork previews.
+- It must not persist shortcut navigation URLs, state/settings mutation clocks, Frequently Visited settings/candidates, or the semantic First-Paint Contract. Work shortcut structure must not be retained.
+- Persistent first-paint cards are inert and have no `href`; the authoritative New Tab installs validated navigation only after session/local state has won.
+- Cache adoption is based on current visual equivalence (layout, order, titles, folder mosaic identity and artwork identity), not on revision-clock equality or URL equality. A corrupt/unusable preview cannot authorize reuse over immediately drawable session artwork.
+- The disposable render-manifest schema advances to v5. State/meta/Sync/Recovery/profile schema versions remain unchanged.
+- With Step 2.3 certified, **Step 2 is complete**. The next roadmap stage is Step 3: consolidate duplicated Firefox/Chrome background semantics behind shared core logic while preserving thin browser-specific adapters.
+- No Step 3 refactor belongs in 1.30.18.14.
+
+
+## 1.30.18.13 device attribution feature policy
+
+- This release temporarily pauses the five-step maintainability journey and changes only device naming and synchronized-change attribution.
+- Each MosaicSync installation owns a stable local `deviceName` attached to its existing `deviceId`. The user may name it during Welcome when opting into Sync and rename it later in Settings.
+- Device names synchronize as a tiny dedicated metadata record keyed by device ID. Layout/profile datasets continue to carry only their existing origin device ID; Settings resolves that ID to the human-readable name.
+- The latest synchronized-change display uses the source dataset timestamp, not the local receipt timestamp. When useful, local receipt time is shown separately.
+- Device names are not part of profile export/Recovery layout data and do not contain artwork or browsing history.
+- Preserve all existing permissions, CSP, layout/Sync/Recovery schemas and backend-free privacy model.
+
+## 1.30.18.12 post-audit Step 2.2 corrective policy
+
+- Do not begin Step 2.3 in this release. 1.30.18.12 exists only to close verified post-publication 1.30.18.11 audit findings and the already-intended manual detected-favicon Sync behavior.
+- Every Frequently Visited render request, including disabled/empty states, invalidates older detached decode work. A stale decode may never make browser-history cards visible again after a newer render state wins.
+- Live Frequently Visited artwork and its warm-session derivative are separate representations. Live rendering uses the browser's original candidate; optimization failure may remove only the disposable session derivative, never downgrade live artwork.
+- Background full-record Sync/status metadata writes preserve current onboarding fields unless the one verified remote-bootstrap transition explicitly owns onboarding completion. Acquiring the persistence lock around a stale whole record is not permission to restore unrelated setup state.
+- Manual detected-favicon Sync remains metadata-only by default. New Browser-source choices use compact exact image identity rather than the coarse legacy `b` source marker; matching may cross Browser/site source classes when the image identity is the same, and legacy `b` records are upgraded from the selected local pixels when those pixels still exist. Image bytes continue to synchronize only through the existing explicit **Sync this image** path.
+- Keep the physical persistence Web Lock name, all Sync/Recovery/state/profile schemas, permissions, CSP, localization and backend-free privacy model unchanged.
+- Regression coverage must use deferred decode/concurrency behavior for the race fixes rather than only source-order assertions.
+
+## 1.30.18.11 Step 2.2 ownership/concurrency closure policy
+
+- The cross-context Web Lock remains physically named `mosaicsync.local-assets.write.v1` for rolling-version compatibility, but the source helper is deliberately named for **persistence** ownership. State, active-Space, meta and startup-repair transitions that can conflict across extension contexts must share that ordering boundary.
+- Ordinary structural profile persistence does **not** own `mosaicsync.active-space.v1`. The dedicated active-Space writer owns that pointer, and structural session publication derives its active Space from the persisted pointer while the lock is held.
+- Startup repair is conditional repair, not a blind replay of a stale startup read. If active-Space or meta authority looked missing/invalid, the repair transaction must acquire the persistence lock, re-read current storage, and write only fields that are still missing/invalid.
+- Independent setup/UI meta changes use `updateLocalMeta()` field intent against the authoritative record re-read inside the lock. Coherent Sync/status state-machine transitions may still use serialized full-record `writeLocalMeta()` semantics.
+- Generic structural session warming has no Frequently Visited parameter or physical FV key access. Browser-derived FV candidates have one writer domain: the dedicated session-only projection path.
+- Oversized native FV favicons are reduced to bounded, disposable first-paint derivatives. The visible FV strip is committed only after its detached favicon decode jobs settle; failed decodes become fallbacks before commit. These derivatives never enter persistent localStorage, `storage.local` profile state, Sync, Recovery or export.
+- Settings-open appearance changes may update lightweight canvas text/shadow presentation immediately, but the full page wallpaper/background/dim commit stays deferred until the Settings surface is safe to repaint.
+- This release remains zero-feature in scope: no Step 2.3 expansion is allowed until these ownership/concurrency invariants are certified.
 
 ## 1.30.18.10 Step 2.2 session-ownership policy
 
@@ -523,7 +572,7 @@ The preview surface is a fixed first child of `#page`, not a DOM sibling. Native
 
 The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
 
-The current release is `1.30.18.10` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+The current release is `1.30.18.12` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
 
 ## 1.26.9 live appearance / wallpaper paint-isolation policy
 

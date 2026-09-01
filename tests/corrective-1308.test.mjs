@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -87,7 +88,7 @@ test("1.30.8 normalized Cross-Space move tolerates a deeply frozen trusted input
 
 test("1.30.8 remote evidence is bounded, core-only, and repaired before authoritative commit/read paths", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.match(source, /const deliveredCoreEvidence = new Map\(\)/);
     assert.match(source, /while \(deliveredCoreEvidence\.size > MAX_EXPECTATIONS\)/);
     assert.match(source, /function coreEvidenceDescriptor\(key, value\)/);
@@ -99,7 +100,7 @@ test("1.30.8 remote evidence is bounded, core-only, and repaired before authorit
 
 test("1.30.8 own-write storage events preserve an overwritten deterministic winner from oldValue", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("browser.storage.onChanged.addListener");
     const end = source.indexOf("browser.alarms?.onAlarm?.addListener", start);
     const block = source.slice(start, end);

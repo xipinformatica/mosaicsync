@@ -7,7 +7,7 @@
  * First-run setup controller. The wizard never publishes or restores a layout until
  * the user explicitly chooses the source for this Firefox profile.
  */
-import "../core/platform.js";
+import { PLATFORM_ID } from "../core/platform.js";
 import {
   DONATE_URL,
   FREQUENTLY_VISITED_PREF_KEY,
@@ -17,8 +17,8 @@ import {
   VERSION
 } from "../core/constants.js";
 import { fetchFirefoxShortcuts, prepareFirefoxShortcutFavicons, replaceWithFirefoxShortcuts } from "../core/importer.js";
-import { nextMutationTime, normalizeMeta, normalizeState, now, stableStringify } from "../core/model.js";
-import { ensureLocalStorage, writeLocalMeta, writeLocalState } from "../core/storage.js";
+import { defaultDeviceName, nextMutationTime, normalizeDeviceName, normalizeState, now, stableStringify } from "../core/model.js";
+import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/storage.js";
 import { cleanupLegacyWebOriginPermissions, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
@@ -33,6 +33,8 @@ const introContinueButton = document.getElementById("introContinueButton");
 const syncStep = document.getElementById("syncStep");
 const sourceStep = document.getElementById("sourceStep");
 const syncContinueButton = document.getElementById("syncContinueButton");
+const welcomeDeviceNameCard = document.getElementById("welcomeDeviceNameCard");
+const welcomeDeviceNameInput = document.getElementById("welcomeDeviceNameInput");
 const sourceFinishButton = document.getElementById("sourceFinishButton");
 const welcomeProfileFile = document.getElementById("welcomeProfileFile");
 const sourceIntro = document.getElementById("sourceIntro");
@@ -61,8 +63,26 @@ function selected(name) {
   return document.querySelector(`input[name="${name}"]:checked`)?.value || "";
 }
 
+let suggestedDeviceNamePromise = null;
+
+async function suggestedDeviceName() {
+  if (!suggestedDeviceNamePromise) {
+    suggestedDeviceNamePromise = Promise.resolve(browser.runtime.getPlatformInfo?.())
+      .catch(() => null)
+      .then(info => defaultDeviceName(PLATFORM_ID, info?.os));
+  }
+  return suggestedDeviceNamePromise;
+}
+
 function refreshChoiceCards() {
   choiceCards.forEach(card => card.classList.toggle("selected", Boolean(card.querySelector("input")?.checked)));
+  const wantsSync = selected("syncChoice") === "yes";
+  if (welcomeDeviceNameCard) welcomeDeviceNameCard.hidden = !wantsSync;
+  if (wantsSync && welcomeDeviceNameInput && !normalizeDeviceName(welcomeDeviceNameInput.value)) {
+    void suggestedDeviceName().then(name => {
+      if (selected("syncChoice") === "yes" && !normalizeDeviceName(welcomeDeviceNameInput.value)) welcomeDeviceNameInput.value = name;
+    });
+  }
   syncContinueButton.disabled = !selected("syncChoice");
   sourceFinishButton.disabled = sourceStep.hidden || !selected("sourceChoice");
 }
@@ -190,9 +210,8 @@ async function importMosaicSyncProfile(file) {
 async function completeOnboarding(message = t("setupComplete")) {
   if (finishing) return;
   finishing = true;
-  const loaded = await ensureLocalStorage();
-  const meta = normalizeMeta({ ...loaded.meta, onboardingCompleted: true, onboardingVersion: VERSION });
-  await writeLocalMeta(meta);
+  await ensureLocalStorage();
+  await updateLocalMeta({ onboardingCompleted: true, onboardingVersion: VERSION });
   setStatus(`${translateText(message)} ${t("openingMosaic")}`);
   await new Promise(resolve => setTimeout(resolve, 220));
   // Do not call tabs.create() here. A packaged extension page can navigate to
@@ -317,6 +336,11 @@ syncContinueButton.addEventListener("click", event => {
       }
 
       syncOptedIn = wantsSync && granted;
+      if (syncOptedIn) {
+        const deviceName = normalizeDeviceName(welcomeDeviceNameInput?.value) || await suggestedDeviceName();
+        const named = await sendSyncMessage("mosaicsync:set-device-name", { deviceName });
+        if (welcomeDeviceNameInput) welcomeDeviceNameInput.value = named.deviceName || deviceName;
+      }
       await sendSyncMessage("mosaicsync:set-sync-enabled", { enabled: syncOptedIn });
       if (!syncOptedIn) await removeSyncConsent();
       const syncStatus = syncOptedIn ? await sendSyncMessage("mosaicsync:get-sync-status") : null;
@@ -474,6 +498,7 @@ async function initializeWelcome() {
   try {
     const loaded = await ensureLocalStorage();
     const existingMeta = loaded.meta;
+    if (welcomeDeviceNameInput) welcomeDeviceNameInput.value = normalizeDeviceName(existingMeta.deviceName) || await suggestedDeviceName();
     webAccessPrompted = loaded.state.settings.webAccessPrompted === true;
     webAccessGranted = await hasWebAccess();
     webAccessDecisionPromise = Promise.resolve(webAccessGranted);

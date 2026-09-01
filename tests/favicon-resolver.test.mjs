@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -22,10 +23,10 @@ function resolverCode(src){return [
 ].join("\n");}
 
 for(const browser of ["firefox"]) test(`${browser}: fast first pass keeps favicon-first and app-subdomain fallback`, async()=>{
-  const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+  const src=readBackgroundSource(browser);
   const code=resolverCode(src);
   const calls=[]; let scenario={};
-  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>scenario.native||null,fetchImageDataUrlDetailed:async(url)=>{calls.push(url);return scenario.fetch?.[url]||{image:"",reason:"http-404",qualitySide:0};},discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return scenario.discovered||{candidates:[],finalPageUrl:url,reason:"http-403"};},betterFaviconCandidate:better,faviconQualitySide:qualitySide};
+  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>scenario.native||null,fetchImageDataUrlDetailed:async(url)=>{calls.push(url);return scenario.fetch?.[url]||{image:"",reason:"http-404",qualitySide:0};},discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return scenario.discovered||{candidates:[],finalPageUrl:url,reason:"http-403"};},betterFaviconCandidate:better,faviconQualitySide:qualitySide};
   vm.createContext(ctx); vm.runInContext(code,ctx);
   scenario={fetch:{"https://chat.mistral.ai/favicon.ico":{image:"",reason:"http-403",qualitySide:0},"https://mistral.ai/favicon.ico":image("M",64,"https://mistral.ai/favicon.ico")}};
   const result=await ctx.resolveFaviconForUrl("https://chat.mistral.ai/",{});
@@ -41,7 +42,7 @@ for(const browser of ["firefox"]) test(`${browser}: fast first pass keeps favico
 });
 
 for (const browser of ["firefox","chrome"]) test(`${browser}: quality pass prioritizes declared cross-host artwork before guessed root paths`, async()=>{
-  const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+  const src=readBackgroundSource(browser);
   const code=resolverCode(src);
   const calls=[];
   let now=0;
@@ -49,7 +50,7 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: quality pass prior
   const high=image("ELPAIS_HD",180,"https://static.elpais.com/dist/resources/images/apple-touch-icon.png",{declared:true});
   const ctx={
     console,URL,Date:clock,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,
-    isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
+    isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>true,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);now+=3000;return {candidates:[{url:high.sourceUrl,score:1180,sideHint:180,order:0,source:"link"}],finalPageUrl:url,reason:""};},
     fetchImageDataUrlDetailed:async (url,options={})=>{calls.push(url);if(url===high.sourceUrl){now+=1000;return {...high,sourceKind:options.sourceKind||high.sourceKind||""};}if(/\/(?:icon\.ico|favicon\.(?:ico|svg|png)|apple-touch-icon\.png)$/.test(url)){now+=4000;return {image:"",reason:"timeout",width:0,height:0,qualitySide:0};}return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
@@ -65,14 +66,14 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: quality pass prior
 });
 
 for (const browser of ["firefox","chrome"]) test(`${browser}: conventional quality guesses are fallback-only and budget-isolated`, async()=>{
-  const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+  const src=readBackgroundSource(browser);
   const code=resolverCode(src);
   const calls=[];
   const low=image("LOW",32,"https://example.test/favicon.ico");
   const high=image("HIGH",256,"https://example.test/icon.ico",{declared:true});
   const ctx={
     console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,
-    isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
+    isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>true,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return {candidates:[],finalPageUrl:url,reason:"http-403"};},
     fetchImageDataUrlDetailed:async(url,options={})=>{calls.push(url);if(url==="https://example.test/favicon.ico")return {...low,sourceKind:options.sourceKind||low.sourceKind||""};if(url==="https://example.test/icon.ico")return {...high,sourceKind:options.sourceKind||high.sourceKind||""};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};}
@@ -86,7 +87,7 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: conventional quali
 });
 
 for (const browser of ["firefox","chrome"]) test(`${browser}: authenticated deep-link quality retry prefers original-site root artwork over login-provider favicon`, async()=>{
-  const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+  const src=readBackgroundSource(browser);
   const code=resolverCode(src);
   const calls=[];
   const newsHigh=image("GOOGLE_NEWS",256,"https://ssl.gstatic.com/gnews/logo/google_news_512.png",{declared:true});newsHigh.qualitySide=512;
@@ -94,7 +95,7 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: authenticated deep
   const requested="https://news.google.com/foryou?hl=en-US&gl=US&ceid=US:en";
   const ctx={
     console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,
-    isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>browser==="chrome"?{...image("GENERIC_G",0,""),native:true}:null,
+    isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>browser === "chrome",hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>browser==="chrome"?{...image("GENERIC_G",0,""),native:true}:null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     fetchImageDataUrlDetailed:async(url,options={})=>{calls.push(url);if(url===newsHigh.sourceUrl)return {...newsHigh,sourceKind:options.sourceKind||newsHigh.sourceKind||""};if(url===loginIcon.sourceUrl)return {...loginIcon,sourceKind:options.sourceKind||loginIcon.sourceKind||""};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};},
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);if(url==="https://news.google.com/")return {candidates:[{url:newsHigh.sourceUrl,score:2112,sideHint:512,order:0,source:"link"}],finalPageUrl:url,reason:""};return {candidates:[{url:loginIcon.sourceUrl,score:696,sideHint:96,order:0,source:"link"}],finalPageUrl:"https://accounts.google.com/v3/signin/identifier?continue=...",reason:""};}
@@ -110,7 +111,7 @@ for (const browser of ["firefox","chrome"]) test(`${browser}: authenticated deep
 
 test("Firefox/Chrome quality resolver architecture is declared-first with conventional fallback", ()=>{
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const fn=extract(src,"resolveFaviconForUrl");
     assert.match(src,/async function probeConventionalFaviconQualityUpgrade\(/);
     assert.match(src,/async function probeOriginalOriginDeclaredIcons\(/);
@@ -122,7 +123,7 @@ test("Firefox/Chrome quality resolver architecture is declared-first with conven
 
 test("1.26.11 keeps the one-time favicon-quality repair without a current-version allowlist", ()=>{
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     assert.match(src,/const resolverQualityUpgrade = \/\^1\\.24\\.14\(\?:\\.\[1234\]\)\?\$\/.test\(previousVersion\);/);
     assert.doesNotMatch(src,/resolverQualityUpgrade = \[[^\n]+\]\.includes\(VERSION\)/);
     assert.match(src,/force: .*resolverQualityUpgrade/);
@@ -132,7 +133,7 @@ test("1.26.11 keeps the one-time favicon-quality repair without a current-versio
 
 test("first provisional favicon schedules its quality pass immediately without consuming a failure attempt", ()=>{
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const code=extract(src,"nextIconRecoveryQualityRetry");
     let now=12345;
     const ctx={Date:{now:()=>now},nextIconRecoveryFailure:()=>{throw new Error("first quality pass must not use failure backoff");}};
@@ -147,19 +148,19 @@ test("first provisional favicon schedules its quality pass immediately without c
 });
 
 test("chrome: native _favicon output size is treated as unknown source quality", ()=>{
-  const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
+  const src=readBackgroundSource("chrome");
   assert.match(src,/return \{ image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, sourceKind: "browser", native: true \};/);
   assert.doesNotMatch(src,/width: 128, height: 128, qualitySide: 128, declared: false, native: true/);
 });
 
 test("chrome: a never-visited site resolves from network metadata when Website Access is granted", async()=>{
-  const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
+  const src=readBackgroundSource("chrome");
   const code=resolverCode(src);
   const calls=[];
   const high=image("NEW_SITE_HD",180,"https://static.example.test/apple-touch-icon.png",{declared:true});
   const ctx={
     console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,
-    isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
+    isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>true,hasWebAccess:async()=>true,resolveBrowserCachedFavicon:async()=>null,
     faviconQualitySide:qualitySide,betterFaviconCandidate:better,
     fetchImageDataUrlDetailed:async url=>{calls.push(url);if(url===high.sourceUrl)return high;if(url==="https://example.test/favicon.ico")return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};return {image:"",reason:"http-404",width:0,height:0,qualitySide:0};},
     discoverPageIconInfo:async url=>{calls.push(`HTML:${url}`);return {candidates:[{url:high.sourceUrl,score:1180,sideHint:180,order:0,source:"link"}],finalPageUrl:url,reason:""};}
@@ -171,10 +172,10 @@ test("chrome: a never-visited site resolves from network metadata when Website A
 });
 
 test("chrome: local _favicon remains available without Website Access, but unknown sites still respect permission", async()=>{
-  const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
+  const src=readBackgroundSource("chrome");
   const code=resolverCode(src);
   let native=image("CACHED",0,"",{declared:false});native.native=true;
-  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,isProtectedChromeStoreUrl:()=>false,hasWebAccess:async()=>false,resolveBrowserCachedFavicon:async()=>native,faviconQualitySide:qualitySide,betterFaviconCandidate:better,fetchImageDataUrlDetailed:async()=>{throw new Error("network must not run without permission");},discoverPageIconInfo:async()=>{throw new Error("HTML must not run without permission");}};
+  const ctx={console,URL,Date,ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,FAVICON_AUTHORITATIVE_SUITABILITY:375,isProtectedChromeStoreUrl:()=>false,isProtectedFaviconUrl:()=>false,platformHasPermissionFreeFaviconSource:()=>true,hasWebAccess:async()=>false,resolveBrowserCachedFavicon:async()=>native,faviconQualitySide:qualitySide,betterFaviconCandidate:better,fetchImageDataUrlDetailed:async()=>{throw new Error("network must not run without permission");},discoverPageIconInfo:async()=>{throw new Error("HTML must not run without permission");}};
   vm.createContext(ctx);vm.runInContext(code,ctx);
   const cached=await ctx.resolveFaviconForUrl("https://known.test/",{});
   assert.ok(cached.image.includes("CACHED"));
@@ -186,7 +187,7 @@ test("chrome: local _favicon remains available without Website Access, but unkno
 });
 
 test("chrome: quality-upgrade queue accepts browser-native artwork as replaceable", ()=>{
-  const src=fs.readFileSync("dist/chrome/background/background.js","utf8");
+  const src=readBackgroundSource("chrome");
   const helper = extract(src,"automaticFaviconArtwork");
   assert.match(helper,/\["favicon", "firefox"\]\.includes\(shortcut\.imageSourceKind(?: \|\| "none")?\)/,
     "Chrome-native legacy source kind must be eligible for a direct quality upgrade");

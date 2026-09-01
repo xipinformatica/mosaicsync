@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -144,7 +145,7 @@ test("1.24.14g portaled tooltip is removed when its original parent disappears",
 
 test("1.24.14g read-only Sync status failures stay out of durable error state on both browsers", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     assert.match(source, /function enqueue\(task, \{ persistSyncError = true \} = \{\}\)/);
     assert.match(source, /if \(!persistSyncError\) return;/);
     assert.match(source, /case "mosaicsync:get-sync-status":[\s\S]{0,160}enqueue\(getSyncStatus, \{ persistSyncError: false \}\)/);
@@ -152,7 +153,7 @@ test("1.24.14g read-only Sync status failures stay out of durable error state on
 });
 
 test("1.24.14g Firefox permission revocation clears all pending Sync recovery journals before disabling Sync", async () => {
-  const source = await readFile("dist/firefox/background/background.js", "utf8");
+  const source = readBackgroundSource("firefox");
   const start = source.indexOf("browser.permissions?.onRemoved?.addListener");
   const end = source.indexOf("const REMOTE_IMAGE_MAX_BYTES", start);
   const block = source.slice(start, end);

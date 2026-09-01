@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -62,7 +63,7 @@ function backgroundHelpers(source) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.7 ${browser} request-id cancellation aborts only the matching manual favicon discovery`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helpers = backgroundHelpers(source);
     let observedSignal = null;
     const context = {
@@ -91,7 +92,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 
   test(`1.27.7 ${browser} caller cancellation aborts an in-flight manual favicon network fetch`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const linked = extractFunction(source, "linkedFetchAbortController");
     const bounded = extractFunction(source, "fetchBoundedResource");
     let fetchSignal = null;
@@ -119,7 +120,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(result.reason, "cancelled");
   });
   test(`1.27.7 ${browser} a pre-cancelled manual favicon discovery performs no permission/network work`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     let permissionCalls = 0;
     const controller = new AbortController();
@@ -134,7 +135,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.7 ${browser} favicon cache cannot be read after live Website Access revocation`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helpers = backgroundHelpers(source);
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     let permissionCalls = 0;
@@ -173,7 +174,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.7 ${browser} favicon cache enforces its aggregate retained-character bound`, () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helpers = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "rememberFaviconChoices"].map(name => extractFunction(source, name)).join("\n");
     const context = {
       Map,

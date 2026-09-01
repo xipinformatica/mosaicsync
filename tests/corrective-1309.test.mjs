@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -70,7 +71,7 @@ test("1.30.9 measured New Tab preference paths use trusted normalized workspace 
 
 test("1.30.9 Sync publication reuses the already-normalized state for profile snapshot publication", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.doesNotMatch(source, /publishProfileDeviceSnapshot\(normalizeState\((?:newRaw|newStateInput)\), meta\)/);
     assert.match(source, /publishProfileDeviceSnapshot\(newStateInput, meta\)/);
   }
@@ -78,7 +79,7 @@ test("1.30.9 Sync publication reuses the already-normalized state for profile sn
 
 test("1.30.9 watchdog retries pending local publication only once after catastrophic-loss protection", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.match(source, /await reconcileIfNewCommit\("alarm", meta, false\);/);
     assert.match(source, /if \(!pendingLocalAlreadyRetried\) meta = await retryPendingLocalSyncMutation\(meta\);/);
     const reconcileStart = source.indexOf("async function reconcileIfNewCommit");

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -29,9 +30,45 @@ function extract(src, name) {
   throw new Error(`unterminated ${name}`);
 }
 
+function extractMultilineFunction(src, name) {
+  let start = src.indexOf(`async function ${name}`);
+  if (start < 0) start = src.indexOf(`function ${name}`);
+  assert.ok(start >= 0, `missing ${name}`);
+  const brace = src.indexOf("{\n", start);
+  assert.ok(brace >= 0, `missing function body for ${name}`);
+  let depth = 0, quote = "", esc = false, lineComment = false, blockComment = false;
+  for (let i = brace; i < src.length; i += 1) {
+    const c = src[i], n = src[i + 1];
+    if (lineComment) { if (c === "\n") lineComment = false; continue; }
+    if (blockComment) { if (c === "*" && n === "/") { blockComment = false; i += 1; } continue; }
+    if (quote) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === quote) quote = ""; continue; }
+    if (c === "/" && n === "/") { lineComment = true; i += 1; continue; }
+    if (c === "/" && n === "*") { blockComment = true; i += 1; continue; }
+    if (c === '"' || c === "'" || c === '`') { quote = c; continue; }
+    if (c === "{") depth += 1;
+    else if (c === "}" && --depth === 0) return src.slice(start, i + 1);
+  }
+  throw new Error(`unterminated ${name}`);
+}
+
+function resolverCode(src) {
+  return [
+    extractMultilineFunction(src, "faviconQualitySide"),
+    extractMultilineFunction(src, "faviconCandidateSuitability"),
+    extractMultilineFunction(src, "faviconCandidatePreference"),
+    extractMultilineFunction(src, "faviconCandidateIsAuthoritativelyGoodEnough"),
+    extractMultilineFunction(src, "betterFaviconCandidate"),
+    extractMultilineFunction(src, "parentHostFaviconUrl"),
+    extractMultilineFunction(src, "probeConventionalFaviconFallbacks"),
+    extractMultilineFunction(src, "probeConventionalFaviconQualityUpgrade"),
+    extractMultilineFunction(src, "probeOriginalOriginDeclaredIcons"),
+    extractMultilineFunction(src, "resolveFaviconForUrl")
+  ].join("\n");
+}
+
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.15 ${browser} favicon discovery enumerates both Spaces`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const ctx = { normalizeFaviconPreference, PERSONAL_SPACE_ID: "personal", WORK_SPACE_ID: "work" };
     vm.createContext(ctx);
     vm.runInContext(extract(src, "flattenShortcuts"), ctx);
@@ -72,7 +109,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.15 ${browser} permission-blocked recovery is not burned as a website retry failure`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = extract(src, "processIconRecoveryQueue");
     let queue = { version: 1, items: [{ id: "s", url: "https://example.test/", attempts: 2, nextAttemptAt: 0, qualityUpgrade: false }] };
     let storedQueue = null;
@@ -140,21 +177,40 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-test("1.26.15 Chrome resolver reaches local favicon cache before Website Access gate", () => {
-  const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
-  const start = src.indexOf("async function resolveFaviconForUrl");
-  const end = src.indexOf("function flattenShortcuts", start);
-  const block = src.slice(start, end);
-  const nativeAt = block.indexOf("const native = await resolveBrowserCachedFavicon(pageUrl)");
-  const permissionAt = block.indexOf("const webAccess = await hasWebAccess()");
-  assert.ok(nativeAt >= 0 && permissionAt > nativeAt);
-  assert.match(block, /if \(!webAccess\) \{/);
+test("1.26.15 Chrome resolver uses permission-free native favicon before Website Access", async () => {
+  const src = readBackgroundSource("chrome");
+  const calls = [];
+  const native = { image: "data:image/png;base64,CACHED", sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, native: true };
+  const ctx = {
+    console, URL, Date, ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000, FAVICON_AUTHORITATIVE_SUITABILITY: 375,
+    isProtectedChromeStoreUrl: () => false, isProtectedFaviconUrl: () => false, platformHasPermissionFreeFaviconSource: () => true,
+    resolveBrowserCachedFavicon: async () => { calls.push("native"); return native; },
+    hasWebAccess: async () => { calls.push("permission"); return false; },
+    fetchImageDataUrlDetailed: async () => { throw new Error("network must not run without Website Access"); },
+    discoverPageIconInfo: async () => { throw new Error("HTML must not run without Website Access"); }
+  };
+  vm.createContext(ctx);
+  vm.runInContext(resolverCode(src), ctx);
+  const result = await ctx.resolveFaviconForUrl("https://known.test/", {});
+  assert.ok(result.image.includes("CACHED"));
+  assert.deepEqual(calls, ["native", "permission"], "Chrome must probe its permission-free native cache before checking Website Access");
 });
 
-test("1.26.15 Firefox proactive network resolver still requires Website Access", () => {
-  const src = fs.readFileSync("dist/firefox/background/background.js", "utf8");
-  const start = src.indexOf("async function resolveFaviconForUrl");
-  const end = src.indexOf("function flattenShortcuts", start);
-  const block = src.slice(start, end);
-  assert.match(block, /if \(!\(await hasWebAccess\(\)\)\) return \{ image: "", sourceUrl: "", reason: "permission"/);
+test("1.26.15 Firefox proactive network resolver still requires Website Access", async () => {
+  const src = readBackgroundSource("firefox");
+  const calls = [];
+  const ctx = {
+    console, URL, Date, ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000, FAVICON_AUTHORITATIVE_SUITABILITY: 375,
+    isProtectedChromeStoreUrl: () => false, isProtectedFaviconUrl: () => false, platformHasPermissionFreeFaviconSource: () => false,
+    resolveBrowserCachedFavicon: async () => { calls.push("native"); throw new Error("Firefox must not probe a permission-free native cache"); },
+    hasWebAccess: async () => { calls.push("permission"); return false; },
+    fetchImageDataUrlDetailed: async () => { throw new Error("network must not run without Website Access"); },
+    discoverPageIconInfo: async () => { throw new Error("HTML must not run without Website Access"); }
+  };
+  vm.createContext(ctx);
+  vm.runInContext(resolverCode(src), ctx);
+  const result = await ctx.resolveFaviconForUrl("https://unknown.test/", {});
+  assert.equal(result.image, "");
+  assert.equal(result.reason, "permission");
+  assert.deepEqual(calls, ["permission"]);
 });

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -140,13 +141,15 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.9 ${browser} quality resolver cannot stop on huge low-suitability manifest art`, async () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const context = vm.createContext({
       Math, Number, String, URL, RegExp,
       ICON_RECOVERY_FETCH_TIMEOUT_MS: 8000,
       
       hasWebAccess: async () => true,
       isProtectedChromeStoreUrl: () => false,
+      isProtectedFaviconUrl: () => false,
+      platformHasPermissionFreeFaviconSource: () => browser === "chrome",
       resolveBrowserCachedFavicon: async () => ({ image: "" }),
       parentHostFaviconUrl: () => "",
       discoverPageIconInfo: async () => ({
@@ -174,7 +177,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.9 ${browser} genuinely excellent preferred favicon may still terminate bounded discovery`, () => {
-    const source = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const context = vm.createContext({ Math, Number, String });
     const constantMatch = source.match(/const FAVICON_AUTHORITATIVE_SUITABILITY\s*=\s*(\d+);/);
     assert.ok(constantMatch);

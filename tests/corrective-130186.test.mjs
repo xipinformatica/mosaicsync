@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -155,7 +156,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.notEqual(root.dataset.bootGrid, "true");
   });
 
-  test(`1.30.18.9 ${browser} persistent manifest shares structural first-paint truth while FV sites are session-owned`, async () => {
+  test(`1.30.18.9 ${browser} persistent visual manifest keeps only Space-label presentation while FV sites stay session-owned`, async () => {
     const previous = globalThis.localStorage;
     const data = new Map();
     globalThis.localStorage = {
@@ -171,19 +172,18 @@ for (const browser of ["firefox", "chrome"]) {
       const manifestModule = await import(`${pathToFileURL(resolve(`dist/${browser}/newtab/render-manifest.js`)).href}?130186-r=${nonce}`);
       const state = makeState(constants, model);
       const session = storage.createRenderSnapshot(state, { frequentSnapshot: frequent });
-      assert.equal(manifestModule.persistRenderManifest(state, { onboardingCompleted: true }, null, frequent), true);
+      assert.equal(manifestModule.persistRenderManifest(state, { onboardingCompleted: true }), true);
       const manifest = JSON.parse(data.get(constants.RENDER_MANIFEST_KEY));
       assert.equal(manifest.version, constants.RENDER_MANIFEST_SCHEMA_VERSION);
-      assert.deepEqual(manifest.firstPaint.spaceNames, session.firstPaint.spaceNames);
-      assert.equal(manifest.firstPaint.activeSpaceId, session.firstPaint.activeSpaceId);
-      assert.equal(manifest.firstPaint.multipleSpacesEnabled, session.firstPaint.multipleSpacesEnabled);
-      assert.deepEqual(manifest.firstPaint.frequent?.sites || [], [], "persistent manifest must never retain browser-derived site candidates");
+      assert.deepEqual({ personal: manifest.spaceSwitcher.personal, work: manifest.spaceSwitcher.work }, session.firstPaint.spaceNames);
+      assert.equal(Object.hasOwn(manifest, "firstPaint"), false, "persistent visual cache must not duplicate the semantic First-Paint Contract");
+      assert.doesNotMatch(JSON.stringify(manifest), /frequent|https:\/\/example\.com/i, "persistent visual cache must contain neither FV state nor site/navigation data");
       assert.equal(session.firstPaint.frequent.sites[0].url, "https://example.com/", "session layer remains the device-local FV owner");
     } finally { globalThis.localStorage = previous; }
   });
 
   test(`1.30.18.6 ${browser} Sync usage reports recovery safety copies separately from layout and settings`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = ["assetIdsByUsage", "syncUsageBreakdown"].map(name => extractFunction(src, name)).join("\n");
     const sizes = new Map([
       ["mosaicsync.sync.settings", 100],

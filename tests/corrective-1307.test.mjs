@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -108,7 +109,7 @@ test("1.30.7 foreground throttle uses a monotonic page-lifetime clock", () => {
 
 test("1.30.7 publication rebase skips serialization immediately when delivered remote wins", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const fn = extractFunction(source, "rebaseCoreWritesAgainstDeliveredSnapshot");
     assert.match(fn, /if \(winner === remote\) continue;/);
     assert.doesNotMatch(fn, /stableStringify\(remote\)\s*!==\s*stableStringify\(winner\)/);
@@ -117,7 +118,7 @@ test("1.30.7 publication rebase skips serialization immediately when delivered r
 
 test("1.30.7 workspace clocks provide a positive fast path while equal clocks retain semantic fallback", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const fn = extractFunction(source, "workspaceCoreChanged");
     let signatureCalls = 0;
     const ctx = {
@@ -144,7 +145,7 @@ test("1.30.7 workspace clocks provide a positive fast path while equal clocks re
 
 test("1.30.7 expected own Sync echoes do not overwrite remote-delivery forensic evidence", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const onChangedAt = source.indexOf("browser.storage.onChanged.addListener");
     const alarmAt = source.indexOf("browser.alarms?.onAlarm?.addListener", onChangedAt);
     const block = source.slice(onChangedAt, alarmAt);

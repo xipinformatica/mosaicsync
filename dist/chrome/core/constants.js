@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.10";
+export const VERSION = "1.30.18.15";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -26,7 +26,7 @@ export const LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX = "mosaicsync.pending-cross-s
 export const LOCAL_PENDING_SYNC_MUTATION_KEY = "mosaicsync.pending-sync-mutation.v1";
 export const SESSION_RENDER_STATE_KEY = "mosaicsync.session.render-state.v2";
 export const RENDER_SNAPSHOT_SCHEMA_VERSION = 4;
-export const RENDER_MANIFEST_SCHEMA_VERSION = 4;
+export const RENDER_MANIFEST_SCHEMA_VERSION = 5;
 export const SESSION_RENDER_INLINE_IMAGE_MAX_CHARS = 24000;
 export const SESSION_RENDER_META_KEY = "mosaicsync.session.render-meta.v1";
 export const SESSION_FREQUENTLY_VISITED_PROJECTION_KEY = "mosaicsync.session.frequent-projection.v1";
@@ -55,6 +55,9 @@ export const LOCAL_MAINTENANCE_MIGRATIONS_KEY = "mosaicsync.maintenance-migratio
 export const LOCAL_SYNC_DIAGNOSTICS_KEY = "mosaicsync.sync-diagnostics.v1";
 export const LOCAL_SYNC_CONTINUITY_KEY = "mosaicsync.sync-continuity.v1";
 export const LOCAL_SYNC_RECOVERY_STATUS_KEY = "mosaicsync.sync-recovery-status.v1";
+// Historical Web Lock string retained for rolling-version compatibility. The
+// lock now serializes the complete storage.local persistence ownership boundary,
+// not only content-addressed local-asset writes.
 export const LOCAL_ASSET_WRITE_LOCK_NAME = "mosaicsync.local-assets.write.v1";
 
 // Alarm names are part of persisted browser state too; changing one is a
@@ -75,6 +78,8 @@ export const SYNC_SPACE_PREFIX = `${SYNC_PREFIX}space.`;
 export const SYNC_ITEM_PREFIX = `${SYNC_PREFIX}item.`;
 export const SYNC_ASSET_PREFIX = `${SYNC_PREFIX}asset.`;
 export const SYNC_DEVICE_SNAPSHOT_PREFIX = `${SYNC_PREFIX}device.`;
+export const SYNC_DEVICE_NAME_PREFIX = `${SYNC_PREFIX}device-name.`;
+export const SYNC_DEVICE_NAME_SCHEMA_VERSION = 1;
 export const SYNC_RESET_INTENT_KEY = `${SYNC_PREFIX}reset-intent`;
 export const SYNC_RESET_INTENT_SCHEMA_VERSION = 1;
 export const SYNC_CONTINUITY_SCHEMA_VERSION = 1;
@@ -249,6 +254,7 @@ export const DEFAULT_STATE = Object.freeze({
 export const DEFAULT_META = Object.freeze({
   schemaVersion: META_SCHEMA_VERSION,
   deviceId: "",
+  deviceName: "",
   syncEnabled: false,
   syncInitialized: false,
   syncBootstrapMode: "none",

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -25,7 +26,7 @@ function extract(src, name) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`${browser}: 1.24.14h tab favicon networking is outside the serialized state queue`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extract(src, "learnFaviconFromTab");
 
     let queue = Promise.resolve();
@@ -63,7 +64,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14h favicon commits re-read current state and skip deleted/stale targets`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extract(src, "applyLearnedFaviconForTab");
     let currentState = { deleted: true, settings: { autoSiteIcons: true } };
     let applyCalls = 0;
@@ -86,7 +87,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14i clicked-tab favicon scheduler behavior is bounded and coalesces repeated tab updates`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const pump = extract(src, "pumpTabFaviconLearningQueue");
     const schedule = extract(src, "scheduleTabFaviconLearning");
     const starts = [];

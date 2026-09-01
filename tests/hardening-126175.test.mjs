@@ -81,28 +81,27 @@ test("1.26.17.5 one shared HTTP(S) validator owns model/cache/bootstrap/UI short
   assert.doesNotMatch(storageSource, /\^https\?:\\\/\\\//i);
 });
 
-test("1.26.17.5 synchronous first-paint uses the shared fail-closed URL helper at href sinks", async () => {
+test("1.26.17.5 synchronous persistent first-paint has no navigation href sink", async () => {
   const safety = await readFile(resolve("src/shared/core/http-url-safety.js"), "utf8");
-  assert.ok(Buffer.byteLength(safety, "utf8") < 1800, "first-paint safety primitive must stay tiny");
   assert.doesNotMatch(safety, /\b(?:fetch|XMLHttpRequest|setTimeout|setInterval|requestAnimationFrame)\b/);
 
   const bootstrap = await readFile(resolve("src/shared/newtab/render-bootstrap.js"), "utf8");
-  assert.match(bootstrap, /const safeShortcutNavigationUrl = globalThis\.__mosaicsyncSafeShortcutNavigationUrl;/);
-  assert.match(bootstrap, /if \(typeof safeShortcutNavigationUrl !== "function"\) return;/);
-  assert.match(bootstrap, /const safeUrl = safeShortcutNavigationUrl\(item\?\.url\);[\s\S]*?card\.href = safeUrl;/);
-  assert.doesNotMatch(bootstrap, /site\?\.url|frequentSitesList|paintFrequentSnapshot/,
-    "browser-derived Frequently Visited URLs must not be persistent first-frame href sinks");
-  assert.doesNotMatch(bootstrap, /function validUrl\s*\(/);
-  assert.doesNotMatch(bootstrap, /card\.href\s*=\s*item\.url/);
+  assert.doesNotMatch(bootstrap, /__mosaicsyncSafeShortcutNavigationUrl|safeShortcutNavigationUrl/,
+    "the persistent visual cache must not need a navigation validator because it owns no URLs");
+  assert.doesNotMatch(bootstrap, /card\.href\s*=|setAttribute\(["']href["']/,
+    "persistent first-paint must never install a navigation target");
+  assert.doesNotMatch(bootstrap, /item\?\.url|item\.url|frequentSitesList|paintFrequentSnapshot/,
+    "persistent first-paint owns neither shortcut navigation data nor browser-derived FV URLs");
+
+  const ui = await readFile(resolve("src/shared/newtab/ui-utils.js"), "utf8");
+  assert.match(ui, /__mosaicsyncSafeShortcutNavigationUrl/,
+    "authoritative interaction setup must retain the shared fail-closed URL validator");
 
   for (const browser of ["firefox", "chrome"]) {
     const html = await readFile(resolve(`src/${browser}/newtab/newtab.html`), "utf8");
-    const safetyIndex = html.indexOf('<script src="../core/http-url-safety.js"></script>');
-    const bootstrapIndex = html.indexOf('<script src="render-bootstrap.js"></script>');
-    assert.ok(safetyIndex >= 0 && bootstrapIndex > safetyIndex, `${browser}: helper must load before render bootstrap`);
-    // Keep the additional tiny classic safety file at the bottom next to the
-    // disposable first-frame renderer; it must not move into the head/startup I/O path.
-    assert.ok(safetyIndex > html.indexOf("<body"), `${browser}: helper must stay out of the head critical path`);
+    assert.ok(html.includes('<script src="render-bootstrap.js"></script>'), `${browser}: visual bootstrap must remain present`);
+    assert.equal(html.includes('<script src="../core/http-url-safety.js"></script>'), false,
+      `${browser}: URL safety helper must no longer be loaded solely for pre-authority visual cache paint`);
   }
 });
 

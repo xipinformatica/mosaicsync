@@ -101,7 +101,6 @@
     </section>
 
     <!-- Paint the cached grid before parsing hundreds of hidden dialog controls. -->
-    <script src="../core/http-url-safety.js"></script>
     <script src="builtin-icons.js"></script>
     <script src="render-bootstrap.js"></script>
     <script src="secondary-style-bootstrap.js"></script>
@@ -259,7 +258,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.30.18.10</p>
+          <p class="eyebrow">MosaicSync · 1.30.18.15</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -507,6 +506,36 @@
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
             <span class="switch-label">Sync</span>
           </label>
+        </div>
+
+        <div class="sync-device-card">
+          <div class="sync-device-summary">
+            <span class="sync-device-icon" aria-hidden="true">▣</span>
+            <span class="sync-device-copy">
+              <small>This device</small>
+              <strong id="settingsDeviceNameText">—</strong>
+              <span>Used to identify changes from this computer on your other MosaicSync devices.</span>
+            </span>
+            <button id="editDeviceNameButton" class="secondary-button" type="button">Rename</button>
+          </div>
+          <div id="deviceNameEditor" class="sync-device-editor" hidden>
+            <label>
+              <span>Device name</span>
+              <input id="settingsDeviceNameInput" type="text" maxlength="64" autocomplete="off" spellcheck="false" placeholder="e.g. Oasis">
+            </label>
+            <div class="sync-device-editor-actions">
+              <button id="cancelDeviceNameButton" class="secondary-button" type="button">Cancel</button>
+              <button id="saveDeviceNameButton" class="primary-button" type="button">Save</button>
+            </div>
+          </div>
+          <div class="sync-source-summary">
+            <span class="sync-source-icon" aria-hidden="true">↻</span>
+            <span class="sync-source-copy">
+              <small>Latest synchronized change</small>
+              <strong id="syncSourceText">Not synchronized yet</strong>
+              <span id="syncSourceDetail" hidden></span>
+            </span>
+          </div>
         </div>
 
         <div id="syncStatusCard" class="sync-status-card" aria-live="polite">

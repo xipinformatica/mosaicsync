@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -43,7 +44,7 @@ function hugePngBytes(width = 20_000, height = 20_000) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.12 ${browser} rejects oversized raster favicon headers before optimization/raw fallback`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [
       extract(src, "imageDimensionsFromBytes"),
       extract(src, "imageDimensionsSafeForRemoteDecode"),
@@ -75,7 +76,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.12 ${browser} rejects oversized safe SVG geometry before createImageBitmap`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [extract(src, "imageDimensionsSafeForRemoteDecode"), extract(src, "rasterizeSafeSvg")].join("\n");
     const svgSafety = await import(`../dist/${browser}/core/svg-safety.js`);
     const bytes = new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg" width="20000" height="20000" viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>');
@@ -107,7 +108,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.26.12 remote image header parsing covers all standard WebP container variants", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = extract(src, "imageDimensionsFromBytes");
     const ctx = {};
     vm.createContext(ctx);

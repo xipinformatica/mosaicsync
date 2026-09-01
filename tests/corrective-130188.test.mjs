@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -186,7 +187,7 @@ for (const browserName of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.8 ${browserName} permission add/remove lifecycle is wired to the shared session tombstone`, () => {
-    const bg = fs.readFileSync(`src/${browserName}/background/background.js`, "utf8");
+    const bg = readBackgroundSource(browserName, { built: false });
     const nt = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
     const boot = fs.readFileSync("src/shared/newtab/session-bootstrap.js", "utf8");
     const config = fs.readFileSync(`dist/${browserName}/newtab/bootstrap-config.js`, "utf8");

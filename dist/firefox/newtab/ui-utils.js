@@ -3,6 +3,11 @@
  * Kept independent of DOM state so they can be regression-tested directly.
  */
 import "../core/http-url-safety.js";
+import {
+  BUILTIN_SHORTCUT_ICON_KEYS,
+  SHORTCUT_COLOR_TAG_KEYS,
+  RENDER_PREVIEW_MAX_CHARS
+} from "../core/constants.js";
 const canonicalHostCache = new Map();
 const CANONICAL_HOST_CACHE_MAX = 256;
 
@@ -197,3 +202,137 @@ export function sortTopLevelByRecent(items, usage) {
     return String(left?.id || "").localeCompare(String(right?.id || ""));
   });
 }
+
+
+/* Step 2.3 persistent presentation-only visual-cache projection helpers. */
+function normalizedBuiltinIcon(value) {
+  return BUILTIN_SHORTCUT_ICON_KEYS.includes(value) ? value : "";
+}
+
+function normalizedColorTag(value) {
+  return SHORTCUT_COLOR_TAG_KEYS.includes(value) ? value : "";
+}
+
+export function renderCachePreviewUsable(value) {
+  return typeof value === "string" && value.length <= RENDER_PREVIEW_MAX_CHARS &&
+    /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
+}
+
+export function renderPreviewIdentity(item) {
+  const assetId = item?.localImageAssetId || item?.imageAssetId || "";
+  if (assetId) return assetId;
+  const image = typeof item?.image === "string" ? item.image : "";
+  if (!image) return "";
+  let hash = 0x811c9dc5;
+  const samples = 8;
+  for (let index = 0; index < samples; index += 1) {
+    const offset = Math.min(
+      image.length - 1,
+      Math.floor(index * Math.max(1, image.length - 1) / Math.max(1, samples - 1))
+    );
+    hash ^= image.charCodeAt(offset) || 0;
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `inline:${image.length}:${(hash >>> 0).toString(36)}`;
+}
+
+function projectShortcutVisual(item, previewForKey) {
+  const imageKey = renderPreviewIdentity(item);
+  return {
+    type: "shortcut",
+    id: item.id,
+    title: item.title,
+    position: item.position,
+    builtinIcon: normalizedBuiltinIcon(item.builtinIcon),
+    colorTag: normalizedColorTag(item.colorTag),
+    imageStyle: item.imageStyle === "cover" ? "cover" : "contain",
+    imageKey,
+    preview: imageKey ? (previewForKey?.(imageKey) || "") : ""
+  };
+}
+
+export function projectRenderCacheItem(item, previewForKey = null) {
+  if (!item || typeof item !== "object") return null;
+  if (item.type !== "folder") return projectShortcutVisual(item, previewForKey);
+  return {
+    type: "folder",
+    id: item.id,
+    title: item.title || "Folder",
+    position: item.position,
+    // Closed-folder first paint can expose only four children. Nothing else from
+    // the folder belongs in persistent Web Storage.
+    items: (item.items || []).slice(0, 4).map(child => {
+      const imageKey = renderPreviewIdentity(child);
+      return {
+        id: child.id,
+        title: child.title,
+        builtinIcon: normalizedBuiltinIcon(child.builtinIcon),
+        colorTag: normalizedColorTag(child.colorTag),
+        imageStyle: child.imageStyle === "cover" ? "cover" : "contain",
+        imageKey,
+        preview: imageKey ? (previewForKey?.(imageKey) || "") : ""
+      };
+    })
+  };
+}
+
+function shortcutVisualMatches(cached, item) {
+  if (!cached || !item || cached.type !== "shortcut" || item.type === "folder") return false;
+  if (cached.id !== item.id || String(cached.title || "") !== String(item.title || "")) return false;
+  if (Number(cached.position) !== Number(item.position)) return false;
+  if (String(cached.builtinIcon || "") !== normalizedBuiltinIcon(item.builtinIcon)) return false;
+  if (String(cached.colorTag || "") !== normalizedColorTag(item.colorTag)) return false;
+  if ((cached.imageStyle === "cover" ? "cover" : "contain") !== (item.imageStyle === "cover" ? "cover" : "contain")) return false;
+  if (String(cached.imageKey || "") !== renderPreviewIdentity(item)) return false;
+  // If the session projection already carries immediately drawable inline
+  // artwork, reusing a persistent cache with no preview would needlessly keep an
+  // empty tile on screen. In that case let the newer session renderer paint.
+  if (typeof item.image === "string" && item.image && !renderCachePreviewUsable(cached.preview)) return false;
+  return true;
+}
+
+function folderVisualMatches(cached, item) {
+  if (!cached || !item || cached.type !== "folder" || item.type !== "folder") return false;
+  if (cached.id !== item.id || String(cached.title || "Folder") !== String(item.title || "Folder")) return false;
+  if (Number(cached.position) !== Number(item.position)) return false;
+  const children = (item.items || []).slice(0, 4);
+  if (!Array.isArray(cached.items) || cached.items.length !== children.length) return false;
+  for (let index = 0; index < children.length; index += 1) {
+    const left = cached.items[index], right = children[index];
+    if (!left || !right || left.id !== right.id || String(left.title || "") !== String(right.title || "")) return false;
+    if (String(left.builtinIcon || "") !== normalizedBuiltinIcon(right.builtinIcon)) return false;
+    if (String(left.colorTag || "") !== normalizedColorTag(right.colorTag)) return false;
+    if ((left.imageStyle === "cover" ? "cover" : "contain") !== (right.imageStyle === "cover" ? "cover" : "contain")) return false;
+    if (String(left.imageKey || "") !== renderPreviewIdentity(right)) return false;
+    if (typeof right.image === "string" && right.image && !renderCachePreviewUsable(left.preview)) return false;
+  }
+  return true;
+}
+
+/**
+ * Compare only what the persistent cache is allowed to paint. Revision clocks,
+ * URLs and nonvisual metadata intentionally have no role in cache reuse.
+ */
+export function renderCacheGridMatchesState(manifest, state) {
+  if (!manifest || typeof manifest !== "object" || !state?.settings) return false;
+  if (manifest.paintSpaceId !== state.activeSpaceId || state.activeSpaceId !== "personal") return false;
+  const layout = manifest.layout;
+  if (!layout || typeof layout !== "object") return false;
+  if (Number(layout.columns) !== Number(state.settings.columns) ||
+      Number(layout.rows) !== Number(state.settings.rows) ||
+      Number(layout.tileSize) !== Number(state.settings.tileSize) ||
+      Boolean(layout.brandVisible !== false) !== Boolean(state.settings.brandVisible !== false)) return false;
+  const cachedItems = Array.isArray(manifest.shortcuts) ? manifest.shortcuts : [];
+  const stateItems = Array.isArray(state.shortcuts) ? state.shortcuts : [];
+  if (cachedItems.length !== stateItems.length) return false;
+  const byId = new Map(cachedItems.map(item => [item?.id, item]));
+  if (byId.size !== cachedItems.length) return false;
+  for (const item of stateItems) {
+    const cached = byId.get(item?.id);
+    if (item?.type === "folder") {
+      if (!folderVisualMatches(cached, item)) return false;
+    } else if (!shortcutVisualMatches(cached, item)) return false;
+  }
+  return true;
+}
+

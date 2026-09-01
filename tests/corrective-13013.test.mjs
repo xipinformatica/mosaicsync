@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -66,7 +67,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.30.13 catastrophic-loss guard precedes pending mutation replay", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function reconcileIfNewCommit");
     const end = source.indexOf("async function getSyncStatus", start);
     const block = source.slice(start, end);
@@ -78,7 +79,7 @@ test("1.30.13 catastrophic-loss guard precedes pending mutation replay", () => {
 
 test("1.30.13 explicit Sync clear commits reset sentinel before removing profile keys", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function clearSyncData()");
     const end = source.indexOf("async function readSyncSnapshot", start);
     const block = source.slice(start, end);
@@ -103,7 +104,7 @@ test("1.30.13 recovery UI strings exist in every supported runtime locale", asyn
 
 test("1.30.13 startup and watchdog never replay pending local state before the loss guard", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const startupAt = source.indexOf("browser.runtime.onStartup.addListener");
     const storageAt = source.indexOf("browser.storage.onChanged.addListener", startupAt);
     const startup = source.slice(startupAt, storageAt);

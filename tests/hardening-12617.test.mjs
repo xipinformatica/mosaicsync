@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -44,7 +45,7 @@ test("1.26.17 SVG geometry ignores a decoy root inside XML prolog comments", asy
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17 ${browser} remote SVG decode is always bounded`, () => {
-    const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extract(src, "rasterizeSafeSvg");
     assert.doesNotMatch(fn, /createImageBitmap\(svgBlob\)\s*;/);
     assert.match(fn, /resizeWidth:\s*targetWidth/);
@@ -53,7 +54,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.17 ${browser} same-marker semantic Sync divergence forces reconciliation`, async () => {
-    const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
+    const src = readBackgroundSource(browser);
     const code = extract(src, "reconcileIfNewCommit");
     let reconciles = 0;
     const remoteRecords = new Map([["remote", { id: "remote", kind: "shortcut", url: "https://remote.test/" }]]);
@@ -100,7 +101,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.17 ${browser} periodic Sync watchdog runs the strong semantic verifier`, () => {
-    const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
+    const src = readBackgroundSource(browser);
     const alarmAt = src.indexOf("browser.alarms?.onAlarm?.addListener");
     const permissionAt = src.indexOf("browser.permissions?.onAdded", alarmAt);
     const block = src.slice(alarmAt, permissionAt);
@@ -214,13 +215,13 @@ test("1.26.17 corrupt hidden-domain storage cannot leak through the persistent f
   const manifest = fs.readFileSync(resolve(root, "dist/firefox/newtab/render-manifest.js"), "utf8");
   assert.doesNotMatch(bootstrap, /paintFrequentSnapshot|frequentSitesList|frequentCard/,
     "persistent bootstrap has no Frequently Visited site painter to bypass hidden-domain filtering");
-  assert.match(manifest, /sites:\s*\[\]/,
-    "persistent manifest must serialize no browser-derived site candidates regardless of local hide-state corruption");
+  assert.doesNotMatch(manifest, /frequentSnapshot|sanitizeFirstPaintFrequentSnapshot|createFirstPaintContract/,
+    "persistent visual manifest must have no FV/semantic-contract serialization path regardless of local hide-state corruption");
 });
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17 ${browser} suppresses shared-ledger repair while that ledger is visibly partial`, () => {
-    const src = fs.readFileSync(resolve(root, `dist/${browser}/background/background.js`), "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extract(src, "reconcilePersonal");
     const guard = fn.indexOf("const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot)");
     const firstRepair = fn.indexOf("const syncWrites = {}");

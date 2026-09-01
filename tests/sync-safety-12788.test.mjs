@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -33,14 +34,14 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.10");
+  assert.equal(VERSION, "1.30.18.15");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browser} device snapshot is a backward-compatible complete Personal+Work generation`, async () => {
-    const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     assert.match(src, /version:\s*DEVICE_SNAPSHOT_SCHEMA_VERSION,[\s\S]*?records:[\s\S]*?settings:[\s\S]*?workRecords:[\s\S]*?workSettings/,
       "payload must remain v2-readable by 1.27.7 while adding Work");
     assert.match(src, /profileComplete\s*=\s*true|profileComplete:\s*true/);
@@ -55,7 +56,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.8 ${browser} fresh bootstrap cannot finalize from Personal alone`, async () => {
-    const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const start = src.indexOf("async function bootstrapRemote");
     const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
     const fn = src.slice(start, end);
@@ -66,7 +67,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.8 ${browser} waiting-profile local edits merge and publish after complete arrival`, async () => {
-    const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const start = src.indexOf("async function bootstrapRemote");
     const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
     const fn = src.slice(start, end);
@@ -76,7 +77,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.8 ${browser} torn Work ledger is repaired from the complete profile and never treated as empty`, async () => {
-    const src = await readFile(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const start = src.indexOf("async function reconcileWork");
     const end = src.indexOf("async function reconcile(strategy", start);
     const fn = src.slice(start, end);

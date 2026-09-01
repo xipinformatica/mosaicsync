@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -132,7 +133,7 @@ test("1.30.6 Sync diagnostics use a dedicated storage.local key and never a stor
   assert.match(constants, /LOCAL_SYNC_DIAGNOSTICS_KEY = "mosaicsync\.sync-diagnostics\.v1"/);
   assert.match(constants, /SYNC_FOREGROUND_CHECK_MIN_INTERVAL_MS = 60_000/);
   for (const browser of ["firefox", "chrome"]) {
-    const background = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const background = readBackgroundSource(browser, { built: false });
     assert.match(background, /browser\.storage\.local\.set\(\{ \[LOCAL_SYNC_DIAGNOSTICS_KEY\]: next \}\)/);
     assert.doesNotMatch(background, /browser\.storage\.sync\.set\(\{ \[LOCAL_SYNC_DIAGNOSTICS_KEY\]/);
     assert.match(background, /lastObservedSharedRevision/);

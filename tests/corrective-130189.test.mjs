@@ -94,12 +94,11 @@ for (const browser of ["firefox", "chrome"]) {
     try {
       const { constants, model, manifest } = await modulesFor(browser, "manifest-fv");
       const state = stateFor(constants, model, { modifiedAt:40 });
-      const frequent = { enabled:true, count:5, sites:[{title:"Sensitive",host:"sensitive.example",url:"https://sensitive.example/",favicon:""}] };
-      assert.equal(manifest.persistRenderManifest(state, { onboardingCompleted:true }, null, frequent), true);
+      assert.equal(manifest.persistRenderManifest(state, { onboardingCompleted:true }), true);
       const saved = JSON.parse(map.get(constants.RENDER_MANIFEST_KEY));
       assert.equal(saved.version, constants.RENDER_MANIFEST_SCHEMA_VERSION);
-      assert.deepEqual(saved.firstPaint.frequent.sites, []);
-      assert.doesNotMatch(JSON.stringify(saved), /sensitive\.example/);
+      assert.equal(Object.hasOwn(saved, "firstPaint"), false);
+      assert.doesNotMatch(JSON.stringify(saved), /frequent|sensitive\.example/i);
     } finally { globalThis.localStorage = previous; }
   });
 }
@@ -112,7 +111,7 @@ test("1.30.18.9 bootstrap constants are generated once from canonical constants"
     const space = fs.readFileSync(`dist/${browser}/newtab/space-bootstrap.js`, "utf8");
     const render = fs.readFileSync(`dist/${browser}/newtab/render-bootstrap.js`, "utf8");
     assert.ok(html.indexOf('bootstrap-config.js') < html.indexOf('session-bootstrap.js'));
-    assert.match(config, /renderManifestVersion":4/);
+    assert.match(config, /renderManifestVersion":5/);
     assert.doesNotMatch(session, /mosaicsync\.session\.render-state/);
     assert.doesNotMatch(space, /\[2,\s*3\]|version\s*===\s*2/);
     assert.doesNotMatch(render, /\[2,\s*3\]|version\s*===\s*2/);

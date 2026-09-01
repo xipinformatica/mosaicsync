@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -30,7 +31,7 @@ function extractFunction(source, name) {
 
 const newtab = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
 const critical = fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8");
-const firefoxBg = fs.readFileSync("src/firefox/background/background.js", "utf8");
+const firefoxBg = readBackgroundSource("firefox", { built: false });
 const english = fs.readFileSync("src/shared/core/i18n-locales/en.js", "utf8");
 
 for (const browser of ["firefox", "chrome"]) {
@@ -95,7 +96,7 @@ test("1.30 source tree no longer carries the dead monolithic newtab.css referenc
 
 test("1.30 obsolete Personal-only snapshot publisher is gone while compatibility readers remain", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const src = fs.readFileSync(`src/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser, { built: false });
     assert.doesNotMatch(src, /async function publishDeviceSnapshot\(/);
     assert.match(src, /async function readOwnDeviceSnapshot\(/,
       "legacy device-snapshot reading remains for backward compatibility");

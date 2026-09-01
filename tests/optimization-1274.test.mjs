@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -134,7 +135,7 @@ test("1.27.4 compact runtime locales are bit-for-text equivalent to all 33 revie
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.4 ${browser} favicon chooser uses bounded concurrency, short-lived cache and keeps declared data icons`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helperNames = [
       "faviconCandidateSuitability",
       "faviconCandidatePreference",
@@ -219,7 +220,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.4 ${browser} favicon chooser cache is capped by entry count and retained pixel data`, () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helpers = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "rememberFaviconChoices"].map(name => extractFunction(source, name)).join("\n");
     const context = {
       Map,

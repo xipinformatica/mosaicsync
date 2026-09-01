@@ -1,3 +1,59 @@
+## 1.30.18.15
+
+- Begins **Step 3.1** by consolidating the previously duplicated Firefox and Chrome MV3 background implementations into one canonical shared background core.
+- Keeps browser-owned background code intentionally thin: Firefox retains its data-collection permission/tab-favicon behavior, while Chromium retains `_favicon` and protected Chrome Web Store handling through explicit adapters.
+- Preserves existing Sync, Recovery, metadata, device attribution, favicon recovery, alarms, queues and persistence semantics; this release moves ownership without redesigning those algorithms.
+- Migrates historical background source-contract tests to follow the canonical shared core plus the appropriate platform adapter without weakening their behavioral assertions.
+- Adds Step-3 regressions that prevent major background semantics from being redeclared in browser overlays and require generated Firefox/Chrome runtimes to use the same shared core.
+- Completes the pre-publication audit hardening by replacing two refactor-fragile favicon source-order checks with behavioral permission/native-cache tests, and permanently testing adapter listener topology plus Firefox-only `data_collection` revocation behavior.
+- Fixes Sync receipt attribution in Settings: when MosaicSync knows the delivering device name, the receipt card now says **Received from {device}** instead of the generic **Received from another device**; legacy/unknown devices retain a short-ID/generic fallback. The new label is localized across all 33 UI languages.
+- No feature, Step-2 first-paint/cache, state/meta/Sync/Recovery schema, permission, CSP, telemetry or backend change.
+
+## 1.30.18.14
+
+- Completes **Step 2.3 and Step 2** of MosaicSync's staged maintainability program without adding product features.
+- Advances the disposable persistent render-manifest format to v5 and reduces it from a second structural/profile projection to a **presentation-only cold-start visual cache**.
+- Removes shortcut navigation URLs, state/settings mutation clocks, Frequently Visited state/candidates and the duplicated semantic First-Paint Contract from persistent Web Storage.
+- Stops persisting Work shortcut/layout structure in the render cache entirely; Work retains only the tiny Space-switcher presentation hint, while the synchronous grid accelerator remains Personal-only.
+- Makes persistent first-paint shortcut cards inert with no `href`. Validated navigation is installed only by authoritative New Tab interaction wiring after current session/local state has won.
+- Replaces clock/URL-based boot-grid reuse with canonical visual-equivalence matching across layout, order, titles, folder mosaic identity and artwork identity; corrupt/unusable previews fail closed against drawable session artwork.
+- Synchronously invalidates the Personal persistent grid when switching to Work so a same-task browser close cannot leave stale Personal paint authorized on the next cold start.
+- Removes the now-unnecessary classic pre-authority URL-safety script load from the disposable render bootstrap; the shared fail-closed HTTP(S) validator remains in authoritative model/storage/UI paths.
+- Migrates historical first-paint/security regressions to the stronger v5 ownership contract and adds dedicated Step-2.3 regressions while preserving all existing product behavior, state/meta/Sync/Recovery schemas, permissions, CSP, localization, telemetry policy and backend-free operation.
+
+## 1.30.18.13
+
+- Added optional MosaicSync device naming during the Welcome Sync choice, with a browser/OS fallback and editable name in Settings.
+- Added latest synchronized-change attribution in Settings using the existing origin device ID and source timestamp, with local receipt time shown separately when relevant.
+- Added a tiny per-device browser-Sync name record so friendly names resolve across computers without changing layout, Sync or Recovery schemas.
+- Protected device-name intent from stale full-record metadata writers and kept the stable MosaicSync device ID unchanged across renames.
+- Localized the new Welcome and Settings UI across all 33 supported languages.
+- This release intentionally pauses the five-step maintainability program and contains no unrelated roadmap work, permission changes, telemetry or backend changes.
+
+## 1.30.18.12
+
+- Ships the post-publication forensic-audit corrections for 1.30.18.11 without beginning Step 2.3 or adding product features.
+- Fixes a real Frequently Visited stale-render race: every FV render request now advances visible-commit authority, including empty/disabled states, so an older slow favicon decode cannot resurrect browser-history cards after the strip has been hidden, permission state changed, or a newer render won.
+- Separates rich live FV favicons from bounded session-only first-paint derivatives. The live strip decodes the original browser candidate; derivative optimization failure can affect only the disposable warm-session copy and can no longer turn a valid live favicon into a fallback letter.
+- Hardens metadata ownership across long-running Sync/status work: normal full-record background writes preserve the current onboarding decision, while the one remote-bootstrap transition that intentionally completes onboarding opts in explicitly. This closes the stale whole-record clobber path found by the .11 audit while retaining coherent Sync transitions.
+- Makes manually chosen detected favicons reproduce more reliably across computers **without synchronizing favicon image bytes**. New Browser-source choices use a compact exact image-identity token instead of the coarse legacy `b` marker; the matcher can recognize the same chosen pixels when another browser discovers them through a different source class, and legacy manual `b` choices are upgraded in Sync records when the originating device still has the selected pixels.
+- Keeps automatic favicons device-local and keeps the existing **Sync this image** option as the only path that stores optimized image bytes in browser Sync.
+- Removes dead structural-warm FV call-site plumbing and small reconstruction leftovers, and clarifies that runtimes without `navigator.locks` do not receive the same cross-context race guarantees.
+- Adds real deferred-decode, stale-meta and exact-favicon-preference behavioral regressions for Firefox and Chrome while preserving the complete historical test suite, schemas, permissions, CSP, localization, privacy boundaries and backend-free architecture.
+
+## 1.30.18.11
+
+- Closes the remaining **Step 2.2 persistence-ownership** findings from the 1.30.18.10 audit without broadening into Step 2.3: the shared Web Lock now has one source-level persistence ownership helper while retaining its existing lock string for rolling-version compatibility.
+- Makes the device active-Space pointer single-owner. Ordinary structural profile writes no longer write `mosaicsync.active-space.v1`, and their session first-paint publication derives active Space from the dedicated persisted pointer while the transaction lock is held, so a stale structural writer cannot visually restore an older Space.
+- Hardens startup repair for active-Space and local meta: a stale startup read now acquires the persistence transaction, re-reads current authority, and repairs only fields that are still missing/invalid. A newer normal writer therefore cannot be overwritten by delayed startup repair.
+- Adds field-intent `updateLocalMeta()` for independent setup/UI changes. It re-reads authoritative meta under the lock and applies only intended fields while preserving device identity and unrelated concurrent fields; coherent full-record Sync/status transitions keep serialized `writeLocalMeta()` semantics.
+- Removes the generic session-warm FV side door. Structural session warming/publication can no longer write the dedicated Frequently Visited projection key; browser-derived FV candidates keep one physical session-only ownership domain.
+- Fixes Frequently Visited first-paint favicon continuity: oversized native favicons are reduced to bounded 48 px/session derivatives instead of being dropped, and the FV strip is assembled off-DOM and committed only after favicon decode has settled (or a fallback has replaced a failed decode), preventing a visible intermediate missing-favicon frame.
+- Preserves the privacy boundary for Frequently Visited artwork: its native/browser-history favicon derivatives remain disposable `storage.session` presentation data and are not added to persistent localStorage, profile state, Sync, Recovery or export.
+- Fixes Light/Dark preview text treatment while Settings is open: `data-canvas-text` updates immediately with the isolated appearance preview, while the full page wallpaper/background/dim repaint remains intentionally deferred until Settings closes.
+- Adds Firefox/Chrome behavioral and source-contract regressions for active-Space single ownership, stale startup repair, independent meta patch preservation, stable Web Lock identity, structural/FV key isolation, bounded decode-before-commit FV artwork, session-only FV privacy and Settings-open canvas-text handoff. The final release suite contains 823 tests.
+- Preserves existing product features, normal Sync/Recovery/state/profile schemas, permissions, CSP, localization, telemetry policy and backend-free operation.
+
 ## 1.30.18.10
 
 - Advances **Step 2.2** by making structural session-cache ownership deterministic under cross-context concurrency: the shared structural `storage.session` projection is now published inside the same Web Lock transaction as the authoritative `storage.local` commit, so an older transaction cannot publish stale first-paint state after a newer transaction has won.

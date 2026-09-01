@@ -157,7 +157,7 @@ function assetIndexValue(ids, pendingGcIds = []) {
 }
 
 async function retryPendingLocalAssetCleanup() {
-  return withLocalAssetWriteLock(async canCollectStale => {
+  return withPersistenceWriteLock(async canCollectStale => {
     if (!canCollectStale) return false;
     const latest = await browser.storage.local.get([LOCAL_STATE_KEY, LOCAL_ASSET_INDEX_KEY]);
     const index = normalizeAssetIndex(latest[LOCAL_ASSET_INDEX_KEY]);
@@ -485,7 +485,7 @@ async function writeSessionFrequentProjectionBestEffort(frequentSnapshot, { supp
   return setSessionBestEffort({ [SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]: projection });
 }
 
-async function publishSessionRenderSnapshotBestEffort(state, meta = null, { frequentSnapshot = undefined } = {}) {
+async function publishSessionRenderSnapshotBestEffort(state, meta = null) {
   if (!browser.storage.session) return false;
   const snapshot = createRenderSnapshot(state || DEFAULT_STATE, { frequentSnapshot: null });
   const updates = {};
@@ -504,15 +504,6 @@ async function publishSessionRenderSnapshotBestEffort(state, meta = null, { freq
       updates[SESSION_RENDER_META_KEY] = normalizedMeta;
     }
   }
-  if (frequentSnapshot !== undefined) {
-    const shared = await readSessionFrequentContext();
-    const projection = sessionFrequentProjectionForWrite(frequentSnapshot, {
-      suppressed: shared?.[SESSION_FREQUENTLY_VISITED_SUPPRESSED_KEY] === true
-    });
-    if (projection && sessionSerialized(shared?.[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY]) !== sessionSerialized(projection)) {
-      updates[SESSION_FREQUENTLY_VISITED_PROJECTION_KEY] = projection;
-    }
-  }
   if (!Object.keys(updates).length) return false;
   const written = await setSessionBestEffort(updates);
   if (written) {
@@ -523,16 +514,18 @@ async function publishSessionRenderSnapshotBestEffort(state, meta = null, { freq
 }
 
 /**
- * Public warm-up path. A caller may hold an older in-memory state, so this
- * function acquires the same cross-context persistence lock and republishes
- * from the state that is authoritative in storage.local *inside* that lock.
+ * Public structural warm-up path. A caller may hold an older in-memory state,
+ * so derive the session accelerator from authoritative storage.local while the
+ * shared persistence lock is held. Frequently Visited deliberately has no
+ * parameter here: its dedicated session writer is the only physical owner of
+ * browser-history-derived candidates.
  */
-export async function warmSessionRenderCache(_state, _meta, { frequentSnapshot = undefined } = {}) {
+export async function warmSessionRenderCache(_state, _meta) {
   if (!browser.storage.session) return false;
-  return withLocalAssetWriteLock(async () => {
+  return withPersistenceWriteLock(async () => {
     const local = browser.storage.local;
     if (!local?.get) {
-      return publishSessionRenderSnapshotBestEffort(_state || DEFAULT_STATE, _meta || DEFAULT_META, { frequentSnapshot });
+      return publishSessionRenderSnapshotBestEffort(_state || DEFAULT_STATE, _meta || DEFAULT_META);
     }
     const result = await local.get([LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_META_KEY]);
     const hasPersistedState = result?.[LOCAL_STATE_KEY] && typeof result[LOCAL_STATE_KEY] === "object";
@@ -542,7 +535,7 @@ export async function warmSessionRenderCache(_state, _meta, { frequentSnapshot =
       : (SPACE_IDS.includes(_state?.activeSpaceId) ? _state.activeSpaceId : current.activeSpaceId);
     current = selectActiveSpaceNormalized(current, activeSpace);
     const currentMeta = ensureDeviceId(result?.[LOCAL_META_KEY] || _meta || DEFAULT_META);
-    return publishSessionRenderSnapshotBestEffort(current, currentMeta, { frequentSnapshot });
+    return publishSessionRenderSnapshotBestEffort(current, currentMeta);
   });
 }
 
@@ -591,13 +584,14 @@ export async function clearSessionFrequentlyVisitedSuppression() {
   }
 }
 
-async function withLocalAssetWriteLock(callback) {
+async function withPersistenceWriteLock(callback) {
   const locks = globalThis.navigator?.locks;
   if (locks?.request) {
     return locks.request(LOCAL_ASSET_WRITE_LOCK_NAME, () => callback(true));
   }
-  // Older/limited extension runtimes still persist safely; they merely retain
-  // orphaned content-addressed pixels rather than risking cross-context deletion.
+  // Older/limited extension runtimes cannot provide cross-context serialization.
+  // Keep the functional fallback for compatibility, but callers must not assume
+  // the same race guarantees that navigator.locks provides on supported browsers.
   return callback(false);
 }
 
@@ -609,7 +603,7 @@ async function persistNormalizedState(normalized, {
   beforeWrite = null,
   assetIdMemo = null
 } = {}) {
-  return withLocalAssetWriteLock(async canCollectStale => {
+  return withPersistenceWriteLock(async canCollectStale => {
     let finalState = normalized;
     let rebased = false;
     let effectiveCrossSpaceSyncIntent = crossSpaceSyncIntent;
@@ -620,8 +614,8 @@ async function persistNormalizedState(normalized, {
     // its baseline no longer matches. The same read also carries the durable
     // unsent-mutation journal when this is a Sync-relevant user edit.
     const transactionRead = await browser.storage.local.get(recordSyncMutation
-      ? [LOCAL_STATE_KEY, LOCAL_PENDING_SYNC_MUTATION_KEY]
-      : LOCAL_STATE_KEY);
+      ? [LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_PENDING_SYNC_MUTATION_KEY]
+      : [LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY]);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
 
     // Fine-grained Settings clocks are inferred at the persistence boundary. UI
@@ -681,7 +675,6 @@ async function persistNormalizedState(normalized, {
     for (const assetId of currentIds) pendingGcIds.delete(assetId);
     const writes = {
       [LOCAL_STATE_KEY]: projection.state,
-      [LOCAL_ACTIVE_SPACE_KEY]: finalState.activeSpaceId,
       [LOCAL_ASSET_INDEX_KEY]: assetIndexValue(currentIds, pendingGcIds)
     };
 
@@ -760,10 +753,15 @@ async function persistNormalizedState(normalized, {
     }
 
     // Structural session publication is part of the same cross-context write
-    // transaction as storage.local. An older transaction can therefore never
-    // release the persistence lock and publish its stale first-paint snapshot
-    // after a newer transaction has already won. FV candidates are separate.
-    await publishSessionRenderSnapshotBestEffort(finalState);
+    // transaction as storage.local. Active-Space ownership stays with the
+    // dedicated pointer: a stale structural writer may update workspace data,
+    // but it cannot make first paint advertise a different Space.
+    const persistedActiveSpaceId = rawStateMultipleSpacesEnabled(projection.state) &&
+      SPACE_IDS.includes(transactionRead[LOCAL_ACTIVE_SPACE_KEY])
+      ? transactionRead[LOCAL_ACTIVE_SPACE_KEY]
+      : "personal";
+    const sessionState = selectActiveSpaceNormalized(finalState, persistedActiveSpaceId);
+    await publishSessionRenderSnapshotBestEffort(sessionState);
 
     if (canCollectStale && pendingGcIds.size) {
       try {
@@ -839,11 +837,96 @@ export async function readLocalMeta() {
   return ensureDeviceId(result[LOCAL_META_KEY] || DEFAULT_META);
 }
 
-export async function writeLocalMeta(meta) {
-  const normalized = ensureDeviceId(meta);
-  await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
-  await writeSessionRenderMetaBestEffort(normalized);
-  return normalized;
+export async function writeLocalMeta(meta, { allowOnboardingChange = false, allowDeviceNameChange = false } = {}) {
+  return withPersistenceWriteLock(async () => {
+    const stored = await browser.storage.local.get(LOCAL_META_KEY);
+    const hasStoredMeta = Boolean(stored?.[LOCAL_META_KEY] && typeof stored[LOCAL_META_KEY] === "object");
+    const current = ensureDeviceId(hasStoredMeta ? stored[LOCAL_META_KEY] : (meta || DEFAULT_META));
+    const candidate = ensureDeviceId({
+      ...(meta || DEFAULT_META),
+      deviceId: hasStoredMeta ? current.deviceId : (meta?.deviceId || current.deviceId)
+    });
+    // Onboarding is an independent user/setup decision. Background Sync/status
+    // transitions are often constructed from an older snapshot before long async
+    // work, so they must not restore stale onboarding fields merely because their
+    // eventual full-record write obtained the persistence lock later. The single
+    // remote-bootstrap transition that intentionally completes onboarding opts in.
+    const normalized = ensureDeviceId({
+      ...candidate,
+      deviceId: current.deviceId,
+      onboardingCompleted: (allowOnboardingChange || !hasStoredMeta) ? candidate.onboardingCompleted : current.onboardingCompleted,
+      onboardingVersion: (allowOnboardingChange || !hasStoredMeta) ? candidate.onboardingVersion : current.onboardingVersion,
+      // A friendly device name is independent UI intent. Long-running Sync/status
+      // writes may have been constructed from older meta and must not roll back a
+      // newer rename merely because they acquire the persistence lock later.
+      deviceName: (allowDeviceNameChange || !hasStoredMeta) ? candidate.deviceName : current.deviceName
+    });
+    await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
+    await writeSessionRenderMetaBestEffort(normalized);
+    return normalized;
+  });
+}
+
+/**
+ * Apply only the caller's intended meta fields against the record that is
+ * authoritative inside the persistence transaction. This is for independent
+ * setup/UI intentions; coherent Sync/status state-machine transitions continue
+ * using writeLocalMeta() as full-record writes.
+ */
+export async function updateLocalMeta(patchOrUpdater) {
+  return withPersistenceWriteLock(async () => {
+    const stored = await browser.storage.local.get(LOCAL_META_KEY);
+    const current = ensureDeviceId(stored?.[LOCAL_META_KEY] || DEFAULT_META);
+    const requested = typeof patchOrUpdater === "function"
+      ? patchOrUpdater({ ...current })
+      : patchOrUpdater;
+    if (!requested || typeof requested !== "object" || Array.isArray(requested)) return current;
+
+    const patch = {};
+    for (const key of Object.keys(DEFAULT_META)) {
+      if (key === "schemaVersion" || key === "deviceId") continue;
+      if (Object.hasOwn(requested, key)) patch[key] = requested[key];
+    }
+    const normalized = ensureDeviceId({ ...current, ...patch, deviceId: current.deviceId });
+    await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
+    await writeSessionRenderMetaBestEffort(normalized);
+    return normalized;
+  });
+}
+
+async function repairStartupAuthoritiesIfNeeded({ fallbackActiveSpaceId = "personal", fallbackMeta = DEFAULT_META } = {}) {
+  return withPersistenceWriteLock(async () => {
+    const latest = await browser.storage.local.get([LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_META_KEY]);
+    const currentState = latest?.[LOCAL_STATE_KEY] && typeof latest[LOCAL_STATE_KEY] === "object"
+      ? latest[LOCAL_STATE_KEY]
+      : DEFAULT_STATE;
+    const multipleSpacesEnabled = rawStateMultipleSpacesEnabled(currentState);
+    const storedActive = latest?.[LOCAL_ACTIVE_SPACE_KEY];
+    const fallbackActive = SPACE_IDS.includes(fallbackActiveSpaceId) ? fallbackActiveSpaceId : "personal";
+    const activeSpaceId = multipleSpacesEnabled
+      ? (SPACE_IDS.includes(storedActive) ? storedActive : fallbackActive)
+      : "personal";
+
+    const storedMeta = latest?.[LOCAL_META_KEY];
+    const metaNeedsRepair = !storedMeta || typeof storedMeta !== "object" || !storedMeta.deviceId;
+    const meta = metaNeedsRepair
+      ? ensureDeviceId(storedMeta || fallbackMeta || DEFAULT_META)
+      : ensureDeviceId(storedMeta);
+    const updates = {};
+    if (storedActive !== activeSpaceId) updates[LOCAL_ACTIVE_SPACE_KEY] = activeSpaceId;
+    if (metaNeedsRepair) updates[LOCAL_META_KEY] = meta;
+    if (Object.keys(updates).length) await browser.storage.local.set(updates);
+
+    // Startup repair is rare. While we already own the transaction, make the
+    // disposable session accelerator agree with whichever active/meta authority
+    // actually survived the re-read instead of publishing the caller's stale view.
+    if (Object.keys(updates).length) {
+      let renderState = normalizeState(currentState);
+      renderState = selectActiveSpaceNormalized(renderState, activeSpaceId);
+      await publishSessionRenderSnapshotBestEffort(renderState, meta);
+    }
+    return { activeSpaceId, meta };
+  });
 }
 
 export function rawStateMultipleSpacesEnabled(rawState) {
@@ -872,6 +955,19 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
     : null;
 
   const rawMultipleSpacesEnabled = rawStateMultipleSpacesEnabled(rawState);
+  const initiallyValidActiveSpace = rawMultipleSpacesEnabled
+    ? SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
+    : result[LOCAL_ACTIVE_SPACE_KEY] === "personal";
+  const initiallyValidMeta = Boolean(result[LOCAL_META_KEY] && typeof result[LOCAL_META_KEY] === "object" && result[LOCAL_META_KEY].deviceId);
+  if (!initiallyValidActiveSpace || !initiallyValidMeta) {
+    const repaired = await repairStartupAuthoritiesIfNeeded({
+      fallbackActiveSpaceId: rawMultipleSpacesEnabled && SPACE_IDS.includes(rawState?.activeSpaceId) ? rawState.activeSpaceId : "personal",
+      fallbackMeta: result[LOCAL_META_KEY] || DEFAULT_META
+    });
+    result[LOCAL_ACTIVE_SPACE_KEY] = repaired.activeSpaceId;
+    result[LOCAL_META_KEY] = repaired.meta;
+  }
+
   const requestedActiveSpaceId = rawMultipleSpacesEnabled && SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY])
     ? result[LOCAL_ACTIVE_SPACE_KEY]
     : "personal";
@@ -933,12 +1029,6 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
     // mutation still has an exact persisted concurrency baseline. Normal modern
     // startup reuses the already-compact storage.local bytes instead.
     compactBaseline = createWriteBaseline(migrationState, assetIdMemo);
-  } else if (!SPACE_IDS.includes(result[LOCAL_ACTIVE_SPACE_KEY]) || forcedPersonal) {
-    await browser.storage.local.set({ [LOCAL_ACTIVE_SPACE_KEY]: state.activeSpaceId });
-  }
-
-  if (!result[LOCAL_META_KEY] || !result[LOCAL_META_KEY].deviceId) {
-    await browser.storage.local.set({ [LOCAL_META_KEY]: meta });
   }
 
   // Stale content-addressed pixels are non-authoritative, but a failed remove()
@@ -963,7 +1053,7 @@ export async function materializeLocalStorage(rawRead, { withTimings = false, hy
 
 export async function writeActiveSpace(spaceId) {
   const requested = SPACE_IDS.includes(spaceId) ? spaceId : "personal";
-  return withLocalAssetWriteLock(async () => {
+  return withPersistenceWriteLock(async () => {
     await browser.storage.local.set({ [LOCAL_ACTIVE_SPACE_KEY]: requested });
 
     // Read the persisted pointer back while the same cross-context persistence

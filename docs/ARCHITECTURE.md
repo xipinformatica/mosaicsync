@@ -68,6 +68,10 @@ Rules:
 - Background contexts cannot synchronously rewrite a New Tab page's localStorage render manifest. A page may therefore refresh that persistent manifest only after proving its structural projection still matches current shared `storage.session`; delayed preview/artwork writers obey the same gate.
 - Identical session acceleration snapshots are skipped only after the writer verifies that the actual shared `storage.session` bytes still match its local fingerprint; one extension context's memory is never treated as proof of shared-cache contents.
 - Active-Space persistence participates in the same cross-context lock and republishes from the persisted pointer; the caller's stale requested Space is never sufficient session authority.
+- Ordinary structural profile persistence does not write the active-Space pointer. It derives structural session active-Space presentation from the dedicated pointer under the persistence lock, preserving one physical owner for device active Space.
+- Startup repair is conditional and transaction-owned: after a stale read detects missing/invalid active-Space or meta authority, it re-reads current storage under the persistence lock and repairs only what is still missing/invalid.
+- Generic structural session warming has no Frequently Visited write capability. FV candidates and their bounded native-favicon derivatives are owned only by the dedicated session projection path.
+- FV favicon-bearing cards are prepared off-DOM and become visible only after their bounded favicon has decoded or has been replaced by a fallback, so startup continuity does not trade correctness for an intermediate missing-artwork frame.
 - Classic startup scripts receive render/session key and render-manifest schema values from deterministic build-generated bootstrap configuration sourced from canonical core constants; do not duplicate schema literals in each classic script.
 - Work-specific shortcut-grid safety checks do not apply to global/device-local Frequently Visited data.
 - All startup cache formats are disposable and explicitly versioned.
@@ -83,6 +87,7 @@ Rules:
 - Settings drafts remain separate from authoritative incoming state until persisted.
 - New user-facing text must use the locale system in every supported language.
 - Visual startup tests complement state tests because a correct final state can still have a wrong intermediate frame.
+- While Settings is open, lightweight canvas text/shadow presentation may follow the isolated Light/Dark preview immediately; full-page wallpaper/background/dim painting remains deferred to protect the Settings compositor surface.
 
 ## 7. Browser adapters
 
@@ -128,3 +133,32 @@ MosaicSync now follows a complexity budget:
 - Preserve all existing product features unless a product decision explicitly removes one.
 
 The target of the staged maintainability program is to improve maintainability without sacrificing features or startup speed; simplification should ideally reduce work and improve reliability/performance.
+
+## 1.30.18.14 Step 2.3 — persistent visual-cache boundary / Step 2 complete
+
+- `storage.session` remains the shared structural first-paint accelerator and carries the semantic First-Paint Contract. `storage.local` remains authoritative persistent state.
+- The persistent Web Storage render manifest advances to disposable schema v5 and is intentionally **presentation-only**: it can retain a readiness marker, `paintSpaceId` visual authorization hint, Space labels/visibility, Personal-grid geometry, visual item identities and bounded artwork previews.
+- It contains **no shortcut URLs**, state/settings mutation clocks, Frequently Visited state/candidates, or duplicated semantic First-Paint Contract. When Work is active it retains no Work grid/layout/shortcut structure; only the tiny Space-label hint remains.
+- The synchronous persistent renderer creates inert visual cards with no navigation target. Authoritative `configureShortcutSlotInteractions()` / folder interaction setup installs validated navigation and editing behavior only after current state wins.
+- Persistent-cache reuse is decided by canonical visual equivalence rather than revision clocks. Titles, positions, layout, folder mosaic children and artwork identity must match; URL/clock changes do not make the visual cache authoritative. Invalid/corrupt previews fail closed and cannot override drawable session artwork.
+- Switching to Work synchronously invalidates a Personal persistent grid before deferred cache refresh, preventing a same-task browser close from authorizing stale Personal paint on the next cold start.
+- The classic pre-authority `http-url-safety.js` load is no longer needed by the persistent renderer because no navigation data crosses this cache boundary; the shared validator remains authoritative in model/storage/UI interaction paths.
+- This completes **Step 2** of the maintainability program. Step 3 may now target Firefox/Chrome background duplication; it must not reopen the settled first-paint/cache ownership boundaries without a demonstrated defect.
+
+
+## 1.30.18.13 device attribution
+
+- A MosaicSync installation's friendly `deviceName` is local meta attached to the existing stable random `deviceId`; renaming never changes device identity.
+- When Sync is enabled, the background publishes a tiny dedicated `device-name` metadata record keyed by device ID. It contains no layout, artwork, favicon or browsing-history data and does not alter the layout/Recovery schema.
+- Existing synchronized datasets remain the authority for change provenance through their existing origin device ID. Settings resolves that ID to the friendly name and displays the dataset source timestamp separately from this installation's receipt time.
+- Device-name-only `storage.sync` deliveries are attribution updates, not layout changes, and are excluded from the normal layout reconciliation trigger.
+- Fallback device naming for upgraded installations happens after first paint and must never become a launcher dependency.
+
+
+## Step 3.1 shared background ownership (1.30.18.15)
+
+Firefox and Chromium now execute the same canonical `background/background-core.js` for MosaicSync semantics. The browser-specific `background.js` files are entrypoints only, and `background-adapter.js` exposes the small set of real platform capabilities required by the shared core.
+
+Shared ownership includes Sync publication/reconciliation, Recovery snapshots, metadata/state transitions, persistence orchestration, device attribution, alarms, mutation queues and favicon-recovery policy. Browser adapters may acquire native favicon data or interpret browser-specific permissions/protected pages, but they do not own Sync/Recovery algorithms.
+
+This boundary is structural: new shared background behavior belongs in the shared core. Browser overlays must not grow parallel implementations of canonical semantics. Step 2 first-paint/cache ownership remains frozen unless a demonstrated defect requires reopening it.

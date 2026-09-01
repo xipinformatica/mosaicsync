@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, access } from "node:fs/promises";
@@ -22,7 +23,7 @@ function functionBody(source, name) {
 
 test("1.24.14 mutation-time quota refresh skips display-only category accounting", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = await text(`src/${browser}/background/background.js`);
+    const source = readBackgroundSource(browser, { built: false });
     const body = functionBody(source, "refreshQuota");
     assert.match(body, /getBytesInUse\(null\)/);
     assert.match(body, /storage\.sync\.get\(null\)/);

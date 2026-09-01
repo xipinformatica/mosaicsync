@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -30,13 +31,13 @@ function icon(name, side, url) { return { image:`data:image/png;base64,${name}`,
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.1 ${browser} final favicon quality pass scans past adequate 64px art and selects later 192px art`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const calls = [];
     const low = icon("LOW64",64,"https://fixture.test/64.png");
     const high = icon("HIGH192",192,"https://fixture.test/192.png");
     const ctx = {
       console, URL, Date, ICON_RECOVERY_FETCH_TIMEOUT_MS:8000,  FAVICON_AUTHORITATIVE_SUITABILITY:375,
-      isProtectedChromeStoreUrl:()=>false, hasWebAccess:async()=>true, resolveBrowserCachedFavicon:async()=>null,
+      isProtectedChromeStoreUrl:()=>false, isProtectedFaviconUrl:()=>false, platformHasPermissionFreeFaviconSource:()=>browser === "chrome", hasWebAccess:async()=>true, resolveBrowserCachedFavicon:async()=>null,
       discoverPageIconInfo:async url => ({ candidates:[{url:low.sourceUrl,sideHint:64,source:"link"},{url:high.sourceUrl,sideHint:192,source:"link"}], finalPageUrl:url, reason:"" }),
       fetchImageDataUrlDetailed:async url => { calls.push(url); if (url===low.sourceUrl) return low; if (url===high.sourceUrl) return high; return {image:"",reason:"http-404",width:0,height:0,qualitySide:0}; }
     };
@@ -52,7 +53,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.1 ${browser} favicon quality ledger suppresses current audits but expires and policy-invalidates deterministically`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const ctx = { URL, Date, FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256, FAVICON_QUALITY_AUDIT_POLICY_VERSION:1, FAVICON_QUALITY_AUDIT_TTL_MS:30*24*60*60*1000 };
     vm.createContext(ctx); vm.runInContext(`${extract(src,"normalizeFaviconQualityAuditLedger")}\n${extract(src,"faviconQualityAuditNeeded")}`,ctx);
     const now = 10_000_000_000;
@@ -112,7 +113,7 @@ test("1.30.1 permission classification isolates Website Access from Frequently V
 
 test("1.30.1 automatic favicon upgrade remains device-local and never targets explicit user artwork", () => {
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8"); const ctx={}; vm.createContext(ctx); vm.runInContext(extract(src,"automaticFaviconArtwork"),ctx);
+    const src=readBackgroundSource(browser); const ctx={}; vm.createContext(ctx); vm.runInContext(extract(src,"automaticFaviconArtwork"),ctx);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"device",imageSourceKind:"favicon",url:"https://a.test/"}),true);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"sync",imageSourceKind:"upload",url:"https://a.test/"}),false);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"device",imageSourceKind:"builtin",url:"https://a.test/"}),false);
@@ -121,7 +122,7 @@ test("1.30.1 automatic favicon upgrade remains device-local and never targets ex
 
 test("1.30.1 favicon recovery deduplicates identical exact-URL work while keeping fast and quality passes distinct", () => {
   for (const browser of ["firefox","chrome"]) {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8"); const fn=extract(src,"processIconRecoveryQueue");
+    const src=readBackgroundSource(browser); const fn=extract(src,"processIconRecoveryQueue");
     assert.match(fn,/const key = `\$\{item\.qualityUpgrade \? "quality" : "fast"\}\\n\$\{item\.url\}\\n\$\{normalizeFaviconPreference\(item\.faviconPreference\)\}`/);
     assert.match(fn,/existing\.items\.push\(item\)/);
   }

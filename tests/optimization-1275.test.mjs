@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -169,7 +170,7 @@ test("1.27.8.8 compact locale helper preserves source key order and hostile/spec
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browser} favicon-choice cache is gated by a live Website Access permission read`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     const permissionCalls = [];
     const context = {
@@ -185,7 +186,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.8.8 ${browser} redirect favicon shares the existing two-wide manual-discovery batch with conventional fallbacks`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const helperNames = ["faviconCandidateSuitability", "faviconCandidatePreference", "faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"];
     const helpers = helperNames.map(name => extractFunction(source, name)).join("\n");
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
@@ -283,7 +284,7 @@ test("1.27.8.8 size guard detects missing categories and significant individual-
   const current = await createSizeReport();
   for (const browser of ["firefox", "chrome"]) {
     const expected = baseline.browsers[browser], actual = current.browsers[browser];
-    assert.equal(actual.version, "1.30.18.10");
+    assert.equal(actual.version, "1.30.18.15");
     assert.equal(expected.version, actual.version, `${browser}: current release needs a conscious size baseline`);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.rawBytes, 0), actual.rawBytes);
     assert.equal(Object.values(actual.categories).reduce((sum, entry) => sum + entry.deflatedBytes, 0), actual.deflatedBytes);

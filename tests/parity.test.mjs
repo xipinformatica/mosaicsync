@@ -6,7 +6,7 @@ import { join, relative, resolve } from "node:path";
 async function walk(root, dir=root, out=[]) { for (const name of await readdir(dir)) { const p=join(dir,name); const s=await stat(p); if(s.isDirectory()) await walk(root,p,out); else out.push(relative(root,p).replaceAll("\\\\","/")); } return out; }
 const approved = [
   /^_locales\//, /^assets\/icon-(16|32|48|128)\.png$/,
-  /^background\/background\.js$/, /^core\/(browser-shim|i18n-platform|platform|permissions)\.js$/,
+  /^background\/(background|background-adapter)\.js$/, /^core\/(browser-shim|i18n-platform|platform|permissions)\.js$/,
   /^manifest\.json$/, /^newtab\/newtab\.html$/
 ];
 
@@ -25,7 +25,7 @@ test("Firefox/Chrome runtime divergence is confined to approved adapters/overlay
 test("both manifests use version 1.30", async () => {
   for(const browser of ["firefox","chrome"]) {
     const manifest=JSON.parse(await readFile(resolve(`dist/${browser}/manifest.json`),"utf8"));
-    assert.equal(manifest.version,"1.30.18.10");
+    assert.equal(manifest.version,"1.30.18.15");
     assert.equal(manifest.manifest_version,3);
   }
 });
@@ -35,5 +35,5 @@ test("browser-specific display-version manifest policy is valid", async () => {
   const firefox=JSON.parse(await readFile(resolve("dist/firefox/manifest.json"),"utf8"));
   const chrome=JSON.parse(await readFile(resolve("dist/chrome/manifest.json"),"utf8"));
   assert.equal(Object.hasOwn(firefox,"version_name"),false,"Firefox must not receive Chrome-only version_name");
-  assert.equal(chrome.version_name,"1.30.18.10");
+  assert.equal(chrome.version_name,"1.30.18.15");
 });

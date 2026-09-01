@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -38,7 +39,7 @@ function installQueueMutationStub(ctx) {
 
 for (const browserName of ["firefox", "chrome"]) {
   test(`1.26.17 ${browserName} targeted iconless-shortcut recovery reaches commit without a site visit`, async () => {
-    const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browserName);
     const state = {
       activeSpaceId: "personal",
       spaces: {
@@ -126,7 +127,7 @@ for (const browserName of ["firefox", "chrome"]) {
 }
 
 test("1.26.17 Chrome native fallback is attempted without Website Access and does not pin a quality job", async () => {
-  const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
+  const src = readBackgroundSource("chrome");
   let queue = { version: 2, items: [{ id: "s", url: "https://known.test/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let resolverCalls = 0;
   const ctx = {

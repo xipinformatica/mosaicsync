@@ -384,7 +384,54 @@ async function latestDeviceSnapshotRoot(syncArea, deviceId) {
   return entries.length ? { key: entries[0][0], root: entries[0][1] } : { key: '', root: null };
 }
 
-if (scenario === 'favicon-preference-rehydrate-13014') {
+if (scenario === 'step3-listener-topology') {
+  console.log(JSON.stringify({
+    ok: true,
+    onInstalled: events.onInstalled.listeners.length,
+    onStartup: events.onStartup.listeners.length,
+    onMessage: events.onMessage.listeners.length,
+    onStorageChanged: events.onStorageChanged.listeners.length,
+    onAlarm: events.onAlarm.listeners.length,
+    onPermissionAdded: events.onPermissionAdded.listeners.length,
+    onPermissionRemoved: events.onPermissionRemoved.listeners.length,
+    onTabUpdated: events.onTabUpdated.listeners.length,
+    onTabRemoved: events.onTabRemoved.listeners.length,
+    onActionClicked: events.onActionClicked.listeners.length
+  }));
+}
+else if (scenario === 'step3-data-collection-revoke') {
+  const state = stateWith();
+  await seedLocalState(state, {
+    syncEnabled: true,
+    syncInitialized: true,
+    syncBootstrapMode: 'local',
+    syncStatus: 'ready',
+    lastRemoteReceiptAt: 123,
+    lastRemoteReceiptRevision: 'remote',
+    lastRemoteReceiptUpdatedAt: 122,
+    lastRemoteReceiptOriginDeviceId: 'other-device'
+  });
+  for (const listener of events.onPermissionRemoved.listeners) listener({ data_collection: ['required'] });
+  const deadline = Date.now() + 1000;
+  let next = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  while (Date.now() < deadline && browserName === 'firefox' && next?.syncEnabled !== false) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    next = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  }
+  if (browserName === 'firefox') {
+    assert.equal(next.syncEnabled, false, 'Firefox data_collection revocation must disable Sync');
+    assert.equal(next.syncInitialized, false);
+    assert.equal(next.syncStatus, 'off');
+    assert.equal(next.lastRemoteReceiptAt, 0);
+    assert.equal(next.lastRemoteReceiptOriginDeviceId, '');
+  } else {
+    assert.equal(next.syncEnabled, true, 'Chrome must ignore Firefox-only data_collection permission events');
+    assert.equal(next.syncInitialized, true);
+    assert.equal(next.syncStatus, 'ready');
+  }
+  console.log(JSON.stringify({ ok: true, syncEnabled: next.syncEnabled, syncInitialized: next.syncInitialized, syncStatus: next.syncStatus }));
+}
+else if (scenario === 'favicon-preference-rehydrate-13014') {
   websiteAccess = true;
   const preferredBytes = tinyPng(64,64,4);
   const fallbackBytes = tinyPng(32,32,1);

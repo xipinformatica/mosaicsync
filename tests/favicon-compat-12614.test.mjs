@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -40,7 +41,7 @@ function pngHeader(width = 32, height = 32) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.14 ${browser} trusts favicon bytes over a wrong HTTP MIME label`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [
       extract(src, "sniffImageMime"),
       extract(src, "imageDimensionsFromBytes"),
@@ -75,7 +76,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.14 ${browser} accepts a bounded declared inline PNG favicon`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [
       extract(src, "sniffImageMime"),
       extract(src, "decodeInlineFaviconResource"),
@@ -112,7 +113,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.14 ${browser} HTML icon discovery keeps declared data-image favicons`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [extract(src, "htmlAttribute"), extract(src, "discoverPageIconInfo")].join("\n");
     const inline = `data:image/png;base64,${Buffer.from(pngHeader()).toString("base64")}`;
     const ctx = {
@@ -137,7 +138,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.26.14 ${browser} clicked-tab favicon-learning preflight does not itself request Website Access`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = extract(src, "prepareFaviconLearning");
     const ctx = {
       console,

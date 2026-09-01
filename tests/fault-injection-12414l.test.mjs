@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -137,7 +138,7 @@ function extract(src, name) {
 
 for (const browserName of ["firefox", "chrome"]) {
   test(`${browserName}: 1.24.14l snapshot decompression is bounded while streaming`, async () => {
-    const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browserName);
     const ctx = { console, Uint8Array };
     vm.createContext(ctx);
     vm.runInContext(extract(src, "readBoundedStreamBytes"), ctx);
@@ -171,7 +172,7 @@ for (const browserName of ["firefox", "chrome"]) {
   });
 
   test(`${browserName}: 1.30.18.3 complete-profile publication commits an immutable generation root after its chunks`, async () => {
-    const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browserName);
     const events = [];
     const prefix = "mosaicsync.sync.device.";
     const legacyRootKey = `${prefix}dev`;
@@ -231,7 +232,7 @@ for (const browserName of ["firefox", "chrome"]) {
   });
 
   test(`${browserName}: 1.30.18.3 failed immutable root commit cleans only the new generation and preserves the previous root`, async () => {
-    const src = fs.readFileSync(`dist/${browserName}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browserName);
     const prefix = "mosaicsync.sync.device.";
     const legacyRootKey = `${prefix}dev`;
     const generationRootKey = `${legacyRootKey}.snapshot.new`;

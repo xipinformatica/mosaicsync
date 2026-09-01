@@ -1,10 +1,12 @@
 # MosaicSync Privacy
 
-Last updated: 25 August 2026
+Last updated: 1 September 2026
 
 MosaicSync is designed to work without a MosaicSync account, MosaicSync cloud service, advertising SDK, analytics service or telemetry backend.
 
 This document describes the privacy behavior of the open-source MosaicSync browser extension. Browser-vendor services such as Firefox Sync or Chrome Sync are governed by the browser vendor's own privacy terms.
+
+When Sync is enabled, MosaicSync may also synchronize the friendly name you assign to this installation (for example, “Oasis”) as a small device-attribution record tied to MosaicSync’s existing random device ID. It is used only to show which MosaicSync device produced a synchronized change; it contains no browsing history or artwork.
 
 ## Data MosaicSync stores
 

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -152,7 +153,7 @@ class FakeElement {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.9 ${browser} keeps automatic favicon winner selection separate from the manual chooser`, () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const resolver = extractFunction(source, "resolveFaviconForUrl");
     assert.match(resolver, /betterFaviconCandidate\(/, "automatic resolver must use the reviewed winner policy");
     assert.doesNotMatch(resolver, /discoverFaviconChoicesForUrl\(/, "automatic resolver must not depend on the manual picker");
@@ -160,7 +161,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.3 ${browser} detected-favicon discovery is bounded, deduplicated and uses validated favicon primitives`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const body = extractFunction(source, "discoverFaviconChoicesForUrl");
     const cacheHelpers = [
       "faviconCandidateSuitability",

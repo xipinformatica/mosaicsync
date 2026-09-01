@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -73,7 +74,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.5 ${browser} remote recovery age is based on local observation passes, not the publisher clock`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extractFunction(src, "maybeGarbageCollectStaleDeviceSnapshots");
     let now = 2_000_000_000_000;
     const remoteRoot = "mosaicsync.sync.device.remote.snapshot.clock-skewed";
@@ -110,7 +111,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.5 ${browser} a forward clock jump cannot reclaim a newly observed rootless publication on the next GC pass`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const fn = extractFunction(src, "maybeGarbageCollectStaleDeviceSnapshots");
     let now = 10_000;
     const orphanRoot = "mosaicsync.sync.device.remote.snapshot.inflight";
@@ -147,7 +148,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.5 ${browser} near-quota pre-retirement plus failed replacement still preserves one verified recovery`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const code = [
       "compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "syncItemsFitInSnapshot",
       "prepareDeviceSnapshotPublicationCapacity", "publishProfileDeviceSnapshot"

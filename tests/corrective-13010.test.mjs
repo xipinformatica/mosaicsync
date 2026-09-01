@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -63,7 +64,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.30.10 cache is worker-local, bounded to the retained device count, and consulted only after current fingerprint verification", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.match(source, /const deviceSnapshotDecodeCache = new Map\(\)/);
     assert.match(source, /const DEVICE_SNAPSHOT_DECODE_CACHE_MAX = DEVICE_SNAPSHOT_MAX_RECENT_DEVICES;/);
     assert.match(source, /typeof value\.dataFingerprint !== "string" \|\| !value\.dataFingerprint/);
@@ -83,7 +84,7 @@ test("1.30.10 cache is worker-local, bounded to the retained device count, and c
 });
 
 test("1.30.10 cache identity covers decoded-result and validation metadata", () => {
-  const source = fs.readFileSync(resolve(root, "src/firefox/background/background.js"), "utf8");
+  const source = readBackgroundSource("firefox", { built: false });
   const start = source.indexOf("function deviceSnapshotDecodeCacheKey");
   const end = source.indexOf("function readDeviceSnapshotDecodeCache", start);
   const block = source.slice(start, end);
@@ -97,7 +98,7 @@ test("1.30.10 cache identity covers decoded-result and validation metadata", () 
 
 test("1.30.10 Sync disable clears only the performance cache and does not alter durable snapshot data", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function setSyncEnabled");
     const end = source.indexOf("function hasSnapshotData", start);
     const block = source.slice(start, end);

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -36,7 +37,7 @@ test("1.30.18.3 keeps ordinary Sync schemas stable", () => {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.3 ${browser} cloned deviceIds publish into collision-free immutable snapshot generations`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const context = { SYNC_DEVICE_SNAPSHOT_PREFIX: "mosaicsync.sync.device.", encodeURIComponent };
     vm.createContext(context);
     vm.runInContext(extract(src, "deviceSnapshotKey"), context);
@@ -55,7 +56,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.3 ${browser} generation decoder is additive and legacy a/b snapshots remain readable`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const decode = extract(src, "decodeDeviceSnapshotCurrentPayload");
     assert.match(decode, /snapshotId/);
     assert.match(decode, /deviceSnapshotGenerationChunkKey/);
@@ -64,7 +65,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.3 ${browser} publication never overwrites the copied legacy device root`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const build = extract(src, "buildProfileDeviceSnapshotPublication");
     assert.match(build, /const rootKey = deviceSnapshotGenerationKey\(meta\.deviceId, commitId\)/);
     assert.match(build, /deviceSnapshotGenerationChunkKey\(meta\.deviceId, commitId, index\)/);
@@ -73,7 +74,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.3 ${browser} own-snapshot selection scans generations and retention is generation-aware`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const own = extract(src, "readOwnDeviceSnapshot");
     const gcStart = src.indexOf("async function maybeGarbageCollectStaleDeviceSnapshots");
     const gcEnd = src.indexOf("function combinedRemoteCore", gcStart);
@@ -85,7 +86,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.3 ${browser} stable deviceId still owns normal Sync records`, () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     assert.match(src, /flattenStateNormalized\([^\n]+meta\.deviceId\)/);
     assert.match(src, /makeSettingsRecordNormalized\([^\n]+meta\.deviceId\)/);
     assert.match(src, /originDeviceId:\s*meta\.deviceId/);

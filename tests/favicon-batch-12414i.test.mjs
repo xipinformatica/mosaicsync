@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -67,7 +68,7 @@ function runFunctions(src, names, context, prelude = "") {
 
 for (const browser of ["firefox", "chrome"]) {
   test(`${browser}: 1.24.14i proactive batch commit is Space-aware and rejects stale/deleted/disabled targets`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     let writes = 0;
     let currentState = stateWithSpaces({
       activeSpaceId: "personal",
@@ -119,7 +120,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14i idempotent favicon rediscovery is unchanged success with no state write`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const image = "data:image/png;base64,U0FNRQ==";
     const existing = shortcut("same", "https://same.example/", {
       image, imageSyncKind: "device", imageSourceKind: "favicon", imageSourceUrl: "https://same.example/favicon.ico",
@@ -146,7 +147,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14i seed/prune retain a moved job in another enabled Space without leaking disabled-Space work`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     let currentState = stateWithSpaces({
       activeSpaceId: "personal", personal: [], personalAuto: false,
       work: [shortcut("moved", "https://moved.example/")], workAuto: true
@@ -184,7 +185,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14i batch engine re-reads the queue after networking and preserves newer queued work`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const oldQueue = { version: 2, items: [{ id: "old", url: "https://old.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
     const newerQueue = { version: 2, items: [{ id: "new", url: "https://new.example/", attempts: 0, nextAttemptAt: 9999999999999, qualityUpgrade: false }] };
     let reads = 0;
@@ -228,7 +229,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`${browser}: 1.24.14i batch engine counts identical recovered artwork as unchanged, not failed`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const queue = { version: 2, items: [{ id: "same", url: "https://same.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: true }] };
     let finalQueue = null;
     const ctx = { console, normalizeFaviconPreference };
@@ -270,7 +271,7 @@ for (const browser of ["firefox", "chrome"]) {
 }
 
 test("chrome: 1.24.14i Space-aware seeding preserves browser-native favicon quality-upgrade semantics", async () => {
-  const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
+  const src = readBackgroundSource("chrome");
   const native = shortcut("native", "https://native.example/", {
     image: "data:image/png;base64,TkFUSVZF", imageSyncKind: "device", imageSourceKind: "firefox"
   });
@@ -298,7 +299,7 @@ test("chrome: 1.24.14i Space-aware seeding preserves browser-native favicon qual
 });
 
 test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", async () => {
-  const src = fs.readFileSync("dist/chrome/background/background.js", "utf8");
+  const src = readBackgroundSource("chrome");
   const queue = { version: 2, items: [{ id: "store", url: "https://chromewebstore.google.com/detail/x", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let finalQueue = null;
   const ctx = { console, normalizeFaviconPreference };
@@ -336,7 +337,7 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
 
 for (const browser of ["firefox", "chrome"]) {
   test(`${browser}: 1.24.14j proactive commit failures retain durable work for backoff retry`, async () => {
-    const src = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const src = readBackgroundSource(browser);
     const queue = { version: 2, items: [{ id: "retry", url: "https://retry.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
     let finalQueue = null;
     let status = null;

@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -58,7 +59,7 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.30.14 reset markers require a non-empty initiating device id", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("function validResetIntent");
     const end = source.indexOf("function recoveryStalePenalty", start);
     const block = source.slice(start, end);
@@ -164,7 +165,7 @@ test("1.30.14 favicon chooser records preference without forcing image-byte Sync
 
 test("1.30.14 preferred favicon hydration uses compact preference matching in both browsers", () => {
   for (const browser of ["firefox", "chrome"]) {
-    const source = fs.readFileSync(resolve(root, `src/${browser}/background/background.js`), "utf8");
+    const source = readBackgroundSource(browser, { built: false });
     assert.match(source, /resolveFaviconForUrlWithPreference/);
     assert.match(source, /faviconPreferenceMatchesCandidate\(wanted, candidate\)/);
     assert.match(source, /faviconPreference: normalizeFaviconPreference\(item\.faviconPreference\)/);

@@ -227,7 +227,7 @@ export function normalizeFaviconPreference(value) {
 
 export function faviconPreferenceForCandidate(candidate) {
   if (!candidate || typeof candidate !== "object") return "";
-  if (String(candidate.source || "").toLowerCase() === "browser") return "b";
+  const browserSource = String(candidate.source || "").toLowerCase() === "browser";
   const image = typeof candidate.image === "string" && candidate.image.startsWith("data:image/")
     ? candidate.image
     : "";
@@ -238,8 +238,12 @@ export function faviconPreferenceForCandidate(candidate) {
   } catch {}
   if (sourceUrl && image) return `u:${compactFaviconPreferenceHash(sourceUrl)}:${compactFaviconPreferenceHash(image)}`;
   if (sourceUrl) return `u:${compactFaviconPreferenceHash(sourceUrl)}:00000000`;
+  // A manually selected browser candidate must identify the chosen artwork, not
+  // merely say “use whatever this other browser currently caches”. Keep legacy
+  // `b` readable, but new browser choices use the same compact image identity as
+  // other source-less candidates and still synchronize zero image bytes.
   if (image) return `i:${compactFaviconPreferenceHash(image)}`;
-  return "";
+  return browserSource ? "b" : "";
 }
 
 export function faviconPreferenceMatchesCandidate(preference, candidate) {
@@ -253,6 +257,19 @@ export function faviconPreferenceMatchesCandidate(preference, candidate) {
     const [, wantedUrlHash, wantedImageHash] = wanted.split(":");
     const [, actualUrlHash, actualImageHash] = actual.split(":");
     return wantedUrlHash === actualUrlHash || (wantedImageHash !== "00000000" && wantedImageHash === actualImageHash);
+  }
+  // Exact manually selected pixels may be rediscovered through a different
+  // source class on another browser (for example Browser cache here, declared
+  // <link rel=icon> there). Match the compact image identity across `i:`/`u:`
+  // forms without synchronizing the image bytes themselves.
+  if (wanted.startsWith("i:") && actual.startsWith("u:")) {
+    const wantedImageHash = wanted.slice(2);
+    const actualImageHash = actual.split(":")[2] || "";
+    return wantedImageHash === actualImageHash;
+  }
+  if (wanted.startsWith("u:") && actual.startsWith("i:")) {
+    const wantedImageHash = wanted.split(":")[2] || "";
+    return wantedImageHash !== "00000000" && wantedImageHash === actual.slice(2);
   }
   return false;
 }
@@ -1021,10 +1038,22 @@ function normalizeDeviceSnapshotSeenPass(raw, limit = 256) {
   return Object.fromEntries(entries.slice(0, Math.max(1, Math.trunc(limit) || 1)));
 }
 
+export function normalizeDeviceName(value) {
+  if (typeof value !== "string") return "";
+  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 64);
+}
+
+export function defaultDeviceName(platformId = "", os = "") {
+  const browserName = platformId === "chrome" ? "Chrome" : "Firefox";
+  const osName = ({ win: "Windows", mac: "macOS", linux: "Linux", android: "Android", cros: "ChromeOS", openbsd: "OpenBSD" })[String(os || "").toLowerCase()] || "Computer";
+  return `${browserName} · ${osName}`;
+}
+
 export function normalizeMeta(raw) {
   return {
     schemaVersion: META_SCHEMA_VERSION,
     deviceId: typeof raw?.deviceId === "string" && raw.deviceId ? raw.deviceId : "",
+    deviceName: normalizeDeviceName(raw?.deviceName),
     syncEnabled: raw?.syncEnabled === true,
     // Preserve initialization for legacy profiles that predate the explicit
     // syncInitialized flag but already completed a successful sync.
@@ -1153,7 +1182,14 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
     : "";
   const builtinIcon = normalizeBuiltinShortcutIcon(shortcut.builtinIcon);
   const colorTag = normalizeShortcutColorTag(shortcut.colorTag);
-  const faviconPreference = normalizeFaviconPreference(shortcut.faviconPreference);
+  let faviconPreference = normalizeFaviconPreference(shortcut.faviconPreference);
+  // 1.30.18.12 migration: old manually selected Browser candidates used the
+  // coarse `b` token. If the originating device still has the user's selected
+  // local pixels, publish their compact identity instead. This changes only the
+  // instruction in the shortcut record; the image itself remains device-local.
+  if (faviconPreference === "b" && localSourceKind === "upload" && isSafeImageDataUrl(shortcut.image)) {
+    faviconPreference = faviconPreferenceForCandidate({ image: shortcut.image, source: "manual-selection" });
+  }
   const record = {
     schemaVersion: SYNC_SCHEMA_VERSION,
     kind: "shortcut",

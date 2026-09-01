@@ -4,12 +4,12 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Disposable synchronous first-frame grid projection.
+ * Disposable synchronous first-frame Personal-grid projection.
  *
- * Since 1.24.10, tiny, strictly-budgeted favicon previews are used. They are visual-cache
- * derivatives only: authoritative artwork remains in the content-addressed
- * local asset store. This lets the very first frame contain wallpaper + tiles +
- * recognizable icons instead of visibly stepping through fallback letters.
+ * Step 2.3 makes this cache presentation-only. It contains no navigation URLs,
+ * mutation clocks, Frequently Visited candidates or shared semantic first-paint
+ * state. The grid is inert until newtab.js verifies it against session/local
+ * authority and wires real interactions.
  */
 (() => {
   const timing = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
@@ -19,6 +19,7 @@
   const KEY = config?.renderManifestKey || "";
   const SHORTCUT_ORDER_KEY = ["mosaicsync", "shortcut-order", "v1"].join(".");
   const SHORTCUT_USAGE_KEY = ["mosaicsync", "shortcut-usage", "v1"].join(".");
+  const DEFAULT_SPACE_KEY = ["mosaicsync", "default-space", "v1"].join(".");
   const COLOR_TAGS = new Set(["red", "orange", "amber", "green", "teal", "blue", "violet", "pink"]);
   const MAX_PREVIEW_CHARS = 6000;
   const root = document.documentElement;
@@ -27,11 +28,6 @@
   const brand = document.querySelector(".brand");
   if (!grid || !emptyState) return;
 
-  // This helper is loaded as a tiny classic script immediately before this
-  // bootstrap. If packaging/order ever regresses, first-paint navigation fails
-  // closed instead of falling back to a local permissive copy.
-  const safeShortcutNavigationUrl = globalThis.__mosaicsyncSafeShortcutNavigationUrl;
-  if (typeof safeShortcutNavigationUrl !== "function") return;
   function validPreview(value) {
     return typeof value === "string" && value.length <= MAX_PREVIEW_CHARS &&
       /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,[A-Za-z0-9+/=]+$/i.test(value);
@@ -94,10 +90,8 @@
       return;
     }
     if (globalThis.__mosaicsyncBuiltinIcons?.append?.(target, item?.builtinIcon)) return;
-    // An imageKey means authoritative state already knows this shortcut has
-    // artwork. If its disposable tiny preview is temporarily stale/missing, an
-    // empty tile is truthful; a fallback letter is not and would visibly flash
-    // underneath the real favicon during authoritative hydration.
+    // An imageKey means authoritative state knows artwork exists. If the tiny
+    // derivative is absent, an empty tile is more truthful than flashing a letter.
     if (typeof item?.imageKey === "string" && item.imageKey) return;
     target.append(fallback(item?.title));
   }
@@ -105,14 +99,13 @@
     const slot = document.createElement("div");
     slot.className = "shortcut-slot";
     slot.dataset.id = item.id;
-    const safeUrl = safeShortcutNavigationUrl(item?.url);
-    if (!safeUrl) return null;
+    // Deliberately no href here. The entire cache is inert until authoritative
+    // state validates it; configureShortcutSlotInteractions() installs the real
+    // validated navigation target during handoff.
     const card = document.createElement("a");
     card.className = "shortcut-card";
-    card.href = safeUrl;
-    card.rel = "noreferrer";
-    card.title = `${item.title}\n${safeUrl}`;
-    card.setAttribute("aria-label", `${item.title}, ${safeUrl}`);
+    card.title = item.title;
+    card.setAttribute("aria-label", item.title);
     const tile = document.createElement("span");
     tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
     applyColorTag(tile, item);
@@ -152,26 +145,24 @@
     return slot;
   }
 
-
   try {
     if (!KEY || !Number.isInteger(config?.renderManifestVersion)) return;
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
     const manifest = JSON.parse(raw);
-    if (!manifest || manifest.version !== config.renderManifestVersion || manifest.onboardingCompleted !== true) return;
-    const firstPaint = manifest.firstPaint?.version === 1 ? manifest.firstPaint : null;
-    if (!firstPaint) return;
+    if (!manifest || manifest.version !== config.renderManifestVersion || manifest.ready !== true) return;
 
-    // Browser-derived Frequently Visited sites are intentionally session/live
-    // owned from 1.30.18.9 onward. The persistent manifest never paints them, so
-    // a cold restart cannot resurrect stale browsing-history suggestions.
+    // Persistent synchronous grid paint remains deliberately Personal-only. If a
+    // device is configured to open Work directly, do not flash Personal first.
+    if (manifest.paintSpaceId !== "personal") return;
+    try {
+      const defaultSpace = localStorage.getItem(DEFAULT_SPACE_KEY) || "last";
+      if (manifest.spaceSwitcher?.visible === true && defaultSpace === "work") return;
+    } catch {}
 
-    // A synchronous cache cannot prove that Work is still an allowed/active Space.
-    // Keep the non-Personal shortcut grid behind the asynchronous authoritative/
-    // session checks without unnecessarily withholding the global Frequent strip.
-    if (firstPaint.activeSpaceId !== "personal") return;
-    if (!Array.isArray(manifest.shortcuts) || manifest.shortcuts.length > 96) return;
-    const columns = Number(manifest.columns), rows = Number(manifest.rows), tileSize = Number(manifest.tileSize);
+    const layout = manifest.layout;
+    if (!layout || typeof layout !== "object" || !Array.isArray(manifest.shortcuts) || manifest.shortcuts.length > 96) return;
+    const columns = Number(layout.columns), rows = Number(layout.rows), tileSize = Number(layout.tileSize);
     if (!Number.isInteger(columns) || columns < 6 || columns > 12 ||
         !Number.isInteger(rows) || rows < 2 || rows > 8 ||
         !Number.isFinite(tileSize) || tileSize < 60 || tileSize > 96) return;
@@ -181,7 +172,8 @@
     root.style.setProperty("--shortcut-icon-size", `${Math.round(tileSize * 53 / 76)}px`);
     root.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     root.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
-    if (brand) brand.hidden = manifest.brandVisible === false;
+    if (brand) brand.hidden = layout.brandVisible === false;
+
     const validItems = [];
     for (const source of manifest.shortcuts) {
       if (!source || typeof source !== "object" || typeof source.id !== "string" || !source.id ||
@@ -191,10 +183,10 @@
       item.builtinIcon = globalThis.__mosaicsyncBuiltinIcons?.isValid?.(item.builtinIcon) ? item.builtinIcon : "";
       item.colorTag = COLOR_TAGS.has(item.colorTag) ? item.colorTag : "";
       if (item.type === "shortcut") {
-        if (!safeShortcutNavigationUrl(item.url)) continue;
+        // Visual-only shortcut: no URL is expected or accepted in this layer.
       } else if (item.type === "folder") {
         if (!Array.isArray(item.items)) continue;
-        item.items = item.items.filter(child => child && typeof child.title === "string" && safeShortcutNavigationUrl(child.url)).map(child => ({
+        item.items = item.items.filter(child => child && typeof child.id === "string" && child.id && typeof child.title === "string").map(child => ({
           ...child,
           builtinIcon: globalThis.__mosaicsyncBuiltinIcons?.isValid?.(child.builtinIcon) ? child.builtinIcon : "",
           colorTag: COLOR_TAGS.has(child.colorTag) ? child.colorTag : "",
@@ -228,9 +220,6 @@
       }
     }
     const hasShortcuts = byPosition.size > 0;
-    // The manifest is a visual acceleration cache only. Until newtab.js verifies
-    // or replaces it against authoritative storage.local state, cached shortcuts
-    // and the cached empty-state controls must not be actionable.
     grid.inert = true;
     emptyState.inert = true;
     grid.replaceChildren(fragment);

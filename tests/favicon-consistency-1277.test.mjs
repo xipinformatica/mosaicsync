@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -82,7 +83,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.7 ${browser} manual chooser distinguishes page inspection failure`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const discover = extractFunction(source, "discoverFaviconChoicesForUrl");
     const helpers = ["faviconChoiceResultChars", "cloneFaviconChoiceResult", "readCachedFaviconChoices", "rememberFaviconChoices"]
       .map(name => extractFunction(source, name)).join("\n");
@@ -109,7 +110,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.27.7 ${browser} production page-icon scanner detects MosaicSync-style inline SVG and PNG declarations`, async () => {
-    const source = fs.readFileSync(`dist/${browser}/background/background.js`, "utf8");
+    const source = readBackgroundSource(browser);
     const html = fs.readFileSync("fixtures/mosaicsync-inline-favicons.html", "utf8");
     const code = [extractFunction(source, "htmlAttribute"), extractFunction(source, "discoverPageIconInfo")].join("\n");
     const context = {

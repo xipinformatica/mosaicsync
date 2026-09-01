@@ -1,3 +1,4 @@
+import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -107,7 +108,7 @@ test("1.24.14m cross-Space transactions do not create a competing generic outbou
 
 for (const browser of ["firefox","chrome"]) {
   test(`${browser}: 1.24.14m production snapshot decoder is wired to the decompression ceiling`, () => {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const start=src.indexOf("async function decodeDeviceSnapshotData");
     assert.ok(start>=0);
     const block=src.slice(start,src.indexOf("\n}\n",start)+3);
@@ -132,7 +133,7 @@ function extractFunction(src, name) {
 
 for (const browser of ["firefox","chrome"]) {
   test(`${browser}: 1.24.14m failed outbound publication retains its durable local mutation for retry`, async () => {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const pending={journalId:"j1",before:{a:1},after:{a:2}};
     let fail=true, clears=0, pushes=0;
     const context={
@@ -150,7 +151,7 @@ for (const browser of ["firefox","chrome"]) {
   });
 
   test(`${browser}: 1.24.14m Sync watch retries dirty local work before remote-revision short-circuit`, () => {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const block=extractFunction(src,"reconcileIfNewCommit");
     const retry=block.indexOf("retryPendingLocalSyncMutation");
     const remote=block.indexOf("browser.storage.sync.get(null)");
@@ -158,7 +159,7 @@ for (const browser of ["firefox","chrome"]) {
   });
 
   test(`${browser}: 1.24.14m legacy pre-Spaces backup is retired only by post-migration maintenance`, () => {
-    const src=fs.readFileSync(`dist/${browser}/background/background.js`,"utf8");
+    const src=readBackgroundSource(browser);
     const block=extractFunction(src,"runOneTimeLegacyMaintenance");
     assert.match(block,/LOCAL_PRE_SPACES_BACKUP_KEY/);
     assert.match(block,/LOCAL_MAINTENANCE_MIGRATIONS_KEY\]: 2/);
