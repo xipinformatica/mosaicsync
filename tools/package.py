@@ -150,8 +150,7 @@ def package_size_report(paths: dict[str, Path], version: str) -> Path:
 def verify_release_identity(version: str) -> None:
     checks = {
         ROOT / "src" / "shared" / "core" / "constants.js": rf'export const VERSION = "{re.escape(version)}";',
-        ROOT / "src" / "firefox" / "newtab" / "newtab.html": rf'MosaicSync · {re.escape(version)}',
-        ROOT / "src" / "chrome" / "newtab" / "newtab.html": rf'MosaicSync · {re.escape(version)}',
+        ROOT / "src" / "shared" / "newtab" / "newtab.html": rf'MosaicSync · {re.escape(version)}',
         ROOT / "README.md": rf'Current source release: {re.escape(version)}',
         ROOT / "README-DEVELOPMENT.md": rf'Current release: {re.escape(version)}',
     }

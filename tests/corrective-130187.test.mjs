@@ -214,7 +214,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.7 ${browser} first-frame FV heading cannot expose static English before localization`, () => {
-    const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, "utf8");
+    const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
     const css = fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8");
     const js = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
     assert.match(html, /frequent-sites-heading frequent-sites-heading-first-paint-pending/);

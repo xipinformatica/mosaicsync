@@ -162,3 +162,11 @@ Firefox and Chromium now execute the same canonical `background/background-core.
 Shared ownership includes Sync publication/reconciliation, Recovery snapshots, metadata/state transitions, persistence orchestration, device attribution, alarms, mutation queues and favicon-recovery policy. Browser adapters may acquire native favicon data or interpret browser-specific permissions/protected pages, but they do not own Sync/Recovery algorithms.
 
 This boundary is structural: new shared background behavior belongs in the shared core. Browser overlays must not grow parallel implementations of canonical semantics. Step 2 first-paint/cache ownership remains frozen unless a demonstrated defect requires reopening it.
+## Step 3.2 browser-boundary consolidation (1.30.18.17)
+
+The remaining safe cross-browser duplication is now source-owned centrally rather than maintained as parallel Firefox/Chromium copies. The tiny background entrypoint and New Tab DOM live under `src/shared`; Chrome's required classic `browser` shim is inserted deterministically by the build into the same runtime position it occupied before. Manifest `_locales` wrappers are generated from one reviewed 33-locale registry with explicit Firefox/Chrome descriptions.
+
+Optional Top Sites and HTTP(S) permission policy is shared in `core/permissions.js`. Only the real capability difference remains behind `permission-platform.js`: Firefox's gesture-bound data-collection consent/revoke versus Chromium's no-op Sync-permission contract. Browser manifests, favicon/background adapters, Chromium's browser shim, platform adapter and localization-brand adapter remain separate because they encode actual browser/store behavior.
+
+The Step 3 boundary is now: shared policy and browser-neutral presentation shells by default; browser overlays only for manifest/store shape or APIs/semantics that genuinely differ. Step 2 first-paint/cache/session ownership remains frozen.
+

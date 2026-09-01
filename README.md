@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.16**
+**Current source release: 1.30.18.17**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.16** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.17** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.16 is a narrow **Step 3 boundary-hardening** follow-up to the accepted 1.30.18.15 shared-background baseline. It adds production-runtime regressions that execute the real Firefox open-tab favicon adapter, the real `tabs.onUpdated` learning chain and Chromium protected Chrome Web Store `_favicon` behavior, including expected-navigation gating, sentinel rejection and device-local/Sync privacy invariants. The new tests pass against the existing production favicon implementation, so no favicon production logic, schema, permission, CSP, Step-2 ownership or product behavior is changed.
+1.30.18.17 completes **Step 3.2 browser-boundary consolidation**. The identical background entrypoint and New Tab DOM now have one shared source owner; manifest locale wrappers are generated deterministically from one reviewed 33-locale registry; and common Top Sites/web-origin permission policy is shared while Firefox data-collection consent and Chromium's no-op Sync-permission behavior remain isolated behind a tiny permission capability module. The generated New Tab shell/locales/background entrypoint were proven byte-for-byte identical to the live 1.30.18.16 runtime before the version bump, and the permission seam is covered behaviorally on both browsers. No product feature, state/meta/Sync/Recovery schema, permission grant, CSP, Step-2 ownership, privacy boundary or UI behavior changes.
+
+1.30.18.16 is the Step 3 adapter-boundary hardening release that added production-runtime regressions around Firefox open-tab/tab-update favicon learning and Chromium protected `_favicon` behavior.
 
 1.30.18.14 completes **Step 2.3 and Step 2** of the staged maintainability program. The persistent `localStorage` render manifest is now a presentation-only cold-start accelerator instead of a second structural/profile representation: it may retain an inert Personal-grid visual projection, tiny artwork previews and Space labels, but no shortcut URLs, mutation clocks, Frequently Visited state or duplicated semantic First-Paint Contract. Work shortcut structure is no longer persisted in that cache at all. Warm structural truth remains owned by `storage.session`, authoritative navigation is installed only after validated state arrives, and cache adoption compares visual equivalence rather than revision clocks. The disposable render-manifest schema advances from v4 to v5; profile/state/meta/Sync/Recovery schemas, permissions, CSP, product features and backend-free operation are unchanged.
 

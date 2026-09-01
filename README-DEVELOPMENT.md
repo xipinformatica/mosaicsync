@@ -1,9 +1,17 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.16.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.17.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.17 Step 3.2 browser-boundary consolidation policy
+
+- Canonical browser-neutral shells have one source owner: `src/shared/background/background.js` and `src/shared/newtab/newtab.html`. Chromium's required classic `browser-shim.js` line is injected deterministically at build time before other New Tab bootstrap scripts; Firefox receives no extra first-paint script.
+- Manifest `_locales` wrappers are generated deterministically from `src/shared/manifest-locales.json`, which stores one shared action label and explicit reviewed Firefox/Chrome descriptions for each of the 33 supported manifest locales.
+- Common optional Top Sites / HTTP(S) permission policy lives in `src/shared/core/permissions.js`; only genuine browser capability differences live in `permission-platform.js` (Firefox data-collection consent/revoke vs Chromium's no-op Sync-permission contract and browser-specific unavailable message).
+- Firefox/Chromium manifests, favicon/background adapters, Chrome's browser shim, Chrome platform adapter and Chrome localization-brand adapter remain separate because they represent real capability/store/runtime differences. Do not merge them for line-count symmetry.
+- Step 2 first-paint/cache/session ownership remains frozen. No feature, schema, permission-set, CSP, privacy, Sync/Recovery or UI behavior change belongs in this release.
 
 ## 1.30.18.16 Step 3 adapter-boundary hardening policy
 

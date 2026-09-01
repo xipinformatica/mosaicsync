@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.16",
-      "rawBytes": 2152061,
-      "deflatedBytes": 633395,
+      "version": "1.30.18.17",
+      "rawBytes": 2152741,
+      "deflatedBytes": 633926,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1690,
-          "deflatedBytes": 658
+          "deflatedBytes": 659
         },
         "manifest-localization": {
           "files": 33,
@@ -57,9 +57,9 @@
           "deflatedBytes": 43620
         },
         "shared-core": {
-          "files": 23,
-          "rawBytes": 270396,
-          "deflatedBytes": 76298
+          "files": 24,
+          "rawBytes": 271076,
+          "deflatedBytes": 76828
         },
         "wallpapers": {
           "files": 29,
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.16",
-      "rawBytes": 2173798,
-      "deflatedBytes": 648042,
+      "version": "1.30.18.17",
+      "rawBytes": 2174385,
+      "deflatedBytes": 648441,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1370,
-          "deflatedBytes": 555
+          "deflatedBytes": 556
         },
         "manifest-localization": {
           "files": 33,
@@ -311,9 +311,9 @@
           "deflatedBytes": 43620
         },
         "shared-core": {
-          "files": 24,
-          "rawBytes": 281460,
-          "deflatedBytes": 79847
+          "files": 25,
+          "rawBytes": 282047,
+          "deflatedBytes": 80245
         },
         "wallpapers": {
           "files": 29,

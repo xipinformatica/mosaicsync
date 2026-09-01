@@ -6,8 +6,9 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 const core = fs.readFileSync("src/shared/background/background-core.js", "utf8");
-const firefoxEntry = fs.readFileSync("src/firefox/background/background.js", "utf8");
-const chromeEntry = fs.readFileSync("src/chrome/background/background.js", "utf8");
+const sharedEntry = fs.readFileSync("src/shared/background/background.js", "utf8");
+const firefoxEntry = sharedEntry;
+const chromeEntry = sharedEntry;
 const firefoxAdapter = fs.readFileSync("src/firefox/background/background-adapter.js", "utf8");
 const chromeAdapter = fs.readFileSync("src/chrome/background/background-adapter.js", "utf8");
 

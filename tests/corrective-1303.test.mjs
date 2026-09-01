@@ -62,7 +62,7 @@ const sharedNewtab = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.3 ${browser} Settings uses a fixed ARIA dialog surface instead of a native modeless dialog`, () => {
-    const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, "utf8");
+    const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
     assert.match(html, /<aside\s+id="settingsDialog"[^>]*\brole="dialog"[^>]*\baria-modal="false"[^>]*\baria-labelledby="settingsDialogTitle"[^>]*\bhidden\b/i);
     assert.doesNotMatch(html, /<dialog\s+id="settingsDialog"/i, "the compositor-sensitive Settings surface must not be native <dialog>");
     assert.match(html, /id="settingsButton"[^>]*aria-controls="settingsDialog"[^>]*aria-expanded="false"/i);

@@ -104,7 +104,7 @@ test("1.30.18.13 Welcome names the device before enabling Sync and exposes the f
 test("1.30.18.13 Settings uses source dataset time, separate receipt time, and initializes fallback naming after first paint", () => {
   const js = fs.readFileSync(resolve(root, "src/shared/newtab/newtab.js"), "utf8");
   for (const browserName of ["firefox", "chrome"]) {
-    const html = fs.readFileSync(resolve(root, `src/${browserName}/newtab/newtab.html`), "utf8");
+    const html = fs.readFileSync(resolve(root, "src/shared/newtab/newtab.html"), "utf8");
     for (const id of ["settingsDeviceNameText", "editDeviceNameButton", "deviceNameEditor", "settingsDeviceNameInput", "saveDeviceNameButton", "syncSourceText", "syncSourceDetail"]) {
       assert.match(html, new RegExp(`id="${id}"`), `${browserName}:${id}`);
     }

@@ -34,6 +34,53 @@ async function fileHashes(dir) {
   return hashes;
 }
 
+async function readManifestLocaleRegistry() {
+  const path = resolve(sharedSource, "manifest-locales.json");
+  const registry = JSON.parse(await readFile(path, "utf8"));
+  if (!registry || typeof registry !== "object" || Array.isArray(registry)) {
+    throw new Error("Invalid manifest locale registry.");
+  }
+  const localeIds = Object.keys(registry).sort();
+  if (!localeIds.length) throw new Error("Manifest locale registry is empty.");
+  for (const locale of localeIds) {
+    const entry = registry[locale];
+    for (const key of ["actionOpenHome", "firefoxDescription", "chromeDescription"]) {
+      if (!entry || typeof entry[key] !== "string" || !entry[key].trim()) {
+        throw new Error(`Invalid manifest locale ${locale}:${key}`);
+      }
+    }
+  }
+  return registry;
+}
+
+async function writeManifestLocales(target, browser, registry) {
+  const localeRoot = join(target, "_locales");
+  await rm(localeRoot, { recursive: true, force: true });
+  for (const locale of Object.keys(registry).sort()) {
+    const entry = registry[locale];
+    const messages = {
+      extensionDescription: { message: browser === "chrome" ? entry.chromeDescription : entry.firefoxDescription },
+      actionOpenHome: { message: entry.actionOpenHome }
+    };
+    const dir = join(localeRoot, locale);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "messages.json"), `${JSON.stringify(messages, null, 2)}\n`, "utf8");
+  }
+}
+
+async function prepareBrowserShell(target, browser) {
+  // The reviewed New Tab DOM is shared. Chromium needs exactly one classic shim
+  // before any bootstrap script so shared code can continue using `browser`.
+  if (browser !== "chrome") return;
+  const path = join(target, "newtab/newtab.html");
+  const source = await readFile(path, "utf8");
+  const marker = '  <link rel="stylesheet" href="newtab-critical.css">\n';
+  const shim = '  <script src="../core/browser-shim.js"></script>\n';
+  if (!source.includes(marker)) throw new Error("New Tab critical-style marker missing for Chrome shim injection.");
+  if (source.includes(shim)) throw new Error("Canonical New Tab source must not contain the Chrome browser shim.");
+  await writeFile(path, source.replace(marker, marker + shim), "utf8");
+}
+
 async function readSourceLocaleCatalogs() {
   const localeDir = resolve(sharedSource, "core/i18n-locales");
   const files = (await readdir(localeDir)).filter(name => name.endsWith(".js")).sort();
@@ -113,8 +160,9 @@ async function optimizeRuntimeData(target, localeData, pslRuntime) {
   }
 }
 
-const [localeData, pslSource] = await Promise.all([
+const [localeData, manifestLocaleRegistry, pslSource] = await Promise.all([
   readSourceLocaleCatalogs(),
+  readManifestLocaleRegistry(),
   readFile(resolve(sharedSource, "core/public_suffix_list.dat"), "utf8")
 ]);
 const pslRuntime = runtimePublicSuffixList(pslSource);
@@ -125,6 +173,10 @@ for (const browser of ["firefox", "chrome"]) {
   await mkdir(target, { recursive: true });
   await cp(sharedSource, target, { recursive: true });
   await cp(resolve(root, `src/${browser}`), target, { recursive: true, force: true });
+  await prepareBrowserShell(target, browser);
+  await writeManifestLocales(target, browser, manifestLocaleRegistry);
+  // Source-only registry: generated manifest locale wrappers live under `_locales`.
+  await rm(join(target, "manifest-locales.json"), { force: true });
   // Runtime owns only the reviewed split critical + secondary pair. The obsolete
   // monolithic newtab.css source was retired in 1.30 after historical tests were
   // migrated to the actual runtime stylesheets. Keep a defensive remove here so
@@ -142,5 +194,5 @@ for (const browser of ["firefox","chrome"]) {
   const manifest=JSON.parse(await readFile(join(target,"manifest.json"),"utf8"));
   manifests[browser]={version:manifest.version, files:await fileHashes(target)};
 }
-await writeFile(resolve(root,"build-manifest.json"), `${JSON.stringify({schemaVersion:1,generatedFrom:"shared source + browser overlays + deterministic runtime data compaction",browsers:manifests},null,2)}\n`);
+await writeFile(resolve(root,"build-manifest.json"), `${JSON.stringify({schemaVersion:1,generatedFrom:"canonical shared source + browser capability overlays + deterministic generated browser shells/locales/runtime data",browsers:manifests},null,2)}\n`);
 console.log("Built dist/firefox and dist/chrome with deterministic PSL/locale runtime compaction; wrote SHA-256 build-manifest.json.");

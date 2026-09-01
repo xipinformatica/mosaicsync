@@ -38,7 +38,7 @@ test("1.30.4 Settings has one scroll owner: the outer Settings surface", async (
 
 test("1.30.4 changes scroll ownership without changing the 1.30.3 Settings container experiment", async () => {
   for (const browser of ["firefox", "chrome"]) {
-    const html = await text(`src/${browser}/newtab/newtab.html`);
+    const html = await text("src/shared/newtab/newtab.html");
     assert.match(html, /<aside id="settingsDialog"[^>]*role="dialog"[^>]*>/);
     assert.doesNotMatch(html, /<dialog id="settingsDialog"/);
     assert.match(html, /<form id="settingsForm" class="dialog-card settings-card">/);

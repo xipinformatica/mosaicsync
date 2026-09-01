@@ -98,7 +98,7 @@ test("1.26.17.5 synchronous persistent first-paint has no navigation href sink",
     "authoritative interaction setup must retain the shared fail-closed URL validator");
 
   for (const browser of ["firefox", "chrome"]) {
-    const html = await readFile(resolve(`src/${browser}/newtab/newtab.html`), "utf8");
+    const html = await readFile(resolve("src/shared/newtab/newtab.html"), "utf8");
     assert.ok(html.includes('<script src="render-bootstrap.js"></script>'), `${browser}: visual bootstrap must remain present`);
     assert.equal(html.includes('<script src="../core/http-url-safety.js"></script>'), false,
       `${browser}: URL safety helper must no longer be loaded solely for pre-authority visual cache paint`);

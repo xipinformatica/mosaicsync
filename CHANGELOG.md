@@ -1,3 +1,12 @@
+## 1.30.18.17
+
+- Completes Step 3.2 browser-boundary consolidation without adding product features or changing browser permissions, CSP, schemas, privacy boundaries or UI behavior.
+- Moves the identical tiny background entrypoint and the browser-neutral New Tab DOM to single canonical shared source owners; Chrome's existing `browser` shim is injected deterministically into its generated shell while Firefox receives no extra startup script.
+- Replaces parallel Firefox/Chrome manifest `_locales` source trees with one reviewed 33-locale registry that deterministically generates the same browser-specific extension descriptions and shared action label.
+- Shares Top Sites and optional HTTP(S) permission policy in one module while isolating only the genuine capability difference: Firefox data-collection consent/revoke versus Chromium's existing no-op Sync-permission contract.
+- Adds Step 3.2 ownership and capability regressions, migrates historical source-contract tests to the new canonical owners, and retains the 1.30.18.16 real favicon-adapter regressions.
+- Before the version bump, canonical New Tab/background-entrypoint/manifest-locale generation was verified byte-for-byte against the live 1.30.18.16 runtime; Firefox/Chromium manifests, favicon adapters and Chrome platform/i18n adapters remain intentionally browser-specific.
+
 ## 1.30.18.16
 
 - Hardens the new shared Firefox/Chromium background boundary with production-runtime behavioral regressions; no new product feature is introduced.

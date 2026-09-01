@@ -20,7 +20,7 @@ function extractFunction(source, name) {
 
 for (const browser of ['firefox', 'chrome']) {
   test(`1.26.11 ${browser} groups Frequently visited dependent controls behind one hidden container`, () => {
-    const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, 'utf8');
+    const html = fs.readFileSync("src/shared/newtab/newtab.html", 'utf8');
     const wrapperStart = html.indexOf('<div id="frequentOptions" class="frequent-options" hidden>');
     const wrapperEnd = html.indexOf('</div>', wrapperStart);
     assert.ok(wrapperStart >= 0, 'dependent options wrapper must exist and start hidden');

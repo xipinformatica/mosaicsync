@@ -179,7 +179,7 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.18.2 ${browser} launcher contains localized one-click permission recovery surface`, () => {
-    const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, "utf8");
+    const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
     const src = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
     assert.match(html, /id="frequentPermissionRecovery"[^>]*hidden/);
     assert.match(html, /id="frequentPermissionRecoveryButton"[^>]*type="button"/);

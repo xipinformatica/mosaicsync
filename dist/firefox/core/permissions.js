@@ -4,35 +4,24 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 /*
- * Runtime permission helpers. Permission requests intentionally return their promise
- * immediately so callers can invoke them directly inside a user-gesture handler.
+ * Shared runtime permission policy. Gesture-sensitive browser capabilities
+ * remain in permission-platform.js and are re-exported without adding an
+ * asynchronous hop.
  */
-import { SYNC_DATA_COLLECTION_TYPES } from "./constants.js";
+import {
+  TOP_SITES_REQUEST_UNAVAILABLE_MESSAGE,
+  removeSyncConsent,
+  requestSyncConsentFromGesture
+} from "./permission-platform.js";
+
+export { removeSyncConsent, requestSyncConsentFromGesture };
 
 const TOP_SITES_PERMISSION = "topSites";
 const WEB_ORIGINS = Object.freeze(["http://*/*", "https://*/*"]);
 
-export function requestSyncConsentFromGesture() {
-  if (!browser.permissions?.request) {
-    return Promise.reject(new Error("Firefox 140 or newer is required for MosaicSync's built-in Sync consent."));
-  }
-  // Keep this call synchronous with the user's click. Firefox only permits
-  // permissions.request() while a user-gesture token is still active.
-  return browser.permissions.request({ data_collection: [...SYNC_DATA_COLLECTION_TYPES] });
-}
-
-export async function removeSyncConsent() {
-  if (!browser.permissions?.remove) return false;
-  try {
-    return await browser.permissions.remove({ data_collection: [...SYNC_DATA_COLLECTION_TYPES] });
-  } catch {
-    return false;
-  }
-}
-
 export function requestTopSitesPermissionFromGesture() {
   if (!browser.permissions?.request) {
-    return Promise.reject(new Error("Firefox could not request access to its New Tab shortcuts."));
+    return Promise.reject(new Error(TOP_SITES_REQUEST_UNAVAILABLE_MESSAGE));
   }
   return browser.permissions.request({ permissions: [TOP_SITES_PERMISSION] });
 }
@@ -73,7 +62,6 @@ export async function hasWebAccess() {
   }
 }
 
-
 export async function cleanupLegacyWebOriginPermissions() {
   if (!browser.permissions?.getAll || !browser.permissions?.remove) return 0;
   if (!(await hasWebAccess())) return 0;
@@ -81,7 +69,7 @@ export async function cleanupLegacyWebOriginPermissions() {
   try {
     const granted = await browser.permissions.getAll();
     const origins = Array.isArray(granted?.origins) ? granted.origins : [];
-    // Only edit the permission set if Firefox exposes the two current global
+    // Only edit the permission set if the browser exposes the two current global
     // grants explicitly. This is intentionally more conservative than merely
     // relying on contains(): a browser-normalized broader pattern must never
     // be risked just to tidy old UI entries.
@@ -103,4 +91,3 @@ export async function cleanupLegacyWebOriginPermissions() {
     return 0;
   }
 }
-

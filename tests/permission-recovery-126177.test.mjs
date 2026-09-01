@@ -100,7 +100,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.26.17.7 ${browser} permission recovery is user-gesture driven and permission events self-heal the feature`, () => {
     const src = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
-    const html = fs.readFileSync(`src/${browser}/newtab/newtab.html`, "utf8");
+    const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
     assert.match(html, /id="frequentlyVisitedPermissionButton"[^>]*type="button"[^>]*hidden/);
     assert.match(src, /function requestFrequentlyVisitedPermissionRecoveryFromGesture\(sourceButton\)[\s\S]*?const permissionPromise = requestTopSitesPermissionFromGesture\(\);[\s\S]*?void \(async \(\) => \{/);
     assert.match(src, /frequentlyVisitedPermissionButton\?\.addEventListener\("click", \(\) => \{[\s\S]*?requestFrequentlyVisitedPermissionRecoveryFromGesture\(frequentlyVisitedPermissionButton\)/);

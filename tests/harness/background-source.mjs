@@ -10,7 +10,7 @@ export function readBackgroundSource(browser, { built = true } = {}) {
     : "src/shared/background/background-core.js";
   const entryPath = built
     ? `dist/${name}/background/background.js`
-    : `src/${name}/background/background.js`;
+    : "src/shared/background/background.js";
   // Platform source first preserves historical extraction tests for browser-only
   // primitives; canonical shared semantics follow from the one background core.
   return [adapterPath, corePath, entryPath]

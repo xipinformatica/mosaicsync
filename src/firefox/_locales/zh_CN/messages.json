@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "注重隐私的 Firefox 新标签页，支持文件夹、自定义和可选 Firefox Sync。MosaicSync 零遥测。"
-  },
-  "actionOpenHome": {
-    "message": "打开 MosaicSync"
-  }
-}

@@ -4,8 +4,7 @@ import fs from "node:fs";
 
 const targets = [
   ["Welcome", "src/shared/welcome/welcome.html"],
-  ["Firefox New Tab", "src/firefox/newtab/newtab.html"],
-  ["Chrome New Tab", "src/chrome/newtab/newtab.html"],
+  ["Shared New Tab", "src/shared/newtab/newtab.html"],
 ];
 
 const privacy = "https://xipinformatica.cat/mosaicsync/#privacy";
