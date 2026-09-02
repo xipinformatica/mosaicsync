@@ -75,7 +75,7 @@ test("1.30.10 cache is worker-local, bounded to the retained device count, and c
     const end = source.indexOf("async function decodeDeviceSnapshotPayload", start);
     assert.ok(start >= 0 && end > start);
     const block = source.slice(start, end);
-    const fingerprintAt = block.indexOf("value.dataFingerprint !== fnv1a(data)");
+    const fingerprintAt = block.indexOf("value.dataFingerprint !== deviceSnapshotDataFingerprint(data)");
     const cacheAt = block.indexOf("readDeviceSnapshotDecodeCache(value)");
     const decodeAt = block.indexOf("decodeDeviceSnapshotData(value, data)");
     assert.ok(fingerprintAt >= 0 && cacheAt > fingerprintAt && decodeAt > cacheAt,

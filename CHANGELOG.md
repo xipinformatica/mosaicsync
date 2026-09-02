@@ -1,3 +1,28 @@
+## 1.30.18.21
+
+- Advances Step 4 with a narrow Recovery-generation storage/publication boundary in `src/shared/background/recovery-generation-store.js`; the existing format module remains the sole wire-format/validation owner.
+- Moves browser-neutral immutable-generation mechanics out of the shared orchestrator: complete Personal+Work payload/chunk assembly, verified-generation reads, own-generation selection, chunk-first/root-last commit with failed-chunk rollback, and post-write verification.
+- Keeps every policy decision in the proven shared core: publication trust, authoritative record selection, normal Sync merging, quota-capacity preparation, fallback retention, retirement, stale/orphan GC, mutation journals and catastrophic-loss quarantine/restart behavior are unchanged.
+- Replaces the duplicated `96`-chunk invariant with one named constant shared by encode and decode paths, without changing the limit, keys, schema versions or payload formats.
+- Adds direct positive and negative store-boundary tests plus generated Firefox/Chrome failure-path coverage. A failed authoritative-root write still removes only the new generation's chunks and preserves the previous verified complete fallback.
+- No product feature, UI, permission, CSP, telemetry/backend, first-paint/session ownership, browser-history privacy rule, automatic-favicon Sync policy or browser capability change.
+
+## 1.30.18.20
+
+- Begins Step 4 production refinement with a deliberately narrow ownership extraction: immutable Recovery-generation representation/validation now lives in `src/shared/background/recovery-generation-format.js` instead of being embedded inside the shared background orchestrator.
+- Moves only browser-neutral wire-format concerns: legacy/immutable generation key derivation, manifest/chunk classification, bounded gzip encode/decode, complete Personal+Work metadata validation, previous-generation fallback descriptors, generation recency descriptors and the performance-only decode cache.
+- Leaves high-risk orchestration in the proven shared core for this release: `storage.sync` reads/writes, chunk-first/root-last publication, quota retirement, verified fallback preservation, GC, Sync merge policy, pending mutation journals and catastrophic continuity/quarantine/restart logic are unchanged.
+- Adds direct format-boundary regressions proving modern and legacy key compatibility, fail-closed torn-generation behavior even after the decode cache is warm, browser-identical generated format code, and absence of browser/storage/continuity policy from the new module. Historical Recovery source-contract tests now follow the real generated module graph rather than assuming one monolithic background file.
+- No state/meta/Sync/Recovery schema, persisted key, manifest permission, CSP, browser privacy boundary, Step-1/2/3 ownership, automatic-favicon Sync policy, telemetry/backend or product/UI feature change.
+
+## 1.30.18.19
+
+- Finishes the audited Frequently Visited first-frame continuity contract: the geometry reservation is now genuinely paint-hidden, sparse or empty live results retain the configured responsive row capacity with invisible/non-interactive layout cells, and missing-permission recovery overlays that existing capacity instead of introducing a new flow row.
+- Preserves the Step-2 privacy boundary while stabilizing layout: no browser-history-derived site, title, URL, favicon or actual live-card cardinality is added to the persistent render manifest, Sync, Recovery or profile state. Real FV cards keep detached favicon preparation and decode/fallback settlement before visible atomic commit; disabled FV still occupies zero startup space.
+- Adds generated-production-runtime Recovery characterization on Firefox and Chromium proving that a durable pending local Sync mutation remains intact and cannot replay while catastrophic remote namespace loss is quarantined, then replays only after Recovery reconstructs and verifies authoritative remote state.
+- Reuses and preserves the existing generated-runtime guards for Recovery worker restart grace, failed immutable-generation root commits, invalid snapshot/decompression outcomes and quota-aware verified fallback preservation instead of rewriting already-covered behavior.
+- Recovery/Sync production logic and schemas, shared background core/adapters, permissions, CSP, browser privacy boundaries, automatic-favicon Sync policy and product features are unchanged. This release is the final pre-Step-4 hardening gate; Steps 1–3 are frozen after certification.
+
 ## 1.30.18.18
 
 - Fixes a first-frame New Tab layout shift where the shortcut grid could initially paint roughly one row too high and then move down when Frequently Visited became visible.

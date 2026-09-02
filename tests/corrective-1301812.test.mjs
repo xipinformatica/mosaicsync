@@ -66,11 +66,15 @@ class FakeNode {
     this.hidden = false;
     this.inert = false;
     this.dataset = {};
-    this.classList = { add() {}, remove() {}, toggle() {} };
+    this.classList = { add() {}, remove() {}, toggle() {}, contains() { return false; } };
+    this.style = {};
+    this.attributes = new Map();
   }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) { this.children = nodes.flatMap(node => node?.isFragment ? node.children : [node]).filter(Boolean); }
-  setAttribute() {}
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
+  querySelector() { return null; }
   addEventListener() {}
   replaceWith(node) { this.replacedWith = node; }
 }
@@ -104,6 +108,7 @@ test("1.30.18.12 slow FV decode cannot resurrect a strip after disable/empty ren
   const context = {
     frequentSitesSection: section,
     frequentSitesList: list,
+    frequentPermissionRecovery: null,
     frequentlyVisitedEnabled: true,
     frequentlyVisitedCount: 5,
     frequentRenderCommitGeneration: 0,
@@ -119,7 +124,13 @@ test("1.30.18.12 slow FV decode cannot resurrect a strip after disable/empty ren
     Promise
   };
   vm.createContext(context);
-  vm.runInContext(`${extractBetween(source, "async function renderFrequentlyVisited", "function setFrequentlyVisitedOptionsVisibility")}; this.renderFrequentlyVisited = renderFrequentlyVisited;`, context);
+  vm.runInContext(`
+    ${extractFunction(source, "createFrequentLayoutPlaceholder")}
+    ${extractFunction(source, "appendFrequentLayoutPlaceholders")}
+    ${extractFunction(source, "resetFrequentPermissionOverlayStyles")}
+    ${extractBetween(source, "async function renderFrequentlyVisited", "function setFrequentlyVisitedOptionsVisibility")}
+    this.renderFrequentlyVisited = renderFrequentlyVisited;
+  `, context);
 
   const oldRender = context.renderFrequentlyVisited([{ title:"Example", url:"https://example.test/", favicon:"data:image/png;base64,AAAA" }]);
   await Promise.resolve();

@@ -19,6 +19,7 @@ class FakeNode {
     this.dataset = {};
     this.attributes = new Map();
     this.hidden = false;
+    this.style = {};
   }
   append(...nodes) { this.children.push(...nodes); }
   replaceChildren(...nodes) {

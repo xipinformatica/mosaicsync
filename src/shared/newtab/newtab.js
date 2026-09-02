@@ -1520,6 +1520,40 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return fallback;
   }
 
+  function createFrequentLayoutPlaceholder() {
+    const card = document.createElement("div");
+    card.className = "frequent-site-card frequent-site-layout-placeholder";
+    card.setAttribute("aria-hidden", "true");
+    card.style.visibility = "hidden";
+    card.style.pointerEvents = "none";
+    const heightAnchor = document.createElement("span");
+    heightAnchor.className = "frequent-site-fallback";
+    card.append(heightAnchor);
+    return card;
+  }
+
+  function appendFrequentLayoutPlaceholders(fragment, usedCount, capacity) {
+    const normalizedCapacity = [3, 5, 8, 10].includes(Number(capacity)) ? Number(capacity) : 5;
+    const normalizedUsed = Math.max(0, Math.min(normalizedCapacity, Number(usedCount) || 0));
+    for (let index = normalizedUsed; index < normalizedCapacity; index += 1) {
+      fragment.append(createFrequentLayoutPlaceholder());
+    }
+  }
+
+  function resetFrequentPermissionOverlayStyles() {
+    const heading = frequentSitesSection?.querySelector?.(".frequent-sites-heading");
+    if (heading?.style) heading.style.visibility = "";
+    if (frequentSitesList?.style) frequentSitesList.style.visibility = "";
+    if (frequentSitesSection?.style) frequentSitesSection.style.position = "";
+    if (frequentPermissionRecovery?.style) {
+      frequentPermissionRecovery.style.position = "";
+      frequentPermissionRecovery.style.left = "";
+      frequentPermissionRecovery.style.right = "";
+      frequentPermissionRecovery.style.top = "";
+      frequentPermissionRecovery.style.transform = "";
+    }
+  }
+
   async function settleFrequentIconBeforeCommit(icon) {
     try {
       if (typeof icon.decode === "function") {
@@ -1548,17 +1582,40 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const generation = typeof frequentRenderCommitGeneration === "number"
       ? ++frequentRenderCommitGeneration
       : 0;
-    const hidden = enabled !== true || list.length === 0;
-    if (hidden) {
+
+    if (enabled !== true) {
       frequentSitesList.replaceChildren();
-      if (frequentSitesSection.classList?.contains?.("frequent-sites-first-paint-reserved")) {
-        frequentSitesSection.classList.remove("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
-        frequentSitesSection.removeAttribute?.("aria-hidden");
-        delete document.documentElement.dataset.bootFrequentGeometry;
-      }
+      if (typeof resetFrequentPermissionOverlayStyles === "function") resetFrequentPermissionOverlayStyles();
+      frequentSitesSection.classList?.remove?.("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
+      frequentSitesSection.removeAttribute?.("aria-hidden");
+      if (frequentSitesSection.dataset) delete frequentSitesSection.dataset.frequentLayoutCapacity;
+      if (frequentSitesSection.style) frequentSitesSection.style.visibility = "";
+      delete document.documentElement.dataset.bootFrequentGeometry;
       frequentSitesSection.hidden = true;
       if (authoritative) {
         frequentSitesSection.inert = false;
+        delete document.documentElement.dataset.bootFrequent;
+      }
+      return true;
+    }
+
+    // Keep the configured capacity as the stable geometry owner for the life of
+    // this enabled strip. The actual browser-history cardinality remains
+    // session/live-only; invisible padding cells prevent a sparse result (or an
+    // empty result) from collapsing rows underneath an already-painted shortcut
+    // grid without persisting any history-derived count.
+    frequentSitesSection.dataset.frequentLayoutCapacity = String(visibleCount);
+    if (list.length === 0) {
+      const capacityFragment = document.createDocumentFragment();
+      appendFrequentLayoutPlaceholders(capacityFragment, 0, visibleCount);
+      frequentSitesList.replaceChildren(capacityFragment);
+      if (typeof resetFrequentPermissionOverlayStyles === "function") resetFrequentPermissionOverlayStyles();
+      frequentSitesSection.classList?.add?.("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
+      frequentSitesSection.setAttribute("aria-hidden", "true");
+      if (frequentSitesSection.style) frequentSitesSection.style.visibility = "hidden";
+      frequentSitesSection.hidden = false;
+      if (authoritative) {
+        frequentSitesSection.inert = true;
         delete document.documentElement.dataset.bootFrequent;
       }
       return true;
@@ -1623,19 +1680,20 @@ ${site.url}`;
       card.append(copy);
       fragment.append(card);
     }
+    appendFrequentLayoutPlaceholders(fragment, list.length, visibleCount);
 
-    // Keep the previous truthful strip (or the initially hidden section) until
-    // every favicon that will be visible has either decoded or been replaced by
-    // its fallback. The fragment is detached, so slow decoding can never expose
-    // an intermediate card with a missing icon.
+    // Keep the previous truthful strip (or the paint-hidden geometry reservation)
+    // until every favicon that will be visible has either decoded or been replaced
+    // by its fallback. Padding cells stay invisible and preserve the configured
+    // responsive row capacity after the real content commits.
     await Promise.all(decodeJobs);
     if (generation && generation !== frequentRenderCommitGeneration) return false;
     frequentSitesList.replaceChildren(fragment);
-    if (frequentSitesSection.classList?.contains?.("frequent-sites-first-paint-reserved")) {
-      frequentSitesSection.classList.remove("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
-      frequentSitesSection.removeAttribute?.("aria-hidden");
-      delete document.documentElement.dataset.bootFrequentGeometry;
-    }
+    if (typeof resetFrequentPermissionOverlayStyles === "function") resetFrequentPermissionOverlayStyles();
+    frequentSitesSection.classList.remove("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
+    frequentSitesSection.removeAttribute?.("aria-hidden");
+    if (frequentSitesSection.style) frequentSitesSection.style.visibility = "";
+    delete document.documentElement.dataset.bootFrequentGeometry;
     frequentSitesSection.hidden = false;
     if (authoritative) {
       frequentSitesSection.inert = false;
@@ -1667,17 +1725,36 @@ ${site.url}`;
     if (frequentPermissionRecoveryButton) frequentPermissionRecoveryButton.textContent = t("grantFrequentlyVisitedPermission");
     if (frequentPermissionRecovery) frequentPermissionRecovery.hidden = !show;
     frequentOptions?.classList?.toggle?.("permission-required", show);
-    if (!show || !frequentSitesSection) return;
-    // This state comes from a live browser.permissions.contains() result, so the
-    // cached Frequently Visited projection is no longer authoritative. Replace it
-    // with an explicit, user-actionable recovery state instead of silently hiding
-    // the enabled feature or requiring an OFF -> ON toggle dance.
-    frequentSitesList?.replaceChildren();
-    if (frequentSitesSection.classList?.contains?.("frequent-sites-first-paint-reserved")) {
-      frequentSitesSection.classList.remove("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
-      frequentSitesSection.removeAttribute?.("aria-hidden");
-      delete document.documentElement.dataset.bootFrequentGeometry;
+    if (!frequentSitesSection) return;
+
+    if (!show) {
+      if (typeof resetFrequentPermissionOverlayStyles === "function") resetFrequentPermissionOverlayStyles();
+      if (frequentSitesSection.classList?.contains?.("frequent-sites-first-paint-reserved")) {
+        frequentSitesSection.setAttribute("aria-hidden", "true");
+        if (frequentSitesSection.style) frequentSitesSection.style.visibility = "hidden";
+      }
+      return;
     }
+
+    // Permission recovery must not introduce a second flow row after the shortcut
+    // grid has painted. Reuse the already-reserved FV capacity: keep its heading
+    // and placeholder grid in layout but paint-hidden, then center the actionable
+    // recovery control over that fixed geometry.
+    const heading = frequentSitesSection.querySelector?.(".frequent-sites-heading");
+    if (heading?.style) heading.style.visibility = "hidden";
+    if (frequentSitesList?.style) frequentSitesList.style.visibility = "hidden";
+    if (frequentSitesSection.style) {
+      frequentSitesSection.style.visibility = "";
+      frequentSitesSection.style.position = "relative";
+    }
+    if (frequentPermissionRecovery?.style) {
+      frequentPermissionRecovery.style.position = "absolute";
+      frequentPermissionRecovery.style.left = "0";
+      frequentPermissionRecovery.style.right = "0";
+      frequentPermissionRecovery.style.top = "50%";
+      frequentPermissionRecovery.style.transform = "translateY(-50%)";
+    }
+    frequentSitesSection.removeAttribute?.("aria-hidden");
     frequentSitesSection.hidden = false;
     frequentSitesSection.inert = false;
     delete document.documentElement.dataset.bootFrequent;

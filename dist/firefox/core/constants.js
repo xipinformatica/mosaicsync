@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.18";
+export const VERSION = "1.30.18.21";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -94,6 +94,7 @@ export const SYNC_QUOTA_MAX_ITEMS = 512;
 export const SYNC_QUOTA_WARNING_FREE_BYTES = 25 * 1024;
 export const SYNC_QUOTA_CRITICAL_FREE_BYTES = 10 * 1024;
 export const DEVICE_SNAPSHOT_CHUNK_DATA_CHARS = 5600;
+export const DEVICE_SNAPSHOT_MAX_CHUNKS = 96;
 export const DEVICE_SNAPSHOT_RETENTION_MS = 180 * 24 * 60 * 60 * 1000;
 export const DEVICE_SNAPSHOT_CAP_MIN_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 export const DEVICE_SNAPSHOT_MAX_RECENT_DEVICES = 8;

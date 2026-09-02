@@ -64,13 +64,14 @@ for (const browser of ["firefox", "chrome"]) {
       document: { documentElement: root },
       hasTopSitesPermission: async () => false,
       // Deliberately omit requestTopSitesPermissionFromGesture: startup refresh must never prompt automatically.
-      renderFrequentlyVisited: sites => { rendered.push(sites); section.hidden = true; section.inert = false; },
+      renderFrequentlyVisited: sites => { rendered.push(sites); list.replaceChildren(); section.hidden = true; section.inert = false; },
       updateFrequentRenderSnapshot: () => {},
       t: key => key,
       console
     };
     vm.createContext(ctx);
     vm.runInContext(`
+      ${extract(src, "resetFrequentPermissionOverlayStyles")}
       ${extract(src, "setFrequentlyVisitedStatus")}
       ${extract(src, "setFrequentlyVisitedPermissionActionVisible")}
       ${extract(src, "setFrequentlyVisitedPermissionRecoveryVisible")}
@@ -127,6 +128,7 @@ for (const browser of ["firefox", "chrome"]) {
     };
     vm.createContext(ctx);
     vm.runInContext(`
+      ${extract(src, "resetFrequentPermissionOverlayStyles")}
       ${extract(src, "setFrequentlyVisitedStatus")}
       ${extract(src, "setFrequentlyVisitedPermissionActionVisible")}
       ${extract(src, "setFrequentlyVisitedPermissionRecoveryVisible")}

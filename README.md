@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.18**
+**Current source release: 1.30.18.21**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,15 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.18** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.21** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.18 is a focused **New Tab first-frame continuity corrective release**. When Frequently Visited is enabled, a privacy-safe synchronous geometry reservation now occupies the configured FV rows before the cached shortcut grid paints, so session/live FV hydration no longer pushes the shortcut grid downward after first paint. The reservation uses only the existing enabled/count compatibility hints; browser-history-derived sites, titles, URLs and favicons remain session/live-only. Real FV cards still decode off-DOM and replace the invisible reservation atomically. No Sync/Recovery/state schema, permission, CSP, background architecture, favicon policy or product-feature change.
+1.30.18.21 advances **Step 4 Recovery ownership refinement** with a browser-neutral generation store. Complete-profile payload/chunk assembly, verified generation reads, own-generation selection, immutable chunks-first/root-last commit with failed-chunk rollback and post-write verification now live in `src/shared/background/recovery-generation-store.js`. The shared core still owns publication trust, authoritative record selection, normal Sync merges, quota-aware retirement, fallback retention, GC, mutation journals and catastrophic-loss continuity. No Recovery/Sync schema, persisted key, permission, CSP, Step-1/2/3 ownership, browser-history privacy boundary or product feature changes.
+
+1.30.18.20 began Step 4 by isolating immutable Recovery-generation representation and validation in `recovery-generation-format.js` without moving storage orchestration.
+
+1.30.18.19 is the certified **pre-Step-4 hardening release** that closed the final Frequently Visited first-frame geometry gaps and added generated-runtime catastrophic-Sync characterization before Recovery production code was touched.
 
 1.30.18.17 completes **Step 3.2 browser-boundary consolidation**. The identical background entrypoint and New Tab DOM now have one shared source owner; manifest locale wrappers are generated deterministically from one reviewed 33-locale registry; and common Top Sites/web-origin permission policy is shared while Firefox data-collection consent and Chromium's no-op Sync-permission behavior remain isolated behind a tiny permission capability module. The generated New Tab shell/locales/background entrypoint were proven byte-for-byte identical to the live 1.30.18.16 runtime before the version bump, and the permission seam is covered behaviorally on both browsers. No product feature, state/meta/Sync/Recovery schema, permission grant, CSP, Step-2 ownership, privacy boundary or UI behavior changes.
 

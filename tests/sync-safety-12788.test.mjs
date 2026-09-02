@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.18");
+  assert.equal(VERSION, "1.30.18.21");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -45,11 +45,13 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(src, /version:\s*DEVICE_SNAPSHOT_SCHEMA_VERSION,[\s\S]*?records:[\s\S]*?settings:[\s\S]*?workRecords:[\s\S]*?workSettings/,
       "payload must remain v2-readable by 1.27.7 while adding Work");
     assert.match(src, /profileComplete\s*=\s*true|profileComplete:\s*true/);
-    assert.match(src, /previousProfile:\s*previousProfileDescriptor\(currentOwn\?\.root\)/,
+    assert.match(src, /previousRoot:\s*currentOwn\?\.root \|\| null/,
+      "the core must pass its currently verified root to publication preparation");
+    assert.match(src, /previousProfile:\s*previousProfileDescriptor\(previousRoot\)/,
       "the first immutable generation must retain a descriptor for the legacy complete fallback when available");
-    assert.match(src, /const rootKey = deviceSnapshotGenerationKey\(meta\.deviceId, commitId\)/,
+    assert.match(src, /const rootKey = deviceSnapshotGenerationKey\(deviceId, commitId\)/,
       "new complete-profile recovery publications must use commit-scoped immutable roots");
-    assert.match(src, /await writeSyncItems\(publication\.chunkWrites[\s\S]*?await writeSyncItems\(\{ \[publication\.rootKey\]: publication\.rootValue \}/,
+    assert.match(src, /await writeSyncItems\(chunkWrites[\s\S]*?await writeSyncItems\(\{ \[rootKey\]: rootValue \}/,
       "chunks must commit before the authoritative root");
     assert.doesNotMatch(src, /publishDeviceSnapshot\([\s\S]{0,200}?newRecords, newSettings/,
       "normal mutations must not fall back to the Personal-only publisher");

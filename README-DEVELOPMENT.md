@@ -1,9 +1,38 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.18.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.21.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+
+## 1.30.18.21 Step 4 Recovery-generation storage/publication boundary policy
+
+- `src/shared/background/recovery-generation-store.js` owns only browser-neutral generation storage mechanics: complete-profile wire-publication assembly behind the format seam, verified reads/own-generation selection, immutable chunk-first/root-last commit with new-chunk rollback, and post-write verification.
+- The store receives the existing Sync read/write/remove primitives from the core. It must not contain browser adapters, normal Sync merge policy, publication-trust decisions, capacity/retirement policy, GC timing, mutation journals, alarms or catastrophic-loss continuity.
+- `background-core.js` continues choosing authoritative Personal+Work records and tombstones before preparation. It also retains quota-aware capacity preparation, previous verified fallback policy, superseded-generation retirement, stale/orphan cleanup, profile merge revisions and all Recovery state-machine behavior.
+- The immutable publication invariant is mandatory: generation chunks commit first and the authoritative root commits last. Any failure before the root becomes authoritative rolls back only the new generation's chunks.
+- `DEVICE_SNAPSHOT_MAX_CHUNKS` is one shared encode/decode invariant with the historical value `96`; existing keys, schemas, payload v2 compatibility, legacy fixed-root/a-b reads and previous-generation fallback fields remain unchanged.
+- Generated Firefox and Chromium store modules must be byte-identical. Steps 1–3 remain frozen and no product behavior belongs in this phase.
+
+## 1.30.18.20 Step 4 Recovery-generation format boundary policy
+
+- Step 4 begins with ownership, not algorithm changes. `src/shared/background/recovery-generation-format.js` owns only the immutable Recovery-generation representation contract: modern/legacy keys, root/chunk classification, bounded gzip codec, manifest/chunk validation, profile-completeness metadata, previous-generation descriptors, generation ordering descriptors and its bounded performance-only decode cache.
+- The shared background core still owns `storage.sync` orchestration, publication, chunk-first/root-last commit ordering, capacity retirement, verified-fallback preservation, GC, normal Sync merge/reconcile policy, pending mutation journals and catastrophic continuity/quarantine/restart behavior. Do not move those simply to reduce line count.
+- The format module must remain browser-neutral and storage-policy-free: no `browser.storage`, alarms, continuity keys, quota writes or browser adapters. Generated Firefox and Chromium copies must be byte-identical.
+- Existing persisted key names, schema versions, payload version 2 compatibility, legacy fixed-root/a-b readers and previous-profile fallback semantics are frozen. A modern generation must fail closed on missing/mismatched chunks before any decode-cache hit can be trusted.
+- Step-1 first paint, Step-2 state/session/cache ownership and Step-3 browser capability boundaries remain frozen throughout Step 4 unless a demonstrated production defect requires otherwise.
+
+## 1.30.18.19 pre-Step-4 hardening policy
+
+- This release closes the final audited Frequently Visited first-frame geometry gaps and adds Recovery characterization only. It does **not** begin Recovery production refactoring.
+- While FV is enabled, configured responsive capacity owns stable startup geometry. The synchronous reservation and any live padding cells are paint-hidden with `visibility:hidden`/non-interactive styling while retaining normal FV card dimensions; no browser-history-derived cardinality, URL, title or favicon data is persisted to achieve this.
+- Sparse or empty live FV results may not collapse the configured startup row capacity underneath an already-painted shortcut grid. Missing Top Sites permission reuses that reserved capacity by overlaying the recovery control rather than adding a normal-flow row.
+- Real FV cards retain detached favicon preparation and decode/fallback settlement before their visible atomic commit. Disabled FV continues to own zero startup space.
+- The Recovery hardening in this release is characterization-only: generated Firefox and Chrome production backgrounds must prove that a durable pending local mutation is not replayed while catastrophic namespace loss is quarantined, and is replayed only after Recovery has reconstructed and verified authoritative remote state.
+- Existing generated-runtime coverage for worker restart grace, failed immutable root commit fallback, invalid snapshot/decompression outcomes and quota fallback preservation remains mandatory; do not duplicate tests merely to increase test count.
+- `background-core.js`, browser background adapters, Recovery/Sync/state schemas, persisted key formats, permissions, CSP, normal Sync semantics, Step-2 session/cache ownership and automatic-favicon Sync policy remain frozen.
+- After this release, Steps 1–3 are considered fully frozen. Step 4 may begin only behind the Recovery characterization suite; Step 4 must simplify ownership without changing Recovery's external safety semantics unless a demonstrated defect requires it.
 
 ## 1.30.18.18 Frequently Visited first-frame geometry policy
 
@@ -696,4 +725,3 @@ Mutation clocks use `nextMutationTime()` to advance beyond observed record/works
 Per-device Sync snapshots retain root-last double buffering. Before a chunked publish, only the inactive target slot may be cleared; after the new root commits, chunks not named by the new root are best-effort reclaimed. This prevents stale historical chunk tails/opposite slots from consuming Sync quota indefinitely while preserving the previous authoritative generation if the new root write fails. Snapshot gzip decoding also enforces the decompressed-byte ceiling incrementally while streaming.
 
 The live-state ID invariant is pinned explicitly: record IDs are unique within each Space, but the same logical ID may temporarily exist in both Personal and Work during destination-first cross-Space convergence. Hostile profile import remains the boundary that repairs ambiguous cross-Space duplicate IDs.
-

@@ -19,10 +19,10 @@ for (const browser of ["firefox", "chrome"]) {
     const versionMatch = constants.match(/export const VERSION = "([^"]+)";/);
     assert.ok(versionMatch, "runtime VERSION constant must be present");
     const runtimeVersion = versionMatch[1];
-    assert.equal(runtimeVersion, "1.30.18.18");
+    assert.equal(runtimeVersion, "1.30.18.21");
 
     const manifest = JSON.parse(await readFile(`dist/${browser}/manifest.json`, "utf8"));
-    assert.equal(manifest.version, "1.30.18.18", "technical manifest version must match 1.30");
+    assert.equal(manifest.version, "1.30.18.21", "technical manifest version must match 1.30");
     if (browser === "chrome") assert.equal(manifest.version_name, runtimeVersion, "Chrome version_name must match public VERSION");
     else assert.equal(Object.hasOwn(manifest, "version_name"), false, "Firefox must not receive Chrome-only version_name");
 
@@ -32,4 +32,3 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(html, /MosaicSync · 1\.25\.16(?:\.1)?(?:<|\s)/i, "stale 1.25.16.x Settings label must not return");
   });
 }
-

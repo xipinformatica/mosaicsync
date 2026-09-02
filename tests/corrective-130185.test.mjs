@@ -186,8 +186,20 @@ for (const browser of ["firefox", "chrome"]) {
         Object.assign(store, structuredClone(items));
       },
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
+      commitProfileDeviceSnapshotPublication: async value => {
+        Object.assign(store, structuredClone(value.chunkWrites));
+        try {
+          const error = new Error("injected root quota failure");
+          error.name = "QuotaExceededError";
+          throw error;
+        } catch (error) {
+          for (const key of Object.keys(value.chunkWrites)) delete store[key];
+          throw error;
+        }
+      },
       isQuotaError: error => error?.name === "QuotaExceededError",
       pruneSupersededDeviceSnapshotGenerations: async () => 0,
+      verifyProfileDeviceSnapshotPublication: async () => ({ snapshots: [], committedSnapshot: null }),
       mergeProfileDeviceSnapshots: () => null,
       profilePublicationTrusted: () => true,
       workspaceStateNormalized: value => value,

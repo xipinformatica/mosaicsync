@@ -28,6 +28,10 @@
       const card = document.createElement("div");
       card.classList.add("frequent-site-card", "frequent-site-first-paint-placeholder");
       card.setAttribute("aria-hidden", "true");
+      // aria-hidden protects the accessibility tree; visibility:hidden protects
+      // the actual first painted frame while preserving the exact card geometry.
+      card.style.visibility = "hidden";
+      card.style.pointerEvents = "none";
       const heightAnchor = document.createElement("span");
       heightAnchor.classList.add("frequent-site-fallback");
       card.append(heightAnchor);
@@ -36,6 +40,11 @@
 
     section.classList.add("frequent-sites-first-paint-reserved", "frequent-sites-heading-first-paint-pending");
     section.setAttribute("aria-hidden", "true");
+    section.dataset.frequentLayoutCapacity = String(count);
+    // Hide the complete reservation, not merely its heading. visibility:hidden
+    // retains layout, so normal FV tile chrome can never flash before the real
+    // detached/decode-before-commit fragment is ready.
+    section.style.visibility = "hidden";
     list.replaceChildren(fragment);
     section.hidden = false;
     document.documentElement.dataset.bootFrequentGeometry = String(count);

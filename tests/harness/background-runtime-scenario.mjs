@@ -7,7 +7,7 @@ if (!['firefox','chrome'].includes(browserName) || !scenario) throw new Error('u
 const root = resolve(import.meta.dirname, '../..');
 
 let fakeNow = 1_787_920_000_000;
-if (/^sync-loss-1301[34]-/.test(scenario)) Date.now = () => fakeNow;
+if (/^sync-loss-1301(?:3|4|9)-/.test(scenario)) Date.now = () => fakeNow;
 
 function clone(value) {
   return value === undefined ? undefined : structuredClone(value);
@@ -59,7 +59,7 @@ const events = {
 const local = makeStorageArea();
 const sync = makeStorageArea();
 const session = makeStorageArea();
-if (/^sync-loss-1301[34]-/.test(scenario)) {
+if (/^sync-loss-1301(?:3|4|9)-/.test(scenario)) {
   sync.getBytesInUse = async function(keys = null) {
     const obj = await this.get(keys);
     return Object.entries(obj).reduce((sum,[key,value]) => sum + Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value)), 0);
@@ -2104,6 +2104,57 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
   assert.equal(normalized.spaces.work.settings.rows,5,'raw legacy Work shared record must not revert explicit modern Work rows from a device snapshot');
   assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work shared record must not claim unrelated modern Work settings');
   console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
+}
+
+else if (scenario === 'sync-loss-13019-pending-journal-quarantine') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const healthy={...remotePersonalEntries(base,'healthy-p'),...remoteWorkEntries(base,'healthy-w')};
+  await sync.set(healthy);
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+
+  const after=stateWith({
+    personal:[shortcut('keep','https://keep.test/',500),shortcut('pending','https://pending.test/',900)],
+    work:[shortcut('work','https://work.test/',500)]
+  });
+  const journal={schemaVersion:1,journalId:'pending-after-loss',createdAt:fakeNow,before:clone(base),after:clone(after)};
+  await local.set({
+    [constants.LOCAL_STATE_KEY]:clone(after),
+    [constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:journal
+  });
+
+  await sync.clear();
+  const setsBefore=sync.stats.setCalls;
+  const quarantineResult=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const continuityDuring=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(quarantineResult?.reason,'remote-loss-quarantine');
+  assert.equal(continuityDuring?.lossState,'quarantine');
+  assert.equal(sync.stats.setCalls,setsBefore,'quarantine must return before replaying a durable local mutation into an empty namespace');
+  assert.equal(pendingDuring?.journalId,journal.journalId,'pending mutation must remain durable while Recovery owns the empty namespace');
+
+  fakeNow=Number(continuityDuring.recoveryEligibleAt)+1;
+  for(const listener of events.onAlarm.listeners) listener({name:constants.SYNC_RECOVERY_ALARM});
+  await send({type:'mosaicsync:get-sync-status'});
+
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  const continuityAfter=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const recoveryStatus=(await local.get(constants.LOCAL_SYNC_RECOVERY_STATUS_KEY))[constants.LOCAL_SYNC_RECOVERY_STATUS_KEY];
+  const localAfter=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const remoteAfter=await sync.get(null);
+  const pendingKey=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('pending')}`;
+  assert.equal(pendingAfter,undefined,'journal may clear only after the Recovery publication is authoritative');
+  assert.equal(continuityAfter?.lossState,'none');
+  assert.equal(recoveryStatus?.state,'restored');
+  assert.ok(remoteAfter[pendingKey],'the pending local edit must be present after authoritative Recovery finishes');
+  assert.ok(findCompactShortcut(localAfter,'pending'),'Recovery/journal replay must never discard the local edit');
+  console.log(JSON.stringify({
+    ok:true,
+    quarantinedBeforeReplay:true,
+    pendingPreservedDuringQuarantine:true,
+    replayedAfterRecovery:true,
+    localPreserved:true
+  }));
 }
 
 else if (scenario === 'top-sites-permission-session-lifecycle') {

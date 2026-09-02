@@ -208,11 +208,23 @@ for (const browserName of ["firefox", "chrome"]) {
       prepareDeviceSnapshotPublicationCapacity: async all => all,
       writeSyncItems: async items => { events.push(["write", Object.keys(items)]); Object.assign(store, structuredClone(items)); },
       removeSyncItems: async keys => { events.push(["remove", [...keys]]); for (const key of keys) delete store[key]; },
+      commitProfileDeviceSnapshotPublication: async value => {
+        events.push(["write", Object.keys(value.chunkWrites)]);
+        Object.assign(store, structuredClone(value.chunkWrites));
+        events.push(["write", [value.rootKey]]);
+        store[value.rootKey] = structuredClone(value.rootValue);
+      },
       isQuotaError: () => false,
       pruneSupersededDeviceSnapshotGenerations: async () => { events.push(["prune", []]); return 0; },
       readDeviceSnapshots: async all => Object.hasOwn(all || {}, generationRootKey)
         ? [{ rootKey: generationRootKey, profileComplete: true, deviceId: "dev", commitId: "new", updatedAt: 1, publishedAt: 1234 }]
         : [],
+      verifyProfileDeviceSnapshotPublication: async (_value, all) => {
+        const snapshots = Object.hasOwn(all || {}, generationRootKey)
+          ? [{ rootKey: generationRootKey, profileComplete: true, deviceId: "dev", commitId: "new", updatedAt: 1, publishedAt: 1234 }]
+          : [];
+        return { snapshots, committedSnapshot: snapshots[0] || null };
+      },
       mergeProfileDeviceSnapshots: () => null
     };
     vm.createContext(context);
@@ -271,9 +283,21 @@ for (const browserName of ["firefox", "chrome"]) {
         Object.assign(store, structuredClone(items));
       },
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
+      commitProfileDeviceSnapshotPublication: async value => {
+        Object.assign(store, structuredClone(value.chunkWrites));
+        try {
+          const error = new Error("injected root quota failure");
+          error.name = "QuotaExceededError";
+          throw error;
+        } catch (error) {
+          for (const key of Object.keys(value.chunkWrites)) delete store[key];
+          throw error;
+        }
+      },
       isQuotaError: error => error?.name === "QuotaExceededError",
       pruneSupersededDeviceSnapshotGenerations: async () => 0,
       readDeviceSnapshots: async () => [],
+      verifyProfileDeviceSnapshotPublication: async () => ({ snapshots: [], committedSnapshot: null }),
       mergeProfileDeviceSnapshots: () => null
     };
     vm.createContext(context);

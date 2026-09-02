@@ -66,10 +66,9 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.30.18.3 ${browser} publication never overwrites the copied legacy device root`, () => {
     const src = readBackgroundSource(browser);
-    const build = extract(src, "buildProfileDeviceSnapshotPublication");
-    assert.match(build, /const rootKey = deviceSnapshotGenerationKey\(meta\.deviceId, commitId\)/);
-    assert.match(build, /deviceSnapshotGenerationChunkKey\(meta\.deviceId, commitId, index\)/);
-    assert.doesNotMatch(build, /const rootKey = deviceSnapshotKey\(meta\.deviceId\)/,
+    assert.match(src, /const rootKey = deviceSnapshotGenerationKey\(deviceId, commitId\)/);
+    assert.match(src, /deviceSnapshotGenerationChunkKey\(deviceId, commitId, index\)/);
+    assert.doesNotMatch(src, /const rootKey = deviceSnapshotKey\(deviceId\)/,
       "new publications must not target the single copied per-device root");
   });
 

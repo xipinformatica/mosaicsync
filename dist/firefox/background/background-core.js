@@ -14,10 +14,6 @@
  */
 import {
   ASSET_ORPHAN_GRACE_MS,
-  DEVICE_SNAPSHOT_SCHEMA_VERSION,
-  PROFILE_SNAPSHOT_SCHEMA_VERSION,
-  DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-  DEVICE_SNAPSHOT_CHUNK_DATA_CHARS,
   DEVICE_SNAPSHOT_RETENTION_MS,
   DEVICE_SNAPSHOT_CAP_MIN_AGE_MS,
   DEVICE_SNAPSHOT_MAX_RECENT_DEVICES,
@@ -25,7 +21,6 @@ import {
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
   DEVICE_SNAPSHOT_ORPHAN_GRACE_MS,
   DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES,
-  DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES,
   EXPECTATION_TTL_MS,
   FAVICON_QUALITY_AUDIT_MAX_ENTRIES,
   FAVICON_QUALITY_AUDIT_POLICY_VERSION,
@@ -64,7 +59,6 @@ import {
   SYNC_ASSET_PREFIX,
   SYNC_CORE_RESERVE_BYTES,
   SYNC_DATASET_KEY,
-  SYNC_DEVICE_SNAPSHOT_PREFIX,
   SYNC_DEVICE_NAME_PREFIX,
   SYNC_DEVICE_NAME_SCHEMA_VERSION,
   SYNC_RESET_INTENT_KEY,
@@ -132,6 +126,8 @@ import {
   writeLocalState
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
+import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
+import { createRecoveryGenerationStore } from "./recovery-generation-store.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
 
@@ -167,12 +163,6 @@ export function startBackground(adapter) {
   const ignoredLocalStateSignatures = new Map();
   const expectedSyncChanges = new Map();
   const deliveredCoreEvidence = new Map();
-  // Performance-only cache for complete, currently verifiable device/profile
-  // generations. Every lookup still revalidates the manifest, chunk set and
-  // compressed-data fingerprint before this cache can bypass gzip/JSON decoding.
-  // Losing the map on an MV3 worker restart therefore changes CPU cost only.
-  const deviceSnapshotDecodeCache = new Map();
-  const DEVICE_SNAPSHOT_DECODE_CACHE_MAX = DEVICE_SNAPSHOT_MAX_RECENT_DEVICES;
   const REMOVED = Symbol("removed");
   const DELIVERED_CORE_EVIDENCE_TTL_MS = Math.max(EXPECTATION_TTL_MS, 10 * 60 * 1000);
   const ASSET_GC_MIN_OBSERVATION_GAP_MS = 12 * 60 * 60 * 1000;
@@ -193,6 +183,40 @@ export function startBackground(adapter) {
 
   const PERSONAL_SPACE_ID = "personal";
   const WORK_SPACE_ID = "work";
+
+  // Step 4 keeps Recovery representation and storage mechanics behind explicit
+  // browser-neutral seams. The core still owns publication trust, quota/retention
+  // policy, merges, journals and catastrophic-loss continuity.
+  const recoveryGenerationFormat = createRecoveryGenerationFormat({
+    bytesToBase64,
+    compareStableText,
+    datasetUpdatedAt,
+    fnv1a,
+    liveRecordCount,
+    recordFingerprint
+  });
+  const {
+    clearDeviceSnapshotDecodeCache,
+    compareDeviceSnapshotGenerationRecency,
+    deviceRootDescriptor,
+    deviceSnapshotKeysForRoot,
+    isDeviceSnapshotChunkKey,
+    isDeviceSnapshotKey,
+  } = recoveryGenerationFormat;
+  const recoveryGenerationStore = createRecoveryGenerationStore({
+    format: recoveryGenerationFormat,
+    readAllSyncItems: () => browser.storage.sync.get(null),
+    removeSyncItems,
+    syncEntryBytes,
+    writeSyncItems
+  });
+  const {
+    commitProfileDeviceSnapshotPublication,
+    prepareProfileDeviceSnapshotPublication,
+    readDeviceSnapshots,
+    readOwnDeviceSnapshot,
+    verifyProfileDeviceSnapshotPublication
+  } = recoveryGenerationStore;
 
   function syncNamespace(spaceId = PERSONAL_SPACE_ID) {
     return syncNamespaceFor(spaceId, { personalSpaceId: PERSONAL_SPACE_ID, syncPrefix: SYNC_PREFIX, syncSettingsKey: SYNC_SETTINGS_KEY, syncDatasetKey: SYNC_DATASET_KEY, syncItemPrefix: SYNC_ITEM_PREFIX, syncAssetPrefix: SYNC_ASSET_PREFIX, syncSpacePrefix: SYNC_SPACE_PREFIX });
@@ -3566,328 +3590,6 @@ export function startBackground(adapter) {
       [...(snapshot?.records?.values?.() || [])].some(record => record?.kind !== "deleted");
   }
 
-  function deviceSnapshotKey(deviceId) {
-    // Legacy fixed per-device root. 1.30.18.3 keeps this readable but never uses
-    // it for new publications because cloned/restored browser profiles can share
-    // the same persistent deviceId.
-    return `${SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent(String(deviceId || ""))}`;
-  }
-
-  function deviceSnapshotGenerationKey(deviceId, snapshotId) {
-    return `${deviceSnapshotKey(deviceId)}.snapshot.${encodeURIComponent(String(snapshotId || ""))}`;
-  }
-
-  function deviceSnapshotGenerationChunkKey(deviceId, snapshotId, index) {
-    return `${deviceSnapshotGenerationKey(deviceId, snapshotId)}.chunk.${index}`;
-  }
-
-  function deviceSnapshotChunkKey(deviceId, slot, index) {
-    // Legacy v2 a/b chunk namespace retained for backward-compatible reads.
-    return `${deviceSnapshotKey(deviceId)}.chunk.${slot}.${index}`;
-  }
-
-  function deviceSnapshotRootMatchesKey(key, value) {
-    if (!isDeviceSnapshotRootKey(key) || !value || typeof value.deviceId !== "string" || !value.deviceId) return false;
-    if (value.chunkKeyMode === "generation") {
-      const snapshotId = typeof value.snapshotId === "string" ? value.snapshotId : "";
-      if (!snapshotId || snapshotId !== value.commitId) return false;
-      return key === deviceSnapshotGenerationKey(value.deviceId, snapshotId);
-    }
-    return key === deviceSnapshotKey(value.deviceId);
-  }
-
-  function deviceSnapshotSlotKeys(deviceId, slot) {
-    if (!["a", "b"].includes(slot)) return [];
-    return Array.from({ length: 96 }, (_, index) => deviceSnapshotChunkKey(deviceId, slot, index));
-  }
-
-  function isDeviceSnapshotKey(key) {
-    return typeof key === "string" && key.startsWith(SYNC_DEVICE_SNAPSHOT_PREFIX);
-  }
-
-  function isDeviceSnapshotChunkKey(key) {
-    return isDeviceSnapshotKey(key) && key.includes(".chunk.");
-  }
-
-  function isDeviceSnapshotRootKey(key) {
-    return isDeviceSnapshotKey(key) && !isDeviceSnapshotChunkKey(key);
-  }
-
-  function base64ToBytes(value) {
-    if (typeof Uint8Array.fromBase64 === "function") return Uint8Array.fromBase64(value);
-    const binary = atob(value);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-    return bytes;
-  }
-
-  async function readBoundedStreamBytes(stream, maxBytes) {
-    if (!stream?.getReader || !Number.isFinite(maxBytes) || maxBytes < 1) return null;
-    const reader = stream.getReader();
-    const chunks = [];
-    let total = 0;
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = value instanceof Uint8Array ? value : new Uint8Array(value || []);
-        if (total + chunk.byteLength > maxBytes) {
-          try { await reader.cancel(); } catch {}
-          return null;
-        }
-        chunks.push(chunk);
-        total += chunk.byteLength;
-      }
-    } finally {
-      try { reader.releaseLock(); } catch {}
-    }
-    const output = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      output.set(chunk, offset);
-      offset += chunk.byteLength;
-    }
-    return output;
-  }
-
-  async function encodeDeviceSnapshotPayload(payload) {
-    if (typeof CompressionStream !== "function") return null;
-    const json = JSON.stringify(payload);
-    const input = new TextEncoder().encode(json);
-    const stream = new Blob([input]).stream().pipeThrough(new CompressionStream("gzip"));
-    const compressed = new Uint8Array(await new Response(stream).arrayBuffer());
-    return { data: bytesToBase64(compressed), jsonChars: json.length, compressedBytes: compressed.length };
-  }
-
-  function deviceSnapshotMetadata(records, settings, deviceId, commitId, publishedAt, encoded, workRecords = null, workSettings = null) {
-    const metadata = {
-      schemaVersion: DEVICE_SNAPSHOT_SCHEMA_VERSION,
-      deviceId,
-      commitId,
-      publishedAt,
-      updatedAt: datasetUpdatedAt(records, settings, 0),
-      liveRecordCount: liveRecordCount(records),
-      recordFingerprint: recordFingerprint(records),
-      settingsModifiedAt: Number(settings?.modifiedAt) || 0,
-      encoding: "gzip-base64",
-      compressedBytes: encoded.compressedBytes,
-      jsonChars: encoded.jsonChars
-    };
-    if (workRecords instanceof Map && workSettings?.kind === "settings") {
-      metadata.profileSnapshotVersion = PROFILE_SNAPSHOT_SCHEMA_VERSION;
-      metadata.profileComplete = true;
-      metadata.updatedAt = Math.max(metadata.updatedAt, datasetUpdatedAt(workRecords, workSettings, 0));
-      metadata.workLiveRecordCount = liveRecordCount(workRecords);
-      metadata.workRecordFingerprint = recordFingerprint(workRecords);
-      metadata.workSettingsModifiedAt = Number(workSettings.modifiedAt) || 0;
-    }
-    return metadata;
-  }
-
-  function deviceSnapshotDecodeCacheKey(value) {
-    if (!value || value.kind !== "device-snapshot-manifest") return "";
-    // Cache only modern complete Personal+Work generations whose compressed and
-    // reconstructed record sets are all fingerprint-verifiable. Older compatible
-    // manifests remain readable through the normal decoder but are intentionally
-    // never trusted as reusable performance state.
-    if (value.profileComplete !== true || Number(value.profileSnapshotVersion) !== PROFILE_SNAPSHOT_SCHEMA_VERSION) return "";
-    if (typeof value.dataFingerprint !== "string" || !value.dataFingerprint) return "";
-    if (typeof value.recordFingerprint !== "string" || !value.recordFingerprint) return "";
-    if (typeof value.workRecordFingerprint !== "string" || !value.workRecordFingerprint) return "";
-    // Include every manifest field that affects either the returned decoded
-    // snapshot or an existing validation decision. If any such metadata changes,
-    // a fresh decode/validation is required even when the compressed bytes match.
-    return JSON.stringify([
-      Number(value.schemaVersion) || 0,
-      value.kind,
-      Number(value.chunkSchemaVersion) || 0,
-      typeof value.deviceId === "string" ? value.deviceId : "",
-      typeof value.commitId === "string" ? value.commitId : "",
-      typeof value.chunkKeyMode === "string" ? value.chunkKeyMode : "",
-      typeof value.snapshotId === "string" ? value.snapshotId : "",
-      Number(value.publishedAt) || 0,
-      Number(value.updatedAt) || 0,
-      Number(value.liveRecordCount) || 0,
-      typeof value.recordFingerprint === "string" ? value.recordFingerprint : "",
-      Number(value.settingsModifiedAt) || 0,
-      typeof value.encoding === "string" ? value.encoding : "",
-      Number(value.compressedBytes) || 0,
-      Number(value.jsonChars) || 0,
-      Number(value.profileSnapshotVersion) || 0,
-      value.profileComplete === true,
-      Number(value.workLiveRecordCount) || 0,
-      typeof value.workRecordFingerprint === "string" ? value.workRecordFingerprint : "",
-      Number(value.workSettingsModifiedAt) || 0,
-      typeof value.slot === "string" ? value.slot : "",
-      Number(value.parts) || 0,
-      Number(value.dataChars) || 0,
-      typeof value.dataFingerprint === "string" ? value.dataFingerprint : ""
-    ]);
-  }
-
-  function readDeviceSnapshotDecodeCache(value) {
-    const key = deviceSnapshotDecodeCacheKey(value);
-    if (!key) return null;
-    const cached = deviceSnapshotDecodeCache.get(key);
-    if (!cached) return null;
-    // Refresh insertion order to make the bounded Map an LRU.
-    deviceSnapshotDecodeCache.delete(key);
-    deviceSnapshotDecodeCache.set(key, cached);
-    return cached;
-  }
-
-  function rememberDeviceSnapshotDecodeCache(value, decoded) {
-    const key = deviceSnapshotDecodeCacheKey(value);
-    if (!key || !decoded || decoded.kind !== "device-snapshot") return decoded;
-    if (deviceSnapshotDecodeCache.has(key)) deviceSnapshotDecodeCache.delete(key);
-    deviceSnapshotDecodeCache.set(key, decoded);
-    while (deviceSnapshotDecodeCache.size > DEVICE_SNAPSHOT_DECODE_CACHE_MAX) {
-      deviceSnapshotDecodeCache.delete(deviceSnapshotDecodeCache.keys().next().value);
-    }
-    return decoded;
-  }
-
-  function clearDeviceSnapshotDecodeCache() {
-    deviceSnapshotDecodeCache.clear();
-  }
-
-  async function decodeDeviceSnapshotData(value, data) {
-    if (!value || value.schemaVersion !== DEVICE_SNAPSHOT_SCHEMA_VERSION) return null;
-    if (value.encoding !== "gzip-base64" || typeof data !== "string" || !data) return null;
-    if (typeof DecompressionStream !== "function") return null;
-    try {
-      const compressed = base64ToBytes(data);
-      if (Number(value.compressedBytes) > 0 && compressed.byteLength !== Number(value.compressedBytes)) return null;
-      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("gzip"));
-      // Bound decompressed bytes while streaming rather than allocating the entire
-      // payload first. A corrupt/high-ratio snapshot can therefore never turn the
-      // post-decode size check itself into an avoidable MV3 worker memory spike.
-      const decompressed = await readBoundedStreamBytes(stream, DEVICE_SNAPSHOT_MAX_DECOMPRESSED_BYTES);
-      if (!decompressed) return null;
-      const payload = JSON.parse(new TextDecoder().decode(decompressed));
-      // Keep payload version 2 so MosaicSync 1.27.7 can continue reading the
-      // Personal half of a 1.27.8.8 full-profile device snapshot during rollout.
-      if (!payload || payload.version !== DEVICE_SNAPSHOT_SCHEMA_VERSION || !Array.isArray(payload.records) || !payload.settings) return null;
-      const records = new Map();
-      for (const record of payload.records) {
-        if (!record?.id || !["shortcut", "folder", "deleted"].includes(record.kind)) continue;
-        records.set(record.id, record);
-      }
-      const settings = payload.settings?.kind === "settings" ? payload.settings : null;
-      if (!settings) return null;
-      if (Number(value.liveRecordCount) !== liveRecordCount(records)) return null;
-      if (value.recordFingerprint && value.recordFingerprint !== recordFingerprint(records)) return null;
-      if (Number(value.settingsModifiedAt) !== Number(settings.modifiedAt || 0)) return null;
-
-      let workRecords = null;
-      let workSettings = null;
-      const profileComplete = value.profileComplete === true &&
-        Number(value.profileSnapshotVersion) === PROFILE_SNAPSHOT_SCHEMA_VERSION;
-      if (profileComplete) {
-        if (!Array.isArray(payload.workRecords) || payload.workSettings?.kind !== "settings") return null;
-        workRecords = new Map();
-        for (const record of payload.workRecords) {
-          if (!record?.id || !["shortcut", "folder", "deleted"].includes(record.kind)) continue;
-          workRecords.set(record.id, record);
-        }
-        workSettings = payload.workSettings;
-        if (Number(value.workLiveRecordCount) !== liveRecordCount(workRecords)) return null;
-        if (value.workRecordFingerprint && value.workRecordFingerprint !== recordFingerprint(workRecords)) return null;
-        if (Number(value.workSettingsModifiedAt) !== Number(workSettings.modifiedAt || 0)) return null;
-      }
-
-      return {
-        kind: "device-snapshot",
-        deviceId: typeof value.deviceId === "string" ? value.deviceId : "",
-        commitId: typeof value.commitId === "string" ? value.commitId : "",
-        publishedAt: Number(value.publishedAt) || 0,
-        updatedAt: Number(value.updatedAt) || 0,
-        records,
-        settings,
-        profileComplete,
-        workRecords,
-        workSettings,
-        usedPreviousGeneration: false
-      };
-    } catch {
-      return null;
-    }
-  }
-
-  async function decodeDeviceSnapshotCurrentPayload(value, all = null) {
-    if (!value || value.schemaVersion !== DEVICE_SNAPSHOT_SCHEMA_VERSION) return null;
-
-    if (value.kind === "device-snapshot") {
-      return decodeDeviceSnapshotData(value, value.data);
-    }
-
-    if (value.kind !== "device-snapshot-manifest" || value.chunkSchemaVersion !== DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION) return null;
-    if (!all || typeof all !== "object") return null;
-    if (!value.deviceId || !value.commitId) return null;
-
-    const generationMode = value.chunkKeyMode === "generation";
-    const snapshotId = generationMode && typeof value.snapshotId === "string" ? value.snapshotId : "";
-    if (generationMode) {
-      if (!snapshotId || snapshotId !== value.commitId) return null;
-    } else if (!["a", "b"].includes(value.slot)) {
-      return null;
-    }
-
-    const parts = Number(value.parts);
-    if (!Number.isInteger(parts) || parts < 1 || parts > 96) return null;
-
-    const chunks = [];
-    for (let index = 0; index < parts; index += 1) {
-      const key = generationMode
-        ? deviceSnapshotGenerationChunkKey(value.deviceId, snapshotId, index)
-        : deviceSnapshotChunkKey(value.deviceId, value.slot, index);
-      const chunk = all[key];
-      if (!chunk || chunk.kind !== "device-snapshot-chunk" || chunk.schemaVersion !== DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION) return null;
-      if (chunk.deviceId !== value.deviceId || chunk.commitId !== value.commitId) return null;
-      if (generationMode) {
-        if (chunk.chunkKeyMode !== "generation" || chunk.snapshotId !== snapshotId) return null;
-      } else if (chunk.slot !== value.slot) {
-        return null;
-      }
-      if (Number(chunk.index) !== index || Number(chunk.total) !== parts || typeof chunk.data !== "string") return null;
-      chunks.push(chunk.data);
-    }
-    const data = chunks.join("");
-    if (Number(value.dataChars) !== data.length) return null;
-    if (value.dataFingerprint && value.dataFingerprint !== fnv1a(data)) return null;
-
-    // Do not consult the cache until the generation currently visible in
-    // storage.sync has independently passed all cheap completeness/chunk/content
-    // checks. A torn or changed generation can therefore never be hidden by an
-    // older cached decode. Only the expensive Base64/gzip/JSON/Map phase is reused.
-    const cached = readDeviceSnapshotDecodeCache(value);
-    if (cached) return cached;
-    const decoded = await decodeDeviceSnapshotData(value, data);
-    return decoded ? rememberDeviceSnapshotDecodeCache(value, decoded) : null;
-  }
-
-  async function decodeDeviceSnapshotPayload(value, all = null) {
-    const current = await decodeDeviceSnapshotCurrentPayload(value, all);
-    if (current) return current;
-
-    // 1.27.8.8 retains the immediately previous complete Personal+Work generation.
-    // If Firefox exposes the new root before all of its chunks, the previous slot
-    // remains independently verifiable and can be used until delivery completes.
-    const previous = value?.previousProfile;
-    if (!previous || value?.kind !== "device-snapshot-manifest" || !all) return null;
-    const descriptor = {
-      ...previous,
-      schemaVersion: DEVICE_SNAPSHOT_SCHEMA_VERSION,
-      kind: "device-snapshot-manifest",
-      chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-      deviceId: value.deviceId,
-      profileSnapshotVersion: PROFILE_SNAPSHOT_SCHEMA_VERSION,
-      profileComplete: true
-    };
-    const fallback = await decodeDeviceSnapshotCurrentPayload(descriptor, all);
-    return fallback ? { ...fallback, usedPreviousGeneration: true } : null;
-  }
-
   function retainTombstones(target, source) {
     const cutoff = Date.now() - TOMBSTONE_TTL_MS;
     for (const [id, record] of source?.entries?.() || []) {
@@ -3896,16 +3598,6 @@ export function startBackground(adapter) {
       target.set(id, record);
     }
     return target;
-  }
-
-  async function readDeviceSnapshots(all) {
-    const snapshots = [];
-    for (const [key, value] of Object.entries(all || {})) {
-      if (!isDeviceSnapshotRootKey(key) || !deviceSnapshotRootMatchesKey(key, value)) continue;
-      const decoded = await decodeDeviceSnapshotPayload(value, all);
-      if (decoded) snapshots.push({ ...decoded, rootKey: key });
-    }
-    return snapshots;
   }
 
   function mergeDeviceSnapshots(snapshots) {
@@ -3985,20 +3677,6 @@ export function startBackground(adapter) {
     return Boolean(meta?.syncInitialized && (meta.lastAppliedWorkSyncRevision || meta.lastAppliedProfileSnapshotRevision));
   }
 
-  function previousProfileDescriptor(root) {
-    if (!root || root.kind !== "device-snapshot-manifest" || root.profileComplete !== true) return null;
-    if (Number(root.profileSnapshotVersion) !== PROFILE_SNAPSHOT_SCHEMA_VERSION) return null;
-    if (!["a", "b"].includes(root.slot) || !root.commitId) return null;
-    const fields = [
-      "commitId", "publishedAt", "updatedAt", "liveRecordCount", "recordFingerprint", "settingsModifiedAt",
-      "encoding", "compressedBytes", "jsonChars", "slot", "parts", "dataChars", "dataFingerprint",
-      "workLiveRecordCount", "workRecordFingerprint", "workSettingsModifiedAt"
-    ];
-    const descriptor = {};
-    for (const field of fields) descriptor[field] = root[field];
-    return descriptor;
-  }
-
   async function buildProfileDeviceSnapshotPublication(fullState, meta, currentOwn, sharedPersonal, sharedWork) {
     const personalState = workspaceStateNormalized(fullState, PERSONAL_SPACE_ID);
     const workState = workspaceStateNormalized(fullState, WORK_SPACE_ID);
@@ -4011,64 +3689,17 @@ export function startBackground(adapter) {
     const personalSettings = makeSettingsRecordNormalized(personalState, meta.deviceId);
     const workSettings = makeSettingsRecordNormalized(workState, meta.deviceId);
     const commitId = uid("profile-commit");
-    const snapshotId = commitId;
     const publishedAt = Date.now();
-    const payload = {
-      // Intentionally remain payload v2 so older MosaicSync versions can still
-      // understand the payload shape when they encounter a compatible root.
-      version: DEVICE_SNAPSHOT_SCHEMA_VERSION,
-      records: [...personalRecords.values()],
-      settings: personalSettings,
-      workRecords: [...workRecords.values()],
-      workSettings
-    };
-    const encoded = await encodeDeviceSnapshotPayload(payload);
-    if (!encoded) return null;
-    const metadata = deviceSnapshotMetadata(
-      personalRecords, personalSettings, meta.deviceId, commitId, publishedAt, encoded,
-      workRecords, workSettings
-    );
-    const rootKey = deviceSnapshotGenerationKey(meta.deviceId, commitId);
-    const dataChunks = [];
-    for (let offset = 0; offset < encoded.data.length; offset += DEVICE_SNAPSHOT_CHUNK_DATA_CHARS) {
-      dataChunks.push(encoded.data.slice(offset, offset + DEVICE_SNAPSHOT_CHUNK_DATA_CHARS));
-    }
-    if (!dataChunks.length || dataChunks.length > 96) return null;
-    const chunkWrites = {};
-    dataChunks.forEach((data, index) => {
-      const key = deviceSnapshotGenerationChunkKey(meta.deviceId, commitId, index);
-      chunkWrites[key] = {
-        schemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-        kind: "device-snapshot-chunk",
-        chunkKeyMode: "generation",
-        snapshotId,
-        deviceId: meta.deviceId,
-        commitId,
-        publishedAt,
-        index,
-        total: dataChunks.length,
-        data
-      };
+    return prepareProfileDeviceSnapshotPublication({
+      deviceId: meta.deviceId,
+      commitId,
+      publishedAt,
+      personalRecords,
+      personalSettings,
+      workRecords,
+      workSettings,
+      previousRoot: currentOwn?.root || null
     });
-    for (const [key, value] of Object.entries(chunkWrites)) {
-      if (syncEntryBytes(key, value) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
-    }
-    const rootValue = {
-      ...metadata,
-      kind: "device-snapshot-manifest",
-      chunkSchemaVersion: DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-      chunkKeyMode: "generation",
-      snapshotId,
-      parts: dataChunks.length,
-      dataChars: encoded.data.length,
-      dataFingerprint: fnv1a(encoded.data),
-      // During the first 1.30.18.3 publication, preserve the old fixed-root a/b
-      // generation as an additional torn-delivery fallback. Later immutable roots
-      // remain independently readable, so no pointer rewrite is required.
-      previousProfile: previousProfileDescriptor(currentOwn?.root)
-    };
-    if (syncEntryBytes(rootKey, rootValue) > SYNC_QUOTA_BYTES_PER_ITEM) return null;
-    return { rootKey, rootValue, chunkWrites, snapshotId };
   }
 
   async function publishProfileDeviceSnapshot(fullState, meta, { force = false } = {}) {
@@ -4112,13 +3743,8 @@ export function startBackground(adapter) {
     if (!publication) return { written: false, reason: "too-large", setRevision: "" };
     all = await prepareDeviceSnapshotPublicationCapacity(all, meta.deviceId, publication);
     try {
-      // Every publication has its own immutable root + chunk namespace. Root-last
-      // commit preserves atomic visibility without allowing a cloned profile with
-      // the same deviceId to overwrite another live clone's recovery generation.
-      await writeSyncItems(publication.chunkWrites, { skipPreflight: true });
-      await writeSyncItems({ [publication.rootKey]: publication.rootValue }, { skipPreflight: true });
+      await commitProfileDeviceSnapshotPublication(publication);
     } catch (error) {
-      try { await removeSyncItems(Object.keys(publication.chunkWrites)); } catch {}
       if (isQuotaError(error)) return { written: false, reason: "quota", setRevision: "" };
       throw error;
     }
@@ -4130,8 +3756,7 @@ export function startBackground(adapter) {
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: superseded device snapshot cleanup skipped`, error);
     }
-    const snapshots = await readDeviceSnapshots(refreshedAll);
-    const committedSnapshot = snapshots.find(snapshot => snapshot.rootKey === publication.rootKey && snapshot.profileComplete === true);
+    const { snapshots, committedSnapshot } = await verifyProfileDeviceSnapshotPublication(publication, refreshedAll);
     if (!committedSnapshot) {
       return { written: false, reason: "verification", setRevision: "", publishedAt: 0 };
     }
@@ -4142,17 +3767,6 @@ export function startBackground(adapter) {
       setRevision: mergedProfile?.revision || "",
       publishedAt: Number(publication.rootValue.publishedAt) || Date.now()
     };
-  }
-
-  async function readOwnDeviceSnapshot(deviceId, all = null) {
-    if (!deviceId) return { rootKey: "", root: null, decoded: null };
-    const values = all && typeof all === "object" ? all : await browser.storage.sync.get(null);
-    const snapshots = (await readDeviceSnapshots(values))
-      .filter(snapshot => snapshot.deviceId === deviceId)
-      .sort(compareDeviceSnapshotGenerationRecency);
-    const decoded = snapshots[0] || null;
-    const rootKey = decoded?.rootKey || "";
-    return { rootKey, root: rootKey ? values[rootKey] || null : null, decoded };
   }
 
   async function readCoreSources(all = null, { includeAssets = true } = {}) {
@@ -4166,31 +3780,6 @@ export function startBackground(adapter) {
     return { all: values, shared, device, profile, deviceSnapshots };
   }
 
-
-  function deviceRootDescriptor(key, value) {
-    if (!isDeviceSnapshotRootKey(key) || !value || !["device-snapshot", "device-snapshot-manifest"].includes(value.kind)) return null;
-    const deviceId = typeof value.deviceId === "string" ? value.deviceId : "";
-    if (!deviceId || !deviceSnapshotRootMatchesKey(key, value)) return null;
-    return {
-      key,
-      deviceId,
-      commitId: typeof value.commitId === "string" ? value.commitId : "",
-      publishedAt: Number(value.publishedAt) || 0,
-      updatedAt: Number(value.updatedAt) || 0
-    };
-  }
-
-  function compareDeviceSnapshotGenerationRecency(a, b) {
-    return (Number(b?.updatedAt) || 0) - (Number(a?.updatedAt) || 0) ||
-      (Number(b?.publishedAt) || 0) - (Number(a?.publishedAt) || 0) ||
-      compareStableText(String(b?.commitId || ""), String(a?.commitId || "")) ||
-      compareStableText(String(a?.rootKey || a?.key || ""), String(b?.rootKey || b?.key || ""));
-  }
-
-  function deviceSnapshotKeysForRoot(all, rootKey) {
-    if (!rootKey) return [];
-    return Object.keys(all || {}).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`));
-  }
 
   function syncItemsFitInSnapshot(all, items) {
     const current = all && typeof all === "object" ? all : {};
