@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.22.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.23.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.18.23 Step 4 Recovery lifecycle boundary policy
+
+- `src/shared/background/recovery-generation-lifecycle.js` is the browser-neutral owner of verified-generation classification, quota-capacity/fallback-retirement planning, superseded-generation retention, and stale/orphan GC eligibility.
+- Lifecycle methods are synchronous functions of explicit Sync views, decoded snapshots, policy constants, metadata observations, and caller-supplied time. They must not access browser storage, clocks, timers, alarms, mutation journals, normal Sync merges, or catastrophic continuity.
+- `background-core.js` remains the orchestrator for `storage.sync` reads/removals, local metadata writes, GC scheduling, publication trust, merge/reconcile work, and catastrophic-loss recovery. Destructive actions still obtain a second full Sync view and ask the lifecycle owner to revalidate candidates immediately before removal.
+- `recovery-generation-format.js` remains the wire-format/validation owner and `recovery-generation-store.js` remains the mechanical read/prepare/commit/verify owner. Generated Firefox and Chromium copies of all three modules must be pairwise byte-identical.
+- The `.22` verified-only retention, fallback readability, future-schema preservation, local-observation aging, orphan grace, root-last publication, and failed-replacement guarantees are behaviorally frozen and covered by equivalence plus MV3 interruption/restart tests.
+- Keys, schemas, payloads, permissions, privacy boundaries, normal Sync semantics, user-facing behavior, and Steps 1–3 remain unchanged.
 
 ## 1.30.18.22 Step 4 validation-aware Recovery retention policy
 

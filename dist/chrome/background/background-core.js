@@ -14,15 +14,7 @@
  */
 import {
   ASSET_ORPHAN_GRACE_MS,
-  DEVICE_SNAPSHOT_SCHEMA_VERSION,
-  DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
-  DEVICE_SNAPSHOT_RETENTION_MS,
-  DEVICE_SNAPSHOT_CAP_MIN_AGE_MS,
-  DEVICE_SNAPSHOT_MAX_RECENT_DEVICES,
-  DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE,
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
-  DEVICE_SNAPSHOT_ORPHAN_GRACE_MS,
-  DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES,
   EXPECTATION_TTL_MS,
   FAVICON_QUALITY_AUDIT_MAX_ENTRIES,
   FAVICON_QUALITY_AUDIT_POLICY_VERSION,
@@ -129,6 +121,7 @@ import {
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
+import { createRecoveryGenerationLifecycle } from "./recovery-generation-lifecycle.js";
 import { createRecoveryGenerationStore } from "./recovery-generation-store.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
@@ -186,9 +179,9 @@ export function startBackground(adapter) {
   const PERSONAL_SPACE_ID = "personal";
   const WORK_SPACE_ID = "work";
 
-  // Step 4 keeps Recovery representation and storage mechanics behind explicit
-  // browser-neutral seams. The core still owns publication trust, quota/retention
-  // policy, merges, journals and catastrophic-loss continuity.
+  // Step 4 keeps Recovery representation, lifecycle decisions and storage
+  // mechanics behind explicit browser-neutral seams. The core owns browser
+  // effects, publication trust, merges, journals and catastrophic continuity.
   const recoveryGenerationFormat = createRecoveryGenerationFormat({
     bytesToBase64,
     compareStableText,
@@ -199,12 +192,21 @@ export function startBackground(adapter) {
   });
   const {
     clearDeviceSnapshotDecodeCache,
-    compareDeviceSnapshotGenerationRecency,
-    deviceRootDescriptor,
-    deviceSnapshotKeysForRoot,
-    isDeviceSnapshotChunkKey,
     isDeviceSnapshotKey,
   } = recoveryGenerationFormat;
+  const recoveryGenerationLifecycle = createRecoveryGenerationLifecycle({
+    format: recoveryGenerationFormat,
+    compareStableText,
+    syncEntryBytes
+  });
+  const {
+    confirmedDeviceSnapshotGarbageCollectionKeys,
+    confirmedSupersededDeviceSnapshotKeys,
+    planDeviceSnapshotGarbageCollection,
+    planDeviceSnapshotPublicationCapacity,
+    supersededDeviceSnapshotRootKeys,
+    syncItemsFitInSnapshot
+  } = recoveryGenerationLifecycle;
   const recoveryGenerationStore = createRecoveryGenerationStore({
     format: recoveryGenerationFormat,
     readAllSyncItems: () => browser.storage.sync.get(null),
@@ -3796,104 +3798,36 @@ export function startBackground(adapter) {
   }
 
 
-  function syncItemsFitInSnapshot(all, items) {
-    const current = all && typeof all === "object" ? all : {};
-    const nextItems = items && typeof items === "object" ? items : {};
-    let bytes = 0;
-    let count = 0;
-    for (const [key, value] of Object.entries(current)) {
-      if (Object.prototype.hasOwnProperty.call(nextItems, key)) continue;
-      bytes += syncEntryBytes(key, value);
-      count += 1;
-    }
-    for (const [key, value] of Object.entries(nextItems)) {
-      bytes += syncEntryBytes(key, value);
-      count += 1;
-    }
-    return bytes <= SYNC_QUOTA_BYTES && count <= SYNC_QUOTA_MAX_ITEMS;
-  }
-
   async function prepareDeviceSnapshotPublicationCapacity(all, deviceId, publication) {
     const publicationItems = { ...publication.chunkWrites, [publication.rootKey]: publication.rootValue };
     if (syncItemsFitInSnapshot(all, publicationItems)) return all;
-
-    // Immutable generations normally retain two complete copies. If staging a
-    // third would exceed Sync quota, retire only verified older generations and
-    // only when the simulated result proves one complete fallback can remain while
-    // the new generation is staged. Never sacrifice the last known-good copy.
-    const valid = (await readDeviceSnapshots(all))
-      .filter(snapshot => snapshot.deviceId === deviceId && snapshot.profileComplete === true && snapshot.rootKey)
-      .sort(compareDeviceSnapshotGenerationRecency);
-    if (valid.length < 2) return all;
-
-    const simulated = { ...all };
-    const removeKeys = [];
-    for (let index = valid.length - 1; index >= 1; index -= 1) {
-      const keys = deviceSnapshotKeysForRoot(simulated, valid[index].rootKey);
-      if (!keys.length) continue;
-      for (const key of keys) {
-        delete simulated[key];
-        removeKeys.push(key);
-      }
-      if (syncItemsFitInSnapshot(simulated, publicationItems)) {
-        await removeSyncItems(removeKeys);
-        return simulated;
-      }
-    }
-    return all;
-  }
-
-  function verifiedProfileDeviceSnapshotDescriptors(all, snapshots, deviceId = "") {
-    return (Array.isArray(snapshots) ? snapshots : [])
-      // A torn root may decode through its embedded previous-profile descriptor.
-      // That keeps Recovery readable, but it is not proof that this root's own
-      // generation is complete and therefore cannot authorize retirement.
-      .filter(snapshot => snapshot?.profileComplete === true && snapshot.usedPreviousGeneration !== true && snapshot.rootKey)
-      .map(snapshot => deviceRootDescriptor(snapshot.rootKey, all?.[snapshot.rootKey]))
-      .filter(entry => entry && (!deviceId || entry.deviceId === deviceId));
-  }
-
-  function currentDeviceSnapshotRootHeader(value) {
-    if (!value || Number(value.schemaVersion) !== DEVICE_SNAPSHOT_SCHEMA_VERSION) return false;
-    if (value.kind === "device-snapshot") return true;
-    return value.kind === "device-snapshot-manifest" &&
-      Number(value.chunkSchemaVersion) === DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION;
+    const snapshots = await readDeviceSnapshots(all);
+    const plan = planDeviceSnapshotPublicationCapacity(all, deviceId, publication, snapshots);
+    if (!plan.removeKeys.length) return all;
+    await removeSyncItems(plan.removeKeys);
+    return plan.all;
   }
 
   async function pruneSupersededDeviceSnapshotGenerations(all, deviceId, { protectRootKey = "", verifiedSnapshots = null } = {}) {
-    function staleVerifiedRootKeys(values, snapshots) {
-      const roots = verifiedProfileDeviceSnapshotDescriptors(values, snapshots, deviceId)
-        .sort(compareDeviceSnapshotGenerationRecency);
-      if (protectRootKey && !roots.some(entry => entry.key === protectRootKey)) return new Set();
-      if (roots.length <= DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE) return new Set();
-
-      const keep = [];
-      const protectedRoot = protectRootKey ? roots.find(entry => entry.key === protectRootKey) : null;
-      if (protectedRoot) keep.push(protectedRoot);
-      for (const entry of roots) {
-        if (keep.length >= DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE) break;
-        if (protectedRoot && entry.key === protectedRoot.key) continue;
-        keep.push(entry);
-      }
-      const keepKeys = new Set(keep.map(entry => entry.key));
-      return new Set(roots.filter(entry => !keepKeys.has(entry.key)).map(entry => entry.key));
-    }
-
     const values = all && typeof all === "object" ? all : {};
     const snapshots = Array.isArray(verifiedSnapshots) ? verifiedSnapshots : await readDeviceSnapshots(values);
-    const initiallyStale = staleVerifiedRootKeys(values, snapshots);
-    if (!initiallyStale.size) return 0;
+    const candidates = supersededDeviceSnapshotRootKeys(values, snapshots, deviceId, { protectRootKey });
+    if (!candidates.length) return 0;
 
     // Re-read immediately before destructive work. Immutable roots cannot be
     // overwritten by normal publishers, but their visible set can still change
     // while an MV3 worker yields to storage.sync.
     const latest = await browser.storage.sync.get(null);
     const latestSnapshots = await readDeviceSnapshots(latest);
-    const stillStale = staleVerifiedRootKeys(latest, latestSnapshots);
-    const staleRoots = new Set([...initiallyStale].filter(rootKey => stillStale.has(rootKey)));
-    const keys = [...staleRoots].flatMap(rootKey => deviceSnapshotKeysForRoot(latest, rootKey));
+    const keys = confirmedSupersededDeviceSnapshotKeys(
+      latest,
+      latestSnapshots,
+      candidates,
+      deviceId,
+      { protectRootKey }
+    );
     if (!keys.length) return 0;
-    await removeSyncItems([...new Set(keys)]);
+    await removeSyncItems(keys);
     return keys.length;
   }
 
@@ -3905,176 +3839,25 @@ export function startBackground(adapter) {
     try {
       const all = await browser.storage.sync.get(null);
       const snapshots = await readDeviceSnapshots(all);
-      const readableRootKeys = new Set(snapshots.map(snapshot => snapshot?.rootKey).filter(Boolean));
-      const roots = Object.entries(all)
-        .map(([key, value]) => deviceRootDescriptor(key, value))
-        .filter(Boolean);
-      const verifiedRoots = verifiedProfileDeviceSnapshotDescriptors(all, snapshots);
+      const observation = planDeviceSnapshotGarbageCollection(all, snapshots, meta, now);
 
-      // Retention is based on this installation's own sequence of GC observations,
-      // never on a remote publisher's wall clock. A restored/cloned machine may be
-      // months wrong yet its freshly observed recovery generation must still be
-      // treated as fresh here.
-      const gcPass = Math.max(0, Math.trunc(Number(meta.deviceSnapshotGcPass) || 0)) + 1;
-      const rootSeenPass = { ...(meta.deviceSnapshotRootSeenPass || {}) };
-      const liveRootKeys = new Set(verifiedRoots.map(root => root.key));
-      for (const root of verifiedRoots) {
-        if (!(Number(rootSeenPass[root.key]) > 0)) rootSeenPass[root.key] = gcPass;
-      }
-      for (const rootKey of Object.keys(rootSeenPass)) {
-        if (!liveRootKeys.has(rootKey)) delete rootSeenPass[rootKey];
-      }
-
-      const retentionPasses = Math.max(1, Math.ceil(DEVICE_SNAPSHOT_RETENTION_MS / DEVICE_SNAPSHOT_GC_INTERVAL_MS));
-      const capMinAgePasses = Math.max(1, Math.ceil(DEVICE_SNAPSHOT_CAP_MIN_AGE_MS / DEVICE_SNAPSHOT_GC_INTERVAL_MS));
-      function staleVerifiedRootKeys(values, decodedSnapshots) {
-        const generationsByDevice = new Map();
-        for (const root of verifiedProfileDeviceSnapshotDescriptors(values, decodedSnapshots)) {
-          const list = generationsByDevice.get(root.deviceId) || [];
-          list.push(root);
-          generationsByDevice.set(root.deviceId, list);
-        }
-        for (const list of generationsByDevice.values()) list.sort(compareDeviceSnapshotGenerationRecency);
-
-        const newestPerDevice = [...generationsByDevice.entries()]
-          .map(([deviceId, list]) => ({ ...list[0], deviceId, observedPass: Number(rootSeenPass[list[0].key]) || gcPass }))
-          .sort((a, b) => b.observedPass - a.observedPass || compareStableText(a.deviceId, b.deviceId));
-        const keepRecentDevices = new Set(newestPerDevice.slice(0, DEVICE_SNAPSHOT_MAX_RECENT_DEVICES).map(entry => entry.deviceId));
-        keepRecentDevices.add(meta.deviceId);
-
-        const stale = new Set();
-        for (const [deviceId, list] of generationsByDevice) {
-          // Only generations that decoded as complete Personal+Work copies may
-          // consume the two retained safety slots. Torn or malformed roots are
-          // observed separately below and can never displace a verified fallback.
-          list.slice(DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE).forEach(entry => stale.add(entry.key));
-
-          if (deviceId === meta.deviceId) continue;
-          const newest = list[0];
-          const observedPass = Number(rootSeenPass[newest.key]) || gcPass;
-          const observedAgePasses = Math.max(0, gcPass - observedPass);
-          const expired = observedAgePasses >= retentionPasses;
-          const rank = newestPerDevice.findIndex(entry => entry.deviceId === deviceId);
-          const overCapAndMature = rank >= DEVICE_SNAPSHOT_MAX_RECENT_DEVICES &&
-            observedAgePasses >= capMinAgePasses && !keepRecentDevices.has(deviceId);
-          if (expired || overCapAndMature) list.forEach(entry => stale.add(entry.key));
-        }
-        return stale;
-      }
-      const staleRootKeys = staleVerifiedRootKeys(all, snapshots);
-
-      const orphanSeenAt = { ...(meta.deviceSnapshotOrphanSeenAt || {}) };
-      const orphanSeenPass = { ...(meta.deviceSnapshotOrphanSeenPass || {}) };
-      const orphanGroups = new Map();
-      // A known current-schema root that cannot be decoded is either torn or
-      // corrupt. Give it the same conservative observation grace as rootless
-      // chunks instead of letting its unverified timestamps consume a safety slot.
-      for (const root of roots) {
-        if (readableRootKeys.has(root.key) || !currentDeviceSnapshotRootHeader(all[root.key])) continue;
-        orphanGroups.set(root.key, { keys: deviceSnapshotKeysForRoot(all, root.key) });
-      }
-      for (const [key] of Object.entries(all)) {
-        if (!isDeviceSnapshotChunkKey(key)) continue;
-        const marker = key.indexOf(".chunk.");
-        if (marker <= 0) continue;
-        const rootKey = key.slice(0, marker);
-        if (Object.prototype.hasOwnProperty.call(all, rootKey)) {
-          if (!orphanGroups.has(rootKey)) {
-            delete orphanSeenAt[rootKey];
-            delete orphanSeenPass[rootKey];
-          }
-          continue;
-        }
-        const group = orphanGroups.get(rootKey) || { keys: [] };
-        group.keys.push(key);
-        orphanGroups.set(rootKey, group);
-      }
-
-      const eligibleOrphanRoots = [];
-      const liveOrphanRoots = new Set();
-      for (const [rootKey, group] of orphanGroups) {
-        if (!group.keys.length) continue;
-        liveOrphanRoots.add(rootKey);
-        let firstSeenAt = Number(orphanSeenAt[rootKey]) || 0;
-        let firstSeenPass = Number(orphanSeenPass[rootKey]) || 0;
-
-        // A backward wall-clock correction restarts the wall-time observation
-        // instead of retaining an impossible future timestamp indefinitely.
-        if (firstSeenAt > now) {
-          firstSeenAt = now;
-          firstSeenPass = gcPass;
-          orphanSeenAt[rootKey] = now;
-          orphanSeenPass[rootKey] = gcPass;
-          continue;
-        }
-
-        if (!firstSeenAt || !firstSeenPass) {
-          orphanSeenAt[rootKey] = now;
-          orphanSeenPass[rootKey] = gcPass;
-          continue;
-        }
-
-        // Require two later GC observations as well as elapsed wall time. A sudden
-        // forward clock correction therefore cannot turn a freshly observed,
-        // potentially in-flight remote publication into garbage on the next pass.
-        const observedPasses = Math.max(0, gcPass - firstSeenPass);
-        const elapsed = Math.max(0, now - firstSeenAt);
-        if (observedPasses >= DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES && elapsed >= DEVICE_SNAPSHOT_ORPHAN_GRACE_MS) {
-          eligibleOrphanRoots.push(rootKey);
-          delete orphanSeenAt[rootKey];
-          delete orphanSeenPass[rootKey];
-        }
-      }
-      for (const rootKey of Object.keys(orphanSeenAt)) {
-        if (!liveOrphanRoots.has(rootKey)) delete orphanSeenAt[rootKey];
-      }
-      for (const rootKey of Object.keys(orphanSeenPass)) {
-        if (!liveOrphanRoots.has(rootKey)) delete orphanSeenPass[rootKey];
-      }
-      const boundedOrphanEntries = Object.entries(orphanSeenAt)
-        .sort((a, b) => Number(b[1]) - Number(a[1]) || compareStableText(a[0], b[0]))
-        .slice(0, 64);
-      const boundedOrphanSeenAt = Object.fromEntries(boundedOrphanEntries);
-      const boundedOrphanSeenPass = Object.fromEntries(
-        boundedOrphanEntries.map(([rootKey]) => [rootKey, Number(orphanSeenPass[rootKey]) || gcPass])
-      );
-      const boundedRootSeenPass = Object.fromEntries(
-        Object.entries(rootSeenPass)
-          .sort((a, b) => Number(b[1]) - Number(a[1]) || compareStableText(a[0], b[0]))
-          .slice(0, 256)
-      );
-
-      const keys = [];
-      if (staleRootKeys.size || eligibleOrphanRoots.length) {
-        // Destructive Sync cleanup gets a fresh view. A root whose chunks arrived
-        // during this worker turn is no longer eligible, and a formerly stale
-        // verified generation is removed only if the latest complete set still
-        // proves it superseded.
+      let keys = [];
+      if (observation.staleRootKeys.length || observation.eligibleOrphanRoots.length) {
+        // Browser reads and writes remain in this orchestrator. The lifecycle
+        // boundary revalidates eligibility against this fresh pre-delete view.
         const latest = await browser.storage.sync.get(null);
         const latestSnapshots = await readDeviceSnapshots(latest);
-        const latestReadableRootKeys = new Set(latestSnapshots.map(snapshot => snapshot?.rootKey).filter(Boolean));
-        const stillStale = staleVerifiedRootKeys(latest, latestSnapshots);
-        for (const rootKey of staleRootKeys) {
-          if (stillStale.has(rootKey)) keys.push(...deviceSnapshotKeysForRoot(latest, rootKey));
-        }
-        for (const rootKey of eligibleOrphanRoots) {
-          if (latestReadableRootKeys.has(rootKey)) continue;
-          if (Object.prototype.hasOwnProperty.call(latest, rootKey)) {
-            const descriptor = deviceRootDescriptor(rootKey, latest[rootKey]);
-            if (!descriptor || !currentDeviceSnapshotRootHeader(latest[rootKey])) continue;
-          }
-          keys.push(...deviceSnapshotKeysForRoot(latest, rootKey));
-        }
+        keys = confirmedDeviceSnapshotGarbageCollectionKeys(latest, latestSnapshots, observation);
       }
-      if (keys.length) await removeSyncItems([...new Set(keys)]);
+      if (keys.length) await removeSyncItems(keys);
 
       const next = {
         ...meta,
         lastDeviceSnapshotGcAt: now,
-        deviceSnapshotGcPass: gcPass,
-        deviceSnapshotRootSeenPass: boundedRootSeenPass,
-        deviceSnapshotOrphanSeenAt: boundedOrphanSeenAt,
-        deviceSnapshotOrphanSeenPass: boundedOrphanSeenPass
+        deviceSnapshotGcPass: observation.gcPass,
+        deviceSnapshotRootSeenPass: observation.deviceSnapshotRootSeenPass,
+        deviceSnapshotOrphanSeenAt: observation.deviceSnapshotOrphanSeenAt,
+        deviceSnapshotOrphanSeenPass: observation.deviceSnapshotOrphanSeenPass
       };
       await writeLocalMeta(next);
       return next;

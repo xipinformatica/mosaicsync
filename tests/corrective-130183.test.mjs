@@ -75,13 +75,10 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.3 ${browser} own-snapshot selection scans generations and retention is generation-aware`, () => {
     const src = readBackgroundSource(browser);
     const own = extract(src, "readOwnDeviceSnapshot");
-    const gcStart = src.indexOf("async function maybeGarbageCollectStaleDeviceSnapshots");
-    const gcEnd = src.indexOf("function combinedRemoteCore", gcStart);
-    const gc = src.slice(gcStart, gcEnd);
     assert.match(own, /readDeviceSnapshots/);
     assert.match(own, /snapshot\.deviceId === deviceId/);
-    assert.match(gc, /DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE/);
-    assert.match(gc, /generationsByDevice/);
+    assert.match(src, /maxGenerationsPerDevice:\s*DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE/);
+    assert.match(src, /function staleVerifiedRootKeys[\s\S]*generationsByDevice/);
   });
 
   test(`1.30.18.3 ${browser} stable deviceId still owns normal Sync records`, () => {

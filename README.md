@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.22**
+**Current source release: 1.30.18.23**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,9 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.22** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.23** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.30.18.23 advances **Step 4 Recovery ownership refinement** by isolating verified-generation classification, quota/fallback-retirement planning, superseded-generation retention, and stale/orphan GC eligibility in `src/shared/background/recovery-generation-lifecycle.js`. The lifecycle module is synchronous and browser-neutral; `background-core.js` still owns every browser read/write, timing trigger, metadata commit, merge, journal, and catastrophic-loss continuity transition. `.22` behavior is preserved through direct equivalence, restart, delayed-delivery, fallback, quota, and two-view interruption coverage. No Recovery/Sync schema, persisted key, permission, CSP, privacy boundary, product feature, or normal Sync behavior changes.
 
 1.30.18.22 hardens **Step 4 Recovery retention and cleanup**. A newly published immutable generation must now verify its own root and chunks before older verified copies may be pruned; a torn root decoded only through its embedded previous-generation fallback remains usable for Recovery but cannot count as a newly verified copy. Retention and stale-generation GC count only independently verified complete Personal+Work generations, current-schema unreadable roots receive conservative repeated-observation grace, and every destructive cleanup re-reads and revalidates browser Sync immediately before deletion. No Recovery/Sync schema, persisted key, permission, CSP, privacy boundary, product feature or normal Sync behavior changes.
 

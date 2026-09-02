@@ -15,8 +15,8 @@
  * It deliberately does NOT decide whether publication is trusted, which local
  * or remote records belong in a generation, how quota capacity is created,
  * which generations retire, when garbage collection runs, or how catastrophic
- * Sync loss and mutation journals are reconciled. Those policies remain in the
- * shared background core.
+ * Sync loss and mutation journals are reconciled. Lifecycle decisions belong
+ * to the adjacent pure planner; browser effects remain in the shared core.
  */
 import {
   DEVICE_SNAPSHOT_CHUNK_DATA_CHARS,

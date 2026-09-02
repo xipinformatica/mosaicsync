@@ -186,9 +186,10 @@ test("1.30.18.21 Recovery store prepares the complete profile wire publication b
   assert.deepEqual(Object.keys(publication.chunkWrites), [`${publication.rootKey}.chunk.0`]);
 });
 
-test("1.30.18.21 Recovery storage module is browser-neutral and leaves policy in the core", () => {
+test("1.30.18.21 Recovery storage module remains browser-neutral across the later lifecycle seam", () => {
   const core = fs.readFileSync("src/shared/background/background-core.js", "utf8");
   const store = fs.readFileSync("src/shared/background/recovery-generation-store.js", "utf8");
+  const lifecycle = fs.readFileSync("src/shared/background/recovery-generation-lifecycle.js", "utf8");
 
   assert.match(core, /import \{ createRecoveryGenerationStore \} from "\.\/recovery-generation-store\.js";/);
   assert.doesNotMatch(core, /async function readDeviceSnapshots\s*\(/);
@@ -197,6 +198,8 @@ test("1.30.18.21 Recovery storage module is browser-neutral and leaves policy in
   assert.match(core, /async function pruneSupersededDeviceSnapshotGenerations\s*\(/);
   assert.match(core, /async function maybeGarbageCollectStaleDeviceSnapshots\s*\(/);
   assert.match(core, /async function beginOrContinueCatastrophicSyncRecovery\s*\(/);
+  assert.match(lifecycle, /function planDeviceSnapshotPublicationCapacity\s*\(/);
+  assert.match(lifecycle, /function planDeviceSnapshotGarbageCollection\s*\(/);
 
   assert.doesNotMatch(store, /browser\.storage|LOCAL_SYNC_CONTINUITY_KEY|SYNC_RECOVERY_ALARM|beginOrContinueCatastrophicSyncRecovery/);
   assert.doesNotMatch(store, /prepareDeviceSnapshotPublicationCapacity|pruneSupersededDeviceSnapshotGenerations|maybeGarbageCollectStaleDeviceSnapshots/);

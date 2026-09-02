@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { readBackgroundSource } from "./harness/background-source.mjs";
+import { createTestRecoveryLifecycle } from "./harness/recovery-lifecycle.mjs";
 import { stableStringify } from "../src/shared/core/model.js";
 import { createRecoveryGenerationStore } from "../src/shared/background/recovery-generation-store.js";
 
@@ -65,11 +66,18 @@ function verifiedDescriptors(all, snapshots, deviceId = "") {
     .filter(entry => entry && (!deviceId || entry.deviceId === deviceId));
 }
 
+function testLifecycle(policy = {}) {
+  return createTestRecoveryLifecycle({
+    compareDeviceSnapshotGenerationRecency: (left, right) => Number(right.updatedAt) - Number(left.updatedAt),
+    deviceRootDescriptor: rootDescriptor,
+    policy
+  });
+}
+
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.22 ${browser} immediate Recovery pruning cannot let torn roots displace the last verified fallback`, async () => {
     const source = readBackgroundSource(browser);
-    const code = ["compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "pruneSupersededDeviceSnapshotGenerations"]
-      .map(name => extractFunction(source, name)).join("\n");
+    const code = extractFunction(source, "pruneSupersededDeviceSnapshotGenerations");
     const [validKey, validRoot] = generationRoot("old-valid", 100);
     const [tornOneKey, tornOneRoot] = generationRoot("newer-torn-one", 300);
     const [tornTwoKey, tornTwoRoot] = generationRoot("newer-torn-two", 200);
@@ -81,12 +89,15 @@ for (const browser of ["firefox", "chrome"]) {
     };
     const snapshots = [{ rootKey: validKey, deviceId: "dev", commitId: "old-valid", publishedAt: 100, updatedAt: 100, profileComplete: true }];
     const removed = [];
+    const owner = testLifecycle({ maxGenerationsPerDevice: 2 });
     const context = {
       DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE: 2,
       compareStableText: (left, right) => String(left).localeCompare(String(right)),
       deviceRootDescriptor: rootDescriptor,
       verifiedProfileDeviceSnapshotDescriptors: (values, decoded, deviceId) => verifiedDescriptors(values, decoded, deviceId),
       readDeviceSnapshots: async () => snapshots,
+      supersededDeviceSnapshotRootKeys: owner.supersededDeviceSnapshotRootKeys,
+      confirmedSupersededDeviceSnapshotKeys: owner.confirmedSupersededDeviceSnapshotKeys,
       browser: { storage: { sync: { get: async () => structuredClone(all) } } },
       removeSyncItems: async keys => { removed.push(...keys); for (const key of keys) delete all[key]; }
     };
@@ -102,8 +113,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.30.18.22 ${browser} a torn root decoded through its previous-generation fallback does not consume a verified retention slot`, async () => {
     const source = readBackgroundSource(browser);
-    const code = ["compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "pruneSupersededDeviceSnapshotGenerations"]
-      .map(name => extractFunction(source, name)).join("\n");
+    const code = extractFunction(source, "pruneSupersededDeviceSnapshotGenerations");
     const [validKey, validRoot] = generationRoot("old-valid", 100);
     const [tornOneKey, tornOneRoot] = generationRoot("newer-torn-one", 300);
     const [tornTwoKey, tornTwoRoot] = generationRoot("newer-torn-two", 200);
@@ -119,12 +129,15 @@ for (const browser of ["firefox", "chrome"]) {
       { rootKey: tornTwoKey, deviceId: "dev", commitId: "old-valid", publishedAt: 100, updatedAt: 100, profileComplete: true, usedPreviousGeneration: true }
     ];
     const removed = [];
+    const owner = testLifecycle({ maxGenerationsPerDevice: 2 });
     const context = {
       DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE: 2,
       compareStableText: (left, right) => String(left).localeCompare(String(right)),
       deviceRootDescriptor: rootDescriptor,
       verifiedProfileDeviceSnapshotDescriptors: (values, decoded, deviceId) => verifiedDescriptors(values, decoded, deviceId),
       readDeviceSnapshots: async () => snapshots,
+      supersededDeviceSnapshotRootKeys: owner.supersededDeviceSnapshotRootKeys,
+      confirmedSupersededDeviceSnapshotKeys: owner.confirmedSupersededDeviceSnapshotKeys,
       browser: { storage: { sync: { get: async () => structuredClone(all) } } },
       removeSyncItems: async keys => { removed.push(...keys); for (const key of keys) delete all[key]; }
     };
@@ -167,6 +180,15 @@ for (const browser of ["firefox", "chrome"]) {
     };
     const snapshots = [{ rootKey: validKey, deviceId: "dev", commitId: "old-valid", publishedAt: 100, updatedAt: 100, profileComplete: true }];
     let now = 10_000_000;
+    const owner = testLifecycle({
+      gcIntervalMs: 1000,
+      orphanGraceMs: 5000,
+      orphanMinGcPasses: 2,
+      maxGenerationsPerDevice: 2,
+      maxRecentDevices: 8,
+      retentionMs: 999_999_999,
+      capMinAgeMs: 999_999_999
+    });
     const context = {
       console,
       PRODUCT_NAME: "MosaicSync",
@@ -189,6 +211,8 @@ for (const browser of ["firefox", "chrome"]) {
       verifiedProfileDeviceSnapshotDescriptors: (values, decoded, deviceId) => verifiedDescriptors(values, decoded, deviceId),
       readDeviceSnapshots: async () => snapshots.filter(snapshot => Object.hasOwn(store, snapshot.rootKey)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
+      planDeviceSnapshotGarbageCollection: owner.planDeviceSnapshotGarbageCollection,
+      confirmedDeviceSnapshotGarbageCollectionKeys: owner.confirmedDeviceSnapshotGarbageCollectionKeys,
       browser: { storage: { sync: { get: async () => structuredClone(store) } } },
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
       writeLocalMeta: async value => value
@@ -304,6 +328,15 @@ for (const browser of ["firefox", "chrome"]) {
       ? [{ rootKey, deviceId: "dev", commitId: "arriving", publishedAt: 300, updatedAt: 300, profileComplete: true }]
       : [];
     const removed = [];
+    const owner = testLifecycle({
+      gcIntervalMs: 1000,
+      orphanGraceMs: 5000,
+      orphanMinGcPasses: 2,
+      maxGenerationsPerDevice: 2,
+      maxRecentDevices: 8,
+      retentionMs: 999_999_999,
+      capMinAgeMs: 999_999_999
+    });
     const context = {
       console,
       PRODUCT_NAME: "MosaicSync",
@@ -325,6 +358,8 @@ for (const browser of ["firefox", "chrome"]) {
       verifiedProfileDeviceSnapshotDescriptors: (values, decoded, deviceId) => verifiedDescriptors(values, decoded, deviceId),
       readDeviceSnapshots: async values => snapshotsFor(values),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
+      planDeviceSnapshotGarbageCollection: owner.planDeviceSnapshotGarbageCollection,
+      confirmedDeviceSnapshotGarbageCollectionKeys: owner.confirmedDeviceSnapshotGarbageCollectionKeys,
       browser: { storage: { sync: { get: async () => {
         reads += 1;
         if (reads === 2) store[rootKey] = { ...store[rootKey], arrived: true };

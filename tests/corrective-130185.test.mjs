@@ -1,4 +1,5 @@
 import { readBackgroundSource } from "./harness/background-source.mjs";
+import { createTestRecoveryLifecycle } from "./harness/recovery-lifecycle.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -82,6 +83,21 @@ for (const browser of ["firefox", "chrome"]) {
       [remoteRoot]: { kind: "root", deviceId: "remote", updatedAt: 100, publishedAt: 1 },
       [`${remoteRoot}.chunk.0`]: { data: "complete" }
     };
+    const owner = createTestRecoveryLifecycle({
+      compareDeviceSnapshotGenerationRecency: (left, right) => (right.updatedAt || 0) - (left.updatedAt || 0),
+      deviceRootDescriptor: (key, value) => value?.kind === "root"
+        ? { key, deviceId: value.deviceId, updatedAt: value.updatedAt, publishedAt: value.publishedAt, commitId: "x" }
+        : null,
+      policy: {
+        gcIntervalMs: 1000,
+        orphanGraceMs: 5000,
+        orphanMinGcPasses: 2,
+        maxGenerationsPerDevice: 2,
+        maxRecentDevices: 8,
+        retentionMs: 2000,
+        capMinAgeMs: 1000
+      }
+    });
     const context = {
       console, PRODUCT_NAME: "MosaicSync", Date: { now: () => now },
       DEVICE_SNAPSHOT_GC_INTERVAL_MS: 1000,
@@ -104,6 +120,8 @@ for (const browser of ["firefox", "chrome"]) {
       compareDeviceSnapshotGenerationRecency: (a,b) => (b.updatedAt||0)-(a.updatedAt||0),
       compareStableText: (a,b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
+      planDeviceSnapshotGarbageCollection: owner.planDeviceSnapshotGarbageCollection,
+      confirmedDeviceSnapshotGarbageCollectionKeys: owner.confirmedDeviceSnapshotGarbageCollectionKeys,
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
       writeLocalMeta: async value => value
     };
@@ -125,6 +143,17 @@ for (const browser of ["firefox", "chrome"]) {
     const orphanRoot = "mosaicsync.sync.device.remote.snapshot.inflight";
     const chunk = `${orphanRoot}.chunk.0`;
     const store = { [chunk]: { data: "in-flight" } };
+    const owner = createTestRecoveryLifecycle({
+      policy: {
+        gcIntervalMs: 1000,
+        orphanGraceMs: 5000,
+        orphanMinGcPasses: 2,
+        maxGenerationsPerDevice: 2,
+        maxRecentDevices: 8,
+        retentionMs: 999999999,
+        capMinAgeMs: 999999999
+      }
+    });
     const context = {
       console, PRODUCT_NAME: "MosaicSync", Date: { now: () => now },
       DEVICE_SNAPSHOT_GC_INTERVAL_MS: 1000,
@@ -143,6 +172,8 @@ for (const browser of ["firefox", "chrome"]) {
       compareDeviceSnapshotGenerationRecency: () => 0,
       compareStableText: (a,b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
+      planDeviceSnapshotGarbageCollection: owner.planDeviceSnapshotGarbageCollection,
+      confirmedDeviceSnapshotGarbageCollectionKeys: owner.confirmedDeviceSnapshotGarbageCollectionKeys,
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
       writeLocalMeta: async value => value
     };
@@ -161,10 +192,8 @@ for (const browser of ["firefox", "chrome"]) {
 for (const browser of ["firefox", "chrome"]) {
   test(`1.30.18.5 ${browser} near-quota pre-retirement plus failed replacement still preserves one verified recovery`, async () => {
     const src = readBackgroundSource(browser);
-    const code = [
-      "compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "syncItemsFitInSnapshot",
-      "prepareDeviceSnapshotPublicationCapacity", "publishProfileDeviceSnapshot"
-    ].map(name => extractFunction(src, name)).join("\n");
+    const code = ["prepareDeviceSnapshotPublicationCapacity", "publishProfileDeviceSnapshot"]
+      .map(name => extractFunction(src, name)).join("\n");
     const pad = size => "x".repeat(size);
     const rootA = "root-a", rootB = "root-b", rootC = "root-c";
     const store = {
@@ -183,6 +212,11 @@ for (const browser of ["firefox", "chrome"]) {
       all[rootC] && { rootKey: rootC, deviceId: "clone", profileComplete: true, updatedAt: 30, publishedAt: 30, commitId: "c" }
     ].filter(Boolean);
     const entryBytes = (key, value) => Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value));
+    const owner = createTestRecoveryLifecycle({
+      compareDeviceSnapshotGenerationRecency: (left, right) => (right.updatedAt || 0) - (left.updatedAt || 0),
+      syncEntryBytes: entryBytes,
+      policy: { syncQuotaBytes: 1000, syncQuotaMaxItems: 100 }
+    });
     const context = {
       console, PRODUCT_NAME: "MosaicSync", PERSONAL_SPACE_ID: "personal", WORK_SPACE_ID: "work",
       SYNC_QUOTA_BYTES: 1000, SYNC_QUOTA_MAX_ITEMS: 100,
@@ -193,6 +227,8 @@ for (const browser of ["firefox", "chrome"]) {
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
       readDeviceSnapshots: async all => decoded(all || {}),
+      syncItemsFitInSnapshot: owner.syncItemsFitInSnapshot,
+      planDeviceSnapshotPublicationCapacity: owner.planDeviceSnapshotPublicationCapacity,
       writeSyncItems: async items => {
         if (Object.hasOwn(items, rootC)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
         Object.assign(store, structuredClone(items));

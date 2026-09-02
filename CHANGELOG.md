@@ -1,3 +1,12 @@
+## 1.30.18.23
+
+- Advances Step 4 with a browser-neutral Recovery lifecycle boundary in `src/shared/background/recovery-generation-lifecycle.js`.
+- Isolates verified complete-generation classification, quota-capacity and fallback-retirement planning, superseded-generation retention, and stale/orphan garbage-collection eligibility from browser effects.
+- Keeps all `storage.sync` reads/removals and local metadata writes in the shared background orchestrator; destructive cleanup still re-reads Sync and revalidates candidates immediately before deletion.
+- Preserves 1.30.18.22 behavior and wire compatibility, including previous-generation fallback readability, verified-only safety slots, local-observation aging, conservative orphan grace, future-schema preservation, root-last publication, and failed-replacement fallback safety.
+- Adds direct lifecycle equivalence, purity, worker-restart, quota, stale-proof, and delayed-delivery interruption coverage, while migrating historical Recovery regressions to follow the new source owner.
+- No product feature, UI, permission, CSP, telemetry/backend, persisted key/schema/payload, privacy boundary, normal Sync behavior, or catastrophic continuity change.
+
 ## 1.30.18.22
 
 - Hardens immutable Recovery publication so a new complete Personal+Work generation must verify its own authoritative root and chunks before an older verified fallback can be pruned.

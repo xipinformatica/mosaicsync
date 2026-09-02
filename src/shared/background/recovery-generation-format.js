@@ -13,8 +13,8 @@
  *
  * It deliberately does NOT own storage access, publication ordering, quota
  * retirement, GC, catastrophic-loss continuity, or Sync merge policy. The
- * adjacent Recovery store owns only storage/publication mechanics; all policy
- * remains in the shared core.
+ * adjacent Recovery store owns storage/publication mechanics, the lifecycle
+ * module owns retirement/GC decisions, and the shared core applies effects.
  */
 import {
   DEVICE_SNAPSHOT_SCHEMA_VERSION,

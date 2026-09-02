@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.22",
-      "rawBytes": 2173094,
-      "deflatedBytes": 640267,
+      "version": "1.30.18.23",
+      "rawBytes": 2177068,
+      "deflatedBytes": 641305,
       "categories": {
         "assets": {
           "files": 2,
@@ -12,9 +12,9 @@
           "deflatedBytes": 700
         },
         "background": {
-          "files": 6,
-          "rawBytes": 337633,
-          "deflatedBytes": 77043
+          "files": 7,
+          "rawBytes": 341607,
+          "deflatedBytes": 78083
         },
         "localization": {
           "files": 34,
@@ -59,7 +59,7 @@
         "shared-core": {
           "files": 24,
           "rawBytes": 271122,
-          "deflatedBytes": 76841
+          "deflatedBytes": 76839
         },
         "wallpapers": {
           "files": 29,
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 303653,
-          "deflatedBytes": 66977
+          "rawBytes": 292441,
+          "deflatedBytes": 64089
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.22",
-      "rawBytes": 2194738,
-      "deflatedBytes": 654783,
+      "version": "1.30.18.23",
+      "rawBytes": 2198712,
+      "deflatedBytes": 655821,
       "categories": {
         "assets": {
           "files": 6,
@@ -266,9 +266,9 @@
           "deflatedBytes": 12143
         },
         "background": {
-          "files": 6,
-          "rawBytes": 336962,
-          "deflatedBytes": 76793
+          "files": 7,
+          "rawBytes": 340936,
+          "deflatedBytes": 77833
         },
         "localization": {
           "files": 34,
@@ -313,7 +313,7 @@
         "shared-core": {
           "files": 25,
           "rawBytes": 282093,
-          "deflatedBytes": 80258
+          "deflatedBytes": 80256
         },
         "wallpapers": {
           "files": 29,
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 303653,
-          "deflatedBytes": 66977
+          "rawBytes": 292441,
+          "deflatedBytes": 64089
         },
         {
           "path": "core/public_suffix_list.dat",

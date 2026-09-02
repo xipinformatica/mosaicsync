@@ -1,4 +1,5 @@
 import { readBackgroundSource } from "./harness/background-source.mjs";
+import { createTestRecoveryLifecycle } from "./harness/recovery-lifecycle.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -149,6 +150,13 @@ for (const browser of ["firefox", "chrome"]) {
     const all = {};
     for (const root of roots) { all[root.key] = { ...root, kind: "root" }; all[`${root.key}.chunk.0`] = { data: root.key }; }
     const removed = [];
+    const owner = createTestRecoveryLifecycle({
+      compareDeviceSnapshotGenerationRecency: (left, right) =>
+        (Number(right?.updatedAt) || 0) - (Number(left?.updatedAt) || 0) ||
+        (Number(right?.publishedAt) || 0) - (Number(left?.publishedAt) || 0),
+      deviceRootDescriptor: (key, value) => value?.kind === "root" ? { ...value, key } : null,
+      policy: { maxGenerationsPerDevice: 2 }
+    });
     const context = {
       DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE: 2,
       compareStableText: (a, b) => String(a).localeCompare(String(b)),
@@ -161,6 +169,8 @@ for (const browser of ["firefox", "chrome"]) {
         .map(root => ({ ...root, rootKey: root.key, profileComplete: true })),
       deviceSnapshotKeysForRoot: (values, rootKey) => Object.keys(values).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`)),
       browser: { storage: { sync: { get: async () => structuredClone(all) } } },
+      supersededDeviceSnapshotRootKeys: owner.supersededDeviceSnapshotRootKeys,
+      confirmedSupersededDeviceSnapshotKeys: owner.confirmedSupersededDeviceSnapshotKeys,
       removeSyncItems: async keys => { removed.push(...keys); for (const key of keys) delete all[key]; }
     };
     vm.createContext(context); vm.runInContext(`${code}; this.prune=pruneSupersededDeviceSnapshotGenerations;`, context);
@@ -173,8 +183,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.30.18.4 ${browser} quota-aware recovery rotation keeps one verified fallback while making room for the new copy`, async () => {
     const src = readBackgroundSource(browser);
-    const code = ["compareDeviceSnapshotGenerationRecency", "deviceSnapshotKeysForRoot", "syncItemsFitInSnapshot", "prepareDeviceSnapshotPublicationCapacity"]
-      .map(name => extractFunction(src, name)).join("\n");
+    const code = extractFunction(src, "prepareDeviceSnapshotPublicationCapacity");
     const pad = size => "x".repeat(size);
     const all = {
       "core": { data: pad(120) },
@@ -188,11 +197,19 @@ for (const browser of ["firefox", "chrome"]) {
     ];
     const removed = [];
     const entryBytes = (key, value) => Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value));
+    const owner = createTestRecoveryLifecycle({
+      compareDeviceSnapshotGenerationRecency: (left, right) =>
+        (Number(right?.updatedAt) || 0) - (Number(left?.updatedAt) || 0),
+      syncEntryBytes: entryBytes,
+      policy: { syncQuotaBytes: 1000, syncQuotaMaxItems: 100 }
+    });
     const context = {
       SYNC_QUOTA_BYTES: 1000, SYNC_QUOTA_MAX_ITEMS: 100,
       syncEntryBytes: entryBytes,
       compareStableText: (a, b) => String(a).localeCompare(String(b)),
       readDeviceSnapshots: async () => snapshots,
+      syncItemsFitInSnapshot: owner.syncItemsFitInSnapshot,
+      planDeviceSnapshotPublicationCapacity: owner.planDeviceSnapshotPublicationCapacity,
       removeSyncItems: async keys => removed.push(...keys)
     };
     vm.createContext(context); vm.runInContext(`${code}; this.prepare=prepareDeviceSnapshotPublicationCapacity; this.fits=syncItemsFitInSnapshot;`, context);
@@ -217,6 +234,17 @@ for (const browser of ["firefox", "chrome"]) {
       [`${freshRoot}.chunk.0`]: { publishedAt: now, data: "fresh" },
       [`${legacyRoot}.chunk.0`]: { data: "legacy-3" }
     };
+    const owner = createTestRecoveryLifecycle({
+      policy: {
+        gcIntervalMs: 1000,
+        orphanGraceMs: 5000,
+        orphanMinGcPasses: 2,
+        maxGenerationsPerDevice: 2,
+        maxRecentDevices: 8,
+        retentionMs: 999999999,
+        capMinAgeMs: 999999999
+      }
+    });
     const context = {
       console, PRODUCT_NAME: "MosaicSync", Date: { now: () => now },
       DEVICE_SNAPSHOT_GC_INTERVAL_MS: 1000, DEVICE_SNAPSHOT_ORPHAN_GRACE_MS: 5000, DEVICE_SNAPSHOT_ORPHAN_MIN_GC_PASSES: 2,
@@ -231,6 +259,8 @@ for (const browser of ["firefox", "chrome"]) {
       compareDeviceSnapshotGenerationRecency: () => 0,
       compareStableText: (a, b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
+      planDeviceSnapshotGarbageCollection: owner.planDeviceSnapshotGarbageCollection,
+      confirmedDeviceSnapshotGarbageCollectionKeys: owner.confirmedDeviceSnapshotGarbageCollectionKeys,
       removeSyncItems: async keys => { for (const key of keys) delete store[key]; },
       writeLocalMeta: async value => value
     };

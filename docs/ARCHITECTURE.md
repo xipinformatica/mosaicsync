@@ -210,3 +210,11 @@ Recovery readability and retirement authority are now explicitly separate. A tor
 Both immediate retention and periodic GC derive their generation sets from fully decoded, complete Personal+Work roots. Current-schema roots that do not decode enter the existing conservative orphan observation ledger instead of competing by untrusted timestamps. Unknown/future root schemas remain untouched. Before deletion, the core obtains a fresh full Sync view and repeats completeness/staleness classification, closing the MV3 yield window in which delayed chunks can make an earlier torn view complete.
 
 The ownership boundary introduced in 1.30.18.20–.21 remains intact: format/validation stays in `recovery-generation-format.js`, mechanical commit/read/verification stays in `recovery-generation-store.js`, and the shared core retains retention, quota, GC and continuity policy. Persisted formats and external behavior are unchanged.
+
+## 1.30.18.23 Step 4: Recovery lifecycle boundary
+
+Recovery lifecycle decisions now have a dedicated browser-neutral owner: `src/shared/background/recovery-generation-lifecycle.js`. It classifies independently verified complete generations, plans quota-driven fallback retirement, selects superseded generations, advances local-observation GC ledgers, and determines stale/orphan candidates. Every decision is synchronous and depends only on an explicit Sync view, decoded snapshots, persisted observation metadata, policy constants, and caller-supplied time.
+
+The shared background core remains the only effectful orchestrator. It reads `storage.sync`, asks the lifecycle module for a plan, obtains a fresh view before destructive work, asks the module to confirm that the same proof still holds, and only then removes keys or writes local metadata. GC timing, publication trust, ordinary Sync merge/reconcile behavior, mutation journals, reset intent, and catastrophic-loss continuity remain in the core.
+
+The three Step-4 seams therefore answer separate questions: the format module defines what a valid generation is; the store performs mechanical read/prepare/commit/verify operations; the lifecycle module decides which verified, stale, or orphan generations are eligible for retention effects. Persisted keys, schemas, payloads, chunks-first/root-last publication, previous fallback semantics, and external behavior remain unchanged.
