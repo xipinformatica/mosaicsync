@@ -189,7 +189,7 @@ export function createRecoveryGenerationStore({
     const values = all && typeof all === "object" ? all : await readAllSyncItems();
     const snapshots = await readDeviceSnapshots(values);
     const committedSnapshot = snapshots.find(snapshot =>
-      snapshot.rootKey === rootKey && snapshot.profileComplete === true
+      snapshot.rootKey === rootKey && snapshot.profileComplete === true && snapshot.usedPreviousGeneration !== true
     ) || null;
     return { all: values, snapshots, committedSnapshot };
   }

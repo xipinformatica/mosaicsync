@@ -93,6 +93,14 @@ for (const browser of ["firefox", "chrome"]) {
       DEVICE_SNAPSHOT_CAP_MIN_AGE_MS: 1000,
       browser: { storage: { sync: { get: async () => structuredClone(store) } } },
       deviceRootDescriptor: (key, value) => value?.kind === "root" ? { key, deviceId: value.deviceId, updatedAt: value.updatedAt, publishedAt: value.publishedAt, commitId: "x" } : null,
+      readDeviceSnapshots: async values => Object.hasOwn(values, remoteRoot)
+        ? [{ rootKey: remoteRoot, deviceId: "remote", updatedAt: 100, publishedAt: 1, commitId: "x", profileComplete: true }]
+        : [],
+      verifiedProfileDeviceSnapshotDescriptors: (values, snapshots, deviceId = "") => snapshots
+        .map(snapshot => ({ key: snapshot.rootKey, deviceId: snapshot.deviceId, updatedAt: snapshot.updatedAt, publishedAt: snapshot.publishedAt, commitId: snapshot.commitId }))
+        .filter(entry => !deviceId || entry.deviceId === deviceId),
+      currentDeviceSnapshotRootHeader: () => false,
+      deviceSnapshotKeysForRoot: (values, rootKey) => Object.keys(values).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`)),
       compareDeviceSnapshotGenerationRecency: (a,b) => (b.updatedAt||0)-(a.updatedAt||0),
       compareStableText: (a,b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),
@@ -128,6 +136,10 @@ for (const browser of ["firefox", "chrome"]) {
       DEVICE_SNAPSHOT_CAP_MIN_AGE_MS: 999999999,
       browser: { storage: { sync: { get: async () => structuredClone(store) } } },
       deviceRootDescriptor: () => null,
+      readDeviceSnapshots: async () => [],
+      verifiedProfileDeviceSnapshotDescriptors: () => [],
+      currentDeviceSnapshotRootHeader: () => false,
+      deviceSnapshotKeysForRoot: (values, rootKey) => Object.keys(values).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`)),
       compareDeviceSnapshotGenerationRecency: () => 0,
       compareStableText: (a,b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),

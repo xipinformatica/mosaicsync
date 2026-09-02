@@ -202,3 +202,11 @@ The second Step-4 phase adds `src/shared/background/recovery-generation-store.js
 The core still chooses the authoritative records/settings/tombstones before publication and still owns every policy decision after preparation: publication trust, ordinary Sync ledger reconciliation, capacity checks, verified-fallback retention, superseded-generation retirement, stale/orphan GC timing, mutation journals and catastrophic-loss quarantine/restart behavior. The existing ordering remains `prepare capacity → write new chunks → write authoritative root → prune only while protecting the new root → verify`.
 
 The historical 96-part ceiling now has one named `DEVICE_SNAPSHOT_MAX_CHUNKS` constant used by both publication and decoding. Its value and all wire semantics are unchanged. Step 4 has clearer representation and storage boundaries, but the Recovery state machine remains intentionally inside the core for a later separately characterized phase.
+
+## 1.30.18.22 Step 4: validation-aware retention and cleanup
+
+Recovery readability and retirement authority are now explicitly separate. A torn immutable root may still decode the independently stored generation named by its `previousProfile` descriptor; this is a valid emergency read, but `usedPreviousGeneration` prevents the torn carrier root from being treated as a verified new generation. Post-write verification therefore proves the newly committed root and chunks themselves before any normal pruning begins.
+
+Both immediate retention and periodic GC derive their generation sets from fully decoded, complete Personal+Work roots. Current-schema roots that do not decode enter the existing conservative orphan observation ledger instead of competing by untrusted timestamps. Unknown/future root schemas remain untouched. Before deletion, the core obtains a fresh full Sync view and repeats completeness/staleness classification, closing the MV3 yield window in which delayed chunks can make an earlier torn view complete.
+
+The ownership boundary introduced in 1.30.18.20–.21 remains intact: format/validation stays in `recovery-generation-format.js`, mechanical commit/read/verification stays in `recovery-generation-store.js`, and the shared core retains retention, quota, GC and continuity policy. Persisted formats and external behavior are unchanged.

@@ -1,3 +1,13 @@
+## 1.30.18.22
+
+- Hardens immutable Recovery publication so a new complete Personal+Work generation must verify its own authoritative root and chunks before an older verified fallback can be pruned.
+- Distinguishes a genuinely verified root from a torn root that remains readable only through its embedded previous-generation fallback; fallback reads remain available for recovery but cannot authorize retirement or consume a verified-retention slot.
+- Makes immediate retention and periodic garbage collection count only independently verified complete generations, preventing newer malformed/torn roots from displacing the last known-good copy.
+- Gives current-schema unreadable roots the existing conservative elapsed-time and repeated-observation grace, while preserving unknown/future schemas.
+- Re-reads and re-decodes browser Sync immediately before destructive pruning or GC so a generation that completes during an MV3 worker turn is not deleted.
+- Adds generated Firefox/Chrome regressions for interrupted publication, post-write verification ordering/failure, fallback-decoded roots, delayed chunk arrival, partial multi-batch rollback and safe reclamation.
+- No product feature, UI, permission, CSP, telemetry/backend, persisted key/schema, privacy boundary or normal Sync behavior change.
+
 ## 1.30.18.21
 
 - Advances Step 4 with a narrow Recovery-generation storage/publication boundary in `src/shared/background/recovery-generation-store.js`; the existing format module remains the sole wire-format/validation owner.

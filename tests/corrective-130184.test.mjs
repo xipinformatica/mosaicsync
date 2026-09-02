@@ -153,6 +153,14 @@ for (const browser of ["firefox", "chrome"]) {
       DEVICE_SNAPSHOT_MAX_GENERATIONS_PER_DEVICE: 2,
       compareStableText: (a, b) => String(a).localeCompare(String(b)),
       deviceRootDescriptor: (key, value) => value?.kind === "root" ? { ...value, key } : null,
+      verifiedProfileDeviceSnapshotDescriptors: (values, snapshots, deviceId = "") => snapshots
+        .map(snapshot => ({ ...values[snapshot.rootKey], key: snapshot.rootKey }))
+        .filter(entry => !deviceId || entry.deviceId === deviceId),
+      readDeviceSnapshots: async values => roots
+        .filter(root => Object.hasOwn(values, root.key))
+        .map(root => ({ ...root, rootKey: root.key, profileComplete: true })),
+      deviceSnapshotKeysForRoot: (values, rootKey) => Object.keys(values).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`)),
+      browser: { storage: { sync: { get: async () => structuredClone(all) } } },
       removeSyncItems: async keys => { removed.push(...keys); for (const key of keys) delete all[key]; }
     };
     vm.createContext(context); vm.runInContext(`${code}; this.prune=pruneSupersededDeviceSnapshotGenerations;`, context);
@@ -216,6 +224,10 @@ for (const browser of ["firefox", "chrome"]) {
       DEVICE_SNAPSHOT_RETENTION_MS: 999999999, DEVICE_SNAPSHOT_CAP_MIN_AGE_MS: 999999999,
       browser: { storage: { sync: { get: async () => structuredClone(store) } } },
       deviceRootDescriptor: () => null,
+      readDeviceSnapshots: async () => [],
+      verifiedProfileDeviceSnapshotDescriptors: () => [],
+      currentDeviceSnapshotRootHeader: () => false,
+      deviceSnapshotKeysForRoot: (values, rootKey) => Object.keys(values).filter(key => key === rootKey || key.startsWith(`${rootKey}.chunk.`)),
       compareDeviceSnapshotGenerationRecency: () => 0,
       compareStableText: (a, b) => String(a).localeCompare(String(b)),
       isDeviceSnapshotChunkKey: key => key.includes(".chunk."),

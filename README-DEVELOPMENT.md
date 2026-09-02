@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.21.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.22.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.18.22 Step 4 validation-aware Recovery retention policy
+
+- Only a generation that decodes its own complete Personal+Work root and chunks may authorize fallback retirement or consume one of the two retained generation slots.
+- A torn root decoded through `previousProfile` remains a valid Recovery read, but `usedPreviousGeneration` disqualifies that root from post-write verification and retention accounting.
+- New publications are verified before normal superseded-generation pruning. Failed verification preserves every known-good fallback.
+- Current-schema unreadable roots use the existing elapsed-time plus repeated-GC-observation orphan grace. Unknown or future schemas are preserved.
+- Pruning and GC must re-read and re-decode `storage.sync` immediately before deleting keys; roots that become complete or cease to be demonstrably stale survive.
+- Keys, schemas, permissions, privacy boundaries, normal Sync policy and user-facing behavior remain frozen.
 
 ## 1.30.18.21 Step 4 Recovery-generation storage/publication boundary policy
 
