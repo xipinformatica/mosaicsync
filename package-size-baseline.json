@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.24",
+      "version": "1.30.18.25",
       "rawBytes": 2181681,
       "deflatedBytes": 642937,
       "categories": {
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.24",
+      "version": "1.30.18.25",
       "rawBytes": 2203325,
-      "deflatedBytes": 657452,
+      "deflatedBytes": 657453,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1370,
-          "deflatedBytes": 555
+          "deflatedBytes": 556
         },
         "manifest-localization": {
           "files": 33,

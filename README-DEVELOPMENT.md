@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.24.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.25.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.18.25 Step 5.1 inventory / ownership policy
+
+- Step 5 begins with evidence only. 1.30.18.25 may add deterministic inventory tooling, documentation and ownership regressions, but it must not perform a production refactor.
+- Steps 1–3 and the audited 1.30.18.24 Step-4 Recovery architecture are frozen. Do not change Recovery, first-paint/cache ownership, browser capability semantics, Sync behavior or persisted formats without a demonstrated production defect.
+- New Tab already has one canonical source owner under `src/shared/newtab`; do not create or merge browser-specific New Tab copies. The old anticipated Step-5 browser-New-Tab consolidation is therefore already satisfied by Step 3.2.
+- Firefox and Chromium overlays must be judged by capability responsibility, not file-count symmetry. Chrome's `platform.js`, `permission-platform.js`, `i18n-platform.js`, browser shim and background adapter represent genuine platform differences and are not cleanup targets merely because shared defaults exist.
+- Large files are only concentration signals. `newtab.js`, `background-core.js`, `model.js` and `storage.js` may be considered in later Step-5 phases only when a cohesive owner can be named and generated-browser behavior can be proven unchanged.
+- No source may be deleted as dead from grep/static-import evidence alone; manifest entrypoints, classic bootstrap scripts, workers and MV3 listener reachability require explicit runtime-path proof.
 
 ## 1.30.18.24 Step 4 Recovery continuity boundary policy
 

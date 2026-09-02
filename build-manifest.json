@@ -3,7 +3,7 @@
   "generatedFrom": "canonical shared source + browser capability overlays + deterministic generated browser shells/locales/runtime data",
   "browsers": {
     "firefox": {
-      "version": "1.30.18.24",
+      "version": "1.30.18.25",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "2074c52fceddb2826159146f99ef32784be49aa053a490123d48fcf35f296e96",
@@ -80,7 +80,7 @@
         "background/runtime-utils.js": "8c6fd3e0a8670b5932e55ed043341ed1d27599b1ae82701bf80ebfed8a8612b2",
         "core/bookmarks.js": "1cbb968a7a60031224a94d5d007aa1a27635e2c6058849dd654d0f961f8fee98",
         "core/concurrency.js": "04dec926562d5e02a4599aeece4bf73d24e433e0b232e3cf89937e5066cb6e04",
-        "core/constants.js": "96e18d3847266f43bc40912fce2a054d2b2d4a92603cd9c97d0bebfeb3c20473",
+        "core/constants.js": "0a0a0adf3a33956049221eff02fead391bfa1c190b29a0f8e7139d83af66e583",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -137,7 +137,7 @@
         "core/storage.js": "5871b4f13b033145fa8861f61d4ba66b373c05cca8b510b30cabd53011ddf48b",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "0b4011decce4fd9df6353e5f5521bcc40f9c5e615a7437dd64698bed16a764a4",
+        "manifest.json": "095e6c1019ae64a5f7f5ce91e0c6507b81e409b0a0fe24e3029140b19561bcfe",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/bootstrap-config.js": "76dab7278f1b582afdcc5708872a9eea93ceb60e951964028e43aa0a55740f40",
         "newtab/builtin-icons.js": "49bc6620595aa7c8cf3e61d21f3f6dbf261926f722a6677feb4687923763b23b",
@@ -145,7 +145,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "393de380f041f30669e447ff9d1b1b89375ad754904674525dbe7971c801f771",
         "newtab/newtab-secondary.css": "3dd59f9a2b250bfb124b5bdb37dcb9cf07b2e8ba4f9828543ef219da6b970e26",
-        "newtab/newtab.html": "a01216ee9a0ec52bbeed0e825dbaafd3e1fdcac62a29099f3f8b7b2578f79791",
+        "newtab/newtab.html": "9bea3394455762492d7c66de57a2a4c2229f04eb1f31d61cda6cfd040c04d0a9",
         "newtab/newtab.js": "46992d1c5a8d9bc16906c88cb00b5da7de9b78f157fa7403355fececd3dad0eb",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
@@ -159,7 +159,7 @@
       }
     },
     "chrome": {
-      "version": "1.30.18.24",
+      "version": "1.30.18.25",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "0426e35a30ece3fe6164f1408272aef0f62d08ca1a718763f8f8b41e3e3effff",
@@ -241,7 +241,7 @@
         "core/bookmarks.js": "1cbb968a7a60031224a94d5d007aa1a27635e2c6058849dd654d0f961f8fee98",
         "core/browser-shim.js": "9538516c44f10cc0b76b2d40e948bd3fcd0928f67f82e07980f341485bf618c2",
         "core/concurrency.js": "04dec926562d5e02a4599aeece4bf73d24e433e0b232e3cf89937e5066cb6e04",
-        "core/constants.js": "96e18d3847266f43bc40912fce2a054d2b2d4a92603cd9c97d0bebfeb3c20473",
+        "core/constants.js": "0a0a0adf3a33956049221eff02fead391bfa1c190b29a0f8e7139d83af66e583",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -298,7 +298,7 @@
         "core/storage.js": "5871b4f13b033145fa8861f61d4ba66b373c05cca8b510b30cabd53011ddf48b",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "35f0ac88e051ddf4cc9af24144d439407668ada26bc12669272df60bace68508",
+        "manifest.json": "8de0a0578e8fbfabce249f2720dcecef3c8f170afb4133b31f83654bbe26cc2c",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/bootstrap-config.js": "76dab7278f1b582afdcc5708872a9eea93ceb60e951964028e43aa0a55740f40",
         "newtab/builtin-icons.js": "49bc6620595aa7c8cf3e61d21f3f6dbf261926f722a6677feb4687923763b23b",
@@ -306,7 +306,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "393de380f041f30669e447ff9d1b1b89375ad754904674525dbe7971c801f771",
         "newtab/newtab-secondary.css": "3dd59f9a2b250bfb124b5bdb37dcb9cf07b2e8ba4f9828543ef219da6b970e26",
-        "newtab/newtab.html": "68bc338b96bbc5eebd80c8ae6df8fa9413d3cbfe2be1ed17361c40d51eeb73e2",
+        "newtab/newtab.html": "cb26eb6e89c6ee46461739a0aa0c875feb263ff269a955c4e79baa79bb05713e",
         "newtab/newtab.js": "46992d1c5a8d9bc16906c88cb00b5da7de9b78f157fa7403355fececd3dad0eb",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",

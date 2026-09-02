@@ -1,3 +1,12 @@
+## 1.30.18.25
+
+- Begins Step 5 with a reproducible whole-codebase ownership and complexity inventory, without changing runtime behavior.
+- Confirms that New Tab already has one canonical shared source owner from the completed Step-3.2 browser-boundary consolidation; there are no Firefox/Chromium New Tab source copies to merge in Step 5.
+- Adds deterministic `npm run inventory` tooling plus permanent ownership regressions for the shared New Tab source and the intentional browser overlay topology.
+- Records the largest remaining canonical code concentrations (`newtab.js`, non-Recovery `background-core.js`, `model.js`, and `storage.js`) as responsibility-review candidates only; no source is declared dead or extracted from size/static reachability alone.
+- Keeps Steps 1–3 and the audited Step-4 Recovery architecture frozen. The only runtime-source change is unified release identity from 1.30.18.24 to 1.30.18.25.
+- No feature, UI behavior, permission, CSP, schema, persisted key/payload, locale, first-paint/cache ownership, favicon privacy policy, normal Sync or Recovery behavior change.
+
 ## 1.30.18.24
 
 - Completes the planned Step-4 implementation with a browser-neutral catastrophic-Recovery continuity boundary in `src/shared/background/recovery-continuity.js`.
