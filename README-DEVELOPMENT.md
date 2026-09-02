@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.25.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.26.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+
+## 1.30.18.26 Step 5.2 New Tab responsibility policy
+
+- Step 5.2 extracts only responsibilities that are cohesive, browser-neutral and deterministic; line count alone is not an extraction mandate.
+- The first justified seam is background-color conversion/normalization in `src/shared/newtab/appearance-color.js`. It owns only clamp/RGB/HSV/hex transformations and takes validation as an explicit dependency.
+- `newtab.js` retains all DOM, pointer, Settings, persistence, preview, repaint and event-order orchestration. Startup/first-paint, Frequently Visited, artwork hydration and Sync/Recovery UI remain frozen unless a concrete defect requires them.
+- Every Step-5.2 extraction needs a frozen-expression equivalence test plus generated Firefox and Chromium execution coverage.
+- Do not create factory/controller abstractions merely to move closure-heavy UI code out of `newtab.js`; extraction must reduce cognitive coupling rather than relocate it.
 
 ## 1.30.18.25 Step 5.1 inventory / ownership policy
 

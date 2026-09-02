@@ -1,3 +1,12 @@
+## 1.30.18.26
+
+- Advances Step 5.2 with one narrow browser-neutral responsibility extraction from the canonical shared New Tab implementation.
+- Moves only deterministic background-color conversion/normalization helpers (`clampUnit`, RGB↔HSV/hex conversion and hex normalization) into `src/shared/newtab/appearance-color.js`; the exact 1.30.18.25 expressions are preserved.
+- Keeps all DOM, pointer, Settings, persistence, appearance-preview and repaint sequencing in `newtab.js`; no first-paint/cache, Frequently Visited, favicon, Sync, Recovery or browser-adapter boundary is reopened.
+- Adds direct frozen-expression equivalence coverage, purity/ownership assertions, and execution of the generated Firefox and Chromium copies of the extracted module.
+- Records the Step-5.2 responsibility decision: closure-heavy UI subsystems are not extracted merely to reduce `newtab.js` line count.
+- No feature, UI behavior, permission, CSP, schema, persisted key/payload, locale, Sync/Recovery behavior or browser-parity change.
+
 ## 1.30.18.25
 
 - Begins Step 5 with a reproducible whole-codebase ownership and complexity inventory, without changing runtime behavior.

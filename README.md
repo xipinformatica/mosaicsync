@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.25**
+**Current source release: 1.30.18.26**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -65,11 +65,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.25** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.26** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.25 begins **Step 5 final complexity reduction** with inventory and ownership proof only. The deterministic inventory confirms that New Tab already has one canonical shared source owner, so Step 5 will not redo the completed Step-3 browser consolidation. It records the largest remaining canonical code concentrations for later responsibility analysis while declaring no runtime source dead from size or static reachability alone. Steps 1–3 and the audited Step-4 Recovery architecture are frozen; the only runtime-source change in this release is the unified version identity. No product behavior, permission, CSP, schema, persisted payload, Sync/Recovery algorithm, first-paint/cache ownership or favicon privacy policy changes.
+1.30.18.26 advances **Step 5.2 responsibility decomposition** with one deliberately narrow extraction from the canonical New Tab implementation: deterministic background-color conversion and normalization now live in `newtab/appearance-color.js`. DOM/event handling, Settings preview/paint sequencing, persistence, first-paint/cache ownership, Sync/Recovery, favicon behavior and browser overlays remain unchanged. The extraction is pinned against the exact 1.30.18.25 helper expressions and executed from both generated browser runtimes.
 
 1.30.18.24 is the frozen **Step 4 Recovery ownership endpoint**. Its post-release forensic audits found no corrective production defect requiring another Recovery release.
 
