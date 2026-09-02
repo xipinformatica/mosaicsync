@@ -61,7 +61,7 @@ test("1.30.14 reset markers require a non-empty initiating device id", () => {
   for (const browser of ["firefox", "chrome"]) {
     const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("function validResetIntent");
-    const end = source.indexOf("function recoveryStalePenalty", start);
+    const end = source.indexOf("async function scheduleSyncRecoveryAlarm", start);
     const block = source.slice(start, end);
     assert.match(block, /value\.initiatedByDevice\.length > 0/);
   }

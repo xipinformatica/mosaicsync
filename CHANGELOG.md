@@ -1,3 +1,12 @@
+## 1.30.18.24
+
+- Completes the planned Step-4 implementation with a browser-neutral catastrophic-Recovery continuity boundary in `src/shared/background/recovery-continuity.js`.
+- Isolates continuity/tombstone normalization, deterministic stale penalty and device jitter, persisted startup warmup, quarantine entry, begin-attempt/restart-grace, retry/exhaustion, healthy/recovered, and intentional-reset transition planning.
+- Keeps all effects in `background-core.js`: browser storage reads/writes, alarms, diagnostics/status, Recovery publication, post-publication verification, cross-Space and local pending-mutation replay, reset handling, and normal Sync reconciliation.
+- Preserves 1.30.18.23 behavior, keys, schemas, state names, persisted formats, timing constants, attempt limits, and safety ordering through direct transition equivalence plus generated Firefox/Chromium interruption coverage.
+- Adds explicit coverage for MV3 worker restart, transient zero from `getBytesInUse`, partial delivery, retry exhaustion, intentional reset, pending-journal quarantine ordering, and byte-identical generated continuity owners.
+- No product feature, UI, permission, CSP, telemetry/backend, privacy boundary, Recovery/Sync/state schema, persisted payload, timing policy, or normal Sync behavior change. Step 4 is ready for its requested post-release audit before freeze.
+
 ## 1.30.18.23
 
 - Advances Step 4 with a browser-neutral Recovery lifecycle boundary in `src/shared/background/recovery-generation-lifecycle.js`.

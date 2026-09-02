@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.23",
-      "rawBytes": 2177068,
-      "deflatedBytes": 641305,
+      "version": "1.30.18.24",
+      "rawBytes": 2181681,
+      "deflatedBytes": 642937,
       "categories": {
         "assets": {
           "files": 2,
@@ -12,9 +12,9 @@
           "deflatedBytes": 700
         },
         "background": {
-          "files": 7,
-          "rawBytes": 341607,
-          "deflatedBytes": 78083
+          "files": 8,
+          "rawBytes": 346220,
+          "deflatedBytes": 79715
         },
         "localization": {
           "files": 34,
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 292441,
-          "deflatedBytes": 64089
+          "rawBytes": 287834,
+          "deflatedBytes": 63146
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.23",
-      "rawBytes": 2198712,
-      "deflatedBytes": 655821,
+      "version": "1.30.18.24",
+      "rawBytes": 2203325,
+      "deflatedBytes": 657452,
       "categories": {
         "assets": {
           "files": 6,
@@ -266,9 +266,9 @@
           "deflatedBytes": 12143
         },
         "background": {
-          "files": 7,
-          "rawBytes": 340936,
-          "deflatedBytes": 77833
+          "files": 8,
+          "rawBytes": 345549,
+          "deflatedBytes": 79465
         },
         "localization": {
           "files": 34,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1370,
-          "deflatedBytes": 556
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 292441,
-          "deflatedBytes": 64089
+          "rawBytes": 287834,
+          "deflatedBytes": 63146
         },
         {
           "path": "core/public_suffix_list.dat",

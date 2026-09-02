@@ -1,10 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.23.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.24.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+## 1.30.18.24 Step 4 Recovery continuity boundary policy
+
+- `src/shared/background/recovery-continuity.js` is the browser-neutral owner of continuity/tombstone normalization, deterministic stale penalty and jitter, and quarantine, startup-warmup, attempt, restart-grace, retry/failure, healthy, recovered, and intentional-reset transition planning.
+- Every clock value is supplied explicitly by `background-core.js`; the continuity module must not read browser storage, schedule alarms, publish Recovery data, verify publications, replay mutation journals, reconcile normal Sync, or perform reset effects.
+- `background-core.js` remains the sole orchestrator for local/Sync reads and writes, alarms, diagnostics/status, Recovery bootstrap and verification, cross-Space/local pending replay, reset observation, and normal Sync policy.
+- The persisted continuity key, schema, fields, tombstone representation, timing constants, attempt cap, state names, status payloads, and recovery ordering are frozen to `.23` behavior.
+- Generated Firefox and Chromium copies of format, store, lifecycle, and continuity modules must be pairwise byte-identical. Direct transition equivalence and real generated-runtime interruption tests remain mandatory.
+- This release completes the planned Step-4 implementation. Step 4 is not frozen until the requested post-release forensic audit confirms the boundary and finds no corrective work.
 
 ## 1.30.18.23 Step 4 Recovery lifecycle boundary policy
 

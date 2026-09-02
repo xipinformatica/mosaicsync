@@ -57,7 +57,6 @@ import {
   SYNC_DEVICE_NAME_SCHEMA_VERSION,
   SYNC_RESET_INTENT_KEY,
   SYNC_RESET_INTENT_SCHEMA_VERSION,
-  SYNC_CONTINUITY_SCHEMA_VERSION,
   SYNC_RECOVERY_STATUS_SCHEMA_VERSION,
   SYNC_ITEM_PREFIX,
   SYNC_PREFIX,
@@ -70,15 +69,6 @@ import {
   SYNC_WATCH_ALARM,
   SYNC_RECOVERY_ALARM,
   SYNC_WATCH_PERIOD_MINUTES,
-  SYNC_RECOVERY_QUARANTINE_MS,
-  SYNC_RECOVERY_STALE_AFTER_MS,
-  SYNC_RECOVERY_VERY_STALE_AFTER_MS,
-  SYNC_RECOVERY_STALE_DELAY_MS,
-  SYNC_RECOVERY_VERY_STALE_DELAY_MS,
-  SYNC_RECOVERY_JITTER_MS,
-  SYNC_RECOVERY_MAX_ATTEMPTS,
-  SYNC_RECOVERY_RESTART_GRACE_MS,
-  SYNC_RECOVERY_STARTUP_WARMUP_MS,
   TOMBSTONE_TTL_MS,
   VERSION,
   WEB_ACCESS_CACHE_MS
@@ -120,6 +110,7 @@ import {
   writeLocalState
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
+import { createRecoveryContinuity } from "./recovery-continuity.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
 import { createRecoveryGenerationLifecycle } from "./recovery-generation-lifecycle.js";
 import { createRecoveryGenerationStore } from "./recovery-generation-store.js";
@@ -596,74 +587,23 @@ export function startBackground(adapter) {
     return SYNC_DIAGNOSTIC_REASONS.has(value) ? value : "message";
   }
 
-  const SYNC_LOSS_STATES = new Set(["none", "quarantine", "recovering", "failed"]);
-
-  function inferredContinuityEstablished(meta) {
-    return Boolean(meta?.syncEnabled && meta?.syncInitialized && (
-      meta.lastAppliedProfileSnapshotRevision ||
-      (meta.lastAppliedSyncRevision && meta.lastAppliedWorkSyncRevision) ||
-      meta.lastAppliedDeviceSnapshotRevision ||
-      meta.lastRemoteReceiptAt ||
-      meta.lastSyncAt
-    ));
-  }
+  const recoveryContinuity = createRecoveryContinuity({ compareStableText, fnv1a });
 
   function normalizeContinuityTombstones(value) {
-    if (!Array.isArray(value)) return [];
-    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
-    const out = [];
-    const seen = new Set();
-    for (const raw of value) {
-      if (!raw || raw.kind !== "deleted" || typeof raw.id !== "string" || !raw.id || seen.has(raw.id)) continue;
-      const deletedAt = Number(raw.deletedAt);
-      const modifiedAt = Number(raw.modifiedAt);
-      if (!Number.isFinite(deletedAt) || !Number.isFinite(modifiedAt) || deletedAt < cutoff) continue;
-      seen.add(raw.id);
-      out.push({
-        schemaVersion: Number(raw.schemaVersion) || SYNC_SCHEMA_VERSION,
-        kind: "deleted",
-        id: raw.id,
-        deletedAt,
-        modifiedAt,
-        deviceId: typeof raw.deviceId === "string" ? raw.deviceId : ""
-      });
-    }
-    out.sort((a, b) => (b.modifiedAt - a.modifiedAt) || compareStableText(a.id, b.id));
-    return out.slice(0, SYNC_QUOTA_MAX_ITEMS);
+    return recoveryContinuity.normalizeContinuityTombstones(value, Date.now());
   }
 
   function continuityTombstonesFromRecords(records) {
-    return normalizeContinuityTombstones([...records?.values?.() || []]);
-  }
-
-  function normalizeSyncContinuity(raw, meta = null) {
-    const source = raw && typeof raw === "object" ? raw : {};
-    const established = source.established === true ||
-      (source.established !== false && inferredContinuityEstablished(meta));
-    return {
-      schemaVersion: SYNC_CONTINUITY_SCHEMA_VERSION,
-      established,
-      lastHealthyAt: Number.isFinite(Number(source.lastHealthyAt)) ? Number(source.lastHealthyAt) : 0,
-      lastCompleteRevision: typeof source.lastCompleteRevision === "string" ? source.lastCompleteRevision : "",
-      lastPublisherDeviceId: typeof source.lastPublisherDeviceId === "string" ? source.lastPublisherDeviceId : "",
-      lastResetEpoch: Number.isFinite(Number(source.lastResetEpoch)) ? Number(source.lastResetEpoch) : 0,
-      personalTombstones: normalizeContinuityTombstones(source.personalTombstones),
-      workTombstones: normalizeContinuityTombstones(source.workTombstones),
-      lossState: SYNC_LOSS_STATES.has(source.lossState) ? source.lossState : "none",
-      lossDetectedAt: Number.isFinite(Number(source.lossDetectedAt)) ? Number(source.lossDetectedAt) : 0,
-      recoveryEligibleAt: Number.isFinite(Number(source.recoveryEligibleAt)) ? Number(source.recoveryEligibleAt) : 0,
-      recoveryAttempts: Math.max(0, Math.min(SYNC_RECOVERY_MAX_ATTEMPTS, Number(source.recoveryAttempts) || 0)),
-      lastRecoveredAt: Number.isFinite(Number(source.lastRecoveredAt)) ? Number(source.lastRecoveredAt) : 0
-    };
+    return recoveryContinuity.continuityTombstonesFromRecords(records, Date.now());
   }
 
   async function readSyncContinuity(meta = null) {
     const stored = await browser.storage.local.get(LOCAL_SYNC_CONTINUITY_KEY);
-    return normalizeSyncContinuity(stored?.[LOCAL_SYNC_CONTINUITY_KEY], meta);
+    return recoveryContinuity.normalizeSyncContinuity(stored?.[LOCAL_SYNC_CONTINUITY_KEY], meta, Date.now());
   }
 
   async function writeSyncContinuity(value, meta = null) {
-    const next = normalizeSyncContinuity(value, meta);
+    const next = recoveryContinuity.normalizeSyncContinuity(value, meta, Date.now());
     await browser.storage.local.set({ [LOCAL_SYNC_CONTINUITY_KEY]: next });
     return next;
   }
@@ -688,20 +628,6 @@ export function startBackground(adapter) {
       typeof value.initiatedByDevice === "string" && value.initiatedByDevice.length > 0);
   }
 
-  function recoveryStalePenalty(continuity, now = Date.now()) {
-    const healthyAt = Number(continuity?.lastHealthyAt) || 0;
-    if (!healthyAt) return SYNC_RECOVERY_VERY_STALE_DELAY_MS;
-    const age = Math.max(0, now - healthyAt);
-    if (age >= SYNC_RECOVERY_VERY_STALE_AFTER_MS) return SYNC_RECOVERY_VERY_STALE_DELAY_MS;
-    if (age >= SYNC_RECOVERY_STALE_AFTER_MS) return SYNC_RECOVERY_STALE_DELAY_MS;
-    return 0;
-  }
-
-  function recoveryDeviceJitter(deviceId) {
-    if (!SYNC_RECOVERY_JITTER_MS) return 0;
-    return Number.parseInt(fnv1a(deviceId || "mosaicsync"), 16) % SYNC_RECOVERY_JITTER_MS;
-  }
-
   async function scheduleSyncRecoveryAlarm(when = 0) {
     if (!browser.alarms?.create || !browser.alarms?.clear) return;
     try {
@@ -714,50 +640,29 @@ export function startBackground(adapter) {
 
   async function deferPersistedSyncRecoveryAfterBrowserStartup(meta) {
     const continuity = await readSyncContinuity(meta);
-    if (!continuity.established || !["quarantine", "recovering"].includes(continuity.lossState)) return continuity;
     const now = Date.now();
-    if (Number(continuity.recoveryEligibleAt) > now) return continuity;
     // Time spent with the browser closed is not evidence that Firefox Sync had a
     // chance to download Extension-Storage. Give every persisted loss state one
     // fresh startup window before any authoritative recovery publication.
-    const recoveryEligibleAt = now + SYNC_RECOVERY_STARTUP_WARMUP_MS;
-    const next = await writeSyncContinuity({ ...continuity, recoveryEligibleAt }, meta);
-    await scheduleSyncRecoveryAlarm(recoveryEligibleAt);
+    const plan = recoveryContinuity.planStartupRecoveryDeferral(continuity, now);
+    if (!plan) return continuity;
+    const next = await writeSyncContinuity(plan.continuity, meta);
+    await scheduleSyncRecoveryAlarm(plan.alarmAt);
     return next;
   }
 
   async function markSyncContinuityHealthy(meta, descriptor = {}) {
     const current = await readSyncContinuity(meta);
-    const next = await writeSyncContinuity({
-      ...current,
-      established: true,
-      lastHealthyAt: Date.now(),
-      lastCompleteRevision: descriptor.revision || current.lastCompleteRevision || "",
-      lastPublisherDeviceId: descriptor.publisherDeviceId || current.lastPublisherDeviceId || "",
-      personalTombstones: descriptor.personalTombstones ?? current.personalTombstones,
-      workTombstones: descriptor.workTombstones ?? current.workTombstones,
-      lossState: "none",
-      lossDetectedAt: 0,
-      recoveryEligibleAt: 0,
-      recoveryAttempts: 0
-    }, meta);
+    const planned = recoveryContinuity.planHealthyContinuity(current, descriptor, Date.now());
+    const next = await writeSyncContinuity(planned, meta);
     await scheduleSyncRecoveryAlarm(0);
     return next;
   }
 
   async function markIntentionalSyncReset(meta, epoch) {
     const current = await readSyncContinuity(meta);
-    const next = await writeSyncContinuity({
-      ...current,
-      established: false,
-      lastResetEpoch: Math.max(Number(current.lastResetEpoch) || 0, Number(epoch) || 0),
-      personalTombstones: [],
-      workTombstones: [],
-      lossState: "none",
-      lossDetectedAt: 0,
-      recoveryEligibleAt: 0,
-      recoveryAttempts: 0
-    }, meta);
+    const planned = recoveryContinuity.planIntentionalReset(current, epoch);
+    const next = await writeSyncContinuity(planned, meta);
     await scheduleSyncRecoveryAlarm(0);
     return next;
   }
@@ -829,16 +734,9 @@ export function startBackground(adapter) {
       const zeroCheck = await browser.storage.sync.get(null);
       if (zeroCheck && Object.keys(zeroCheck).length > 0) return null;
       const now = Date.now();
-      const eligibleAt = now + SYNC_RECOVERY_QUARANTINE_MS +
-        recoveryStalePenalty(continuity, now) + recoveryDeviceJitter(meta.deviceId);
-      continuity = await writeSyncContinuity({
-        ...continuity,
-        lossState: "quarantine",
-        lossDetectedAt: now,
-        recoveryEligibleAt: eligibleAt,
-        recoveryAttempts: 0
-      }, meta);
-      await scheduleSyncRecoveryAlarm(eligibleAt);
+      const quarantine = recoveryContinuity.planLossQuarantine(continuity, meta.deviceId, now);
+      continuity = await writeSyncContinuity(quarantine.continuity, meta);
+      await scheduleSyncRecoveryAlarm(quarantine.alarmAt);
       await noteSyncDiagnostic({
         lastCheckAt: now,
         lastCheckReason: syncCheckReason(checkReason),
@@ -848,24 +746,21 @@ export function startBackground(adapter) {
     }
 
     const now = Date.now();
-    if (continuity.lossState === "failed") {
+    const readiness = recoveryContinuity.recoveryReadiness(continuity, now);
+    if (readiness === "failed") {
       return { ok: false, reason: "remote-loss-recovery-failed", error: "MosaicSync couldn't restore the synchronized copy. Your local profile is still safe.", meta };
     }
-    if (now < continuity.recoveryEligibleAt) {
+    if (readiness === "wait") {
       await scheduleSyncRecoveryAlarm(continuity.recoveryEligibleAt);
       return { ok: true, pending: true, reason: "remote-loss-quarantine", meta };
     }
 
-    const attempt = Math.max(0, Number(continuity.recoveryAttempts) || 0) + 1;
+    const attemptPlan = recoveryContinuity.planRecoveryAttempt(continuity, now);
+    const attempt = attemptPlan.attempt;
     // Persist a one-shot grace deadline before starting the publication. It is not
     // consulted by this live attempt, but if MV3 kills the worker halfway through,
     // the replacement worker waits briefly before publishing a second generation.
-    continuity = await writeSyncContinuity({
-      ...continuity,
-      lossState: "recovering",
-      recoveryAttempts: attempt,
-      recoveryEligibleAt: now + SYNC_RECOVERY_RESTART_GRACE_MS
-    }, meta);
+    continuity = await writeSyncContinuity(attemptPlan.continuity, meta);
     await writeSyncRecoveryStatus("recovering");
 
     try {
@@ -890,13 +785,14 @@ export function startBackground(adapter) {
       const descriptor = completeRemoteDescriptor(sources, workSnapshot);
       if (!descriptor) throw new Error("The recovered synchronized copy is incomplete.");
       const healthy = await markSyncContinuityHealthy(currentMeta, descriptor);
-      await writeSyncContinuity({ ...healthy, lastRecoveredAt: Date.now() }, currentMeta);
+      await writeSyncContinuity(recoveryContinuity.planRecoverySuccess(healthy, Date.now()), currentMeta);
       await writeSyncRecoveryStatus("restored");
       return { ok: true, recovered: true, reason: "remote-loss-recovered", meta: await readLocalMeta() };
     } catch (error) {
       const currentMeta = await readLocalMeta();
-      if (attempt >= SYNC_RECOVERY_MAX_ATTEMPTS) {
-        await writeSyncContinuity({ ...continuity, lossState: "failed", recoveryEligibleAt: 0 }, currentMeta);
+      const failure = recoveryContinuity.planRecoveryFailure(continuity, attempt, meta.deviceId, Date.now());
+      if (failure.failed) {
+        await writeSyncContinuity(failure.continuity, currentMeta);
         await scheduleSyncRecoveryAlarm(0);
         await writeSyncRecoveryStatus("failed");
         const failedMeta = await writeLocalMeta({
@@ -906,9 +802,8 @@ export function startBackground(adapter) {
         });
         return { ok: false, reason: "remote-loss-recovery-failed", error: failedMeta.lastSyncError, meta: failedMeta };
       }
-      const retryAt = Date.now() + SYNC_RECOVERY_QUARANTINE_MS + recoveryDeviceJitter(meta.deviceId);
-      await writeSyncContinuity({ ...continuity, lossState: "quarantine", recoveryEligibleAt: retryAt, recoveryAttempts: attempt }, currentMeta);
-      await scheduleSyncRecoveryAlarm(retryAt);
+      await writeSyncContinuity(failure.continuity, currentMeta);
+      await scheduleSyncRecoveryAlarm(failure.alarmAt);
       return { ok: true, pending: true, reason: "remote-loss-retry", meta: currentMeta };
     }
   }
