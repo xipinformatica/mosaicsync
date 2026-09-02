@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Nuova scheda di Chrome orientata alla privacy, con cartelle, personalizzazione e Chrome Sync opzionale. Zero telemetria MosaicSync."
-  },
-  "actionOpenHome": {
-    "message": "Apri MosaicSync"
-  }
-}

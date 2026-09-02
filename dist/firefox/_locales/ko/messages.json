@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "폴더, 사용자 지정, 선택적 Firefox Sync를 제공하는 개인정보 중심의 Firefox 새 탭. MosaicSync 텔레메트리 없음."
-  },
-  "actionOpenHome": {
-    "message": "MosaicSync 열기"
-  }
-}

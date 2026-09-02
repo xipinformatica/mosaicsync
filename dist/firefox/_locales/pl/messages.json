@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Prywatna strona nowej karty Firefoksa z folderami, personalizacją i opcjonalnym Firefox Sync. Zero telemetrii MosaicSync."
-  },
-  "actionOpenHome": {
-    "message": "Otwórz MosaicSync"
-  }
-}

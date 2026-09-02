@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Ориентиран към поверителността нов раздел за Firefox с папки, персонализирана визия и по избор Firefox Sync. Нулева телеметрия от MosaicSync."
-  },
-  "actionOpenHome": {
-    "message": "Отвори MosaicSync"
-  }
-}
