@@ -1,0 +1,24 @@
+# MosaicSync 1.26.17.1 QA contract
+
+1. **One version identity:** Firefox manifest, Chrome manifest and `version_name`, shared `VERSION`, Settings labels, build manifest, README/current documentation, release notes and package filenames must all report exactly `1.26.17.1`. No alternate internal/display/technical version is permitted.
+2. **Public history:** `CHANGELOG.md` must go directly from 1.26.17.1 to the last published 1.26.12. Unpublished development candidates must not appear as standalone public release headings.
+3. **Automatic favicon before visit:** with Automatic site icons enabled and Website Access granted, create a never-before-used HTTP/HTTPS shortcut in Firefox and Chrome. The favicon must appear automatically without visiting the site. Repeat in the inactive Space.
+4. **Chrome placeholder fail-closed:** with Website Access absent, simulate/observe a Chrome `_favicon` sentinel failure. MosaicSync must not persist unknown native bytes or the generic globe; the failed sentinel must be retryable. Pin `scaleFactor=1x`, avoid forced cache reuse, and reject every learned placeholder signature.
+5. **Chrome native retry scheduling:** a never-visited Chrome site without Website Access may remain capability-blocked, but the durable queue must not spin rapidly or claim unscheduled immediate work. Native rechecks stay bounded and a later permission grant/New Tab can recover.
+6. **Permission lifecycle:** deny Website Access while enabling Automatic site icons; the toggle must not misleadingly remain enabled. Revoke during an in-flight recovery and after a provisional icon, then grant again; stale/quality-only work must not overwrite user artwork or wake forever.
+7. **SVG/raster safety:** rerun the hostile MIME/raster/SVG corpus. Pre-decode dimension validation remains the actual memory-safety boundary; decoder resize options are additional output bounding, not relied on as a pre-allocation guarantee.
+8. **Frequently Visited:** drag into an exact empty slot, hide a registrable domain, and corrupt/throw the device-local hidden-domain storage. The synchronous cached first frame must fail closed and never flash hidden suggestions when the hide list cannot be trusted.
+9. **Firefox Sync PC-B scenario:** with changed remote content locally visible through `storage.sync.get(null)` but no `storage.onChanged` event, the semantic watchdog must self-heal without restart. Same markers + identical content must remain write-free.
+10. **Partial Sync delivery:** when an atomic device snapshot is usable but the compatibility shared ledger is visibly partial, MosaicSync may apply the usable snapshot locally but must not immediately republish/repair the incomplete shared ledger. Once the ledger becomes coherent, normal reconciliation resumes.
+11. **Concurrency/Spaces:** delete, edit URL, rename, upload custom artwork, toggle auto-icons, and move Personal↔Work while favicon recovery is in flight. Stale work must never resurrect or overwrite newer state.
+12. **Profile boundary:** automatically learned/browser-native favicon pixels remain excluded from browser `storage.sync` but are intentionally included in an explicit complete `.mosaicsync` profile export. Recovery diagnostics, permission UI memory, render snapshots and Frequently Visited hidden-domain data remain excluded from profile exports.
+13. **Localization/security:** all 32 runtime catalogs and WebExtension locale catalogs remain complete; no new raw user-visible English, required permissions, remote code, telemetry or CSP relaxation.
+14. Run the real production-module favicon/Sync harnesses plus `npm test`, `npm run bench`, JavaScript/Python syntax checks, deterministic-build checks, ZIP integrity, secret scans and manifest-permission comparison before packaging.
+
+## Frequently Visited cross-Space regression (1.26.17.1)
+
+- Put YouTube (or another test host) in Personal and verify it does not appear in Frequently Visited while Work is active.
+- Repeat in the opposite direction: a host saved in Work must not be suggested in Personal.
+- Put a shortcut inside a folder in the other Space and verify the host is still excluded.
+- Verify a genuinely unsaved Top Site can still appear and the configured Frequently Visited count can still be filled from later candidates.
+- Verify Firefox and Chrome behave the same.

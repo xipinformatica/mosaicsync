@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Privacy-first Chrome New Tab with folders, custom visuals and optional Chrome Sync. Zero MosaicSync telemetry."
+  },
+  "actionOpenHome": {
+    "message": "Open MosaicSync"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "フォルダー、カスタマイズ、任意の Firefox Sync を備えたプライバシー重視の Firefox 新しいタブ。MosaicSync テレメトリーなし。"
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync を開く"
+  }
+}

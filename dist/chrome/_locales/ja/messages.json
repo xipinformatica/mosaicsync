@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "フォルダー、カスタマイズ、任意の Chrome Sync を備えた、プライバシー重視の Chrome 新しいタブ。MosaicSync のテレメトリーはありません。"
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync を開く"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Datenschutzorientierter Firefox-Neuer-Tab mit Ordnern, Anpassungen und optionalem Firefox Sync. Keine MosaicSync-Telemetrie."
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync öffnen"
+  }
+}

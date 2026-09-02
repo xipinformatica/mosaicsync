@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "폴더, 사용자 지정, 선택적 Chrome Sync를 제공하는 개인정보 중심의 Chrome 새 탭. MosaicSync 텔레메트리는 없습니다."
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync 열기"
+  }
+}
