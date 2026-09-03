@@ -1,3 +1,12 @@
+## 1.30.18.36
+
+- Combines Maintenance Infrastructure M4 and M5 while keeping the frozen MosaicSync application runtime unchanged apart from release identity.
+- Adds dependency-free, cross-platform targeted test commands for startup, New Tab, Sync, Recovery, security, generated-browser parity, core state and release tooling; `npm test` remains the authoritative complete suite.
+- Requires every permanent test file to belong to at least one deterministic targeted group, preventing the convenience taxonomy from silently leaving new regressions undiscoverable.
+- Adds bounded seeded property/fuzz coverage for state normalization/prototype-pollution resistance, malformed and checksum-valid mutated profile imports, Recovery continuity/tombstone normalization, and HTTP(S)-only navigation validation.
+- Fuzz failures identify their exact seed and case number, making generated failures reproducible; no external fuzzing dependency, production test hook or unbounded random campaign is introduced.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
 ## 1.30.18.35
 
 - Completes Maintenance Infrastructure M3 with permanent architectural knowledge preservation around the frozen 1.30.18.32 runtime.

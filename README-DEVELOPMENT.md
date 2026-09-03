@@ -1,9 +1,20 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.35.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.36.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+## 1.30.18.36 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
+
+This release keeps the 1.30.18.32 application architecture frozen. Production runtime changes are release identity only.
+
+- `npm test` remains the single authoritative full regression suite.
+- `tools/test-groups.mjs` and `tools/run-test-group.mjs` provide dependency-free, cross-platform convenience subsets for startup, New Tab, Sync, Recovery, security, browser parity, core state and release tooling.
+- Every test file must belong to at least one targeted group; group membership is deterministic and regression-tested.
+- `tests/harness/deterministic-fuzz.mjs` uses a small seeded xorshift generator. Seeds and case numbers are included in failures so every generated case is exactly reproducible.
+- Property/fuzz coverage is intentionally restricted to high-value trust boundaries: state normalization/prototype-pollution resistance, checksum-valid and malformed profile imports, Recovery continuity normalization/tombstones, and HTTP(S)-only navigation safety.
+- No external fuzzing dependency, unbounded random campaign, production test hook or runtime refactor is permitted for this phase. If a generated case reveals a real defect, stop and handle that defect as a separate product change rather than hiding it inside test infrastructure.
 
 ## 1.30.18.35 Maintenance Infrastructure M3: permanent knowledge policy
 

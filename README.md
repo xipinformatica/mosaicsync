@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.35**
+**Current source release: 1.30.18.36**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -17,7 +17,7 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 
 ### Maintenance Infrastructure
 
-The five-step production-code refinement program is frozen at 1.30.18.32. Maintenance Infrastructure releases improve guardrails around that frozen runtime rather than continuing architectural churn. M1 added dependency-free real-browser smoke automation; M2 added one fail-closed end-to-end release-certification command, `npm run certify`; M3 makes the accumulated architecture knowledge permanent through the existing [architecture map](docs/ARCHITECTURE.md), concise [ADRs](docs/adr/README.md), and a [regression catalogue](docs/REGRESSION-CATALOG.md). See [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+The five-step production-code refinement program is frozen at 1.30.18.32. Maintenance Infrastructure releases improve guardrails around that frozen runtime rather than continuing architectural churn. M1 added dependency-free real-browser smoke automation; M2 added one fail-closed end-to-end release-certification command, `npm run certify`; M3 made the accumulated architecture knowledge permanent; M4+M5 now organize the regression suite into simple targeted commands and add a small deterministic property/fuzz layer at high-value data trust boundaries. See [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -59,6 +59,22 @@ npm run bench
 npm run size
 ```
 
+For fast local feedback, the same suite is also grouped by subsystem:
+
+```bash
+npm run test:groups
+npm run test:startup
+npm run test:newtab
+npm run test:sync
+npm run test:recovery
+npm run test:security
+npm run test:browser
+npm run test:core
+npm run test:release
+```
+
+These are convenience subsets only. `npm test` remains the release-authoritative regression suite.
+
 To create deterministic Firefox and Chrome runtime ZIPs:
 
 ```bash
@@ -69,11 +85,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.35** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.36** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.35 completes **Maintenance Infrastructure M3** by preserving the architectural knowledge accumulated during the refinement program. The existing `docs/ARCHITECTURE.md` remains the canonical ownership map, `docs/adr/` records nine non-obvious frozen decisions and why they exist, and `docs/REGRESSION-CATALOG.md` maps major historical failure families to their permanent tests. M3 changes documentation/tests only apart from release identity; the 1.30.18.32 application architecture remains frozen.
+1.30.18.36 combines **Maintenance Infrastructure M4 + M5** without changing the frozen application runtime. M4 adds cross-platform targeted test commands for startup, New Tab, Sync, Recovery, security, browser parity, core state and release tooling while `npm test` remains the authoritative full suite. M5 adds dependency-free, seeded property/fuzz tests for state normalization, profile-import parsing, Recovery continuity and HTTP(S) navigation safety. Every fuzz seed is reproducible; no external fuzzing framework or production test hook is added.
 
 1.30.18.24 is the frozen **Step 4 Recovery ownership endpoint**. Its post-release forensic audits found no corrective production defect requiring another Recovery release.
 
