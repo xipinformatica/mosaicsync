@@ -14,7 +14,8 @@ const GROUPS = Object.freeze({
       /newtab-appearance-color/i,
       /browser-smoke/i,
       /corrective-13018(?:1[0489]?|9)?\.test\.mjs$/i,
-      /corrective-130181[0148]\.test\.mjs$/i
+      /corrective-130181[0148]\.test\.mjs$/i,
+      /corrective-1301841\.test\.mjs$/i
     ]
   },
   newtab: {
@@ -37,7 +38,7 @@ const GROUPS = Object.freeze({
       /stabilization/i,
       /corrective-12789/i,
       /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i,
-      /corrective-13018(?:39|40)\.test\.mjs$/i
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i
     ]
   },
   sync: {
@@ -110,7 +111,7 @@ const GROUPS = Object.freeze({
       /performance-hardening/i,
       /corrective-1303\.test\.mjs$/i,
       /corrective-1301838\.test\.mjs$/i,
-      /corrective-13018(?:39|40)\.test\.mjs$/i
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i
     ]
   }
 });

@@ -88,7 +88,7 @@ test("1.30.18.31 release packaging rebuilds before reading dist and drops stale 
     assert.match(result.stdout, /Built dist\/firefox and dist\/chrome/,
       "package.py must run the canonical build before packaging");
 
-    const version = "1.30.18.40";
+    const version = "1.30.18.41";
     for (const browser of ["firefox", "chrome"]) {
       const zip = join(temp, `artifacts/mosaicsync-${version}-${browser}.zip`);
       assert.equal(fs.existsSync(zip), true);

@@ -1,3 +1,11 @@
+## 1.30.18.41
+
+- Eliminates the remaining subtle downward shortcut movement when a multi-row Frequently Visited strip changes from its hidden first-paint reservation to live cards.
+- Gives reservation, padding and live FV cards one explicit 48 px critical-CSS row height, with stable title/host line heights that fit the same border box.
+- Preserves the synchronous privacy-safe geometry bootstrap, responsive configured capacity, detached favicon decode and atomic live commit without adding layout measurement, timers, I/O or startup delay.
+- Adds three focused regressions, including one proven to fail on untouched 1.30.18.40, while retaining the 1.30.18.18/.19 continuity suite.
+- No Sync, Recovery, state/schema, permission, CSP, browser-adapter, localization-catalog, privacy-boundary or user-data-format change.
+
 ## 1.30.18.40
 
 - Replaced the shortcut artwork help disclosure with a hover-only tooltip that closes when the pointer leaves and cannot remain open when the editor is reused.

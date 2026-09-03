@@ -1,8 +1,12 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.40.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.41.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.30.18.41 Frequently Visited micro-shift correction
+
+Frequently Visited reservation and live cards use one explicit 48 px row height in blocking critical CSS. Stable title/host line heights fit that border box exactly, so a two-row live commit cannot enlarge content-sized grid tracks after the shortcut grid paints. The existing synchronous privacy-safe reservation, responsive capacity, detached favicon decode, atomic commit and disabled zero-space path remain unchanged; no measurement, timer, extra I/O or delayed paint is introduced.
 
 ## 1.30.18.40 shortcut-editor presentation correction
 
