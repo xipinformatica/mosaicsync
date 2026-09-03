@@ -153,9 +153,10 @@ test("1.30.18.15 receipt attribution uses the named device and has an ID fallbac
   };
   vm.createContext(ctx);
   vm.runInContext(`${code}; this.label = syncReceiptSourceLabel;`, ctx);
-  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "work-device", lastRemoteReceiptOriginDeviceName: "Work PC" }), "Received from Work PC");
-  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "remote-ABC123", lastRemoteReceiptOriginDeviceName: "" }), "Received from Another device · ABC123");
-  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "", lastRemoteReceiptOriginDeviceName: "" }), "Received from another device");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "work-device", lastRemoteReceiptOriginDeviceName: "Work PC", lastRemoteReceiptProvenanceExact: true }), "Received from Work PC");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "remote-ABC123", lastRemoteReceiptOriginDeviceName: "", lastRemoteReceiptProvenanceExact: true }), "Received from Another device · ABC123");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "", lastRemoteReceiptOriginDeviceName: "", lastRemoteReceiptProvenanceExact: false }), "Received from another device");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "legacy-misattributed", lastRemoteReceiptOriginDeviceName: "CachyOS", lastRemoteReceiptProvenanceExact: false }), "Received from another device");
   assert.match(source, /remoteReceiptAt\s*\?\s*syncReceiptSourceLabel\(status, meta\)/s, "receipt card must render the resolved source label");
 });
 

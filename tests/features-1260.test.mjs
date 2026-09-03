@@ -41,7 +41,7 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.30.18.41");
+  assert.equal(VERSION, "1.30.18.42");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
 });

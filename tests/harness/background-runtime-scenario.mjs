@@ -773,7 +773,7 @@ else if (scenario === 'sync-partial-ledger-no-repair') {
   let syncWrites=0; const originalSet=sync.set.bind(sync); sync.set=async items=>{syncWrites+=1; return originalSet(items);};
   const result=await send({type:'mosaicsync:reconcile-now'});
   const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
-  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://remote-partial.test/','usable device snapshot should still apply locally');
+  assert.equal(findCompactShortcut(raw,'shared')?.url,'https://local-partial.test/','automatic reconciliation must preserve local state while the live shared ledger is partial');
   assert.equal(result?.sharedLedgerPending,true,'reconcile should report the incomplete compatibility ledger');
   assert.equal(syncWrites,0,'partial compatibility ledger must not be repaired/republished immediately');
   console.log(JSON.stringify({ok:true,sharedLedgerPending:true,syncWrites}));

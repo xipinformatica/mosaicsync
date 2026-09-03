@@ -42,7 +42,7 @@ for(const browser of ['firefox','chrome']) {
 }
 
 for(const browser of ['firefox','chrome']) {
-  test(`1.26.17 production ${browser} applies a usable device snapshot without repairing a partial shared ledger`,()=>{
+  test(`1.26.17 production ${browser} preserves local state while a partial shared ledger has an atomic safety copy`,()=>{
     const out=run(browser,'sync-partial-ledger-no-repair');
     assert.equal(out.sharedLedgerPending,true); assert.equal(out.syncWrites,0);
   });

@@ -1086,6 +1086,7 @@ export function normalizeMeta(raw) {
     lastRemoteReceiptRevision: typeof raw?.lastRemoteReceiptRevision === "string" ? raw.lastRemoteReceiptRevision : "",
     lastRemoteReceiptUpdatedAt: Number.isFinite(raw?.lastRemoteReceiptUpdatedAt) ? raw.lastRemoteReceiptUpdatedAt : 0,
     lastRemoteReceiptOriginDeviceId: typeof raw?.lastRemoteReceiptOriginDeviceId === "string" ? raw.lastRemoteReceiptOriginDeviceId : "",
+    lastRemoteReceiptProvenanceExact: raw?.lastRemoteReceiptProvenanceExact === true,
     lastDeviceSnapshotGcAt: Number.isFinite(raw?.lastDeviceSnapshotGcAt) ? raw.lastDeviceSnapshotGcAt : 0,
     deviceSnapshotGcPass: Number.isFinite(raw?.deviceSnapshotGcPass) && raw.deviceSnapshotGcPass > 0 ? Math.trunc(raw.deviceSnapshotGcPass) : 0,
     deviceSnapshotRootSeenPass: normalizeDeviceSnapshotSeenPass(raw?.deviceSnapshotRootSeenPass, 256),

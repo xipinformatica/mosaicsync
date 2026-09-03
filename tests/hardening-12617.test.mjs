@@ -76,7 +76,7 @@ for (const browser of ["firefox", "chrome"]) {
       validResetIntent: () => false,
       SYNC_RESET_INTENT_KEY: "mosaicsync:reset-intent",
       browser: { storage: { sync: { get: async () => ({}) } } },
-      readCoreSources: async () => ({ shared: { dataset: { commitId: "same" } }, device: { revision: "device:same" }, profile: null }),
+      readCoreSources: async () => ({ shared: { dataset: { commitId: "same" }, records: remoteRecords, settings }, device: { revision: "device:same" }, profile: null }),
       datasetRevision: dataset => dataset?.commitId ? `commit:${dataset.commitId}` : "",
       readSyncSnapshot: async () => ({ dataset: { commitId: "work" }, records: new Map(), settings }),
       combinedRemoteCore: () => ({ records: remoteRecords, settings }),
@@ -223,9 +223,9 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.26.17 ${browser} suppresses shared-ledger repair while that ledger is visibly partial`, () => {
     const src = readBackgroundSource(browser);
     const fn = extract(src, "reconcilePersonal");
-    const guard = fn.indexOf("const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot)");
+    const guard = fn.indexOf('strategy === "merge" && !isSnapshotUsable(snapshot)');
     const firstRepair = fn.indexOf("const syncWrites = {}");
     assert.ok(guard >= 0 && firstRepair > guard, "partial-ledger guard must run before any compatibility-ledger repair writes");
-    assert.match(fn.slice(guard, firstRepair), /return \{ ok: true, meta: refreshed, sharedLedgerPending: true \}/);
+    assert.match(fn.slice(guard, firstRepair), /return \{ ok: true, skipped: true, reason: "shared-ledger-pending", meta: refreshed, sharedLedgerPending: true \}/);
   });
 }

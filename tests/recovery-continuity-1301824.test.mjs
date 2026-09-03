@@ -249,8 +249,8 @@ test("1.30.18.24 continuity boundary is pure and browser effects remain orchestr
   assert.match(core, /import \{ createRecoveryContinuity \} from "\.\/recovery-continuity\.js";/);
   assert.match(core, /await browser\.storage\.local\.get\(LOCAL_SYNC_CONTINUITY_KEY\)/);
   assert.match(core, /await browser\.storage\.local\.set\(\{ \[LOCAL_SYNC_CONTINUITY_KEY\]: next \}\)/);
-  assert.match(core, /await browser\.storage\.sync\.getBytesInUse\(null\)[\s\S]*?await browser\.storage\.sync\.get\(null\)[\s\S]*?planLossQuarantine\(/,
-    "transient-zero defense must precede quarantine planning");
+  assert.match(core, /const firstCoreCheck = await browser\.storage\.sync\.get\(null\)[\s\S]*?hasLiveSyncCoreSignal\(firstCoreCheck\)[\s\S]*?const secondCoreCheck = await browser\.storage\.sync\.get\(null\)[\s\S]*?hasLiveSyncCoreSignal\(secondCoreCheck\)[\s\S]*?planLossQuarantine\(/,
+    "live shared-core absence must be double-confirmed before quarantine planning");
   assert.match(core, /planRecoveryAttempt\([\s\S]*?await writeSyncContinuity\([\s\S]*?await writeSyncRecoveryStatus\("recovering"\)[\s\S]*?await bootstrapLocal\(/,
     "restart grace must be durable before Recovery publication starts");
   assert.match(core, /await bootstrapLocal\([\s\S]*?retryPendingCrossSpaceSync\([\s\S]*?retryPendingLocalSyncMutation\([\s\S]*?getSyncStatus\(\)/,

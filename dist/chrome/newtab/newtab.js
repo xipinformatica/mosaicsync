@@ -6212,6 +6212,7 @@ ${site.url}`;
   }
 
   function syncReceiptSourceLabel(status, rawMeta = meta) {
+    if (status?.lastRemoteReceiptProvenanceExact !== true) return t("received");
     const sourceId = String(status?.lastRemoteReceiptOriginDeviceId || "");
     const sourceName = normalizeDeviceName(status?.lastRemoteReceiptOriginDeviceName);
     if (sourceId && sourceId === rawMeta?.deviceId) {

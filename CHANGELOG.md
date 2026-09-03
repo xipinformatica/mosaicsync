@@ -1,3 +1,14 @@
+## 1.30.18.42
+
+- Corrects the Sync failures reproduced during a Firefox/CachyOS ↔ Windows dual-boot investigation: a two-hour forward clock correction could invalidate wall-clock-based own-write suppression and feed a storage-event reconciliation storm, while immutable device/profile Recovery generations could be merged across devices into a synthetic profile that never existed on any one machine.
+- Makes exact own-write suppression one-shot and clock-jump-safe; a matching key/signature is consumed regardless of legacy expiry time, while mismatches remain external changes. Coalesces bursts of unresolved `storage.sync` events into one serialized reconciliation drain instead of queueing a full reconciliation per event.
+- Treats immutable device/profile snapshots as atomic Recovery generations. Restore/bootstrap selects one coherent generation, with Personal and Work from the same source; initialized-device live Sync never unions records from multiple Recovery snapshots or repairs a torn shared ledger from a safety copy.
+- Keeps normal live conflict resolution on coherent shared Personal/Work ledgers and preserves local state while either live ledger is missing/torn. Background reconciliation no longer flashes the Sync UI into “Updating Sync…” for no-op checks.
+- Makes receipt attribution truthful: collaborative shared ledgers use generic “Received” provenance, while a named device is shown only for an exact atomic source. Legacy 1.30.18.41 newest-publisher attribution is cleared without fabricating a new receipt time.
+- Strengthens catastrophic-loss confirmation so stale local Recovery generations/device metadata cannot masquerade as a healthy live Sync core or cancel an active quarantine; two live-core namespace reads must agree before loss planning.
+- Adds permanent 1.30.18.42 regressions for forward clock jumps, mismatched echoes, atomic Personal+Work generation selection, Recovery-only churn, provenance migration, coalesced storage-event reconciliation, torn-ledger waiting and continuity/loss behavior.
+- No permission, CSP, product-feature, locale-catalog, or Sync/Recovery wire-schema version change.
+
 ## 1.30.18.41
 
 - Eliminates the remaining subtle downward shortcut movement when a multi-row Frequently Visited strip changes from its hidden first-paint reservation to live cards.

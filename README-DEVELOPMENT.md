@@ -1,8 +1,21 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.41.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.42.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.30.18.42 Sync atomicity and clock-jump correction
+
+This corrective release follows a reproduced Firefox/CachyOS ↔ Windows incident rather than reopening generic refactoring. The investigation proved that complete immutable device generations crossed Firefox Sync successfully, but also exposed three unsafe interactions in the local Sync orchestration.
+
+- **Own-write suppression is exact and one-shot, not wall-clock-authoritative.** A matching key/signature capability is consumed once even if its legacy expiry timestamp is now in the past. Expiry remains only bounded-cleanup metadata, so an OS clock correction cannot turn a delayed exact echo into a remote change. Mismatched values still count as external and consume the stale token.
+- **Storage-event bursts are coalesced.** Unresolved Sync keys are accumulated and reconciled through one serialized drain instead of queuing one full reconciliation per event. Background checks do not flip the Settings card to `syncing`; the active “Updating Sync…” state is reserved for explicit work that actually needs it.
+- **Recovery generations are atomic.** `selectAtomicRecoverySnapshot()` chooses one verified device generation. Personal and Work come from that same generation; complete snapshots from different devices are never unioned record-by-record. Recovery generations are explicit Restore/bootstrap fallbacks and no longer participate in initialized-device live merging.
+- **Normal live Sync requires coherent shared ledgers.** If Personal or Work is missing/torn, an initialized device preserves its local Space and waits rather than filling holes from an immutable safety snapshot. Bootstrap/Restore chooses one coherent Personal+Work source, never a cross-source profile hybrid.
+- **Receipt provenance is conservative.** Collaborative shared ledgers do not claim that one device supplied the resulting layout. A friendly device name is displayed only for an exact atomic source; 1.30.18.41 metadata that attached a newest-publisher name to a merged ledger normalizes to generic provenance.
+- **Catastrophic-loss confirmation ignores stale Recovery-only bytes.** Two namespace reads must both show no live shared Personal/Work core before quarantine is planned. Locally retained Recovery generations, device-name records and other safety metadata cannot mask a real live-core loss, and those same Recovery generations cannot cancel an active quarantine by themselves.
+
+There is no Sync/Recovery wire-schema version bump, permission change, CSP change or new product feature. Existing complete generations remain readable. The release changes source-selection/orchestration policy so safety copies cannot synthesize a layout that never existed on one device.
 
 ## 1.30.18.41 Frequently Visited micro-shift correction
 

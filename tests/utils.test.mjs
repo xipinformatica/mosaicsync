@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { canonicalSiteHost, formatBytes, normalizeShortcutUrl, clearCanonicalHostCacheForTests } from "../dist/firefox/newtab/ui-utils.js";
-import { compactSignature, pruneExpectationMap, pruneSessionEntries, syncNamespaceFor } from "../dist/firefox/background/runtime-utils.js";
+import { compactSignature, syncNamespaceFor, trimExpectationMap, trimSessionEntries } from "../dist/firefox/background/runtime-utils.js";
 
 test("New Tab URL helpers are deterministic", () => {
   clearCanonicalHostCacheForTests();
@@ -12,10 +12,10 @@ test("New Tab URL helpers are deterministic", () => {
 });
 
 test("background expectation helpers preserve limits and signatures", () => {
-  const map = new Map([["old", 1], ["a", 100], ["b", 100], ["c", 100]]);
-  pruneExpectationMap(map, { now: 50, max: 2 });
+  const map = new Map([["old", { signature: "old", expiresAt: 1 }], ["a", { signature: "a", expiresAt: 100 }], ["b", { signature: "b", expiresAt: 100 }], ["c", { signature: "c", expiresAt: 100 }]]);
+  trimExpectationMap(map, { max: 2 });
   assert.deepEqual([...map.keys()], ["b", "c"]);
-  const entries = pruneSessionEntries({ old: 1, a: 100, b: 100, c: 100 }, { now: 50, max: 2 });
+  const entries = trimSessionEntries({ old: { signature: "old", expiresAt: 1 }, a: { signature: "a", expiresAt: 100 }, b: { signature: "b", expiresAt: 100 }, c: { signature: "c", expiresAt: 100 } }, { max: 2 });
   assert.deepEqual(Object.keys(entries), ["b", "c"]);
   assert.equal(compactSignature("abc"), compactSignature("abc"));
   const ns = syncNamespaceFor("work", { personalSpaceId:"personal", syncPrefix:"p.", syncSettingsKey:"ps", syncDatasetKey:"pd", syncItemPrefix:"pi.", syncAssetPrefix:"pa.", syncSpacePrefix:"space." });

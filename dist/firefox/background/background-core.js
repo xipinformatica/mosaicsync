@@ -109,7 +109,8 @@ import {
   writeLocalMeta,
   writeLocalState
 } from "../core/storage.js";
-import { compactSignature as compactRuntimeSignature, countOwnEnumerable, hasOwnEnumerable, pruneExpectationMap as pruneRuntimeExpectationMap, pruneSessionEntries as pruneRuntimeSessionEntries, syncNamespaceFor } from "./runtime-utils.js";
+import { compactSignature as compactRuntimeSignature, consumeExactExpectation, consumeExactSessionExpectations, countOwnEnumerable, hasOwnEnumerable, syncNamespaceFor, trimExpectationMap, trimSessionEntries } from "./runtime-utils.js";
+import { selectAtomicRecoverySnapshot } from "./sync-source-policy.js";
 import { createRecoveryContinuity } from "./recovery-continuity.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
 import { createRecoveryGenerationLifecycle } from "./recovery-generation-lifecycle.js";
@@ -166,6 +167,9 @@ export function startBackground(adapter) {
   let webAccessCacheAt = 0;
   let faviconQualityAuditWriteQueue = Promise.resolve();
   let syncDiagnosticsWriteQueue = Promise.resolve();
+  const pendingSyncStorageChanges = new Map();
+  let pendingSyncStorageOverwrittenEvidence = 0;
+  let syncStorageReconcileScheduled = false;
 
   const PERSONAL_SPACE_ID = "personal";
   const WORK_SPACE_ID = "work";
@@ -183,6 +187,7 @@ export function startBackground(adapter) {
   });
   const {
     clearDeviceSnapshotDecodeCache,
+    compareDeviceSnapshotGenerationRecency,
     isDeviceSnapshotKey,
   } = recoveryGenerationFormat;
   const recoveryGenerationLifecycle = createRecoveryGenerationLifecycle({
@@ -217,21 +222,20 @@ export function startBackground(adapter) {
     return syncNamespaceFor(spaceId, { personalSpaceId: PERSONAL_SPACE_ID, syncPrefix: SYNC_PREFIX, syncSettingsKey: SYNC_SETTINGS_KEY, syncDatasetKey: SYNC_DATASET_KEY, syncItemPrefix: SYNC_ITEM_PREFIX, syncAssetPrefix: SYNC_ASSET_PREFIX, syncSpacePrefix: SYNC_SPACE_PREFIX });
   }
 
-  function pruneExpectationMap(map) { pruneRuntimeExpectationMap(map, { max: MAX_EXPECTATIONS }); }
-
   function compactSignature(signature) { return compactRuntimeSignature(signature, REMOVED); }
 
-  function pruneSessionEntries(entries) { return pruneRuntimeSessionEntries(entries, { max: MAX_EXPECTATIONS }); }
-
   function rememberLocalSignature(signature) {
-    pruneExpectationMap(ignoredLocalStateSignatures);
-    ignoredLocalStateSignatures.set(signature, Date.now() + EXPECTATION_TTL_MS);
+    // Exact own-write signatures are one-shot capabilities, not wall-clock leases.
+    // A large system-clock correction must not turn a delayed exact echo into an
+    // external local mutation. Bounded size + consume-once provides the cleanup.
+    trimExpectationMap(ignoredLocalStateSignatures, { max: MAX_EXPECTATIONS - 1 });
+    ignoredLocalStateSignatures.set(signature, { signature, expiresAt: Date.now() + EXPECTATION_TTL_MS });
   }
 
   function consumeLocalSignature(signature) {
-    const expiresAt = ignoredLocalStateSignatures.get(signature) || 0;
+    const expected = ignoredLocalStateSignatures.get(signature);
     ignoredLocalStateSignatures.delete(signature);
-    return expiresAt >= Date.now();
+    return Boolean(expected && (typeof expected === "object" ? expected.signature === signature : true));
   }
 
   async function rememberDurableLocalSignature(signature) {
@@ -239,8 +243,8 @@ export function startBackground(adapter) {
     try {
       const fingerprint = compactSignature(signature);
       const stored = await browser.storage.session.get(SESSION_LOCAL_IGNORE_KEY);
-      const entries = pruneSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY]);
-      entries[fingerprint] = Date.now() + EXPECTATION_TTL_MS;
+      const entries = trimSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY], { max: MAX_EXPECTATIONS - 1 });
+      entries[fingerprint] = { signature: fingerprint, expiresAt: Date.now() + EXPECTATION_TTL_MS };
       await browser.storage.session.set({ [SESSION_LOCAL_IGNORE_KEY]: entries });
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not persist local write suppression`, error);
@@ -252,11 +256,11 @@ export function startBackground(adapter) {
     try {
       const fingerprint = compactSignature(signature);
       const stored = await browser.storage.session.get(SESSION_LOCAL_IGNORE_KEY);
-      const entries = pruneSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY]);
-      const expiresAt = Number(entries[fingerprint]) || 0;
+      const entries = trimSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY]);
+      const expected = entries[fingerprint];
       delete entries[fingerprint];
       await browser.storage.session.set({ [SESSION_LOCAL_IGNORE_KEY]: entries });
-      return expiresAt >= Date.now();
+      return Boolean(expected && (typeof expected === "object" ? expected.signature === fingerprint : true));
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not read local write suppression`, error);
       return false;
@@ -268,7 +272,7 @@ export function startBackground(adapter) {
     try {
       const fingerprint = compactSignature(signature);
       const stored = await browser.storage.session.get(SESSION_LOCAL_IGNORE_KEY);
-      const entries = pruneSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY]);
+      const entries = trimSessionEntries(stored?.[SESSION_LOCAL_IGNORE_KEY]);
       if (!Object.prototype.hasOwnProperty.call(entries, fingerprint)) return;
       delete entries[fingerprint];
       await browser.storage.session.set({ [SESSION_LOCAL_IGNORE_KEY]: entries });
@@ -278,14 +282,15 @@ export function startBackground(adapter) {
   }
 
   function rememberSyncChange(key, signature) {
-    pruneExpectationMap(expectedSyncChanges);
+    // Exact Sync echoes remain suppressible across RTC/NTP clock corrections.
+    // `expiresAt` is retained only for backward-compatible session payload shape;
+    // it is not consulted when an exact key+signature echo is consumed.
+    trimExpectationMap(expectedSyncChanges, { max: MAX_EXPECTATIONS - 1 });
     expectedSyncChanges.set(key, { signature, expiresAt: Date.now() + EXPECTATION_TTL_MS });
   }
 
   function consumeSyncChange(key, signature) {
-    const expected = expectedSyncChanges.get(key);
-    expectedSyncChanges.delete(key);
-    return Boolean(expected && expected.expiresAt >= Date.now() && expected.signature === signature);
+    return consumeExactExpectation(expectedSyncChanges, key, signature);
   }
 
   function coreEvidenceDescriptor(key, value) {
@@ -382,7 +387,7 @@ export function startBackground(adapter) {
     if (!browser.storage.session || !entries.length) return;
     try {
       const stored = await browser.storage.session.get(SESSION_SYNC_EXPECTATIONS_KEY);
-      const expectations = pruneSessionEntries(stored?.[SESSION_SYNC_EXPECTATIONS_KEY]);
+      const expectations = trimSessionEntries(stored?.[SESSION_SYNC_EXPECTATIONS_KEY], { max: Math.max(0, MAX_EXPECTATIONS - entries.length) });
       const expiresAt = Date.now() + EXPECTATION_TTL_MS;
       for (const [key, signature] of entries) {
         expectations[key] = { signature: compactSignature(signature), expiresAt };
@@ -397,17 +402,14 @@ export function startBackground(adapter) {
     if (!browser.storage.session || !entries.length) return entries.length > 0;
     try {
       const stored = await browser.storage.session.get(SESSION_SYNC_EXPECTATIONS_KEY);
-      const expectations = pruneSessionEntries(stored?.[SESSION_SYNC_EXPECTATIONS_KEY]);
-      let hasExternalChange = false;
-      for (const [key, signature] of entries) {
-        const expected = expectations[key];
-        delete expectations[key];
-        if (!expected || expected.expiresAt < Date.now() || expected.signature !== compactSignature(signature)) {
-          hasExternalChange = true;
-        }
-      }
-      await browser.storage.session.set({ [SESSION_SYNC_EXPECTATIONS_KEY]: expectations });
-      return hasExternalChange;
+      const compactEntries = entries.map(([key, signature]) => [key, compactSignature(signature)]);
+      const consumed = consumeExactSessionExpectations(
+        stored?.[SESSION_SYNC_EXPECTATIONS_KEY],
+        compactEntries,
+        { max: MAX_EXPECTATIONS }
+      );
+      await browser.storage.session.set({ [SESSION_SYNC_EXPECTATIONS_KEY]: consumed.expectations });
+      return consumed.hasExternalChange;
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not read Sync write suppression`, error);
       return true;
@@ -667,6 +669,19 @@ export function startBackground(adapter) {
     return next;
   }
 
+  function hasLiveSyncCoreSignal(all) {
+    if (!all || typeof all !== "object") return false;
+    const workNamespace = syncNamespace(WORK_SPACE_ID);
+    return Object.keys(all).some(key =>
+      key === SYNC_SETTINGS_KEY ||
+      key === SYNC_DATASET_KEY ||
+      key.startsWith(SYNC_ITEM_PREFIX) ||
+      key === workNamespace.settingsKey ||
+      key === workNamespace.datasetKey ||
+      key.startsWith(workNamespace.itemPrefix)
+    );
+  }
+
   function completeRemoteDescriptor(sources, workSnapshot) {
     const personal = combinedRemoteCore(sources.shared, sources.device);
     const work = combinedWorkRemoteCore(workSnapshot, sources.profile);
@@ -678,6 +693,22 @@ export function startBackground(adapter) {
       publisherDeviceId: sources.profile?.originDeviceId || personal.originDeviceId || work.originDeviceId || "",
       personalTombstones: continuityTombstonesFromRecords(personal.records),
       workTombstones: continuityTombstonesFromRecords(work.records)
+    };
+  }
+
+  function completeLiveRemoteDescriptor(sources, workSnapshot) {
+    if (!isSnapshotUsable(sources?.shared) || !isSnapshotUsable(workSnapshot)) return null;
+    const personalRevision = datasetRevision(sources.shared.dataset);
+    const workRevision = datasetRevision(workSnapshot.dataset);
+    const personalPublisher = typeof sources.shared.dataset?.originDeviceId === "string" ? sources.shared.dataset.originDeviceId : "";
+    const workPublisher = typeof workSnapshot.dataset?.originDeviceId === "string" ? workSnapshot.dataset.originDeviceId : "";
+    return {
+      revision: `${personalRevision}|${workRevision}`,
+      // A two-ledger live profile can contain contributions from several devices;
+      // only retain a publisher identity when both final dataset commits agree.
+      publisherDeviceId: personalPublisher && personalPublisher === workPublisher ? personalPublisher : "",
+      personalTombstones: continuityTombstonesFromRecords(sources.shared.records),
+      workTombstones: continuityTombstonesFromRecords(workSnapshot.records)
     };
   }
 
@@ -717,7 +748,11 @@ export function startBackground(adapter) {
       if (validResetIntent(reset)) return observeRemoteResetIntent(reset, meta);
       const sources = await readCoreSources(all, { includeAssets: false });
       const workSnapshot = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
-      const complete = completeRemoteDescriptor(sources, workSnapshot);
+      // Once live-core loss is quarantined, locally retained immutable recovery
+      // generations cannot prove that Firefox/Mozilla Sync has recovered. Only a
+      // coherent live Personal+Work ledger cancels the quarantine. This prevents
+      // stale local Recovery roots from masking a real remote namespace wipe.
+      const complete = completeLiveRemoteDescriptor(sources, workSnapshot);
       if (complete) {
         const hadConfirmedRecovery = continuity.lossState === "recovering" || continuity.recoveryAttempts > 0;
         await markSyncContinuityHealthy(meta, complete);
@@ -725,14 +760,24 @@ export function startBackground(adapter) {
         return null;
       }
     } else {
-      const usedBytes = await browser.storage.sync.getBytesInUse(null);
-      if (Number(usedBytes) > 0) return null;
-      // Never enter catastrophic-loss quarantine from one quota API observation
-      // alone. A second independent namespace read must also be genuinely empty.
-      // This protects startup/engine-initialization races where getBytesInUse()
-      // can transiently report zero while records are already locally visible.
-      const zeroCheck = await browser.storage.sync.get(null);
-      if (zeroCheck && Object.keys(zeroCheck).length > 0) return null;
+      // Recovery generations and device-name records are safety/metadata, not proof
+      // that the live shared Personal+Work ledgers still exist. Firefox can retain
+      // stale local recovery keys after the server-side Extension Storage namespace
+      // was wiped. If those keys count as "non-empty", no survivor would ever enter
+      // catastrophic-loss recovery. Double-confirm the *live core* instead.
+      const firstCoreCheck = await browser.storage.sync.get(null);
+      const firstReset = firstCoreCheck?.[SYNC_RESET_INTENT_KEY];
+      if (validResetIntent(firstReset)) return observeRemoteResetIntent(firstReset, meta);
+      if (hasLiveSyncCoreSignal(firstCoreCheck)) return null;
+
+      // A second independent namespace read protects startup/staggered-delivery
+      // races. Quarantine is still only a waiting state; the existing recovery
+      // grace gives Firefox ample time to deliver a coherent live ledger before any
+      // survivor can republish from its protected local profile.
+      const secondCoreCheck = await browser.storage.sync.get(null);
+      const secondReset = secondCoreCheck?.[SYNC_RESET_INTENT_KEY];
+      if (validResetIntent(secondReset)) return observeRemoteResetIntent(secondReset, meta);
+      if (hasLiveSyncCoreSignal(secondCoreCheck)) return null;
       const now = Date.now();
       const quarantine = recoveryContinuity.planLossQuarantine(continuity, meta.deviceId, now);
       continuity = await writeSyncContinuity(quarantine.continuity, meta);
@@ -920,6 +965,60 @@ export function startBackground(adapter) {
     }).catch(() => {});
   });
 
+  function scheduleSyncStorageReconciliation() {
+    if (syncStorageReconcileScheduled) return;
+    syncStorageReconcileScheduled = true;
+    void enqueue(async () => {
+      try {
+        // Collapse an arbitrarily large Firefox delivery burst into at most one
+        // reconciliation per semantic batch. Events raised by our own writes while
+        // this task runs are folded into the next loop turn instead of enqueueing a
+        // second unbounded chain of `storage-event` jobs.
+        while (pendingSyncStorageChanges.size || pendingSyncStorageOverwrittenEvidence) {
+          const unresolvedChanges = [...pendingSyncStorageChanges.entries()];
+          pendingSyncStorageChanges.clear();
+          const overwrittenEvidenceCount = pendingSyncStorageOverwrittenEvidence;
+          pendingSyncStorageOverwrittenEvidence = 0;
+
+          const durableExternalChange = unresolvedChanges.length
+            ? await consumeDurableSyncChanges(unresolvedChanges)
+            : false;
+          if (!durableExternalChange && !overwrittenEvidenceCount) continue;
+
+          const meta = await readLocalMeta();
+          if (!meta.syncEnabled) {
+            clearDeliveredCoreEvidence();
+            continue;
+          }
+          if (!meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
+            const result = await bootstrapRemote({ waitIfMissing: true });
+            await noteSyncDiagnostic({
+              lastReconcileAt: Date.now(),
+              lastReconcileReason: "storage-event",
+              lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
+            });
+            continue;
+          }
+          if (meta.syncInitialized) {
+            const result = await reconcileIfNewCommit("storage-event");
+            await noteSyncDiagnostic({
+              lastReconcileAt: Date.now(),
+              lastReconcileReason: "storage-event",
+              lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : (result?.skipped ? (result.reason || "already-applied") : "reconciled"))
+            });
+          }
+        }
+      } finally {
+        syncStorageReconcileScheduled = false;
+        if (pendingSyncStorageChanges.size || pendingSyncStorageOverwrittenEvidence) scheduleSyncStorageReconciliation();
+      }
+    }).catch(error => {
+      syncStorageReconcileScheduled = false;
+      console.warn(`${PRODUCT_NAME}: coalesced Sync storage reconciliation failed`, error);
+      if (pendingSyncStorageChanges.size || pendingSyncStorageOverwrittenEvidence) scheduleSyncStorageReconciliation();
+    });
+  }
+
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") {
       const stateChange = changes[LOCAL_STATE_KEY];
@@ -984,42 +1083,14 @@ export function startBackground(adapter) {
 
     if (unresolvedChanges.length || overwrittenEvidenceCount) {
       const storageEventAt = Date.now();
-      const diagnosticWrite = noteSyncDiagnostic({
+      for (const [key, signature] of unresolvedChanges) pendingSyncStorageChanges.set(key, signature);
+      pendingSyncStorageOverwrittenEvidence += overwrittenEvidenceCount;
+      void noteSyncDiagnostic({
         lastSyncStorageChangeEventAt: storageEventAt,
         lastSyncStorageChangeRelevantCount: relevant.length,
         lastSyncStorageChangeUnresolvedCount: unresolvedChanges.length + overwrittenEvidenceCount
       });
-      enqueue(async () => {
-        await diagnosticWrite;
-        const durableExternalChange = unresolvedChanges.length
-          ? await consumeDurableSyncChanges(unresolvedChanges)
-          : false;
-        if (!durableExternalChange && !overwrittenEvidenceCount) return;
-        const meta = await readLocalMeta();
-        if (!meta.syncEnabled) {
-          clearDeliveredCoreEvidence();
-          return;
-        }
-        // A new computer can wait safely for Firefox itself to download the
-        // extension's storage.sync data. As soon as it arrives, restore it.
-        if (!meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
-          const result = await bootstrapRemote({ waitIfMissing: true });
-          await noteSyncDiagnostic({
-            lastReconcileAt: Date.now(),
-            lastReconcileReason: "storage-event",
-            lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
-          });
-          return;
-        }
-        if (meta.syncInitialized) {
-          const result = await reconcileIfNewCommit("storage-event");
-          await noteSyncDiagnostic({
-            lastReconcileAt: Date.now(),
-            lastReconcileReason: "storage-event",
-            lastReconcileOutcome: result?.pending ? "waiting" : (result?.ok === false ? "error" : "reconciled")
-          });
-        }
-      });
+      scheduleSyncStorageReconciliation();
     }
   });
 
@@ -1139,7 +1210,8 @@ export function startBackground(adapter) {
         lastRemoteReceiptAt: 0,
         lastRemoteReceiptRevision: "",
         lastRemoteReceiptUpdatedAt: 0,
-        lastRemoteReceiptOriginDeviceId: ""
+        lastRemoteReceiptOriginDeviceId: "",
+        lastRemoteReceiptProvenanceExact: false
       });
       await ensureSyncWatchAlarm(next);
     });
@@ -3453,7 +3525,8 @@ export function startBackground(adapter) {
         lastRemoteReceiptAt: 0,
         lastRemoteReceiptRevision: "",
         lastRemoteReceiptUpdatedAt: 0,
-        lastRemoteReceiptOriginDeviceId: ""
+        lastRemoteReceiptOriginDeviceId: "",
+        lastRemoteReceiptProvenanceExact: false
       });
       await ensureSyncWatchAlarm(next);
       return { ok: true, meta: next, action: "disabled" };
@@ -3495,76 +3568,67 @@ export function startBackground(adapter) {
     return target;
   }
 
-  function mergeDeviceSnapshots(snapshots) {
+  function deviceSnapshotRevision(snapshot, prefix = "device") {
+    if (!snapshot?.deviceId || !snapshot?.commitId) return "";
+    return `${prefix}:${snapshot.deviceId}:${snapshot.commitId}:${Number(snapshot.updatedAt) || 0}`;
+  }
+
+  function selectDeviceSnapshotSource(snapshots) {
     if (!Array.isArray(snapshots) || !snapshots.length) return null;
-    let records = new Map();
-    let settings = null;
-    let updatedAt = 0;
-    let latestPublishedAt = 0;
-    let latestOriginDeviceId = "";
-    const revisions = [];
-    for (const snapshot of snapshots) {
-      records = mergeRecordMaps(records, snapshot.records);
-      settings = settings ? mergeSettingsRecords(settings, snapshot.settings) : snapshot.settings;
-      updatedAt = Math.max(updatedAt, Number(snapshot.updatedAt) || 0);
-      if (Number(snapshot.publishedAt) >= latestPublishedAt) {
-        latestPublishedAt = Number(snapshot.publishedAt) || 0;
-        latestOriginDeviceId = snapshot.deviceId || latestOriginDeviceId;
-      }
-      revisions.push(`${snapshot.deviceId}:${snapshot.commitId}:${snapshot.updatedAt}`);
-    }
-    if (!settings) return null;
-    revisions.sort(compareStableText);
+    const completeProfile = selectAtomicRecoverySnapshot(snapshots, {
+      compareRecency: compareDeviceSnapshotGenerationRecency,
+      requireCompleteProfile: true
+    });
+    const selected = completeProfile || selectAtomicRecoverySnapshot(snapshots, {
+      compareRecency: compareDeviceSnapshotGenerationRecency,
+      requireCompleteProfile: false
+    });
+    if (!selected) return null;
     return {
-      records: pruneExpiredTombstones(records),
-      settings,
+      records: pruneExpiredTombstones(new Map(selected.records)),
+      settings: selected.settings,
       dataset: null,
       assets: new Map(),
-      sourceKind: "device-snapshots",
-      revision: `devices:${fnv1a(revisions.join("|"))}`,
-      updatedAt,
-      publishedAt: latestPublishedAt,
-      originDeviceId: latestOriginDeviceId
+      sourceKind: "device-snapshot",
+      revision: deviceSnapshotRevision(selected, "device"),
+      updatedAt: datasetUpdatedAt(selected.records, selected.settings, 0),
+      publishedAt: Number(selected.publishedAt) || 0,
+      originDeviceId: selected.deviceId || "",
+      commitId: selected.commitId || "",
+      provenanceExact: true,
+      snapshot: selected
     };
   }
 
-
-  function mergeProfileDeviceSnapshots(snapshots) {
-    const complete = (Array.isArray(snapshots) ? snapshots : []).filter(snapshot =>
-      snapshot?.profileComplete === true && snapshot.workRecords instanceof Map && snapshot.workSettings?.kind === "settings"
-    );
-    if (!complete.length) return null;
-
-    let personalRecords = new Map();
-    let personalSettings = null;
-    let workRecords = new Map();
-    let workSettings = null;
-    let updatedAt = 0;
-    let latestPublishedAt = 0;
-    let latestOriginDeviceId = "";
-    const revisions = [];
-    for (const snapshot of complete) {
-      personalRecords = mergeRecordMaps(personalRecords, snapshot.records);
-      personalSettings = personalSettings ? mergeSettingsRecords(personalSettings, snapshot.settings) : snapshot.settings;
-      workRecords = mergeRecordMaps(workRecords, snapshot.workRecords);
-      workSettings = workSettings ? mergeSettingsRecords(workSettings, snapshot.workSettings) : snapshot.workSettings;
-      updatedAt = Math.max(updatedAt, Number(snapshot.updatedAt) || 0);
-      if (Number(snapshot.publishedAt) >= latestPublishedAt) {
-        latestPublishedAt = Number(snapshot.publishedAt) || 0;
-        latestOriginDeviceId = snapshot.deviceId || latestOriginDeviceId;
-      }
-      revisions.push(`${snapshot.deviceId}:${snapshot.commitId}:${snapshot.updatedAt}:${snapshot.usedPreviousGeneration ? "previous" : "current"}`);
-    }
-    if (!personalSettings || !workSettings) return null;
-    revisions.sort(compareStableText);
+  function selectProfileDeviceSnapshotSource(snapshots) {
+    const selected = selectAtomicRecoverySnapshot(snapshots, {
+      compareRecency: compareDeviceSnapshotGenerationRecency,
+      requireCompleteProfile: true
+    });
+    if (!selected) return null;
+    const personalUpdatedAt = datasetUpdatedAt(selected.records, selected.settings, 0);
+    const workUpdatedAt = datasetUpdatedAt(selected.workRecords, selected.workSettings, 0);
     return {
-      personal: { records: pruneExpiredTombstones(personalRecords), settings: personalSettings, assets: new Map() },
-      work: { records: pruneExpiredTombstones(workRecords), settings: workSettings, assets: new Map() },
-      revision: `profiles:${fnv1a(revisions.join("|"))}`,
-      updatedAt,
-      publishedAt: latestPublishedAt,
-      originDeviceId: latestOriginDeviceId,
-      complete: true
+      personal: {
+        records: pruneExpiredTombstones(new Map(selected.records)),
+        settings: selected.settings,
+        assets: new Map(),
+        updatedAt: personalUpdatedAt
+      },
+      work: {
+        records: pruneExpiredTombstones(new Map(selected.workRecords)),
+        settings: selected.workSettings,
+        assets: new Map(),
+        updatedAt: workUpdatedAt
+      },
+      revision: deviceSnapshotRevision(selected, "profile"),
+      updatedAt: Math.max(personalUpdatedAt, workUpdatedAt),
+      publishedAt: Number(selected.publishedAt) || 0,
+      originDeviceId: selected.deviceId || "",
+      commitId: selected.commitId || "",
+      complete: true,
+      provenanceExact: true,
+      snapshot: selected
     };
   }
 
@@ -3598,6 +3662,10 @@ export function startBackground(adapter) {
   }
 
   async function publishProfileDeviceSnapshot(fullState, meta, { force = false } = {}) {
+    const profileRevisionFor = snapshot => {
+      if (!snapshot?.deviceId || !snapshot?.commitId) return "";
+      return `profile:${snapshot.deviceId}:${snapshot.commitId}:${Number(snapshot.updatedAt) || 0}`;
+    };
     if (!meta?.deviceId) return { written: false, reason: "missing-device", setRevision: "" };
     if (!force && !profilePublicationTrusted(meta)) {
       // Never infer profile completeness from local Work content alone. A fresh
@@ -3625,7 +3693,7 @@ export function startBackground(adapter) {
           written: false,
           unchanged: true,
           reason: "unchanged",
-          setRevision: meta.lastAppliedProfileSnapshotRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+          setRevision: profileRevisionFor(currentOwn.decoded) || meta.lastAppliedProfileSnapshotRevision || meta.lastAppliedDeviceSnapshotRevision || "",
           publishedAt: Number(currentOwn.decoded.publishedAt) || meta.lastProfileSnapshotPublishedAt || 0
         };
       }
@@ -3667,12 +3735,10 @@ export function startBackground(adapter) {
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: superseded device snapshot cleanup skipped`, error);
     }
-    const { snapshots } = verification;
-    const mergedProfile = mergeProfileDeviceSnapshots(snapshots);
     return {
       written: true,
       value: publication.rootValue,
-      setRevision: mergedProfile?.revision || "",
+      setRevision: profileRevisionFor(verification.committedSnapshot),
       publishedAt: Number(publication.rootValue.publishedAt) || Date.now()
     };
   }
@@ -3683,8 +3749,8 @@ export function startBackground(adapter) {
       readSyncSnapshot(values, { includeAssets }),
       readDeviceSnapshots(values)
     ]);
-    const device = mergeDeviceSnapshots(deviceSnapshots);
-    const profile = mergeProfileDeviceSnapshots(deviceSnapshots);
+    const device = selectDeviceSnapshotSource(deviceSnapshots);
+    const profile = selectProfileDeviceSnapshotSource(deviceSnapshots);
     return { all: values, shared, device, profile, deviceSnapshots };
   }
 
@@ -3760,8 +3826,7 @@ export function startBackground(adapter) {
 
   function combinedRemoteCore(shared, device) {
     const sharedUsable = isSnapshotUsable(shared);
-    if (!device && !sharedUsable) return null;
-    if (!device) {
+    if (sharedUsable) {
       return {
         records: pruneExpiredTombstones(shared.records),
         settings: shared.settings,
@@ -3769,35 +3834,29 @@ export function startBackground(adapter) {
         sourceKind: "shared-ledger",
         revision: datasetRevision(shared.dataset),
         updatedAt: Number(shared.dataset?.updatedAt) || datasetUpdatedAt(shared.records, shared.settings, 0),
-        originDeviceId: typeof shared.dataset?.originDeviceId === "string" ? shared.dataset.originDeviceId : ""
+        originDeviceId: typeof shared.dataset?.originDeviceId === "string" ? shared.dataset.originDeviceId : "",
+        provenanceExact: false
       };
     }
-
-    let records = new Map(device.records);
-    let settings = device.settings;
-    if (sharedUsable) {
-      records = mergeRecordMaps(records, shared.records);
-      settings = mergeSettingsRecords(settings, shared.settings);
-    }
-    const revisionParts = [device.revision];
-    if (sharedUsable) revisionParts.push(datasetRevision(shared.dataset));
-    revisionParts.sort(compareStableText);
+    if (!device) return null;
+    // Immutable device snapshots are coherent recovery generations. They are a
+    // fallback only while the live shared ledger is missing/torn; never union a
+    // partial or complete shared ledger into an atomic generation.
     return {
-      records: pruneExpiredTombstones(records),
-      settings,
-      assets: shared.assets || new Map(),
-      sourceKind: sharedUsable ? "device+shared" : "device-snapshots",
-      revision: `core:${fnv1a(revisionParts.join("|"))}`,
-      updatedAt: Math.max(device.updatedAt || 0, sharedUsable ? Number(shared.dataset?.updatedAt) || 0 : 0),
-      originDeviceId: device.originDeviceId || (sharedUsable ? String(shared.dataset?.originDeviceId || "") : "")
+      records: new Map(device.records),
+      settings: device.settings,
+      assets: shared?.assets || new Map(),
+      sourceKind: "device-snapshot",
+      revision: device.revision,
+      updatedAt: Number(device.updatedAt) || 0,
+      originDeviceId: device.originDeviceId || "",
+      provenanceExact: true
     };
   }
 
   function combinedWorkRemoteCore(shared, profile) {
     const sharedUsable = isSnapshotUsable(shared);
-    const profileWork = profile?.complete === true ? profile.work : null;
-    if (!profileWork && !sharedUsable) return null;
-    if (!profileWork) {
+    if (sharedUsable) {
       return {
         records: pruneExpiredTombstones(shared.records),
         settings: shared.settings,
@@ -3805,28 +3864,21 @@ export function startBackground(adapter) {
         sourceKind: "shared-work-ledger",
         revision: datasetRevision(shared.dataset),
         updatedAt: Number(shared.dataset?.updatedAt) || datasetUpdatedAt(shared.records, shared.settings, 0),
-        originDeviceId: typeof shared.dataset?.originDeviceId === "string" ? shared.dataset.originDeviceId : ""
+        originDeviceId: typeof shared.dataset?.originDeviceId === "string" ? shared.dataset.originDeviceId : "",
+        provenanceExact: false
       };
     }
-    let records = new Map(profileWork.records);
-    let settings = profileWork.settings;
-    // A complete profile snapshot supplies the missing baseline. Even if the old
-    // Work ledger is torn, any records/settings that *are* visible can be folded in
-    // by the existing commutative per-record clocks, preserving newer concurrent
-    // edits without treating absent keys as deletions.
-    if (shared?.records instanceof Map) records = mergeRecordMaps(records, shared.records);
-    if (shared?.settings) settings = mergeSettingsRecords(settings, shared.settings);
-    const revisionParts = [profile.revision];
-    if (sharedUsable) revisionParts.push(datasetRevision(shared.dataset));
-    revisionParts.sort(compareStableText);
+    const profileWork = profile?.complete === true ? profile.work : null;
+    if (!profileWork) return null;
     return {
-      records: pruneExpiredTombstones(records),
-      settings,
-      assets: shared.assets || new Map(),
-      sourceKind: sharedUsable ? "profile+shared-work" : "profile-snapshot",
-      revision: `work-core:${fnv1a(revisionParts.join("|"))}`,
-      updatedAt: Math.max(profile.updatedAt || 0, sharedUsable ? Number(shared.dataset?.updatedAt) || 0 : 0),
-      originDeviceId: profile.originDeviceId || (sharedUsable ? String(shared.dataset?.originDeviceId || "") : "")
+      records: new Map(profileWork.records),
+      settings: profileWork.settings,
+      assets: shared?.assets || new Map(),
+      sourceKind: "profile-snapshot",
+      revision: profile.revision,
+      updatedAt: Number(profileWork.updatedAt) || datasetUpdatedAt(profileWork.records, profileWork.settings, 0),
+      originDeviceId: profile.originDeviceId || "",
+      provenanceExact: true
     };
   }
 
@@ -3910,15 +3962,35 @@ export function startBackground(adapter) {
 
   function observeRemoteCore(meta, core) {
     if (!remoteCoreUsable(core) || !core.revision) return meta;
-    const originDeviceId = typeof core.originDeviceId === "string" ? core.originDeviceId : "";
-    if (originDeviceId && originDeviceId === meta.deviceId) return meta;
-    if (meta.lastRemoteReceiptRevision === core.revision) return meta;
+    const provenanceExact = core.provenanceExact === true;
+    const exactOriginDeviceId = provenanceExact && typeof core.originDeviceId === "string"
+      ? core.originDeviceId
+      : "";
+    if (exactOriginDeviceId && exactOriginDeviceId === meta.deviceId) return meta;
+
+    // 1.30.18.41 could persist a device name against a collaborative ledger merely
+    // because that device had the newest recovery publication. Clear that stale
+    // attribution even when the ledger revision itself has not changed. Do not
+    // manufacture a new receipt timestamp for this metadata-only correction.
+    if (meta.lastRemoteReceiptRevision === core.revision) {
+      if ((meta.lastRemoteReceiptOriginDeviceId || "") === exactOriginDeviceId &&
+          meta.lastRemoteReceiptProvenanceExact === provenanceExact) return meta;
+      return {
+        ...meta,
+        lastRemoteReceiptOriginDeviceId: exactOriginDeviceId,
+        lastRemoteReceiptProvenanceExact: provenanceExact
+      };
+    }
     return {
       ...meta,
       lastRemoteReceiptAt: Date.now(),
       lastRemoteReceiptRevision: core.revision,
       lastRemoteReceiptUpdatedAt: Number(core.updatedAt) || 0,
-      lastRemoteReceiptOriginDeviceId: originDeviceId
+      // Shared ledgers are collaborative merge products. Naming their last writer
+      // as the source of the whole received layout is false provenance. Only an
+      // atomic device/profile generation has exact source attribution.
+      lastRemoteReceiptOriginDeviceId: exactOriginDeviceId,
+      lastRemoteReceiptProvenanceExact: provenanceExact
     };
   }
 
@@ -3981,39 +4053,38 @@ export function startBackground(adapter) {
       lastObservedWorkRevision: workRevision,
       lastObservedProfileRevision: profileRevision
     };
-    const sharedUnchanged = !sharedRevision || sharedRevision === meta.lastAppliedSyncRevision;
-    const devicesUnchanged = !deviceRevision || deviceRevision === meta.lastAppliedDeviceSnapshotRevision;
-    const workUnchanged = !workRevision || workRevision === meta.lastAppliedWorkSyncRevision;
-    const profileUnchanged = !profileRevision || profileRevision === meta.lastAppliedProfileSnapshotRevision;
+    const liveRevisionChanged = Boolean(
+      (sharedRevision && sharedRevision !== meta.lastAppliedSyncRevision) ||
+      (workRevision && workRevision !== meta.lastAppliedWorkSyncRevision)
+    );
 
-    // Commit markers are a fast signal, not proof that every storage.sync record
-    // visible in this running browser has already been applied. Firefox can deliver
-    // a multi-key extension snapshot in batches, and an event can be delayed or
-    // missed. Compare the actual usable remote semantic content with the current
-    // local workspaces before taking the cheap "already applied" exit.
+    // Recovery generations are safety copies, not live merge inputs. A device or
+    // profile snapshot arriving before its compatibility ledger must therefore not
+    // trigger an initialized device to reconcile local state. Only coherent live
+    // ledgers (or an explicit restore/bootstrap path) can drive normal Sync changes.
     let contentUnchanged = true;
-    if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged) {
-      const core = combinedRemoteCore(sources.shared, sources.device);
-      const local = await ensureLocalStorage();
-      if (remoteCoreUsable(core)) {
-        const personal = workspaceStateNormalized(local.state, PERSONAL_SPACE_ID);
-        const localRecords = flattenStateNormalized(personal, meta.deviceId);
-        const localSettings = makeSettingsRecordNormalized(personal, meta.deviceId);
-        contentUnchanged = recordFingerprint(core.records) === recordFingerprint(localRecords) &&
-          settingsRecordEqual(core.settings, localSettings);
-      }
-      const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
-      if (contentUnchanged && remoteCoreUsable(workCore)) {
-        const work = workspaceStateNormalized(local.state, WORK_SPACE_ID);
-        const localRecords = flattenStateNormalized(work, meta.deviceId);
-        const localSettings = makeSettingsRecordNormalized(work, meta.deviceId);
-        contentUnchanged = recordFingerprint(workCore.records) === recordFingerprint(localRecords) &&
-          settingsRecordEqual(workCore.settings, localSettings);
-      } else if (contentUnchanged && (hasSnapshotData(workSnapshot) || sources.profile?.complete)) {
-        contentUnchanged = false;
+    if (!liveRevisionChanged) {
+      const personalLiveUsable = isSnapshotUsable(sources.shared);
+      const workLiveUsable = isSnapshotUsable(workSnapshot);
+      if (personalLiveUsable || workLiveUsable) {
+        const local = await ensureLocalStorage();
+        if (personalLiveUsable) {
+          const personal = workspaceStateNormalized(local.state, PERSONAL_SPACE_ID);
+          const localRecords = flattenStateNormalized(personal, meta.deviceId);
+          const localSettings = makeSettingsRecordNormalized(personal, meta.deviceId);
+          contentUnchanged = recordFingerprint(sources.shared.records) === recordFingerprint(localRecords) &&
+            settingsRecordEqual(sources.shared.settings, localSettings);
+        }
+        if (contentUnchanged && workLiveUsable) {
+          const work = workspaceStateNormalized(local.state, WORK_SPACE_ID);
+          const localRecords = flattenStateNormalized(work, meta.deviceId);
+          const localSettings = makeSettingsRecordNormalized(work, meta.deviceId);
+          contentUnchanged = recordFingerprint(workSnapshot.records) === recordFingerprint(localRecords) &&
+            settingsRecordEqual(workSnapshot.settings, localSettings);
+        }
       }
     }
-    if (sharedUnchanged && devicesUnchanged && workUnchanged && profileUnchanged && contentUnchanged) {
+    if (!liveRevisionChanged && contentUnchanged) {
       await noteSyncDiagnostic({
         ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
         ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -4123,6 +4194,7 @@ export function startBackground(adapter) {
       remoteReceiptAt: statusMeta.lastRemoteReceiptAt,
       lastRemoteReceiptUpdatedAt: statusMeta.lastRemoteReceiptUpdatedAt,
       lastRemoteReceiptOriginDeviceId: statusMeta.lastRemoteReceiptOriginDeviceId,
+      lastRemoteReceiptProvenanceExact: statusMeta.lastRemoteReceiptProvenanceExact === true,
       remoteCommitId: latestDevice?.commitId || (typeof snapshot.dataset?.commitId === "string" ? snapshot.dataset.commitId : ""),
       remoteOriginDeviceId,
       remoteOriginDeviceName,
@@ -4289,11 +4361,54 @@ export function startBackground(adapter) {
     const sources = await readCoreSources();
     const resetIntent = sources.all?.[SYNC_RESET_INTENT_KEY];
     if (validResetIntent(resetIntent) && meta.syncInitialized) return observeRemoteResetIntent(resetIntent, meta);
-    const personalCore = combinedRemoteCore(sources.shared, sources.device);
     const workSnapshot = await readSyncSnapshot(sources.all, { spaceId: WORK_SPACE_ID });
-    const workCore = combinedWorkRemoteCore(workSnapshot, sources.profile);
-    const profileComplete = Boolean(sources.profile?.complete && remoteCoreUsable(workCore));
-    const legacyComplete = remoteCoreUsable(personalCore) && isSnapshotUsable(workSnapshot);
+    const atomicProfile = sources.profile?.complete === true ? sources.profile : null;
+    const liveProfileComplete = isSnapshotUsable(sources.shared) && isSnapshotUsable(workSnapshot);
+    const settingsModern = settings => Number(settings?.schemaVersion) >= SYNC_SCHEMA_VERSION && settings?.settingsClock && typeof settings.settingsClock === "object";
+    const atomicModern = Boolean(atomicProfile && settingsModern(atomicProfile.personal.settings) && settingsModern(atomicProfile.work.settings));
+    const liveModern = Boolean(liveProfileComplete && settingsModern(sources.shared.settings) && settingsModern(workSnapshot.settings));
+    const atomicMatchesLive = Boolean(atomicProfile && liveProfileComplete &&
+      recordFingerprint(atomicProfile.personal.records) === recordFingerprint(sources.shared.records) &&
+      settingsRecordEqual(atomicProfile.personal.settings, sources.shared.settings) &&
+      recordFingerprint(atomicProfile.work.records) === recordFingerprint(workSnapshot.records) &&
+      settingsRecordEqual(atomicProfile.work.settings, workSnapshot.settings));
+
+    // Restore/bootstrap chooses one coherent profile source. Prefer the atomic
+    // generation when it is the only complete profile, when it exactly represents
+    // the coherent live ledgers, or when it protects modern field-clock Settings
+    // from a raw legacy whole-record ledger. Otherwise a complete modern live
+    // Personal+Work pair is newer operational state and wins as a whole.
+    const useAtomicProfile = Boolean(atomicProfile && (
+      !liveProfileComplete ||
+      atomicMatchesLive ||
+      (atomicModern && !liveModern)
+    ));
+    const personalCore = useAtomicProfile
+      ? {
+          records: new Map(atomicProfile.personal.records),
+          settings: atomicProfile.personal.settings,
+          assets: sources.shared?.assets || new Map(),
+          sourceKind: "profile-snapshot",
+          revision: atomicProfile.revision,
+          updatedAt: Number(atomicProfile.personal.updatedAt) || 0,
+          originDeviceId: atomicProfile.originDeviceId || "",
+          provenanceExact: true
+        }
+      : combinedRemoteCore(sources.shared, null);
+    const workCore = useAtomicProfile
+      ? {
+          records: new Map(atomicProfile.work.records),
+          settings: atomicProfile.work.settings,
+          assets: workSnapshot?.assets || new Map(),
+          sourceKind: "profile-snapshot",
+          revision: atomicProfile.revision,
+          updatedAt: Number(atomicProfile.work.updatedAt) || 0,
+          originDeviceId: atomicProfile.originDeviceId || "",
+          provenanceExact: true
+        }
+      : combinedWorkRemoteCore(workSnapshot, null);
+    const profileComplete = Boolean(useAtomicProfile && remoteCoreUsable(personalCore) && remoteCoreUsable(workCore));
+    const legacyComplete = Boolean(!useAtomicProfile && remoteCoreUsable(personalCore) && isSnapshotUsable(workSnapshot));
 
     // A new 1.27.8.8 profile never finalizes from Personal alone. Either a complete
     // Personal+Work device generation exists, or both compatibility namespaces
@@ -4326,15 +4441,7 @@ export function startBackground(adapter) {
 
     await markSyncing(meta);
 
-    const remotePersonal = profileComplete && sources.profile?.personal
-      ? combinedRemoteCore(sources.shared, {
-          records: sources.profile.personal.records,
-          settings: sources.profile.personal.settings,
-          revision: sources.profile.revision,
-          updatedAt: sources.profile.updatedAt,
-          originDeviceId: sources.profile.originDeviceId
-        })
-      : personalCore;
+    const remotePersonal = personalCore;
     const remoteWork = workCore;
 
     // First reconstruct the exact verified remote profile. This is our baseline
@@ -5100,14 +5207,10 @@ export function startBackground(adapter) {
       };
     }
 
-    await markSyncing(meta);
     const sources = await readCoreSources();
     let snapshot = sources.shared;
     const core = combinedRemoteCore(snapshot, sources.device);
 
-    // Release 1.14 prefers the atomic per-device snapshots when available. The
-    // legacy shared ledger can legitimately be partial for several minutes while
-    // Firefox delivers its keys; that no longer blocks a complete device snapshot.
     if (!remoteCoreUsable(core)) {
       const waitingMeta = await refreshQuota({
         ...meta,
@@ -5121,12 +5224,31 @@ export function startBackground(adapter) {
       return { ok: true, pending: true, meta: waitingMeta };
     }
 
+    // On an initialized device, immutable recovery generations never participate
+    // in the automatic live merge. If Firefox exposes an atomic generation before
+    // the shared ledger is coherent, preserve the current local Personal Space and
+    // wait for the dataset/records to finish arriving. Explicit Restore/bootstrap
+    // paths may still consume the atomic generation as a whole.
+    if (strategy === "merge" && !isSnapshotUsable(snapshot)) {
+      const refreshed = await refreshQuota({
+        ...meta,
+        syncStatus: "ready",
+        lastSyncError: "",
+        lastSyncWarning: "",
+        syncWaitStartedAt: 0
+      });
+      await writeLocalMeta(refreshed);
+      await ensureSyncWatchAlarm(refreshed);
+      return { ok: true, skipped: true, reason: "shared-ledger-pending", meta: refreshed, sharedLedgerPending: true };
+    }
+
     const observedMeta = observeRemoteCore(meta, core);
     const localRecords = flattenStateNormalized(localState, meta.deviceId);
     const localSettings = makeSettingsRecordNormalized(localState, meta.deviceId);
     const localAssets = collectLocalAssetsNormalized(localState);
 
     if (strategy === "remote") {
+      await markSyncing(meta);
       const restoredPersonalState = stateFromRecords(core.records, core.settings, localState, core.assets);
       const restoredState = replaceWorkspaceNormalized(fullLocalState, PERSONAL_SPACE_ID, workspaceStateNormalized(restoredPersonalState, PERSONAL_SPACE_ID));
       await setLocalStateSilently(restoredState);
@@ -5166,27 +5288,8 @@ export function startBackground(adapter) {
     const desiredRecords = flattenStateNormalized(desiredPersonalState, meta.deviceId);
     const desiredAssets = collectLocalAssetsNormalized(desiredPersonalState);
 
-    // Firefox/Chrome can expose a newer atomic device snapshot before every key of
-    // the compatibility shared ledger has arrived. The device snapshot is safe to
-    // apply locally, but repairing the visibly partial ledger at that moment would
-    // republish an older/incomplete view and amplify Sync writes. Wait for the
-    // ledger to become coherent; the periodic semantic watchdog will revisit it.
-    const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot);
-    if (sharedLedgerPartial && !sources.profile?.complete) {
-      const appliedMeta = markAppliedRemoteCore(observedMeta, sources.device?.revision || "");
-      const refreshed = await refreshQuota({
-        ...appliedMeta,
-        syncStatus: "ready",
-        lastSyncAt: Date.now(),
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncWaitStartedAt: 0
-      });
-      await writeLocalMeta(refreshed);
-      await ensureSyncWatchAlarm(refreshed);
-      if (mergedStateChanged) await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
-      return { ok: true, meta: refreshed, sharedLedgerPending: true };
-    }
+    // The live shared ledger is coherent here. Atomic safety generations were
+    // already excluded from automatic merge above.
 
     // Repair/maintain the shared record ledger for compatibility and for binary
     // artwork references. It is no longer allowed to block the fast core path.
@@ -5209,7 +5312,7 @@ export function startBackground(adapter) {
     }
 
     const hasCoreWrites = hasOwnEnumerable(syncWrites);
-    const shouldCommitDataset = hasCoreWrites || sharedLedgerPartial;
+    const shouldCommitDataset = hasCoreWrites;
     const desiredDataset = shouldCommitDataset
       ? datasetRecord(
           datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
@@ -5257,9 +5360,9 @@ export function startBackground(adapter) {
     let snapshot = await readSyncSnapshot(all, { spaceId: WORK_SPACE_ID });
     let core = combinedWorkRemoteCore(snapshot, sources.profile);
 
-    // Missing/partial Work is never silently interpreted as an empty Space in
-    // 1.27.8. A complete full-profile device snapshot can bridge a torn shared
-    // ledger; otherwise keep the last trusted local Work and wait for delivery.
+    // Missing/partial Work is never silently interpreted as an empty Space.
+    // A complete profile generation may satisfy explicit Restore/bootstrap, but
+    // automatic live reconciliation waits for the shared Work ledger itself.
     if (!remoteCoreUsable(core)) {
       const waiting = await writeLocalMeta({
         ...meta,
@@ -5268,6 +5371,21 @@ export function startBackground(adapter) {
         syncWaitStartedAt: meta.syncWaitStartedAt || Date.now()
       });
       return { ok: true, meta: waiting, pending: true, workPending: true };
+    }
+
+    // Work follows the same safety boundary as Personal: a complete profile
+    // generation is an atomic Restore/bootstrap fallback, not an automatic
+    // per-record merge source while the live Work ledger is torn or absent.
+    if (strategy === "merge" && !isSnapshotUsable(snapshot)) {
+      const refreshed = await refreshQuota({
+        ...meta,
+        syncStatus: "ready",
+        lastSyncError: "",
+        lastSyncWarning: "",
+        syncWaitStartedAt: 0
+      });
+      await writeLocalMeta(refreshed);
+      return { ok: true, skipped: true, reason: "work-ledger-pending", meta: refreshed, sharedLedgerPending: true };
     }
 
     const localState = workspaceStateNormalized(fullLocalState, WORK_SPACE_ID);
@@ -5322,11 +5440,8 @@ export function startBackground(adapter) {
     const desiredRecords = flattenStateNormalized(desiredState, meta.deviceId);
     const desiredAssets = collectLocalAssetsNormalized(desiredState);
 
-    // A complete profile snapshot is the trusted baseline for repairing a torn
-    // compatibility Work ledger. Present partial records were already merged above;
-    // missing keys are restored from the full profile and the dataset marker is
-    // recommitted last.
-    const sharedLedgerPartial = hasSnapshotData(snapshot) && !isSnapshotUsable(snapshot);
+    // The live Work ledger is coherent here. Atomic profile generations were
+    // already excluded from automatic merge above.
 
     const syncWrites = {};
     for (const [id, record] of desiredRecords) {
@@ -5345,7 +5460,7 @@ export function startBackground(adapter) {
     }
 
     const hasCoreWrites = hasOwnEnumerable(syncWrites);
-    const shouldCommitDataset = hasCoreWrites || sharedLedgerPartial;
+    const shouldCommitDataset = hasCoreWrites;
     const desiredDataset = shouldCommitDataset
       ? datasetRecord(
           datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
@@ -5389,11 +5504,10 @@ export function startBackground(adapter) {
       if (!personal?.ok || personal?.pending) return personal;
       let work = await reconcileWork(strategy);
 
-      // A trusted 1.27.7 installation may encounter a torn Work ledger before it
-      // has ever emitted a 1.27.8.8 full-profile snapshot. Preserve its local Work,
-      // publish that complete Personal+Work generation, then immediately retry the
-      // Work read through the new atomic source. Fresh/half-restored profiles have
-      // no applied Work/profile revision and are therefore never allowed to do this.
+      // Keep the local immutable safety generation current after a successful
+      // live reconciliation, but never feed that publication back into the same
+      // automatic merge. A torn/missing Work ledger waits for Firefox delivery;
+      // only explicit Restore/bootstrap may consume the atomic profile as data.
       let currentMeta = work?.meta || personal.meta || await readLocalMeta();
       if (currentMeta.syncEnabled && currentMeta.syncInitialized) {
         const { state } = await ensureLocalStorage();
@@ -5405,7 +5519,6 @@ export function startBackground(adapter) {
           lastProfileSnapshotPublishedAt: profilePublish.publishedAt || currentMeta.lastProfileSnapshotPublishedAt || 0,
           ...profileProtectionState(profilePublish, currentMeta)
         });
-        if (work?.pending && profilePublish.written) work = await reconcileWork(strategy);
       }
 
       if (work?.pending) {
@@ -5493,6 +5606,7 @@ export function startBackground(adapter) {
       lastRemoteReceiptRevision: "",
       lastRemoteReceiptUpdatedAt: 0,
       lastRemoteReceiptOriginDeviceId: "",
+      lastRemoteReceiptProvenanceExact: false,
       syncBytesInUse: Math.max(0, Number(usedBytes) || 0),
       syncItemCount: Object.keys(remaining || {}).filter(key => key.startsWith(SYNC_PREFIX)).length
     });

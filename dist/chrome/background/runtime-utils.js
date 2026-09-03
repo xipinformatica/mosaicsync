@@ -4,13 +4,6 @@ export function syncNamespaceFor(spaceId, { personalSpaceId, syncPrefix, syncSet
   const prefix = `${syncSpacePrefix}${spaceId}.`;
   return { spaceId, prefix, settingsKey: `${prefix}settings`, datasetKey: `${prefix}dataset`, itemPrefix: `${prefix}item.`, assetPrefix: `${prefix}asset.` };
 }
-export function pruneExpectationMap(map, { now = Date.now(), max = 256 } = {}) {
-  for (const [key, value] of map) {
-    const expiresAt = typeof value === "object" ? value.expiresAt : value;
-    if (!Number.isFinite(expiresAt) || expiresAt < now) map.delete(key);
-  }
-  while (map.size > max) map.delete(map.keys().next().value);
-}
 export function compactSignature(signature, removedSentinel = null) {
   if (removedSentinel !== null && signature === removedSentinel) return "removed";
   const text = String(signature ?? "");
@@ -22,15 +15,36 @@ export function compactSignature(signature, removedSentinel = null) {
   }
   return `${text.length}:${(hashA >>> 0).toString(16)}:${(hashB >>> 0).toString(16)}:${text.slice(0, 24)}:${text.slice(-24)}`;
 }
-export function pruneSessionEntries(entries, { now = Date.now(), max = 256 } = {}) {
+export function trimExpectationMap(map, { max = 256 } = {}) {
+  if (!(map instanceof Map)) return map;
+  while (map.size > max) map.delete(map.keys().next().value);
+  return map;
+}
+
+export function trimSessionEntries(entries, { max = 256 } = {}) {
   const clean = {};
-  for (const [key, value] of Object.entries(entries || {})) {
-    const expiresAt = typeof value === "object" ? value.expiresAt : value;
-    if (Number.isFinite(expiresAt) && expiresAt >= now) clean[key] = value;
-  }
+  for (const [key, value] of Object.entries(entries || {})) clean[key] = value;
   const keys = Object.keys(clean);
   for (let index = 0; index < Math.max(0, keys.length - max); index += 1) delete clean[keys[index]];
   return clean;
+}
+
+export function consumeExactExpectation(map, key, signature) {
+  if (!(map instanceof Map)) return false;
+  const expected = map.get(key);
+  map.delete(key);
+  return Boolean(expected && expected.signature === signature);
+}
+
+export function consumeExactSessionExpectations(entries, changes, { max = 256 } = {}) {
+  const expectations = trimSessionEntries(entries, { max });
+  let hasExternalChange = false;
+  for (const [key, signature] of changes || []) {
+    const expected = expectations[key];
+    delete expectations[key];
+    if (!expected || expected.signature !== signature) hasExternalChange = true;
+  }
+  return { expectations: trimSessionEntries(expectations, { max }), hasExternalChange };
 }
 
 export function hasOwnEnumerable(value) {

@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.41");
+  assert.equal(VERSION, "1.30.18.42");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -63,7 +63,8 @@ for (const browser of ["firefox", "chrome"]) {
     const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
     const fn = src.slice(start, end);
     assert.match(fn, /const profileComplete =/);
-    assert.match(fn, /const legacyComplete = remoteCoreUsable\(personalCore\) && isSnapshotUsable\(workSnapshot\)/);
+    assert.match(fn, /const legacyComplete = Boolean\(!useAtomicProfile && remoteCoreUsable\(personalCore\) && isSnapshotUsable\(workSnapshot\)\)/);
+    assert.match(fn, /const useAtomicProfile = Boolean\(atomicProfile/);
     assert.match(fn, /\(!profileComplete && !legacyComplete\)/);
     assert.match(fn, /syncStatus:\s*waitIfMissing \? "waiting" : "error"/);
   });
@@ -78,13 +79,15 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(fn, /publishProfileDeviceSnapshot\(mergedState, refreshed, \{ force: true \}\)/);
   });
 
-  test(`1.27.8.8 ${browser} torn Work ledger is repaired from the complete profile and never treated as empty`, async () => {
+  test(`1.30.18.42 ${browser} torn Work ledger waits without merging the atomic recovery profile`, async () => {
     const src = readBackgroundSource(browser);
     const start = src.indexOf("async function reconcileWork");
     const end = src.indexOf("async function reconcile(strategy", start);
     const fn = src.slice(start, end);
     assert.match(fn, /if \(!remoteCoreUsable\(core\)\)[\s\S]*?syncStatus:\s*"waiting"/);
-    assert.match(fn, /const shouldCommitDataset = hasCoreWrites \|\| sharedLedgerPartial/);
+    assert.match(fn, /strategy === "merge" && !isSnapshotUsable\(snapshot\)/);
+    assert.match(fn, /reason: "work-ledger-pending"/);
+    assert.match(fn, /const shouldCommitDataset = hasCoreWrites/);
     assert.match(fn, /if \(shouldCommitDataset && desiredDataset\) await writeSyncItems\(\{ \[namespace\.datasetKey\]: desiredDataset \}\)/);
     assert.doesNotMatch(fn, /remoteMissing:\s*true/);
   });

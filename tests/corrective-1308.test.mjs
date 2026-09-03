@@ -106,6 +106,7 @@ test("1.30.8 own-write storage events preserve an overwritten deterministic winn
     const block = source.slice(start, end);
     assert.match(block, /rememberOverwrittenCoreEvidence\(key, change\.oldValue, change\.newValue\)/);
     assert.match(block, /rememberDeliveredCoreEvidence\(key, change\.newValue\)/);
-    assert.match(block, /if \(!durableExternalChange && !overwrittenEvidenceCount\) return;/);
+    assert.match(source, /function scheduleSyncStorageReconciliation\(\)[\s\S]*?if \(!durableExternalChange && !overwrittenEvidenceCount\) continue;/);
+    assert.match(block, /pendingSyncStorageOverwrittenEvidence \+= overwrittenEvidenceCount/);
   }
 });

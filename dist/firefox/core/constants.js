@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.30.18.41";
+export const VERSION = "1.30.18.42";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -288,6 +288,7 @@ export const DEFAULT_META = Object.freeze({
   lastRemoteReceiptRevision: "",
   lastRemoteReceiptUpdatedAt: 0,
   lastRemoteReceiptOriginDeviceId: "",
+  lastRemoteReceiptProvenanceExact: false,
   lastDeviceSnapshotGcAt: 0,
   deviceSnapshotGcPass: 0,
   deviceSnapshotRootSeenPass: {},

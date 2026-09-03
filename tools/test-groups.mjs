@@ -49,7 +49,8 @@ const GROUPS = Object.freeze({
       /profile-assets/i,
       /sync-/i,
       /production-background-e2e/i,
-      /corrective-130(?:6|7|8|9|13|14|15)\.test\.mjs$/i
+      /corrective-130(?:6|7|8|9|13|14|15)\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -57,7 +58,8 @@ const GROUPS = Object.freeze({
     patterns: [
       /recovery-/i,
       /corrective-13013\.test\.mjs$/i,
-      /corrective-1301819\.test\.mjs$/i
+      /corrective-1301819\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i
     ]
   },
   security: {
@@ -111,7 +113,8 @@ const GROUPS = Object.freeze({
       /performance-hardening/i,
       /corrective-1303\.test\.mjs$/i,
       /corrective-1301838\.test\.mjs$/i,
-      /corrective-13018(?:39|4[01])\.test\.mjs$/i
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i
     ]
   }
 });
