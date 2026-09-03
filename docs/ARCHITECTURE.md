@@ -286,3 +286,9 @@ Restricted environments may use `npm run certify:mechanical`, but that result is
 ## 1.30.18.35 Maintenance Infrastructure M3: permanent knowledge boundary
 
 The architecture map remains the ownership authority; M3 does not create another implementation specification. `docs/adr/` preserves the rationale behind a deliberately small set of non-obvious frozen decisions, while `docs/REGRESSION-CATALOG.md` maps high-value historical failure families to the tests that should catch recurrence. Documentation is a maintenance aid, not another runtime/version/schema authority.
+
+
+## Post-freeze maintenance references
+
+- `docs/COMPATIBILITY.md`
+- `docs/MAINTENANCE-POLICY.md`

@@ -1,3 +1,12 @@
+## 1.30.18.37
+
+- Completes Maintenance Infrastructure M6 with the final browser/API compatibility, dependency, permission/privacy/CSP and maintenance-system audit; the frozen application runtime is unchanged apart from release identity.
+- Records the externally reviewed Firefox 140 and Chromium 104 support floors in `docs/COMPATIBILITY.md`, including why those floors map to MosaicSync's actual manifest/API requirements.
+- Records the permanent post-freeze change policy in `docs/MAINTENANCE-POLICY.md`: production architecture changes require a concrete bug, platform/API, security/privacy, measurable-maintenance or separately approved product reason.
+- Adds pre-M6 and final post-M6 forensic audit records and integrity tests for compatibility floors, least-privilege permissions, dependency-free maintenance tooling and the explicit no-M7 freeze state.
+- Confirms M1–M6 add maintenance guardrails without changing the 1.30.18.32 frozen application architecture; there is no planned Maintenance Infrastructure M7 or 1.30.18.38 release.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
 ## 1.30.18.36
 
 - Combines Maintenance Infrastructure M4 and M5 while keeping the frozen MosaicSync application runtime unchanged apart from release identity.

@@ -1,5 +1,12 @@
 # MosaicSync Maintenance Infrastructure roadmap
 
+Permanent post-freeze references:
+
+- [Compatibility and security watchpoints](COMPATIBILITY.md)
+- [Maintenance policy](MAINTENANCE-POLICY.md)
+- [Architecture map](ARCHITECTURE.md)
+- [Regression catalogue](REGRESSION-CATALOG.md)
+
 The five-step zero-new-features / full-code-refinement program is complete and frozen at MosaicSync 1.30.18.32. The Maintenance Infrastructure roadmap improves the guardrails around that frozen runtime. It does not authorize continued production refactoring.
 
 ## Roadmap
@@ -119,7 +126,15 @@ A failing assertion always reports the fixed seed and case number. The campaign 
 
 ## M6 — final maintenance-infrastructure audit and freeze
 
-Planned for **1.30.18.37**. M6 is the final compatibility/security/dependency review and a freeze, not another refactor phase. There is no requirement to manufacture a 1.30.18.38 release if M6 is clean.
+**Completed in 1.30.18.37.** M6 performed the final browser/API compatibility, permission/privacy/CSP, dependency/tooling and maintenance-infrastructure review without reopening the frozen application architecture.
+
+- `docs/COMPATIBILITY.md` records the reviewed Firefox 140 and Chromium 104 floors, permission budget, CSP/remote-code boundary, dependency boundary and future compatibility-review triggers.
+- `docs/MAINTENANCE-POLICY.md` makes the post-freeze stop rule explicit: production architecture changes require a concrete bug/platform/security/privacy/maintenance/product reason, not aesthetics or continued cleanup momentum.
+- `docs/PRE-M6-AUDIT-1.30.18.36.md` records the clean baseline evidence before M6.
+- `docs/M6-FINAL-AUDIT-1.30.18.37.md` records the final post-change evidence and freeze decision.
+- M6 adds only documentation/test guardrails plus release identity; no production algorithm is changed.
+
+There is **no planned M7 or 1.30.18.38 maintenance-infrastructure release**. Future releases are normal product maintenance driven by concrete needs.
 
 ## Permanent maintenance rule
 

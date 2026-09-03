@@ -1,11 +1,11 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.36.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.37.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
-## 1.30.18.36 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
+## 1.30.18.37 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
 
 This release keeps the 1.30.18.32 application architecture frozen. Production runtime changes are release identity only.
 
@@ -844,3 +844,8 @@ Mutation clocks use `nextMutationTime()` to advance beyond observed record/works
 Per-device Sync snapshots retain root-last double buffering. Before a chunked publish, only the inactive target slot may be cleared; after the new root commits, chunks not named by the new root are best-effort reclaimed. This prevents stale historical chunk tails/opposite slots from consuming Sync quota indefinitely while preserving the previous authoritative generation if the new root write fails. Snapshot gzip decoding also enforces the decompressed-byte ceiling incrementally while streaming.
 
 The live-state ID invariant is pinned explicitly: record IDs are unique within each Space, but the same logical ID may temporarily exist in both Personal and Work during destination-first cross-Space convergence. Hostile profile import remains the boundary that repairs ambiguous cross-Space duplicate IDs.
+
+
+## Frozen maintenance boundary
+
+After 1.30.18.37, use `docs/MAINTENANCE-POLICY.md` and `docs/COMPATIBILITY.md` before proposing production architecture or browser-floor changes.
