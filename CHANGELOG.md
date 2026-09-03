@@ -1,3 +1,66 @@
+## 1.30.18.35
+
+- Completes Maintenance Infrastructure M3 with permanent architectural knowledge preservation around the frozen 1.30.18.32 runtime.
+- Keeps the existing `docs/ARCHITECTURE.md` as the single ownership map and adds a plain-English navigation layer instead of creating a competing architecture specification.
+- Adds nine concise accepted/frozen Architecture Decision Records under `docs/adr/` for non-obvious boundaries: authoritative state vs disposable startup caches, device-local browser-derived data, shared core/browser adapters, Recovery vs Normal Sync, catastrophic-loss confirmation/restart grace, intentional reset authority, Settings appearance isolation, deterministic fail-closed release certification, and the post-.32 refactor freeze policy.
+- Adds `docs/REGRESSION-CATALOG.md`, mapping ten high-value historical regression families—including the withdrawn 1.30.18.26 startup failure—to the permanent tests that should catch recurrence.
+- Adds four M3 knowledge-integrity tests that verify architecture navigation, ADR completeness/structure, regression-test references, and that documentation does not become another technical runtime-version authority.
+- No product algorithm, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
+## 1.30.18.34
+
+- Completes Maintenance Infrastructure M2 with one canonical, fail-closed end-to-end release-certification command: `npm run certify`.
+- The official certification path composes the existing canonical build, full regression suite, runtime reachability audit, real Firefox + Chromium smoke lane, performance benchmark, runtime size report, generated release contracts, deterministic release packaging, packaged release contracts, clean-source re-extraction/rebuild/retest/repackage, and byte-for-byte artifact verification.
+- Adds an explicitly separate `npm run certify:mechanical` mode for restricted environments that cannot launch the real browsers. Mechanical mode is clearly reported as **not full certification** and cannot silently satisfy the browser-smoke gate.
+- Certification writes machine-readable artifact/build-manifest SHA-256 evidence to `artifacts/certification-report.json`; any Firefox, Chromium, GitHub-ready source or build-manifest mismatch fails the run.
+- Before the `.34` identity bump, the new certification tooling was added to the `.33` source and the Firefox/Chromium release packages reproduced the live `.33` hashes exactly, proving the tooling does not alter extension runtime output.
+- No product algorithm, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
+## 1.30.18.33
+
+- Begins the post-refinement Maintenance Infrastructure roadmap with M1 real-browser smoke automation; the frozen 1.30.18.32 product architecture remains unchanged.
+- Adds dependency-free WebDriver smoke tooling for real Firefox and Chromium/Chrome-for-Testing sessions, with explicit browser/driver discovery and strict failure when the requested real browser cannot be exercised.
+- The real-browser flow enters the browser's actual New Tab override, seeds an isolated onboarded profile, requires the production `interactionReady` startup boundary, opens Settings, switches Personal/Work Spaces, checks the disabled Frequently Visited surface, and proves a real shortcut click navigates.
+- Firefox smoke uses the isolated `mosaicsync-dev@xipinformatica.cat` temporary development package; Chromium smoke loads the generated Chromium tree into an isolated profile. No production user profile or extension storage is reused.
+- Adds five deterministic M1 tests covering CLI/capability contracts, explicit browser/driver discovery, both browser smoke workflows, and fail-closed Frequently Visited validation.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited semantics, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
+## 1.30.18.32
+
+- Completes Step 5.6 with the final whole-project forensic audit and freezes the zero-new-features/full-code-refinement cycle.
+- Re-validates startup/first-paint, New Tab/Settings, Spaces/folders/drag, Frequently Visited, artwork/favicons, storage/import, normal Sync, Recovery/MV3 lifecycle, browser parity/adapters, permissions/privacy/CSP, reachability and deterministic build/package behavior.
+- Confirms the cumulative Step-5 production diff remains deliberately narrow: the corrected pure appearance-color owner, one proven dead favicon helper retirement, one unused import retirement, and release identities; Step-5.4 is test-only and Step-5.5 is tooling-only.
+- Re-runs the complete generated Firefox/Chromium confidence stack and records no production defect or further extraction/deletion justified by evidence.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
+## 1.30.18.31
+
+- Completes Step 5.5 with build/package pipeline simplification only; extension runtime behavior and ownership remain frozen.
+- Centralizes all public/runtime/dev ZIP creation behind one deterministic writer with one timestamp, permission, compression, path-normalization and ordering policy.
+- Makes `tools/package.py` rebuild the canonical Firefox/Chromium runtime before packaging, eliminating the possibility of publishing a stale `dist/` tree after same-version source edits.
+- Makes `tools/release_contract.py` derive the expected release version from the canonical shared `VERSION` declaration instead of maintaining a second hard-coded version source.
+- Adds `npm run release:package` as the canonical release packaging entrypoint and removes the redundant pre-build from `npm run firefox:dev`, because the packager now owns its own required build.
+- Proves the refactored tooling emits byte-identical Firefox and Chromium 1.30.18.30 ZIPs before the 1.30.18.31 identity bump, and adds behavioral regressions for canonical version derivation, deterministic ZIP metadata/order and stale-dist rejection.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, favicon, Sync, Recovery, storage or browser-adapter change.
+
+## 1.30.18.30
+
+- Completes Step 5.4 as a test-architecture hardening release with no production algorithm/refactor change.
+- Adds a full generated New Tab startup/integration harness that imports the complete Firefox and Chromium `newtab.js` module graphs, waits for the authoritative `interactionReady` boundary, and verifies real generated Settings, color-swatch, storage-listener and Frequently Visited wiring.
+- Exercises the actual Frequently Visited Settings toggle through disable and re-enable, including the browser Top Sites path, instead of relying only on source-shape assertions for that startup surface.
+- Adds a negative mutation regression that recreates the withdrawn 1.30.18.26 injected-validator/one-argument-caller mismatch and proves the full-startup harness fails before Settings/Frequently Visited wiring.
+- Keeps existing structural/source-shape tests where structure itself is the contract (release identity, manifest/CSP/permissions, HTML/CSS/bootstrap ordering) and treats source-shape checks on behavioral invariants as supplementary to existing or new runtime tests.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, favicon, Sync, Recovery, storage or browser-adapter behavior change.
+
+## 1.30.18.29
+
+- Completes Step 5.3 with proof-driven legacy/dead-code retirement on the manually validated 1.30.18.28 baseline.
+- Removes the uncalled private `workspaceAllowsAutoIcons()` helper from `background-core.js`; its broader canonical successor, `shortcutAllowsFaviconRecovery()`, already owns workspace-aware automatic recovery plus explicit manual favicon preference recovery.
+- Removes an unused `settingsRecordEqual` named import from `core/concurrency.js` and retires stale historical test scaffolding that still extracted or mocked the dead favicon helper.
+- Adds deterministic `npm run reachability` tooling that verifies all shared runtime modules are reachable from manifest/HTML roots and reports high-confidence unused named imports/private functions separately from intentionally retained test/reference exports.
+- Adds generated Firefox/Chromium preservation coverage for inactive Work-space favicon recovery and explicit favicon preference rehydration while automatic site icons are disabled.
+- No product feature, UI behavior, permission, CSP, schema, persisted payload, locale, first-paint/cache, Frequently Visited, normal Sync, Recovery or browser-adapter behavior change.
+
 ## 1.30.18.28
 
 - Safely resumes Step 5.2 from the live 1.30.18.27 rollback baseline rather than continuing from the withdrawn 1.30.18.26 source.

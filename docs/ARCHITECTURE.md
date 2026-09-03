@@ -1,5 +1,11 @@
 # MosaicSync architecture
 
+> **Permanent maintenance map (M3 / 1.30.18.35).** This document says *who owns what*. For the non-obvious reasons behind frozen choices, see [`docs/adr/`](adr/README.md). For historical failures and the tests that prevent recurrence, see [`docs/REGRESSION-CATALOG.md`](REGRESSION-CATALOG.md).
+
+## Plain-English map
+
+MosaicSync deliberately separates **the real saved profile** from **fast disposable previews**, keeps browser-derived history/artwork local, shares one core implementation between Firefox and Chromium, treats Recovery as a safety layer around normal Sync, and requires release artifacts to be rebuilt and verified from source. The detailed sections below are the engineering contract behind those rules.
+
 This document records the boundaries that keep MosaicSync fast, private and maintainable. It is intentionally short: it describes ownership and invariants rather than every function.
 
 ## 1. Authoritative state
@@ -242,3 +248,41 @@ The first 1.30.18.26 attempt is withdrawn because it changed the callable contra
 
 The extraction is guarded at two layers: direct expression equivalence to the frozen 1.30.18.25 helpers, and a generated Firefox/Chromium startup regression that runs the exact color-swatch initialization block which executes before Settings click wiring and before final state startup. The latter regression fails on withdrawn 1.30.18.26 and passes on the corrected owner. No larger appearance, Frequently Visited, first-paint, favicon, Sync, Recovery or browser-adapter responsibility is moved.
 
+
+## 1.30.18.29 Step 5.3: reachability-proven retirement
+
+Step 5.3 treats deletion as a proof obligation rather than a line-count goal. `tools/runtime-reachability.mjs` derives shared runtime roots from the background entrypoint and HTML script tags, follows literal static/dynamic module edges and worker-module URLs, and separately reports unused named imports and private lexical functions. Exported helpers with no production importer are review surfaces rather than automatic deletion candidates because tests, benchmarks and trust-boundary reference APIs can intentionally own them.
+
+The audit found two high-confidence leftovers: `workspaceAllowsAutoIcons()` was an uncalled private predecessor to the broader `shortcutAllowsFaviconRecovery()` policy, and `settingsRecordEqual` was imported but unused by `core/concurrency.js`. Only those two production leftovers are retired. Historical favicon test scaffolding is updated to exercise the canonical helper instead of artificially extracting/mocking the dead predecessor. Generated Firefox and Chromium tests preserve both Work-space automatic favicon recovery and explicit manual favicon preference recovery with automatic icons disabled. No lifecycle, persistence, Sync/Recovery, first-paint, Frequently Visited, Settings or browser-capability boundary is moved.
+
+## 1.30.18.30 Step 5.4: generated-runtime test architecture
+
+Step 5.4 changes the confidence model rather than the production architecture. The permanent `tests/harness/newtab-runtime-smoke.mjs` environment imports the complete generated Firefox or Chromium New Tab module graph with controlled browser/DOM/storage surfaces. It seeds an onboarded profile with Frequently Visited enabled, waits for the real `loadState()` path to publish `interactionReady`, then verifies that later Settings, color-swatch, storage-change and Top Sites/Frequently Visited wiring is live. The Settings Frequently Visited toggle is driven off and back on through the generated listener, proving its dependent controls and live strip follow the persisted intent path.
+
+A negative test mutates a temporary generated Firefox tree to recreate the 1.30.18.26 contract failure: `normalizeHexColor` suddenly requires an injected validator while the established caller still passes one argument. The full-startup harness must fail before interaction readiness, Settings wiring, storage-listener registration and Frequently Visited execution. This turns the withdrawn release from a historical anecdote into a permanent integration boundary.
+
+Existing source-shape checks are not blanket-deleted. They remain useful when literal structure is the contract (manifest/CSP/permission fields, HTML/CSS/bootstrap ordering, release identity and generated-source ownership), and they remain secondary guardrails where behavioral tests already exercise the effect. No production module ownership, persistence, Sync/Recovery, first-paint, favicon, permission or browser-capability boundary changes in this phase.
+## 1.30.18.31 Step 5.5: deterministic build/package ownership
+
+Release packaging owns a fresh canonical build before creating artifacts. Firefox, Chromium, GitHub-ready source and the isolated Firefox-development package share one deterministic ZIP writer, while release-contract validation remains independent and derives its expected version from the canonical shared VERSION. Build manifests, package-size reporting, release-contract scanning and development/production identity separation remain distinct safety boundaries.
+
+## 1.30.18.32 Step 5.6: final freeze
+
+The zero-new-features/full-code-refinement program is complete. The cumulative Step-5 production changes are limited to the corrected pure appearance-color owner and two reachability-proven retirements; later Step-5 work strengthens tests and release tooling without changing extension algorithms. Startup/first-paint, state/cache ownership, browser capability boundaries, Recovery ownership, normal Sync behavior, privacy/permissions/CSP and persisted schemas are now frozen maintenance contracts. Future structural work requires a demonstrated defect or separately approved product/platform/security objective.
+
+
+
+## 1.30.18.33 Maintenance Infrastructure M1: external real-browser guardrail
+
+The 1.30.18.32 architecture remains frozen. M1 does not move an application responsibility. `tools/browser-smoke.mjs` sits outside the runtime graph and drives isolated real Firefox and Chromium/Chrome-for-Testing sessions through standard WebDriver interfaces. The smoke treats the browser-generated New Tab override as the system boundary: production startup must reach `interactionReady`, Settings must open, Space switching must work, the disabled Frequently Visited surface must remain internally consistent, and a seeded shortcut must navigate. Firefox uses the separate development Gecko ID so the smoke cannot share the production add-on's storage namespace.
+
+
+## 1.30.18.34 Maintenance Infrastructure M2: certification boundary
+
+Release certification is now an explicit maintenance boundary outside the extension runtime. `npm run certify` composes the canonical build/test/reachability/browser-smoke/benchmark/contract/package tools and then proves reproducibility from the packaged GitHub-ready source. It must not contain an alternate runtime builder or silently skip unavailable browser automation.
+
+Restricted environments may use `npm run certify:mechanical`, but that result is deliberately non-authoritative for full release certification because the real-browser guardrail was not executed. Artifact mismatch, release-contract drift or clean-room reproduction failure is always fatal.
+
+## 1.30.18.35 Maintenance Infrastructure M3: permanent knowledge boundary
+
+The architecture map remains the ownership authority; M3 does not create another implementation specification. `docs/adr/` preserves the rationale behind a deliberately small set of non-obvious frozen decisions, while `docs/REGRESSION-CATALOG.md` maps high-value historical failure families to the tests that should catch recurrence. Documentation is a maintenance aid, not another runtime/version/schema authority.

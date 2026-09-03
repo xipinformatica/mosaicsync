@@ -218,10 +218,6 @@ for (const browser of ["firefox", "chrome"]) {
         }
         return null;
       },
-      workspaceAllowsAutoIcons: (state, id) => {
-        const location = ctx.findShortcutLocationById(state, id);
-        return Boolean(location?.workspace?.settings?.autoSiteIcons);
-      },
       shortcutAllowsFaviconRecovery: (state, id) => {
         const location = ctx.findShortcutLocationById(state, id);
         const pref = normalizeFaviconPreference(location?.shortcut?.faviconPreference);

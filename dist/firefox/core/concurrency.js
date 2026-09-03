@@ -22,7 +22,6 @@ import {
   normalizeWorkspace,
   replaceWorkspaceNormalized,
   selectActiveSpaceNormalized,
-  settingsRecordEqual,
   stampSettingsMutationClocks,
   stateFromRecords,
   syncRecordEqual

@@ -7,7 +7,16 @@
     "test": "node tools/build.mjs && node --test tests/*.test.mjs",
     "bench": "node tools/build.mjs && node bench/performance.mjs",
     "size": "node tools/build.mjs && node tools/size-report.mjs",
-    "firefox:dev": "node tools/build.mjs && python tools/package.py --firefox-dev",
-    "inventory": "node tools/complexity-inventory.mjs"
+    "release:package": "python tools/package.py",
+    "firefox:dev": "python tools/package.py --firefox-dev",
+    "inventory": "node tools/complexity-inventory.mjs",
+    "reachability": "node tools/runtime-reachability.mjs",
+    "smoke:probe": "node tools/browser-smoke.mjs --probe",
+    "smoke:prepare": "python tools/package.py --firefox-dev",
+    "smoke:firefox": "python tools/package.py --firefox-dev && node tools/browser-smoke.mjs --browser=firefox",
+    "smoke:chrome": "node tools/build.mjs && node tools/browser-smoke.mjs --browser=chrome",
+    "smoke:browsers": "python tools/package.py --firefox-dev && node tools/browser-smoke.mjs --browser=all",
+    "certify": "node tools/certify-release.mjs",
+    "certify:mechanical": "node tools/certify-release.mjs --skip-browser-smoke"
   }
 }

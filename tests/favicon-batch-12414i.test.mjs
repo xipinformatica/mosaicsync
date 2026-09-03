@@ -77,7 +77,7 @@ for (const browser of ["firefox", "chrome"]) {
       workAuto: true
     });
     const ctx = runFunctions(src, [
-      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
+      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "applyProactiveFaviconResults"
     ], {
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
@@ -129,7 +129,7 @@ for (const browser of ["firefox", "chrome"]) {
     let writes = 0;
     const currentState = stateWithSpaces({ work: [existing], workAuto: true });
     const ctx = runFunctions(src, [
-      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "workspaceAllowsAutoIcons", "applyProactiveFaviconResults"
+      "automaticFaviconArtwork", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById", "applyProactiveFaviconResults"
     ], {
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
@@ -156,7 +156,7 @@ for (const browser of ["firefox", "chrome"]) {
     let written = null;
     const ctx = runFunctions(src, [
       "automaticFaviconArtwork", "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
-      "workspaceAllowsAutoIcons", "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue", "pruneIconRecoveryQueueAgainstState"
+      "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue", "pruneIconRecoveryQueueAgainstState"
     ], {
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
@@ -278,7 +278,7 @@ test("chrome: 1.24.14i Space-aware seeding preserves browser-native favicon qual
   const currentState = stateWithSpaces({ activeSpaceId: "personal", personal: [native], personalAuto: true });
   const ctx = runFunctions(src, [
     "automaticFaviconArtwork", "flattenShortcuts", "shortcutNeedsProactiveFavicon", "findShortcutInItems", "findShortcutById", "findShortcutLocationById",
-    "workspaceAllowsAutoIcons", "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue"
+    "iconRecoveryItemStillRelevantInState", "iconRecoveryItemStillRelevant", "seedIconRecoveryQueue"
   ], {
     PERSONAL_SPACE_ID: "personal",
     WORK_SPACE_ID: "work",

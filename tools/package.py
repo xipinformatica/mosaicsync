@@ -3,9 +3,10 @@
 from pathlib import Path
 import json
 import re
+import subprocess
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from release_contract import validate_manifest, validate_zip
+from release_contract import VERSION as CANONICAL_VERSION, validate_manifest, validate_zip
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,23 @@ SOURCE_EXCLUDED_DIRS = frozenset({
 SOURCE_EXCLUDED_NAMES = frozenset({"package-size-report.json", ".DS_Store", "Thumbs.db", "Desktop.ini"})
 SOURCE_EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".log", ".tmp", ".temp", ".bak", ".swp", ".zip", ".xpi", ".crx", ".pem")
 
+def write_deterministic_zip(output: Path, entries) -> Path:
+    """Write (archive_path, bytes) entries with one canonical ZIP policy."""
+    output.parent.mkdir(exist_ok=True)
+    normalized = sorted(((str(rel).replace("\\", "/"), payload) for rel, payload in entries), key=lambda item: item[0])
+    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+        for rel, payload in normalized:
+            info = ZipInfo(rel, FIXED_TIME)
+            info.compress_type = ZIP_DEFLATED
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
+    return output
+
+def build_runtime() -> None:
+    """Regenerate dist/build-manifest so packaging never consumes a stale tree."""
+    subprocess.run(["node", "tools/build.mjs"], cwd=ROOT, check=True)
+
+
 def should_include_source_path(path: Path) -> bool:
     rel = path.relative_to(ROOT)
     if any(part in SOURCE_EXCLUDED_DIRS for part in rel.parts[:-1]):
@@ -33,34 +51,24 @@ def should_include_source_path(path: Path) -> bool:
 
 def package_source(version: str) -> Path:
     output = OUT / f"mosaicsync-{version}-github-ready.zip"
-    OUT.mkdir(exist_ok=True)
-    paths = sorted(
-        (path for path in ROOT.rglob("*") if should_include_source_path(path)),
-        key=lambda path: path.relative_to(ROOT).as_posix()
+    entries = (
+        (path.relative_to(ROOT).as_posix(), path.read_bytes())
+        for path in ROOT.rglob("*")
+        if should_include_source_path(path)
     )
-    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in paths:
-            rel = path.relative_to(ROOT).as_posix()
-            info = ZipInfo(rel, FIXED_TIME)
-            info.compress_type = ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
-    return output
+    return write_deterministic_zip(output, entries)
 
 def package(browser: str, version: str) -> Path:
     source = DIST / browser
     # Public release artifacts deliberately use exactly three ZIP names:
     # browser-labelled Firefox, browser-labelled Chrome, and GitHub-ready source.
     output = OUT / (f"mosaicsync-{version}-firefox.zip" if browser == "firefox" else f"mosaicsync-{version}-chrome.zip")
-    OUT.mkdir(exist_ok=True)
-    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in sorted(p for p in source.rglob("*") if p.is_file()):
-            rel = path.relative_to(source).as_posix()
-            info = ZipInfo(rel, FIXED_TIME)
-            info.compress_type = ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            archive.writestr(info, path.read_bytes(), compress_type=ZIP_DEFLATED, compresslevel=9)
-    return output
+    entries = (
+        (path.relative_to(source).as_posix(), path.read_bytes())
+        for path in source.rglob("*")
+        if path.is_file()
+    )
+    return write_deterministic_zip(output, entries)
 
 
 
@@ -86,19 +94,13 @@ def package_firefox_dev(version: str) -> Path:
     manifest["short_name"] = "MosaicSync Dev"
 
     output = DEV_OUT / f"mosaicsync-{version}-firefox-dev-temporary.zip"
-    DEV_OUT.mkdir(exist_ok=True)
-    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in sorted(p for p in source.rglob("*") if p.is_file()):
-            rel = path.relative_to(source).as_posix()
-            info = ZipInfo(rel, FIXED_TIME)
-            info.compress_type = ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            if rel == "manifest.json":
-                payload = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-            else:
-                payload = path.read_bytes()
-            archive.writestr(info, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
-    return output
+    manifest_payload = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    entries = (
+        (path.relative_to(source).as_posix(), manifest_payload if path.relative_to(source).as_posix() == "manifest.json" else path.read_bytes())
+        for path in source.rglob("*")
+        if path.is_file()
+    )
+    return write_deterministic_zip(output, entries)
 
 def size_category(rel: str) -> str:
     if rel.startswith("core/i18n-locales/") or rel == "core/i18n-runtime-catalog.js": return "localization"
@@ -170,25 +172,16 @@ def verify_release_identity(version: str) -> None:
 
 
 if __name__ == "__main__":
+    build_runtime()
     manifests = {
         browser: json.loads((DIST / browser / "manifest.json").read_text())
         for browser in ("firefox", "chrome")
     }
     for browser, manifest in manifests.items():
         validate_manifest(browser, manifest)
-    versions = {browser: manifest["version"] for browser, manifest in manifests.items()}
-    if len(set(versions.values())) != 1:
-        raise SystemExit(f"Browser technical versions differ: {versions}")
-    # MosaicSync has one canonical release identity everywhere. Chrome
-    # version_name, when present, must exactly match the technical manifest
-    # version; we never publish a separate display/internal version.
-    chrome_version_name = manifests["chrome"].get("version_name", versions["chrome"])
-    if chrome_version_name != versions["chrome"]:
-        raise SystemExit(
-            f"Chrome version_name must equal canonical version: "
-            f"version={versions['chrome']!r}, version_name={chrome_version_name!r}"
-        )
-    release_label = versions["chrome"]
+    # validate_manifest already pins each browser's version (and Chrome
+    # version_name) to the single canonical source VERSION.
+    release_label = CANONICAL_VERSION
     verify_release_identity(release_label)
 
     if sys.argv[1:] == ["--firefox-dev"]:

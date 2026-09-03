@@ -2551,10 +2551,6 @@ export function startBackground(adapter) {
       : null;
   }
 
-  function workspaceAllowsAutoIcons(state, shortcutId) {
-    const location = findShortcutLocationById(state, shortcutId);
-    return Boolean(location?.workspace?.settings?.autoSiteIcons);
-  }
 
   function shortcutAllowsFaviconRecovery(state, shortcutId) {
     const location = findShortcutLocationById(state, shortcutId);

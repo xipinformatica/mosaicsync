@@ -10,7 +10,16 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.30.18.28"
+VERSION_RE = re.compile(r'^export const VERSION = "([^"]+)";$', re.MULTILINE)
+
+def canonical_source_version() -> str:
+    constants = (ROOT / "src" / "shared" / "core" / "constants.js").read_text(encoding="utf-8")
+    match = VERSION_RE.search(constants)
+    if not match:
+        raise ValueError("canonical VERSION declaration missing from src/shared/core/constants.js")
+    return match.group(1)
+
+VERSION = canonical_source_version()
 PRODUCTION_GECKO_ID = "mosaicsync@xipinformatica.cat"
 DEV_GECKO_ID = "mosaicsync-dev@xipinformatica.cat"
 CSP = "default-src 'none'; script-src 'self'; style-src 'self'; style-src-attr 'none'; img-src 'self' data:; connect-src http: https:; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; worker-src 'self'"

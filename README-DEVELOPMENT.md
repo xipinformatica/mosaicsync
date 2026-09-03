@@ -1,11 +1,74 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.28.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.35.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+## 1.30.18.35 Maintenance Infrastructure M3: permanent knowledge policy
 
+- `docs/ARCHITECTURE.md` is the canonical ownership map. It describes who owns authoritative state, startup acceleration, Normal Sync, Recovery, artwork, browser adapters, import/export and release boundaries.
+- `docs/adr/` records a deliberately small set of non-obvious accepted/frozen decisions. ADRs explain *why* a boundary exists and name the evidence that must be reconsidered before changing it. They are not a second implementation specification.
+- `docs/REGRESSION-CATALOG.md` records high-value historical failure families and points to the permanent regression tests that protect them. It is not a replacement for `CHANGELOG.md`.
+- Documentation must not become another technical source of truth for release version, schema constants or runtime configuration. Source constants/manifests remain authoritative for those values.
+- A new ADR is justified only for a decision whose rationale would otherwise be easy to "simplify" away later. Routine implementation details stay in code/tests rather than expanding the decision catalogue indefinitely.
+- M3 changes documentation/tests plus release identity only. The 1.30.18.32 application architecture, M1 browser-smoke boundary and M2 certification boundary remain frozen.
+
+
+## 1.30.18.34 Maintenance Infrastructure M2: one-command certification policy
+
+- `npm run certify` is the single canonical full-release certification entry point. It must fail closed if any required gate fails.
+- Full certification requires, in order, the canonical build, full regression suite, runtime reachability, real Firefox + Chromium smoke, benchmark, runtime size report, generated release contracts, deterministic public packaging, packaged release contracts, clean-source re-extraction/rebuild/retest/repackage, and byte-for-byte comparison of Firefox, Chromium, GitHub-ready source and `build-manifest.json`.
+- `npm run certify:mechanical` exists only for constrained environments that cannot launch the real browsers. It may run all non-browser gates but must report `MECHANICAL_ONLY` / `fullyCertified:false`; it is never equivalent to `npm run certify`.
+- Certification writes `artifacts/certification-report.json` with the certification level and SHA-256 evidence. A mismatch in any compared artifact is a hard failure.
+- The clean-room pass starts from the just-packaged GitHub-ready source ZIP, not from retained JavaScript memory or the original working directory.
+- M2 changes maintenance tooling/tests/docs only. The 1.30.18.32 application architecture and all later validated runtime behavior remain frozen.
+
+## 1.30.18.33 Maintenance Infrastructure M1: real-browser smoke policy
+
+- The five-step architecture-refinement program remains frozen at 1.30.18.32. M1 adds maintenance guardrails around that runtime; it does not reopen production architecture.
+- `npm run smoke:probe` reports which Firefox/GeckoDriver and Chromium/ChromeDriver binaries the machine can use. Explicit paths may be supplied through `MOSAICSYNC_FIREFOX_BIN`, `MOSAICSYNC_GECKODRIVER_BIN`, `MOSAICSYNC_CHROME_BIN`, `MOSAICSYNC_CHROMEDRIVER_BIN`, and on Linux `MOSAICSYNC_XVFB_BIN`.
+- `npm run smoke:firefox` creates the isolated Firefox-development package, starts a fresh WebDriver profile, temporarily installs the distinct `mosaicsync-dev@xipinformatica.cat` add-on, and exercises the real browser New Tab override.
+- `npm run smoke:chrome` builds the generated Chromium runtime and exercises it through a fresh WebDriver profile. Chrome for Testing is preferred because consumer Chrome builds may restrict command-line unpacked-extension loading.
+- `npm run smoke:browsers` requires both real browser lanes to pass. Missing browsers/drivers are failures, never silent skips.
+- The smoke requires the actual extension page to reach `interactionReady`, opens Settings, switches Work/Personal Spaces, checks the disabled Frequently Visited state, and follows a real shortcut navigation. It deliberately avoids granting optional Top Sites/Bookmarks/Web host permissions so the test itself cannot broaden the extension's permission surface.
+- Browser-smoke profiles are temporary and isolated. They do not reuse the user's normal Firefox/Chromium profile or production MosaicSync storage.
+
+## 1.30.18.32 Step 5.6 final freeze policy
+
+- Step 5.6 is audit/certification first. No architectural or product-code change belongs in the final freeze release unless a demonstrated production defect requires a narrow correction.
+- The final audit covers startup/first paint, New Tab/Settings, Spaces/folders/drag, Frequently Visited, artwork/favicons, storage/import, normal Sync, Recovery/MV3 lifecycle, browser parity/adapters, permissions/privacy/CSP, reachability and deterministic build/package reproducibility.
+- The trusted Step-5 lineage explicitly excludes withdrawn 1.30.18.26; 1.30.18.27 restored the Step-5.1 runtime and 1.30.18.28 corrected the pure color-owner extraction behind a full generated-New-Tab startup regression.
+- After the final .32 clean-room build/test/package reproduction passes, Steps 1–5 are frozen. Future architecture work requires a concrete bug, browser/platform requirement, security/privacy requirement or separately approved product objective.
+
+## 1.30.18.31 Step 5.5 build/package policy
+
+- Begin from the manually validated/live 1.30.18.30 source. Step 5.5 may simplify deterministic build/release tooling, but production algorithms and all completed Step-1 through Step-5.4 ownership boundaries remain frozen.
+- `src/shared/core/constants.js` is the canonical release-version source for release-contract validation. Do not maintain a second independent hard-coded version in packaging/contract tooling.
+- `tools/package.py` owns the required canonical build before any public or development ZIP is created, so packaging cannot consume a stale same-version `dist/` tree.
+- Firefox, Chromium, GitHub-ready source and temporary Firefox-development packaging share one deterministic ZIP writer and therefore one timestamp, permission, compression, path normalization and entry-order contract.
+- A tooling refactor must prove the existing browser runtime ZIPs remain byte-identical before a release identity bump. Runtime package differences in Step 5.5 are permitted only where the version identity itself changes.
+- Release-contract validation, build-manifest hashing, package-size reporting, source exclusions and the distinct development Gecko ID remain mandatory safety boundaries rather than cleanup targets.
+- Recovery, Sync, first-paint/session/cache ownership, New Tab/Settings/Frequently Visited behavior, favicon policy, storage schemas, permissions, CSP, locales and browser adapters remain unchanged.
+
+
+## 1.30.18.30 Step 5.4 test-architecture policy
+
+- Begin from the manually validated 1.30.18.29 runtime. Step 5.4 changes tests/harnesses and release identity only; production algorithms and ownership boundaries remain frozen.
+- New Tab refactors are no longer considered protected by direct helper/source-shape tests alone. The full generated Firefox and Chromium `newtab.js` module graphs must import without startup exceptions and reach the authoritative `interactionReady` phase.
+- The full-startup smoke must prove that later wiring actually happened: Settings opens from its generated click handler, color swatches attach listeners, the storage-change listener is registered, and enabled Frequently Visited executes the browser Top Sites path and renders.
+- Frequently Visited enable/disable is exercised through the generated Settings change listener so source-order/source-token assertions are supplementary rather than the sole proof of this interaction boundary.
+- The harness carries a negative mutation regression for the withdrawn 1.30.18.26 failure class. If an extracted helper silently changes an established caller contract again, the integration gate must fail before `interactionReady`.
+- Source-shape tests remain appropriate where source structure is itself the product/release contract: manifests, CSP/permissions, HTML semantics, CSS/first-paint ownership, generated-file identity and release packaging. Do not remove those merely to reduce regex counts.
+- Recovery, normal Sync, first-paint/session/cache ownership, favicon policy, Settings behavior, Frequently Visited product semantics, storage schemas, permissions, CSP, locales and browser adapters remain unchanged.
+
+## 1.30.18.29 Step 5.3 dead-code retirement policy
+
+- Begin from the manually validated 1.30.18.28 runtime. Do not resurrect or reuse withdrawn 1.30.18.26.
+- Delete production code only when high-confidence reachability evidence agrees: no runtime module root, no named-import use, no private lexical caller, and no generated Firefox/Chromium behavior depends on it.
+- Test-only/reference exports are not dead merely because production does not import them. Defensive model wrappers, the registrable-domain comparison reference helper and explicit `ForTests` cache hooks remain intentionally retained.
+- This release retires only the superseded `workspaceAllowsAutoIcons` private helper and the unused `settingsRecordEqual` import in `concurrency.js`; the canonical `shortcutAllowsFaviconRecovery` path remains unchanged and is exercised on both generated browsers.
+- Recovery, Sync, first-paint/session/cache ownership, Frequently Visited, Settings orchestration, browser adapters, permissions, CSP, schemas and persisted formats remain frozen.
 
 ## 1.30.18.28 Step 5.2 corrective extraction policy
 

@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.28**
+**Current source release: 1.30.18.35**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -14,6 +14,10 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 - Contributing: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Development notes: [README-DEVELOPMENT.md](README-DEVELOPMENT.md)
 - Release history: [CHANGELOG.md](CHANGELOG.md)
+
+### Maintenance Infrastructure
+
+The five-step production-code refinement program is frozen at 1.30.18.32. Maintenance Infrastructure releases improve guardrails around that frozen runtime rather than continuing architectural churn. M1 added dependency-free real-browser smoke automation; M2 added one fail-closed end-to-end release-certification command, `npm run certify`; M3 makes the accumulated architecture knowledge permanent through the existing [architecture map](docs/ARCHITECTURE.md), concise [ADRs](docs/adr/README.md), and a [regression catalogue](docs/REGRESSION-CATALOG.md). See [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -65,11 +69,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.28** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.35** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.28 safely resumes **Step 5.2** from the live 1.30.18.27 rollback baseline (code-equivalent to 1.30.18.25 apart from release identity). The withdrawn 1.30.18.26 extraction changed the callable contract of New Tab color helpers and could abort New Tab initialization; 1.30.18.28 rebuilds the extraction from the safe baseline while preserving the historical one-argument helper contracts and adds generated Firefox/Chromium startup regressions for that exact failure boundary. No product feature, permission, CSP, schema, persisted payload, Sync/Recovery algorithm, first-paint/cache ownership, Frequently Visited policy or favicon privacy policy changes.
+1.30.18.35 completes **Maintenance Infrastructure M3** by preserving the architectural knowledge accumulated during the refinement program. The existing `docs/ARCHITECTURE.md` remains the canonical ownership map, `docs/adr/` records nine non-obvious frozen decisions and why they exist, and `docs/REGRESSION-CATALOG.md` maps major historical failure families to their permanent tests. M3 changes documentation/tests only apart from release identity; the 1.30.18.32 application architecture remains frozen.
 
 1.30.18.24 is the frozen **Step 4 Recovery ownership endpoint**. Its post-release forensic audits found no corrective production defect requiring another Recovery release.
 
