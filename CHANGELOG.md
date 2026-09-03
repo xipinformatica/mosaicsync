@@ -1,3 +1,12 @@
+## 1.30.18.38
+
+- Post-M6 external-audit corrective release; this is not M7 and does not reopen the frozen architecture.
+- Fixed one inherited Chromium adapter-boundary leak in New Tab native favicon hydration: shared code now calls `getNativeTopSites({ limit: 100 })`, so Firefox keeps its richer `topSites.get({ newtab, includeFavicon, limit })` contract while Chromium calls `topSites.get()` with no unsupported options.
+- Hardened the M1 Chromium smoke lane for current browser behavior: known branded Google Chrome command-line targets are rejected in favor of Chrome for Testing or Chromium, preventing a stale `--load-extension` assumption from masquerading as a usable automation target.
+- Fixed Windows maintenance-tool path resolution by replacing URL `.pathname` conversion with Node `fileURLToPath()` in browser smoke and certification-test roots.
+- Added strict generated-Chromium schema coverage that failed on 1.30.18.37 and now proves no Firefox-style Top Sites options reach Chrome; Firefox preservation, branded-Chrome rejection and portable path regressions are also pinned.
+- No Sync, Recovery, first-paint, persisted schema, permission, CSP, localization, product feature or user-data-format change.
+
 ## 1.30.18.37
 
 - Completes Maintenance Infrastructure M6 with the final browser/API compatibility, dependency, permission/privacy/CSP and maintenance-system audit; the frozen application runtime is unchanged apart from release identity.

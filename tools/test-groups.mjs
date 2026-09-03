@@ -83,6 +83,7 @@ const GROUPS = Object.freeze({
       /favicon-/i,
       /corrective-130181[567]\.test\.mjs$/i,
       /corrective-13012\.test\.mjs$/i,
+      /corrective-1301838\.test\.mjs$/i,
       /test-architecture/i
     ]
   },
@@ -106,7 +107,8 @@ const GROUPS = Object.freeze({
       /release-/i,
       /optimization-/i,
       /performance-hardening/i,
-      /corrective-1303\.test\.mjs$/i
+      /corrective-1303\.test\.mjs$/i,
+      /corrective-1301838\.test\.mjs$/i
     ]
   }
 });

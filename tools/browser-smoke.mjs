@@ -5,12 +5,20 @@ import path from "node:path";
 import os from "node:os";
 import net from "node:net";
 import { spawn } from "node:child_process";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf";
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+export function isKnownBrandedChromeBinary(candidate) {
+  const normalized = String(candidate || "").replace(/\\/g, "/").toLowerCase();
+  const basename = normalized.split("/").at(-1) || "";
+  if (basename === "google-chrome" || basename === "google-chrome-stable") return true;
+  if (normalized.includes("/google/chrome/application/chrome.exe")) return true;
+  return normalized.includes("/applications/google chrome.app/");
+}
 
 export function parseBrowserSmokeArgs(argv = process.argv.slice(2)) {
   const out = { browser: "all", probe: false, keepProfile: false };
@@ -61,7 +69,6 @@ async function firstExecutable(candidates) {
 }
 
 export async function discoverBrowserSmokeEnvironment(env = process.env) {
-  const home = os.homedir();
   const firefox = await firstExecutable([
     env.MOSAICSYNC_FIREFOX_BIN,
     "firefox", "firefox-esr",
@@ -70,16 +77,15 @@ export async function discoverBrowserSmokeEnvironment(env = process.env) {
     process.platform === "darwin" ? "/Applications/Firefox.app/Contents/MacOS/firefox" : ""
   ]);
   const geckodriver = await firstExecutable([env.MOSAICSYNC_GECKODRIVER_BIN, "geckodriver"]);
-  const chrome = await firstExecutable([
+  const chromeCandidate = await firstExecutable([
     env.MOSAICSYNC_CHROME_BIN,
-    "chrome-for-testing", "google-chrome", "google-chrome-stable", "chromium", "chromium-browser",
-    process.platform === "win32" ? path.join(env.PROGRAMFILES || "C:\\Program Files", "Google", "Chrome", "Application", "chrome.exe") : "",
-    process.platform === "win32" ? path.join(env.LOCALAPPDATA || path.join(home, "AppData", "Local"), "Google", "Chrome", "Application", "chrome.exe") : "",
-    process.platform === "darwin" ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" : ""
+    "chrome-for-testing", "chromium", "chromium-browser"
   ]);
+  const chromeRejected = isKnownBrandedChromeBinary(chromeCandidate) ? chromeCandidate : "";
+  const chrome = chromeRejected ? "" : chromeCandidate;
   const chromedriver = await firstExecutable([env.MOSAICSYNC_CHROMEDRIVER_BIN, "chromedriver"]);
   const xvfb = process.platform === "linux" ? await firstExecutable([env.MOSAICSYNC_XVFB_BIN, "Xvfb"]) : "";
-  return { firefox, geckodriver, chrome, chromedriver, xvfb };
+  return { firefox, geckodriver, chrome, chromeRejected, chromedriver, xvfb };
 }
 
 async function allocatePort() {
@@ -201,6 +207,9 @@ export function browserCapabilities(kind, { browserBinary, chromeExtensionPath, 
         }
       }
     };
+  }
+  if (isKnownBrandedChromeBinary(browserBinary)) {
+    throw new Error("Chromium smoke requires Chrome for Testing or Chromium; current branded Google Chrome does not support command-line unpacked-extension loading.");
   }
   const args = [
     `--load-extension=${chromeExtensionPath}`,
@@ -346,7 +355,8 @@ export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProf
     throw new Error("Firefox smoke requires Firefox and geckodriver. Set MOSAICSYNC_FIREFOX_BIN and MOSAICSYNC_GECKODRIVER_BIN if they are not on PATH.");
   }
   if (kind === "chrome" && (!environment.chrome || !environment.chromedriver)) {
-    throw new Error("Chromium smoke requires a Chromium/Chrome-for-Testing binary and chromedriver. Set MOSAICSYNC_CHROME_BIN and MOSAICSYNC_CHROMEDRIVER_BIN if they are not on PATH.");
+    const rejected = environment.chromeRejected ? ` Branded Chrome was rejected: ${environment.chromeRejected}.` : "";
+    throw new Error(`Chromium smoke requires Chrome for Testing or Chromium plus chromedriver.${rejected} Set MOSAICSYNC_CHROME_BIN and MOSAICSYNC_CHROMEDRIVER_BIN if needed.`);
   }
 
   const profileRoot = await fs.mkdtemp(path.join(os.tmpdir(), `mosaicsync-${kind}-smoke-`));

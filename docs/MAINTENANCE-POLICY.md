@@ -1,6 +1,6 @@
 # MosaicSync maintenance policy
 
-MosaicSync's five-step application refinement program froze at 1.30.18.32. The Maintenance Infrastructure program freezes with 1.30.18.37. Stability is now an explicit project feature.
+MosaicSync's five-step application refinement program froze at 1.30.18.32. The planned Maintenance Infrastructure program completed at 1.30.18.37; external audit then triggered the narrow 1.30.18.38 corrective release under this policy. The freeze is re-established at 1.30.18.38. Stability is now an explicit project feature.
 
 ## Default rule: preserve the frozen architecture
 
@@ -65,3 +65,7 @@ Delete production code only with evidence that it is unreachable/obsolete **and*
 ## When to stop
 
 Once the identified problem is solved and certification is green, stop. Do not expand scope into adjacent cleanup. A release may legitimately contain no architectural changes at all.
+
+## Post-M6 corrective precedent
+
+1.30.18.38 is the intended example of this policy working: a code-first external audit demonstrated a reachable browser API-contract defect and maintenance-tool portability/compatibility defects, so the project made the smallest correction with focused negative and preservation regressions. That does **not** reopen generic refactoring or create M7. Once those demonstrated findings are corrected and certified, stop again.

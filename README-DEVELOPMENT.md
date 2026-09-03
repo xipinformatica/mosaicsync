@@ -1,11 +1,25 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.37.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.38.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
-## 1.30.18.37 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
+## 1.30.18.38 post-M6 external-audit correction
+
+This release follows the permanent maintenance policy exactly: external code-first review demonstrated one reachable Chromium API-contract bug plus two maintenance-tool defects, so only those concrete findings are corrected. This is **not M7** and does not restart generic refinement.
+
+- `hydrateDeviceFavicons()` uses `getNativeTopSites({ limit: 100 })`; shared New Tab code no longer calls `browser.topSites.get()` directly.
+- The generated Chromium New Tab smoke is schema-strict and throws on `topSites.get(options)`, while Firefox must preserve its richer Top Sites options path through the default adapter.
+- M1 Chromium automation supports Chrome for Testing or Chromium. Known branded Google Chrome command-line targets are rejected because current branded Chrome no longer supports the unpacked-extension command-line contract M1 uses.
+- Maintenance ESM roots use Node `fileURLToPath()` rather than URL `.pathname`, preserving Windows drive-letter/path semantics.
+- Scope stops here: no adjacent favicon redesign, test-group cleanup, certification optimization, CSP change, Sync/Recovery change or production refactor belongs in 1.30.18.38.
+
+## 1.30.18.37 Maintenance Infrastructure M6: final audit/freeze
+
+M6 completed the planned Maintenance Infrastructure roadmap and formalized the stop policy. External review after M6 then found the narrow issues corrected by 1.30.18.38; that corrective release does not constitute a new infrastructure phase.
+
+## 1.30.18.36 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
 
 This release keeps the 1.30.18.32 application architecture frozen. Production runtime changes are release identity only.
 

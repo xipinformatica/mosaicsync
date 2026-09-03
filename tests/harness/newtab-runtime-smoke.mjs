@@ -227,6 +227,8 @@ globalThis.__mosaicsyncBootGrid = { manifest: null, painted: false };
 
 const listeners = { storageChanged: [], permissionsAdded: [], permissionsRemoved: [], runtimeMessage: [] };
 let topSitesCalls = 0;
+let topSitesZeroArgCalls = 0;
+let topSitesOptionCalls = 0;
 const local = new StorageArea();
 const session = new StorageArea();
 const sync = new StorageArea();
@@ -238,7 +240,15 @@ globalThis.browser = {
     onAdded: { addListener(listener) { listeners.permissionsAdded.push(listener); } },
     onRemoved: { addListener(listener) { listeners.permissionsRemoved.push(listener); } }
   },
-  topSites: { async get() { topSitesCalls += 1; return [{ title: "Example", url: "https://example.test/", favicon: "" }]; } },
+  topSites: { async get(...args) {
+    topSitesCalls += 1;
+    if (args.length === 0) topSitesZeroArgCalls += 1;
+    else topSitesOptionCalls += 1;
+    if (browserName === "chrome" && args.length !== 0) {
+      throw new TypeError("Chrome topSites.get() accepts no arguments");
+    }
+    return [{ title: "Example", url: "https://example.test/", favicon: "data:image/png;base64,QUFBQQ==" }];
+  } },
   bookmarks: { async getTree() { return []; }, async search() { return []; }, async getChildren() { return []; }, onCreated: noOpEvent(), onChanged: noOpEvent(), onMoved: noOpEvent(), onRemoved: noOpEvent() },
   tabs: { async query() { return []; }, async create() { return {}; }, async update() { return {}; }, onUpdated: noOpEvent() },
   runtime: {
@@ -256,6 +266,22 @@ const constants = await import(`${pathToFileURL(path.join(root, `dist/${browserN
 const seededState = structuredClone(constants.DEFAULT_STATE);
 seededState.spaces.personal.settings.frequentlyVisitedEnabled = true;
 seededState.spaces.personal.settings.frequentlyVisitedCount = 5;
+seededState.spaces.personal.shortcuts = [{
+  type: "shortcut",
+  id: "m38-native-cache-shortcut",
+  title: "Example",
+  url: "https://example.test/",
+  image: "",
+  imageSyncData: "",
+  imageAssetId: "",
+  localImageAssetId: "",
+  imageSyncKind: "none",
+  imageSourceKind: "none",
+  imageSourceUrl: "",
+  imageIsFallback: false,
+  modifiedAt: 1
+}];
+seededState.shortcuts = seededState.spaces.personal.shortcuts;
 seededState.settings = seededState.spaces.personal.settings;
 local.data[constants.LOCAL_STATE_KEY] = seededState;
 local.data[constants.LOCAL_META_KEY] = {
@@ -311,6 +337,8 @@ const result = {
   swatchClickListeners: (swatches[0]?.listeners.get("click") || []).length,
   storageListeners: listeners.storageChanged.length,
   topSitesCalls,
+  topSitesZeroArgCalls,
+  topSitesOptionCalls,
   frequentlyVisitedVisible: byId.get("frequentSitesSection")?.hidden === false,
   frequentlyVisitedChangeListeners: (byId.get("settingsFrequentlyVisited")?.listeners.get("change") || []).length,
   frequentDisabled: globalThis.__mosaicsyncSmokeFrequentDisabled || null,
@@ -320,7 +348,9 @@ const result = {
 
 const ok = result.failures.length === 0 && result.consoleErrors.length === 0 && result.interactionReady &&
   result.settingsClickListeners > 0 && result.settingsOpened && result.swatchClickListeners > 0 &&
-  result.storageListeners > 0 && result.topSitesCalls > 1 && result.frequentlyVisitedVisible &&
+  result.storageListeners > 0 && result.topSitesCalls > 1 &&
+  (browserName === "chrome" ? result.topSitesOptionCalls === 0 : result.topSitesOptionCalls > 0) &&
+  result.frequentlyVisitedVisible &&
   result.frequentlyVisitedChangeListeners > 0 && result.frequentDisabled?.optionsHidden && result.frequentDisabled?.sectionHidden &&
   result.frequentReenabled?.optionsVisible && result.frequentReenabled?.sectionVisible;
 console.log(JSON.stringify(result));

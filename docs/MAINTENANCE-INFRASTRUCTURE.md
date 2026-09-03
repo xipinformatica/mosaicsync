@@ -134,7 +134,18 @@ A failing assertion always reports the fixed seed and case number. The campaign 
 - `docs/M6-FINAL-AUDIT-1.30.18.37.md` records the final post-change evidence and freeze decision.
 - M6 adds only documentation/test guardrails plus release identity; no production algorithm is changed.
 
-There is **no planned M7 or 1.30.18.38 maintenance-infrastructure release**. Future releases are normal product maintenance driven by concrete needs.
+There is **no planned M7**. External code-first review after M6 found a concrete Chromium adapter leak plus maintenance-tool compatibility/portability defects; those demonstrated findings are handled by the narrow **1.30.18.38 post-audit corrective release**, not by reopening the Maintenance Infrastructure roadmap. Future releases after that correction are normal product maintenance driven by concrete needs.
+
+## Post-audit corrective — 1.30.18.38
+
+1.30.18.38 is not a new maintenance phase. It applies the permanent stop/change policy to verified external-audit findings only:
+
+- route New Tab native favicon hydration through `getNativeTopSites()` so Firefox-only Top Sites arguments never reach Chromium;
+- make the generated Chromium New Tab harness schema-strict for `topSites.get()` and preserve Firefox's richer path;
+- reject known branded Google Chrome automation targets in M1 and require Chrome for Testing or Chromium for unpacked-extension smoke;
+- replace URL `.pathname` filesystem conversion with `fileURLToPath()` for Windows-safe maintenance tooling.
+
+No adjacent cleanup is authorized. The freeze endpoint becomes 1.30.18.38 once the corrective release passes full regression/reachability/contracts/clean-room reproduction plus the user's real Firefox smoke.
 
 ## Permanent maintenance rule
 

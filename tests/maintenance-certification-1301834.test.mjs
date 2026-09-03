@@ -4,7 +4,8 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import { spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   parseCertificationArgs,
   certificationPlan,
@@ -12,7 +13,7 @@ import {
   extractSourceZip
 } from "../tools/certify-release.mjs";
 
-const root = resolve(new URL("..", import.meta.url).pathname);
+const root = fileURLToPath(new URL("../", import.meta.url));
 
 test("1.30.18.34 official certify command is one fail-closed full-release entry point", () => {
   const pkg = JSON.parse(fs.readFileSync(join(root, "package.json"), "utf8"));

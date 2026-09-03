@@ -1,5 +1,7 @@
 # M6 final forensic audit — MosaicSync 1.30.18.37
 
+> **Post-audit status:** This document records the M6 audit as performed at 1.30.18.37. Subsequent independent code-first review found one inherited LOW Chromium Top Sites adapter leak plus maintenance-tool compatibility/portability defects. They are corrected narrowly in 1.30.18.38. The M6 architecture conclusions remain valid, but the original statement that no LOW production defect existed is superseded by the 1.30.18.38 corrective record.
+
 ## Verdict
 
 **PASS — Maintenance Infrastructure M1–M6 is complete and the application architecture remains frozen.**

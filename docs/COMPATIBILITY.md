@@ -2,7 +2,7 @@
 
 This document records the externally visible browser/API assumptions behind the frozen MosaicSync runtime. It is a maintenance map, not a second implementation specification. The manifests and release-contract tests remain authoritative.
 
-Last reviewed: **2026-09-03** during Maintenance Infrastructure M6 / MosaicSync 1.30.18.37.
+Last reviewed: **2026-09-03** after the post-M6 external-audit correction / MosaicSync 1.30.18.38.
 
 ## Supported browser floors
 
@@ -14,7 +14,7 @@ Why 140 is the floor:
 
 - Firefox 140 added `browser_specific_settings.gecko.data_collection_permissions`, which MosaicSync declares for Mozilla's built-in data-collection consent model.
 - MosaicSync's Firefox manifest uses Manifest V3, a stable extension ID, `storage`, `alarms`, optional `topSites` / `bookmarks`, optional HTTP(S) hosts, the New Tab override, and the Firefox homepage override.
-- Firefox-specific Top Sites options (`newtab`, `includeFavicon`, `limit`) remain behind the Firefox/shared platform capability instead of leaking into Chromium.
+- Firefox-specific Top Sites options (`newtab`, `includeFavicon`, `limit`) remain behind `getNativeTopSites()`. Shared New Tab native-cache hydration uses that adapter; Chromium therefore calls `topSites.get()` with no Firefox-only options.
 - Firefox native open-tab favicon recovery reads `tabs.query({url: ...})` only after matching HTTP(S) host access is already granted; MosaicSync deliberately does not request the broad `tabs` permission.
 
 Primary external references reviewed in M6:
@@ -91,6 +91,10 @@ Maintenance implications:
 The repository intentionally has **no npm runtime or development dependencies**. The maintenance scripts use Node.js built-ins and Python's standard library. WebDriver smoke uses the standard WebDriver HTTP protocol rather than a third-party browser-automation package.
 
 Do not add a dependency merely for convenience. A new dependency needs a concrete reduction in risk or maintenance cost that is greater than the supply-chain/update burden it introduces.
+
+## Chromium automation target for M1
+
+The real-browser smoke lane intentionally uses **Chrome for Testing or Chromium**, not current branded Google Chrome. Branded Chrome removed the `--load-extension` command-line path used by this dependency-free WebDriver harness starting with Chrome 137, and later branded releases also removed related extension command-line switches. `tools/browser-smoke.mjs` therefore rejects known branded-Chrome binaries rather than advertising an automation target that cannot load the unpacked MosaicSync runtime. This affects maintenance tooling only; it does not change MosaicSync's production Chromium compatibility floor.
 
 ## Periodic review triggers
 

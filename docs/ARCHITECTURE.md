@@ -288,6 +288,10 @@ Restricted environments may use `npm run certify:mechanical`, but that result is
 The architecture map remains the ownership authority; M3 does not create another implementation specification. `docs/adr/` preserves the rationale behind a deliberately small set of non-obvious frozen decisions, while `docs/REGRESSION-CATALOG.md` maps high-value historical failure families to the tests that should catch recurrence. Documentation is a maintenance aid, not another runtime/version/schema authority.
 
 
+## 1.30.18.38 post-audit corrective boundary
+
+External review after M6 found one shared-New-Tab call bypassing the already-established browser adapter. The correction does not add an owner: `hydrateDeviceFavicons()` now uses the existing `getNativeTopSites()` capability, preserving the architectural rule that Firefox/Chromium API-shape differences belong in platform adapters. Maintenance-tool Chrome-target and filesystem-path fixes remain outside the runtime graph.
+
 ## Post-freeze maintenance references
 
 - `docs/COMPATIBILITY.md`

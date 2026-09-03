@@ -126,3 +126,17 @@ This catalogue records high-value historical failures and the permanent tests th
 - `tests/maintenance-certification-1301834.test.mjs`
 
 **If it returns:** preserve ADR-008. Full certification must fail closed and the package path must own a fresh deterministic build.
+
+## R-011 — Shared New Tab leaked Firefox Top Sites arguments into Chromium
+
+**Historical symptom/risk:** native device-favicon hydration in shared New Tab called `browser.topSites.get({ newtab, includeFavicon, limit })` directly. Chromium's API contract accepts no Firefox-style options, so that secondary hydration path could fail closed and abort later icon-maintenance work in the same idle task.
+
+**Found by:** post-M6 external code-first audit of 1.30.18.37.
+
+**Corrected in:** 1.30.18.38.
+
+**Permanent protection:**
+- `tests/corrective-1301838.test.mjs`
+- `tests/test-architecture-1301830.test.mjs`
+
+**If it returns:** shared New Tab must call `getNativeTopSites()`; browser-specific Top Sites argument shapes belong only in `core/platform.js`. The generated Chromium smoke must keep rejecting `topSites.get(options)`.

@@ -4713,11 +4713,7 @@ ${site.url}`;
     if (!deviceShortcuts.length) return;
     if (!(await hasTopSitesPermission())) return;
 
-    const sites = await browser.topSites.get({
-      newtab: true,
-      includeFavicon: true,
-      limit: 100
-    });
+    const sites = await getNativeTopSites({ limit: 100 });
     if (!Array.isArray(sites) || !sites.length) return;
 
     const faviconSites = sites.filter(site => site?.url && site?.favicon?.startsWith("data:image/"));

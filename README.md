@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.37**
+**Current source release: 1.30.18.38**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -85,11 +85,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.37** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.38** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.37 combines **Maintenance Infrastructure M4 + M5** without changing the frozen application runtime. M4 adds cross-platform targeted test commands for startup, New Tab, Sync, Recovery, security, browser parity, core state and release tooling while `npm test` remains the authoritative full suite. M5 adds dependency-free, seeded property/fuzz tests for state normalization, profile-import parsing, Recovery continuity and HTTP(S) navigation safety. Every fuzz seed is reproducible; no external fuzzing framework or production test hook is added.
+1.30.18.38 is a **post-M6 external-audit corrective release**, not another maintenance phase. It fixes one inherited Chromium Top Sites adapter leak in native favicon hydration, updates the M1 Chromium smoke contract for current branded-Chrome command-line restrictions, and makes maintenance ESM path resolution portable on Windows. The frozen Sync/Recovery/first-paint architecture, permissions, schemas and product behavior are otherwise unchanged.
 
 1.30.18.24 is the frozen **Step 4 Recovery ownership endpoint**. Its post-release forensic audits found no corrective production defect requiring another Recovery release.
 
