@@ -4,10 +4,11 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.38**
+**Current source release: 1.30.18.40**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
+- Chrome Web Store: https://chromewebstore.google.com/detail/mosaicsync/adoedheeaigmimommakojmmlahcckjkh
 - License: [Mozilla Public License 2.0](LICENSE)
 - Privacy: [PRIVACY.md](PRIVACY.md)
 - Security: [SECURITY.md](SECURITY.md)
@@ -85,11 +86,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.38** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.40** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.38 is a **post-M6 external-audit corrective release**, not another maintenance phase. It fixes one inherited Chromium Top Sites adapter leak in native favicon hydration, updates the M1 Chromium smoke contract for current branded-Chrome command-line restrictions, and makes maintenance ESM path resolution portable on Windows. The frozen Sync/Recovery/first-paint architecture, permissions, schemas and product behavior are otherwise unchanged.
+1.30.18.40 is a narrow follow-up to the published 1.30.18.39 UI correction. Artwork help is now hover-only and constrained inside the shortcut editor, all four artwork actions share one desktop row, and Light-mode field labels sit transparently on the dialog surface. The frozen Sync/Recovery/first-paint architecture, permissions, schemas and data behavior are unchanged.
+
+1.30.18.38 is the **post-M6 external-audit corrective endpoint** that fixed the demonstrated Chromium Top Sites adapter leak and maintenance-tool portability findings without reopening generic refactoring.
 
 1.30.18.24 is the frozen **Step 4 Recovery ownership endpoint**. Its post-release forensic audits found no corrective production defect requiring another Recovery release.
 

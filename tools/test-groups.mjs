@@ -36,7 +36,8 @@ const GROUPS = Object.freeze({
       /snow-leopard/i,
       /stabilization/i,
       /corrective-12789/i,
-      /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i
+      /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i,
+      /corrective-13018(?:39|40)\.test\.mjs$/i
     ]
   },
   sync: {
@@ -108,7 +109,8 @@ const GROUPS = Object.freeze({
       /optimization-/i,
       /performance-hardening/i,
       /corrective-1303\.test\.mjs$/i,
-      /corrective-1301838\.test\.mjs$/i
+      /corrective-1301838\.test\.mjs$/i,
+      /corrective-13018(?:39|40)\.test\.mjs$/i
     ]
   }
 });

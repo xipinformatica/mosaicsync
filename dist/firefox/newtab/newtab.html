@@ -213,35 +213,45 @@
               <input id="shortcutImageUrl" type="url" inputmode="url" maxlength="2048" autocomplete="off" placeholder="https://example.com/icon.png" aria-label="Online image address">
               <button id="useShortcutImageUrl" class="secondary-button" type="button">Use web image</button>
             </div>
-            <label id="shortcutSyncImageRow" class="artwork-sync-row">
-              <input id="shortcutSyncImage" type="checkbox">
-              <span><strong>Sync this image</strong><small id="shortcutSyncImageHint">Off by default. MosaicSync keeps your higher-quality local image and creates a separate compact copy only if you enable Sync.</small></span>
-            </label>
-            <p id="shortcutImageHint" class="hint">Local images stay on this Firefox unless you choose to sync them. Web images keep a lightweight source address so another Firefox can reconstruct them.</p>
+            <div id="shortcutSyncImageRow" class="artwork-sync-row">
+              <label class="artwork-sync-toggle">
+                <input id="shortcutSyncImage" type="checkbox">
+                <strong>Sync this image</strong>
+              </label>
+              <div class="artwork-sync-help">
+                <button id="shortcutSyncImageInfo" class="artwork-sync-info-button" type="button" aria-label="Sync this image" aria-describedby="shortcutSyncImageTooltip">?</button>
+                <div id="shortcutSyncImageTooltip" class="artwork-sync-popover" role="tooltip">
+                  <p id="shortcutSyncImageHint">Off by default. MosaicSync keeps your higher-quality local image and creates a separate compact copy only if you enable Sync.</p>
+                  <p id="shortcutImageHint">Local images stay on this Firefox unless you choose to sync them. Web images keep a lightweight source address so another Firefox can reconstruct them.</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </fieldset>
 
-      <label class="field">
-        <span>Image style</span>
-        <select id="shortcutImageStyle">
-          <option value="contain">Icon — fit inside tile</option>
-          <option value="cover">Image — fill tile</option>
-        </select>
-      </label>
+      <div class="shortcut-visual-options">
+        <label class="field">
+          <span>Image style</span>
+          <select id="shortcutImageStyle">
+            <option value="contain">Icon — fit inside tile</option>
+            <option value="cover">Image — fill tile</option>
+          </select>
+        </label>
 
-      <div class="field shortcut-color-field">
-        <span>Shortcut color</span>
-        <div id="shortcutColorPicker" class="shortcut-color-picker" role="group" aria-label="Shortcut color">
-          <button type="button" data-shortcut-color="" class="shortcut-color-choice no-color selected" aria-pressed="true" title="No color"><span aria-hidden="true">×</span></button>
-          <button type="button" data-shortcut-color="red" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="orange" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="amber" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="green" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="teal" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="blue" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="violet" class="shortcut-color-choice" aria-pressed="false"></button>
-          <button type="button" data-shortcut-color="pink" class="shortcut-color-choice" aria-pressed="false"></button>
+        <div class="field shortcut-color-field">
+          <span>Shortcut color</span>
+          <div id="shortcutColorPicker" class="shortcut-color-picker" role="group" aria-label="Shortcut color">
+            <button type="button" data-shortcut-color="" class="shortcut-color-choice no-color selected" aria-pressed="true" title="No color"><span aria-hidden="true">×</span></button>
+            <button type="button" data-shortcut-color="red" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="orange" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="amber" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="green" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="teal" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="blue" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="violet" class="shortcut-color-choice" aria-pressed="false"></button>
+            <button type="button" data-shortcut-color="pink" class="shortcut-color-choice" aria-pressed="false"></button>
+          </div>
         </div>
       </div>
 
@@ -258,7 +268,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.30.18.38</p>
+          <p class="eyebrow">MosaicSync · 1.30.18.40</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

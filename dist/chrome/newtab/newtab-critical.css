@@ -249,7 +249,7 @@ select{ font: inherit; }button{ color: inherit; }.page{
   background: var(--tile-hover);
   box-shadow: 0 0 0 2px rgba(255,255,255,.17), 0 7px 18px rgba(0,0,0,.22);
 }.shortcut-card:hover .tile{
-  transform: scale(1.045);
+  transform: translateY(-1px);
   filter: brightness(1.065);
 }.shortcut-card:active .tile{ transform: translateY(1px) scale(.985); filter: brightness(1); }.tile{
   position: relative;
@@ -528,8 +528,10 @@ select{ font: inherit; }button{ color: inherit; }.page{
   border-color: rgba(0,0,0,.17);
   background: rgba(255,255,255,.52);
 }:root[data-effective-theme="light"] .settings-button:hover{ background: rgba(255,255,255,.91); border-color: rgba(0,0,0,.28); }:root[data-effective-theme="light"] .settings-button svg{ stroke: #24202a; }:root[data-effective-theme="light"] .eyebrow{ color: #674a91; }:root[data-effective-theme="light"] .icon-button{ color: rgba(25,20,30,.63); }:root[data-effective-theme="light"] .icon-button:hover{ background: rgba(0,0,0,.055); color: #1d1922; }:root[data-effective-theme="light"] .field > span,
-:root[data-effective-theme="light"] .image-fieldset legend,
-:root[data-effective-theme="light"] .field input,
+:root[data-effective-theme="light"] .image-fieldset legend{
+  background: transparent;
+  color: #1c1920;
+}:root[data-effective-theme="light"] .field input,
 :root[data-effective-theme="light"] .field select{
   border-color: rgba(0,0,0,.15);
   background: #fff;

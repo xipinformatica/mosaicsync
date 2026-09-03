@@ -1,9 +1,22 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.38.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.40.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+## 1.30.18.40 shortcut-editor presentation correction
+
+This release corrects three demonstrated presentation defects in the published 1.30.18.39 shortcut editor. Native disclosure state is removed from artwork help so pointer hover closes immediately and cannot survive dialog reuse; the tooltip is constrained to the complete artwork row; all four artwork actions share one desktop row; and Light-mode labels no longer inherit the white input surface. Keyboard focus remains an equivalent help path. Generic small-window scrolling remains the safety fallback. No Sync, Recovery, first-paint, state/schema, permission, CSP, browser-adapter or privacy boundary changes.
+
+
+## 1.30.18.39 post-freeze UI correction
+
+This release follows the frozen maintenance policy: two demonstrated user-facing defects justify narrow presentation changes, while a documentation correction adds the already-public Chrome listing.
+
+- Wide-but-short laptop viewports receive a height-aware shortcut-editor layout. Image actions use a stable two-column grid, visual options share one row, and artwork explanations move into an accessible hover/focus/click information bubble. Generic dialog scrolling remains the fail-safe for exceptionally small viewports and long localized content.
+- Shortcut hover retains its restrained highlight, outline, shadow and one-pixel lift without scaling tile artwork onto fractional pixels.
+- The README links both official browser stores.
+- No Sync, Recovery, first-paint, state/schema, permission, CSP, browser-adapter or privacy boundary changes.
 
 ## 1.30.18.38 post-M6 external-audit correction
 

@@ -1,3 +1,21 @@
+## 1.30.18.40
+
+- Replaced the shortcut artwork help disclosure with a hover-only tooltip that closes when the pointer leaves and cannot remain open when the editor is reused.
+- Constrained artwork help to the editor content width so explanatory text remains fully visible.
+- Kept Choose local image, Choose detected favicon, Built-in icons and Clear image in one compact desktop row.
+- Removed unintended full-width white backgrounds from Light-mode field labels while preserving input and select surfaces.
+- Added three regressions proven to fail on the published 1.30.18.39 source.
+- No Sync, Recovery, first-paint, persisted schema, permission, CSP, browser-adapter, localization-catalog or user-data-format change.
+
+## 1.30.18.39
+
+- Added a height-aware shortcut-editor layout for common short laptop viewports so the full form and Save/Cancel actions remain visible without routine scrolling.
+- Reorganized image actions into a consistent two-column grid, placed image style and shortcut color efficiently on one row, and moved artwork/Sync explanations into an accessible question-mark bubble available by hover, focus and click.
+- Kept the polished tile hover highlight and lift while removing fractional whole-tile scaling that could make raster favicons appear slightly aliased.
+- Added the official MosaicSync Chrome Web Store listing beside Firefox Add-ons in the README.
+- Added three negative regressions proven to fail on 1.30.18.38 and focused preservation coverage for short-screen scrolling safety and the retained hover treatment.
+- No Sync, Recovery, first-paint, persisted schema, permission, CSP, browser-adapter, localization-catalog or user-data-format change.
+
 ## 1.30.18.38
 
 - Post-M6 external-audit corrective release; this is not M7 and does not reopen the frozen architecture.

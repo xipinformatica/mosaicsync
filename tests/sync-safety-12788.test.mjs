@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.38");
+  assert.equal(VERSION, "1.30.18.40");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -89,9 +89,10 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(fn, /remoteMissing:\s*true/);
   });
 
-  test(`1.27.8.8 ${browser} shortcut hover is restrained, paint-only and does not change grid geometry`, async () => {
+  test(`1.27.8.8 ${browser} shortcut hover is restrained, paint-only and keeps artwork crisp`, async () => {
     const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
-    assert.match(css, /\.shortcut-card:hover \.tile\s*\{[\s\S]*?transform:\s*scale\(1\.045\);[\s\S]*?filter:\s*brightness\(1\.065\);/);
+    assert.match(css, /\.shortcut-card:hover \.tile\s*\{[\s\S]*?transform:\s*translateY\(-1px\);[\s\S]*?filter:\s*brightness\(1\.065\);/);
+    assert.doesNotMatch(css, /\.shortcut-card:hover \.tile\s*\{[^}]*scale\(/);
     assert.match(css, /transition:[^;]*transform 100ms ease,[^;]*filter 100ms ease/);
   });
 }

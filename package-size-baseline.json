@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.30.18.38",
-      "rawBytes": 2181696,
-      "deflatedBytes": 643201,
+      "version": "1.30.18.40",
+      "rawBytes": 2186766,
+      "deflatedBytes": 644203,
       "categories": {
         "assets": {
           "files": 2,
@@ -33,13 +33,13 @@
         },
         "newtab-css": {
           "files": 2,
-          "rawBytes": 122259,
-          "deflatedBytes": 22056
+          "rawBytes": 126798,
+          "deflatedBytes": 22899
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 46012,
-          "deflatedBytes": 9880
+          "rawBytes": 46543,
+          "deflatedBytes": 10039
         },
         "newtab-js": {
           "files": 13,
@@ -106,8 +106,8 @@
         {
           "path": "newtab/newtab-secondary.css",
           "category": "newtab-css",
-          "rawBytes": 86814,
-          "deflatedBytes": 14683
+          "rawBytes": 91303,
+          "deflatedBytes": 15530
         },
         {
           "path": "core/storage.js",
@@ -118,8 +118,8 @@
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 46012,
-          "deflatedBytes": 9880
+          "rawBytes": 46543,
+          "deflatedBytes": 10039
         },
         {
           "path": "core/i18n-locales/el.js",
@@ -130,8 +130,8 @@
         {
           "path": "newtab/newtab-critical.css",
           "category": "newtab-css",
-          "rawBytes": 35445,
-          "deflatedBytes": 7373
+          "rawBytes": 35495,
+          "deflatedBytes": 7369
         },
         {
           "path": "core/i18n-locales/bg.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.30.18.38",
-      "rawBytes": 2203340,
-      "deflatedBytes": 657717,
+      "version": "1.30.18.40",
+      "rawBytes": 2208410,
+      "deflatedBytes": 658719,
       "categories": {
         "assets": {
           "files": 6,
@@ -287,13 +287,13 @@
         },
         "newtab-css": {
           "files": 2,
-          "rawBytes": 122259,
-          "deflatedBytes": 22056
+          "rawBytes": 126798,
+          "deflatedBytes": 22899
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 46062,
-          "deflatedBytes": 9893
+          "rawBytes": 46593,
+          "deflatedBytes": 10052
         },
         "newtab-js": {
           "files": 13,
@@ -360,8 +360,8 @@
         {
           "path": "newtab/newtab-secondary.css",
           "category": "newtab-css",
-          "rawBytes": 86814,
-          "deflatedBytes": 14683
+          "rawBytes": 91303,
+          "deflatedBytes": 15530
         },
         {
           "path": "core/storage.js",
@@ -372,8 +372,8 @@
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 46062,
-          "deflatedBytes": 9893
+          "rawBytes": 46593,
+          "deflatedBytes": 10052
         },
         {
           "path": "core/i18n-locales/el.js",
@@ -384,8 +384,8 @@
         {
           "path": "newtab/newtab-critical.css",
           "category": "newtab-css",
-          "rawBytes": 35445,
-          "deflatedBytes": 7373
+          "rawBytes": 35495,
+          "deflatedBytes": 7369
         },
         {
           "path": "core/i18n-locales/bg.js",
