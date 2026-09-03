@@ -2854,8 +2854,8 @@ ${site.url}`;
   }
 
   function setColorPickerFromHex(hex) {
-    const normalized = normalizeHexColor(hex, validHex) || DEFAULT_STATE.settings.backgroundColor;
-    const rgb = hexToRgb(normalized, validHex);
+    const normalized = normalizeHexColor(hex) || DEFAULT_STATE.settings.backgroundColor;
+    const rgb = hexToRgb(normalized);
     if (!rgb) return;
     const hsv = rgbToHsv(rgb);
     colorPickerHue = hsv.h;

@@ -3,12 +3,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
+import { validHex } from "../core/model.js";
 
 export function clampUnit(value) {
   return Math.min(1, Math.max(0, Number(value) || 0));
 }
 
-export function hexToRgb(hex, validHex) {
+export function hexToRgb(hex) {
   if (!validHex(hex)) return null;
   const value = String(hex).slice(1);
   return {
@@ -52,7 +53,7 @@ export function hsvToHex(hue, saturation, value) {
   return `#${rgb.map(channel => Math.round((channel + match) * 255).toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function normalizeHexColor(value, validHex) {
+export function normalizeHexColor(value) {
   let text = String(value || "").trim();
   if (/^[0-9a-f]{6}$/i.test(text)) text = `#${text}`;
   return validHex(text) ? text.toLowerCase() : "";

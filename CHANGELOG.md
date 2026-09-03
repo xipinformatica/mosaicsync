@@ -1,11 +1,23 @@
-## 1.30.18.26
+## 1.30.18.28
 
-- Advances Step 5.2 with one narrow browser-neutral responsibility extraction from the canonical shared New Tab implementation.
-- Moves only deterministic background-color conversion/normalization helpers (`clampUnit`, RGB↔HSV/hex conversion and hex normalization) into `src/shared/newtab/appearance-color.js`; the exact 1.30.18.25 expressions are preserved.
-- Keeps all DOM, pointer, Settings, persistence, appearance-preview and repaint sequencing in `newtab.js`; no first-paint/cache, Frequently Visited, favicon, Sync, Recovery or browser-adapter boundary is reopened.
-- Adds direct frozen-expression equivalence coverage, purity/ownership assertions, and execution of the generated Firefox and Chromium copies of the extracted module.
-- Records the Step-5.2 responsibility decision: closure-heavy UI subsystems are not extracted merely to reduce `newtab.js` line count.
-- No feature, UI behavior, permission, CSP, schema, persisted key/payload, locale, Sync/Recovery behavior or browser-parity change.
+- Safely resumes Step 5.2 from the live 1.30.18.27 rollback baseline rather than continuing from the withdrawn 1.30.18.26 source.
+- Moves only the deterministic New Tab background-color conversion/normalization helpers into `src/shared/newtab/appearance-color.js` while preserving their exact historical callable contracts; `normalizeHexColor(value)` and `hexToRgb(hex)` remain one-argument functions and the new pure owner imports `validHex` itself.
+- Adds a permanent generated Firefox/Chromium startup regression for the exact 1.30.18.26 failure boundary. The regression was first proven to fail 4/4 against withdrawn 1.30.18.26 and passes on the corrected implementation.
+- Keeps all New Tab DOM/event orchestration, Settings live preview/persistence/repaint ordering, Frequently Visited, startup/first-paint/session caches, favicon handling, Sync, Recovery, storage, permissions, CSP, schemas, locales and browser adapters unchanged.
+- No product feature or user-visible behavior change.
+
+## 1.30.18.27
+
+- Emergency safe rollback release published after the 1.30.18.26 New Tab startup regression was discovered in Firefox.
+- Restores the complete 1.30.18.25 production implementation unchanged apart from release identity, returning MosaicSync to the certified Step-5.1 baseline.
+- Contains none of the withdrawn 1.30.18.26 appearance-color extraction.
+
+## 1.30.18.26 — withdrawn
+
+- Withdrawn due to a New Tab startup regression in the attempted Step-5.2 appearance-color extraction.
+- The extraction changed `normalizeHexColor`/`hexToRgb` from their historical self-contained callable contracts to require an injected `validHex` dependency, while some production callers retained the old call shape.
+- A synchronous color-swatch initialization call could therefore throw before the remainder of `newtab.js` finished wiring Settings and later startup behavior, leaving the bootstrap-rendered page partially visible but incompletely initialized; Frequently Visited could consequently remain unavailable.
+- Do not use this release as a baseline.
 
 ## 1.30.18.25
 

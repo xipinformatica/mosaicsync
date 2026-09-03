@@ -234,3 +234,11 @@ Step 5 begins by measuring ownership rather than moving production code. The det
 The largest remaining canonical JavaScript concentrations are `newtab.js`, `background-core.js`, `model.js` and `storage.js`. They are candidates for responsibility analysis, not automatic extraction. Recovery portions of the background core are frozen at the audited 1.30.18.24 Step-4 boundary; Step-2 persistence/session/first-paint ownership and Step-3 browser capability seams remain frozen as well. Static reachability or line count is insufficient evidence for deletion because WebExtension manifests, classic bootstrap scripts, workers and MV3 listeners create runtime roots outside ordinary ESM imports.
 
 1.30.18.25 therefore changes no production behavior beyond release identity. Later Step-5 work may proceed only through narrow, named ownership seams with positive preservation and negative regression coverage on generated Firefox and Chromium runtimes.
+## 1.30.18.28 Step 5.2: corrected pure appearance-color owner
+
+The first 1.30.18.26 attempt is withdrawn because it changed the callable contract of two helpers while leaving existing New Tab startup callers unchanged. 1.30.18.27 restored the 1.30.18.25 production implementation. The corrected 1.30.18.28 extraction starts again from that safe implementation.
+
+`src/shared/newtab/appearance-color.js` owns only deterministic background-color conversion/normalization. Its exported signatures are deliberately identical to the historical inline helpers. The module imports the existing pure `validHex` validator itself; no DOM caller is required to inject dependencies and every existing `newtab.js` call expression remains unchanged apart from line movement caused by removing the inline definitions.
+
+The extraction is guarded at two layers: direct expression equivalence to the frozen 1.30.18.25 helpers, and a generated Firefox/Chromium startup regression that runs the exact color-swatch initialization block which executes before Settings click wiring and before final state startup. The latter regression fails on withdrawn 1.30.18.26 and passes on the corrected owner. No larger appearance, Frequently Visited, first-paint, favicon, Sync, Recovery or browser-adapter responsibility is moved.
+

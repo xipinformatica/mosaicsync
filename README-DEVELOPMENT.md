@@ -1,19 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.26.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.28.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
 
-## 1.30.18.26 Step 5.2 New Tab responsibility policy
+## 1.30.18.28 Step 5.2 corrective extraction policy
 
-- Step 5.2 extracts only responsibilities that are cohesive, browser-neutral and deterministic; line count alone is not an extraction mandate.
-- The first justified seam is background-color conversion/normalization in `src/shared/newtab/appearance-color.js`. It owns only clamp/RGB/HSV/hex transformations and takes validation as an explicit dependency.
-- `newtab.js` retains all DOM, pointer, Settings, persistence, preview, repaint and event-order orchestration. Startup/first-paint, Frequently Visited, artwork hydration and Sync/Recovery UI remain frozen unless a concrete defect requires them.
-- Every Step-5.2 extraction needs a frozen-expression equivalence test plus generated Firefox and Chromium execution coverage.
-- Do not create factory/controller abstractions merely to move closure-heavy UI code out of `newtab.js`; extraction must reduce cognitive coupling rather than relocate it.
+- 1.30.18.28 resumes Step 5.2 only from the safe 1.30.18.27 rollback baseline, whose production implementation is the certified 1.30.18.25 code apart from release identity. Withdrawn 1.30.18.26 must never be used as a development baseline.
+- A behavior-preserving extraction must preserve the existing callable contract unless a separately justified product change requires otherwise. The New Tab color helpers therefore remain `normalizeHexColor(value)` and `hexToRgb(hex)`; the extracted owner carries the existing pure `validHex` dependency itself.
+- Any New Tab extraction must include a generated Firefox and generated Chromium startup regression that exercises the real initialization boundary affected by the change. Direct helper equivalence and generated-file presence are not sufficient certification by themselves.
+- The 1.30.18.28 regression is required to fail against the withdrawn 1.30.18.26 implementation and pass against the corrected implementation before release certification.
+- Settings DOM/event ordering, Frequently Visited, startup/first-paint/session ownership, favicon behavior, Sync, Recovery, storage, permissions, CSP, schemas and locales remain frozen.
 
 ## 1.30.18.25 Step 5.1 inventory / ownership policy
 
