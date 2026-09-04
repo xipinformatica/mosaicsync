@@ -5568,35 +5568,21 @@ export function startBackground(adapter) {
       initiatedByDevice: meta.deviceId || "",
       initiatedAt: Date.now()
     };
-
-    // Commit the reset marker first. MosaicSync-controlled deletion therefore
-    // never creates the same 0-byte namespace that Firefox uninstall cleanup can
-    // create. Surviving 1.30.13+ devices can distinguish explicit deletion from
-    // catastrophic external loss, including devices that were briefly offline.
-    await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent });
-    const all = await browser.storage.sync.get(null);
-    const keys = Object.keys(all).filter(key => key.startsWith(SYNC_PREFIX) && key !== SYNC_RESET_INTENT_KEY);
-    if (keys.length) await removeSyncItems(keys);
-    await clearAssetGcLedger();
-    await clearAllPendingSyncRecoveryState();
-    await markIntentionalSyncReset(meta, epoch);
-
-    const [usedBytes, remaining] = await Promise.all([
-      browser.storage.sync.getBytesInUse(null),
-      browser.storage.sync.get(null)
-    ]);
-    const next = await writeLocalMeta({
+    const resetMeta = {
       ...meta,
-      syncEnabled: false,
+      // Clearing the remote copy resets the synchronization relationship, not
+      // the user's Sync preference. An enabled device stays enrolled in the
+      // same safe await-remote state used by peers that observe reset-intent.
+      syncEnabled: meta.syncEnabled,
       syncInitialized: false,
-      syncBootstrapMode: "none",
-      syncStatus: "off",
+      syncBootstrapMode: meta.syncEnabled ? "await-remote" : "none",
+      syncStatus: meta.syncEnabled ? "waiting" : "off",
       lastSyncAt: 0,
       lastSyncError: "",
       lastSyncWarning: "",
       syncSkippedAssets: 0,
       syncFastSnapshotFallback: false,
-      syncWaitStartedAt: 0,
+      syncWaitStartedAt: meta.syncEnabled ? Date.now() : 0,
       lastAppliedSyncRevision: "",
       lastAppliedWorkSyncRevision: "",
       lastAppliedDeviceSnapshotRevision: "",
@@ -5606,12 +5592,86 @@ export function startBackground(adapter) {
       lastRemoteReceiptRevision: "",
       lastRemoteReceiptUpdatedAt: 0,
       lastRemoteReceiptOriginDeviceId: "",
-      lastRemoteReceiptProvenanceExact: false,
+      lastRemoteReceiptProvenanceExact: false
+    };
+
+    // Read the namespace before arming the local reset so a browser API read
+    // failure cannot leave this device disabled when no remote mutation happened.
+    const existing = await browser.storage.sync.get(null);
+    let armedMeta = meta;
+    let namespaceCleared = false;
+    try {
+      // Arm the reset locally before the browser namespace is emptied. The
+      // continuity reset plus uninitialized await-remote mode make the removal
+      // burst non-authoritative without silently changing the user's Sync toggle.
+      // Automatic local publication still requires syncInitialized=true.
+      armedMeta = await writeLocalMeta(resetMeta);
+      await markIntentionalSyncReset(armedMeta, epoch);
+      await ensureSyncWatchAlarm(armedMeta);
+
+      // `storage.sync.clear()` is the critical 1.30.18.43 correction. The old
+      // reset wrote the sentinel first, which can fail exactly when Firefox Sync
+      // is at quota. Clearing the per-extension namespace needs no free quota.
+      await browser.storage.sync.clear();
+      namespaceCleared = true;
+
+      // Retire stale write-suppression/evidence from the deleted namespace before
+      // installing the single reset sentinel. This also keeps a later fresh
+      // authoritative bootstrap independent from pre-reset delivery history.
+      expectedSyncChanges.clear();
+      pendingSyncStorageChanges.clear();
+      pendingSyncStorageOverwrittenEvidence = 0;
+      clearDeliveredCoreEvidence();
+      if (browser.storage.session) {
+        await browser.storage.session.remove(SESSION_SYNC_EXPECTATIONS_KEY).catch(() => {});
+      }
+
+      // The tiny sentinel is written only after space has been freed. Peers on
+      // 1.30.13+ treat it as an intentional reset and wait instead of resurrecting
+      // an old local profile. Skip the quota preflight because the namespace has
+      // just been cleared and this record is intentionally the only survivor.
+      await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }, { skipPreflight: true });
+
+      const remaining = await browser.storage.sync.get(null);
+      const remainingKeys = Object.keys(remaining || {});
+      if (remainingKeys.length !== 1 || remainingKeys[0] !== SYNC_RESET_INTENT_KEY || !validResetIntent(remaining[SYNC_RESET_INTENT_KEY])) {
+        throw new Error("Firefox Sync could not verify the cleared MosaicSync namespace.");
+      }
+    } catch (error) {
+      if (!namespaceCleared) {
+        // If Firefox refused the clear itself, restore the exact pre-reset local
+        // control state because no remote deletion was committed.
+        await writeSyncContinuity(continuity, meta).catch(() => {});
+        await writeLocalMeta(meta).catch(() => {});
+        await ensureSyncWatchAlarm(meta).catch(() => {});
+      } else {
+        // Once the namespace has been cleared it is unsafe to re-arm automatic
+        // publication merely because writing/verifying the sentinel failed. Keep
+        // this device uninitialized (await-remote when Sync was enabled) and
+        // surface the failure for an explicit retry.
+        armedMeta = await writeLocalMeta({
+          ...armedMeta,
+          lastSyncError: String(error?.message || error || "Firefox Sync reset failed.")
+        }).catch(() => armedMeta);
+      }
+      throw error;
+    }
+
+    await clearAssetGcLedger();
+    await clearAllPendingSyncRecoveryState();
+
+    const [usedBytes, remaining] = await Promise.all([
+      browser.storage.sync.getBytesInUse(null),
+      browser.storage.sync.get(null)
+    ]);
+    const next = await writeLocalMeta({
+      ...armedMeta,
+      lastSyncError: "",
       syncBytesInUse: Math.max(0, Number(usedBytes) || 0),
-      syncItemCount: Object.keys(remaining || {}).filter(key => key.startsWith(SYNC_PREFIX)).length
+      syncItemCount: Object.keys(remaining || {}).length
     });
     await ensureSyncWatchAlarm(next);
-    return { ok: true, meta: next, removed: keys.length, resetEpoch: epoch };
+    return { ok: true, meta: next, removed: Object.keys(existing || {}).length, resetEpoch: epoch };
   }
 
   async function readSyncSnapshot(preloaded = null, { includeAssets = true, spaceId = PERSONAL_SPACE_ID } = {}) {

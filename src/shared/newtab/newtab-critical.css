@@ -36,6 +36,8 @@
   --canvas-control-bg: rgba(23,14,36,.34);
   --canvas-control-hover: rgba(52,39,70,.82);
   --canvas-border: rgba(255,255,255,.20);
+  --scrollbar-thumb: rgba(232,232,238,.46);
+  --scrollbar-thumb-hover: rgba(244,244,248,.66);
 }@media (prefers-color-scheme: light){:root{ --page-bg: #e9e2f1; }}*{ box-sizing: border-box; }html,
 body{
   width: 100%;
@@ -56,6 +58,8 @@ select{ font: inherit; }button{ color: inherit; }.page{
   min-width: 720px;
   min-height: 500px;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
   background-color: var(--page-bg);
   background-image: var(--boot-background-image, none);
   background-position: center center;
@@ -64,6 +68,24 @@ select{ font: inherit; }button{ color: inherit; }.page{
   transition: none;
 }:root[data-render-ready="true"] .page{
   transition: background-color 150ms ease, background-image 180ms ease;
+}
+.page::-webkit-scrollbar{
+  width: 8px;
+  height: 8px;
+}
+.page::-webkit-scrollbar-track{
+  background: transparent;
+}
+.page::-webkit-scrollbar-thumb{
+  background: var(--scrollbar-thumb);
+  border-radius: 999px;
+}
+.page::-webkit-scrollbar-thumb:hover{
+  background: var(--scrollbar-thumb-hover);
+}
+:root[data-effective-theme="light"]{
+  --scrollbar-thumb: rgba(70,70,70,.55);
+  --scrollbar-thumb-hover: rgba(70,70,70,.72);
 }
 .page::after{
   content: "";

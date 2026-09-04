@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.42");
+  assert.equal(VERSION, "1.30.18.45");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });

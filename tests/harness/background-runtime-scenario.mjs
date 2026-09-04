@@ -25,7 +25,7 @@ function makeEvent() {
 
 function makeStorageArea(initial = {}) {
   const data = new Map(Object.entries(clone(initial)));
-  const stats = { getCalls: 0, getAllCalls: 0, setCalls: 0, removeCalls: 0 };
+  const stats = { getCalls: 0, getAllCalls: 0, setCalls: 0, removeCalls: 0, clearCalls: 0 };
   return {
     data, stats,
     async get(keys = null) {
@@ -43,7 +43,7 @@ function makeStorageArea(initial = {}) {
     },
     async set(items) { stats.setCalls += 1; for (const [k,v] of Object.entries(items || {})) data.set(k, clone(v)); },
     async remove(keys) { stats.removeCalls += 1; for (const k of (Array.isArray(keys)?keys:[keys])) data.delete(k); },
-    async clear() { data.clear(); },
+    async clear() { stats.clearCalls += 1; data.clear(); },
     async getBytesInUse(keys = null) {
       const obj = await this.get(keys);
       return Buffer.byteLength(JSON.stringify(obj));
@@ -1815,6 +1815,56 @@ else if (scenario === 'sync-loss-13013-transient-empty-cancels') {
   console.log(JSON.stringify({ok:true,cancelled:true,silent:true}));
 }
 
+else if (scenario === 'sync-1301843-full-quota-clear') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:Date.now()-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  const before=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+
+  // Reproduce the real quota-full failure boundary: adding the reset sentinel
+  // while old synchronized data still exists is rejected. A correct hard reset
+  // must free the extension namespace first and only then commit the sentinel.
+  const normalSet=sync.set.bind(sync);
+  sync.set=async items => {
+    if (Object.prototype.hasOwnProperty.call(items || {}, constants.SYNC_RESET_INTENT_KEY) && sync.data.size > 0) {
+      sync.stats.setCalls += 1;
+      const error=new Error('simulated storage.sync quota exhaustion before reset sentinel');
+      error.name='QuotaExceededError';
+      throw error;
+    }
+    return normalSet(items);
+  };
+
+  const cleared=await send({type:'mosaicsync:clear-sync-data'});
+  const remote=await sync.get(null);
+  const keys=Object.keys(remote);
+  const after=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(cleared?.ok,true);
+  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY]);
+  assert.deepEqual(model.normalizeState(after),model.normalizeState(before));
+  assert.equal(meta.syncEnabled,true,'explicit clear must preserve the enabled Sync preference');
+  assert.equal(meta.syncInitialized,false);
+  assert.equal(meta.syncBootstrapMode,'await-remote');
+  assert.equal(meta.syncStatus,'waiting');
+  const setsAfterClear=sync.stats.setCalls;
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const afterWaitMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(afterWaitMeta.syncEnabled,true);
+  assert.equal(afterWaitMeta.syncInitialized,false);
+  assert.equal(afterWaitMeta.syncBootstrapMode,'await-remote');
+  assert.equal(sync.stats.setCalls,setsAfterClear,'waiting initiator must not automatically republish over reset-intent');
+  console.log(JSON.stringify({
+    ok:true,
+    cleared:true,
+    localPreserved:true,
+    onlyResetIntent:keys.length===1 && keys[0]===constants.SYNC_RESET_INTENT_KEY,
+    syncWaiting:meta.syncEnabled===true && meta.syncInitialized===false && meta.syncBootstrapMode==='await-remote',
+    noAutoRepublish:sync.stats.setCalls===setsAfterClear,
+    clearCalls:sync.stats.clearCalls
+  }));
+}
+
 else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
   const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
   await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
@@ -1831,7 +1881,9 @@ else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
   let continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
   assert.equal(continuity.established,false);
   assert.ok(Number(continuity.lastResetEpoch)>0);
-  assert.equal(cleared.meta.syncEnabled,false);
+  assert.equal(cleared.meta.syncEnabled,true);
+  assert.equal(cleared.meta.syncInitialized,false);
+  assert.equal(cleared.meta.syncBootstrapMode,'await-remote');
 
   // Model another established device observing the reset marker: it must
   // preserve its local profile, stay safely enrolled in await-remote mode, and

@@ -6739,7 +6739,9 @@ ${site.url}`;
   });
 
   clearSyncButton?.addEventListener("click", async () => {
-    const confirmed = window.confirm(t("deleteSyncTitle"));
+    const confirmed = window.confirm(`${t("deleteSyncTitle")}
+
+${t("clearSyncWarning")}`);
     if (!confirmed) return;
 
     try {

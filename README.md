@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.42**
+**Current source release: 1.30.18.45**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -86,9 +86,13 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.42** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.30.18.45** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.30.18.45 is a tightly scoped New Tab UI corrective release. Folder popovers now remove roughly 15 px of stacked header/grid/card dead space so shortcut tiles sit visibly closer to the title row without changing tile size, horizontal spacing or footer layout. The shortcut editor also makes **Image style** genuinely live: switching between **Icon — fit inside tile** and **Image — fill tile** immediately updates the preview, including the compact laptop layout where a more-specific image-size rule previously masked the cover preview until Save. No Sync, Recovery, permission, CSP, localization, state/profile schema or user-data-format change is introduced.
+
+1.30.18.44 refines the quota-safe **Clear Sync copy** reset introduced in 1.30.18.43: clearing the remote MosaicSync namespace now preserves the user’s **Sync across Firefox** preference while leaving the device safely uninitialized in `await-remote` mode until a deliberate new source is chosen. The localized warning/completion text in all 33 UI languages now describes that behavior. New Tab also owns a thin theme-aware scrollbar from first paint, with a transparent track and subtle dark/light thumb so Light wallpapers no longer acquire an opaque black hover strip. No permission, CSP, state/profile schema, reset-intent schema or Sync/Recovery wire-format version changes are introduced.
 
 1.30.18.42 is a corrective Sync-safety release for failures demonstrated during a Firefox/CachyOS ↔ Windows dual-boot investigation. Exact own-write echo suppression no longer depends on wall-clock expiry, Sync storage-event bursts are coalesced, immutable device/profile snapshots are selected as one atomic Recovery generation instead of being merged across devices, automatic live Sync waits for coherent shared ledgers, and named “Received from …” attribution is shown only when the source is exact. Catastrophic-loss detection now judges the live shared Sync core rather than stale Recovery metadata/snapshot bytes. No permission, CSP or Sync/Recovery wire-schema version changes are introduced.
 

@@ -1,3 +1,29 @@
+## 1.30.18.45
+
+- Tightens folder popover vertical density by removing roughly 15 px of accumulated header/grid/card dead space above shortcut artwork; title/close placement, tile size, horizontal spacing, labels, footer controls and drag behavior are unchanged.
+- Makes shortcut **Image style** preview genuinely live in the editor. Switching between fit-inside and fill-tile now updates the preview immediately on normal and compact laptop layouts; the fix resolves a CSS-specificity conflict that previously let the compact image-size rule mask cover mode until Save/close.
+- Adds two permanent 1.30.18.45 regressions proven to fail 2/2 on untouched 1.30.18.44 and pass after the scoped corrections, with targeted test-group ownership updated.
+- No Sync, Recovery, permission, CSP, localization-catalog, state/profile schema, browser-adapter or user-data-format change.
+
+## 1.30.18.44
+
+- Keeps **Sync across Firefox** enabled after a successful **Clear Sync copy** when it was enabled before the reset. The device becomes safely uninitialized in `await-remote`/waiting state instead of silently changing the user’s Sync preference.
+- Preserves 1.30.18.43’s quota-full hard-reset guarantees: the local Personal/Work profile remains untouched, the per-extension Sync namespace is cleared without needing free quota, only the valid reset-intent sentinel remains, and no automatic republish can overwrite that intentional reset.
+- Updates the destructive reset warning and completion text in all 33 MosaicSync runtime languages so the UI accurately says Sync remains enabled while MosaicSync waits for a deliberate new source.
+- Gives the actual New Tab scrolling element a thin theme-aware scrollbar in critical first-paint CSS. Light mode uses a restrained medium-grey thumb, Dark mode a subtle light-grey thumb, and the track stays transparent so hovering the scrollbar cannot create an opaque black strip over bright wallpapers. Chromium receives equivalent `::-webkit-scrollbar` styling.
+- Adds permanent 1.30.18.44 reset/scrollbar regressions proven to fail 2/2 on untouched 1.30.18.43, updates targeted test-group ownership, and consciously extends the reviewed critical/runtime CSS size budgets only for the new first-paint scrollbar contract.
+- No permission, CSP, state/profile schema, reset-intent schema, Sync/Recovery wire-format, telemetry, remote code or unrelated product behavior change.
+
+## 1.30.18.43
+
+- Fixes the Settings **Clear Sync copy** action when MosaicSync’s browser `storage.sync` namespace is already at quota. The old marker-first reset could fail with `QuotaExceededError` before deleting anything.
+- Arms intentional-reset continuity and turns Sync off locally before clearing, then uses the browser’s per-extension `storage.sync.clear()` operation so deletion does not require free quota. The local Personal/Work layout is preserved.
+- Retires stale Sync suppression/evidence after the clear, writes back only the existing tiny versioned reset-intent sentinel, and verifies that it is the sole remaining Sync item; peers therefore continue to wait rather than resurrecting pre-reset data.
+- Keeps failure handling fail-safe: a failure before remote clear restores the prior local control state; a failure after clear leaves Sync off rather than republishing automatically.
+- Adds an explicit destructive warning and clearer completion message in all 33 MosaicSync runtime languages, explaining that synchronized shortcuts, folders, settings, images and Recovery copies are removed while local data on this device is kept.
+- Adds permanent Firefox/Chromium quota-full reset regressions, proven to fail on untouched 1.30.18.42, while retaining the existing intentional-reset peer/republish coverage.
+- No permission, CSP, state/profile schema, reset-intent schema, Sync/Recovery wire-format or unrelated product behavior change.
+
 ## 1.30.18.42
 
 - Corrects the Sync failures reproduced during a Firefox/CachyOS ↔ Windows dual-boot investigation: a two-hour forward clock correction could invalidate wall-clock-based own-write suppression and feed a storage-event reconciliation storm, while immutable device/profile Recovery generations could be merged across devices into a synthetic profile that never existed on any one machine.

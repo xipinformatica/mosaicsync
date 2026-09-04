@@ -15,7 +15,10 @@ const GROUPS = Object.freeze({
       /browser-smoke/i,
       /corrective-13018(?:1[0489]?|9)?\.test\.mjs$/i,
       /corrective-130181[0148]\.test\.mjs$/i,
-      /corrective-1301841\.test\.mjs$/i
+      /corrective-1301841\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i
     ]
   },
   newtab: {
@@ -38,7 +41,9 @@ const GROUPS = Object.freeze({
       /stabilization/i,
       /corrective-12789/i,
       /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i,
-      /corrective-13018(?:39|4[01])\.test\.mjs$/i
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i
     ]
   },
   sync: {
@@ -50,7 +55,9 @@ const GROUPS = Object.freeze({
       /sync-/i,
       /production-background-e2e/i,
       /corrective-130(?:6|7|8|9|13|14|15)\.test\.mjs$/i,
-      /corrective-1301842\.test\.mjs$/i
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -59,7 +66,8 @@ const GROUPS = Object.freeze({
       /recovery-/i,
       /corrective-13013\.test\.mjs$/i,
       /corrective-1301819\.test\.mjs$/i,
-      /corrective-1301842\.test\.mjs$/i
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i
     ]
   },
   security: {
@@ -114,7 +122,10 @@ const GROUPS = Object.freeze({
       /corrective-1303\.test\.mjs$/i,
       /corrective-1301838\.test\.mjs$/i,
       /corrective-13018(?:39|4[01])\.test\.mjs$/i,
-      /corrective-1301842\.test\.mjs$/i
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i
     ]
   }
 });

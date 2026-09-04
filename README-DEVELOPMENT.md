@@ -1,8 +1,26 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.42.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.30.18.45.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.30.18.45 folder density + live image-style preview correction
+
+- Folder popover tiles move upward by reducing only stacked vertical padding between the existing header and item artwork. Tile dimensions, columns, labels, horizontal spacing, footer controls and drag behavior remain unchanged.
+- The shortcut editor already dispatched `change` to `updateImagePreview()`, but the compact laptop rule `#shortcutDialog .image-preview img` had greater specificity than the base `.image-preview.cover img` rule. A cover-specific selector at matching dialog specificity now wins, so Fit-inside/Fill-tile changes are visible before Save in both normal and short-screen layouts.
+- No persisted state, Sync/Recovery behavior, localization catalog, permission, CSP or browser-adapter contract changes.
+
+## 1.30.18.44 reset preference + first-paint scrollbar correction
+
+`Clear Sync copy` resets the synchronized relationship, not the user’s Sync preference. If `syncEnabled` was true before the explicit reset, the initiating device must remain `syncEnabled:true` but `syncInitialized:false`, `syncBootstrapMode:"await-remote"`, `syncStatus:"waiting"`; automatic publication remains impossible because local mutation publication requires initialized Sync. The quota-safe 1.30.18.43 ordering remains mandatory: arm intentional-reset continuity locally, clear the per-extension Sync namespace, retire deleted-namespace suppression/evidence, write and verify only the versioned reset-intent sentinel. A peer or initiator waiting on that sentinel must not recreate the prior profile until an explicit new authoritative source is chosen. Reset confirmation/completion semantics must match this state in every runtime locale.
+
+The New Tab scrolling owner remains `.page` (`html`/`body` stay overflow-hidden). Scrollbar presentation is first-paint-owned in `newtab-critical.css`: Firefox uses a thin scrollbar with `scrollbar-color` and a transparent track; Chromium uses equivalent `::-webkit-scrollbar` rules. Light appearance uses a restrained dark-grey thumb and Dark appearance a subtle light-grey thumb. The track must remain transparent, including hover, so platform-native opaque tracks cannot cover bright wallpapers. Scrollbar styling must not change page overflow ownership or launcher geometry.
+
+## 1.30.18.43 quota-safe explicit Sync reset
+
+`Clear Sync copy` is a destructive, user-confirmed reset of MosaicSync’s browser-native Sync namespace. The old marker-first order could fail when the namespace was already at quota because adding the reset-intent record itself required free bytes. The 1.30.18.43 order is: preserve the local profile, arm intentional-reset continuity and turn local Sync off, call the per-extension `storage.sync.clear()` operation, retire stale own-write/delivery suppression, write back only the tiny versioned reset-intent sentinel, and verify that this sentinel is the sole remaining Sync item. A failure before the clear restores the prior local control state; a failure after the clear keeps Sync off rather than risking automatic resurrection. Peers that observe the existing reset-intent schema continue to wait for an explicit new authoritative source.
+
+The Settings confirmation explicitly warns that synchronized shortcuts, folders, settings, synchronized images and Recovery copies are deleted from Firefox/Chromium Sync while the current device’s local layout is retained. The warning and completion message exist in all 33 runtime locales. No permission, CSP, state schema or Sync/Recovery wire-format version changes are part of this release.
 
 ## 1.30.18.42 Sync atomicity and clock-jump correction
 

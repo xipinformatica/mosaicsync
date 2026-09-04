@@ -77,15 +77,16 @@ test("1.30.13 catastrophic-loss guard precedes pending mutation replay", () => {
   }
 });
 
-test("1.30.13 explicit Sync clear commits reset sentinel before removing profile keys", () => {
+test("1.30.13+ explicit Sync clear preserves a reset sentinel and never leaves the local device initialized to resurrect old data", () => {
   for (const browser of ["firefox", "chrome"]) {
     const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function clearSyncData()");
     const end = source.indexOf("async function readSyncSnapshot", start);
     const block = source.slice(start, end);
-    assert.ok(block.indexOf("writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent })") >= 0);
-    assert.ok(block.indexOf("writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent })") < block.indexOf("removeSyncItems(keys)"));
-    assert.doesNotMatch(block, /storage\.sync\.clear\(/, "MosaicSync-controlled reset must never create an intentional 0-byte namespace");
+    assert.match(block, /markIntentionalSyncReset/);
+    assert.match(block, /syncInitialized: false/);
+    assert.match(block, /syncBootstrapMode: meta\.syncEnabled \? "await-remote" : "none"/);
+    assert.match(block, /writeSyncItems\(\{ \[SYNC_RESET_INTENT_KEY\]: resetIntent \}/);
   }
 });
 

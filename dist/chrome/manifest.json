@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "MosaicSync",
   "short_name": "MosaicSync",
-  "version": "1.30.18.42",
-  "version_name": "1.30.18.42",
+  "version": "1.30.18.45",
+  "version_name": "1.30.18.45",
   "minimum_chrome_version": "104",
   "description": "__MSG_extensionDescription__",
   "permissions": [
