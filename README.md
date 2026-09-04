@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.30.18.45**
+**Current source release: 1.31.0**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -86,11 +86,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.30.18.45** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.31.0** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.30.18.45 is a tightly scoped New Tab UI corrective release. Folder popovers now remove roughly 15 px of stacked header/grid/card dead space so shortcut tiles sit visibly closer to the title row without changing tile size, horizontal spacing or footer layout. The shortcut editor also makes **Image style** genuinely live: switching between **Icon — fit inside tile** and **Image — fill tile** immediately updates the preview, including the compact laptop layout where a more-specific image-size rule previously masked the cover preview until Save. No Sync, Recovery, permission, CSP, localization, state/profile schema or user-data-format change is introduced.
+1.31.0 is a no-new-features quality release built from the certified 1.30.18.46 source. It closes two audit-demonstrated Sync safety gaps: an interrupted quota-full intentional reset can no longer expose an empty cloud before reset authority is durable, and Restore can select a demonstrably newer coherent atomic Personal+Work copy when older live ledgers from the same publisher remain visible. Remote shortcut images are read through a bounded, timed stream; release ZIPs are committed atomically; and the real generated editor preview now has behavioral coverage. Permissions, CSP, persisted schemas, wire formats and product features are unchanged.
 
 1.30.18.44 refines the quota-safe **Clear Sync copy** reset introduced in 1.30.18.43: clearing the remote MosaicSync namespace now preserves the user’s **Sync across Firefox** preference while leaving the device safely uninitialized in `await-remote` mode until a deliberate new source is chosen. The localized warning/completion text in all 33 UI languages now describes that behavior. New Tab also owns a thin theme-aware scrollbar from first paint, with a transparent track and subtle dark/light thumb so Light wallpapers no longer acquire an opaque black hover strip. No permission, CSP, state/profile schema, reset-intent schema or Sync/Recovery wire-format version changes are introduced.
 

@@ -18,7 +18,8 @@ const GROUPS = Object.freeze({
       /corrective-1301841\.test\.mjs$/i,
       /corrective-1301843\.test\.mjs$/i,
       /corrective-1301844\.test\.mjs$/i,
-      /corrective-1301845\.test\.mjs$/i
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   },
   newtab: {
@@ -43,7 +44,9 @@ const GROUPS = Object.freeze({
       /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i,
       /corrective-13018(?:39|4[01])\.test\.mjs$/i,
       /corrective-1301844\.test\.mjs$/i,
-      /corrective-1301845\.test\.mjs$/i
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1301846\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   },
   sync: {
@@ -57,7 +60,8 @@ const GROUPS = Object.freeze({
       /corrective-130(?:6|7|8|9|13|14|15)\.test\.mjs$/i,
       /corrective-1301842\.test\.mjs$/i,
       /corrective-1301843\.test\.mjs$/i,
-      /corrective-1301844\.test\.mjs$/i
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -67,7 +71,8 @@ const GROUPS = Object.freeze({
       /corrective-13013\.test\.mjs$/i,
       /corrective-1301819\.test\.mjs$/i,
       /corrective-1301842\.test\.mjs$/i,
-      /corrective-1301843\.test\.mjs$/i
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   },
   security: {
@@ -96,7 +101,8 @@ const GROUPS = Object.freeze({
       /corrective-130181[567]\.test\.mjs$/i,
       /corrective-13012\.test\.mjs$/i,
       /corrective-1301838\.test\.mjs$/i,
-      /test-architecture/i
+      /test-architecture/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   },
   core: {
@@ -125,7 +131,9 @@ const GROUPS = Object.freeze({
       /corrective-1301842\.test\.mjs$/i,
       /corrective-1301843\.test\.mjs$/i,
       /corrective-1301844\.test\.mjs$/i,
-      /corrective-1301845\.test\.mjs$/i
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1301846\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i
     ]
   }
 });

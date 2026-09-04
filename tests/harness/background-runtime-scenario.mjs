@@ -1821,14 +1821,21 @@ else if (scenario === 'sync-1301843-full-quota-clear') {
   await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
   const before=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
 
-  // Reproduce the real quota-full failure boundary: adding the reset sentinel
-  // while old synchronized data still exists is rejected. A correct hard reset
-  // must free the extension namespace first and only then commit the sentinel.
+  // Fill the real item-count boundary. The reset must retire enough old entries
+  // to fit its sentinel while never passing through an empty namespace.
+  const filler={};
+  for(let index=sync.data.size;index<constants.SYNC_QUOTA_MAX_ITEMS;index+=1) {
+    filler[`mosaicsync.test.filler.${index}`]={kind:'test-filler',index};
+  }
+  await sync.set(filler);
+  assert.equal(sync.data.size,constants.SYNC_QUOTA_MAX_ITEMS);
   const normalSet=sync.set.bind(sync);
   sync.set=async items => {
-    if (Object.prototype.hasOwnProperty.call(items || {}, constants.SYNC_RESET_INTENT_KEY) && sync.data.size > 0) {
+    const keys=Object.keys(items||{});
+    const additions=keys.filter(key=>!sync.data.has(key)).length;
+    if (sync.data.size+additions>constants.SYNC_QUOTA_MAX_ITEMS) {
       sync.stats.setCalls += 1;
-      const error=new Error('simulated storage.sync quota exhaustion before reset sentinel');
+      const error=new Error('simulated storage.sync item quota exhaustion');
       error.name='QuotaExceededError';
       throw error;
     }
@@ -2266,6 +2273,99 @@ else if (scenario === 'sync-same-marker-divergence') {
   assert.equal(merged?.url,'https://remote.test/','semantic divergence under the same marker must apply the newer remote winner');
   assert.notEqual(result?.reason,'already-applied');
   console.log(JSON.stringify({ok:true,result,syncWrites:beforeSets.length}));
+}
+
+else if (scenario === 'sync-1310-reset-sentinel-failure-safe') {
+  const base=stateWith({
+    personal:[shortcut('current','https://current.test/',900)],
+    work:[shortcut('current-work','https://current-work.test/',900)]
+  });
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'current-p'),...remoteWorkEntries(base,'current-w')});
+
+  // Fill the item-count budget so the reset must create capacity before it can
+  // add the fixed sentinel. Every capacity-removal boundary must still leave a
+  // non-empty namespace if the sentinel write fails.
+  const filler={};
+  for(let index=sync.data.size;index<constants.SYNC_QUOTA_MAX_ITEMS;index+=1) {
+    filler[`mosaicsync.audit.filler.${index}`]={kind:'audit-filler',index};
+  }
+  await sync.set(filler);
+  assert.equal(sync.data.size,constants.SYNC_QUOTA_MAX_ITEMS);
+
+  const normalSet=sync.set.bind(sync);
+  sync.set=async items=>{
+    if(Object.prototype.hasOwnProperty.call(items||{},constants.SYNC_RESET_INTENT_KEY)) {
+      sync.stats.setCalls+=1;
+      throw new Error('simulated worker/API stop before reset sentinel durability');
+    }
+    return normalSet(items);
+  };
+
+  const cleared=await send({type:'mosaicsync:clear-sync-data'});
+  const remoteAfterFailure=await sync.get(null);
+  const metaAfterFailure=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(cleared?.ok,false,'sentinel failure must surface');
+  assert.ok(Object.keys(remoteAfterFailure).length>0,'an interrupted reset must never leave an empty namespace without a sentinel');
+  assert.equal(remoteAfterFailure[constants.SYNC_RESET_INTENT_KEY],undefined);
+  assert.equal(metaAfterFailure.syncInitialized,false,'a remotely mutated reset attempt must remain locally unable to republish');
+
+  // Model an established peer returning with stale local state. Non-empty
+  // partial data is existing torn-delivery territory and must not start
+  // catastrophic Recovery in the absence of reset authority.
+  await local.set({
+    [constants.LOCAL_META_KEY]:{...constants.DEFAULT_META,deviceId:'stale-peer',onboardingCompleted:true,syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-10000},
+    [constants.LOCAL_SYNC_CONTINUITY_KEY]:{
+      schemaVersion:constants.SYNC_CONTINUITY_SCHEMA_VERSION,established:true,lastHealthyAt:fakeNow-10000,
+      lastCompleteRevision:'old',lastPublisherDeviceId:'stale-peer',lastResetEpoch:0,personalTombstones:[],workTombstones:[],
+      lossState:'none',lossDetectedAt:0,recoveryEligibleAt:0,recoveryAttempts:0,lastRecoveredAt:0
+    }
+  });
+  const peerResult=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const peerContinuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.notEqual(peerResult?.reason,'remote-loss-quarantine');
+  assert.notEqual(peerContinuity?.lossState,'quarantine');
+  console.log(JSON.stringify({
+    ok:true,
+    resetFailedSafely:true,
+    remainingItems:Object.keys(remoteAfterFailure).length,
+    initiatorBlocked:metaAfterFailure.syncInitialized===false,
+    stalePeerDidNotRecover:true,
+    clearCalls:sync.stats.clearCalls
+  }));
+}
+
+else if (scenario === 'sync-1310-newer-atomic-outranks-older-live') {
+  const waiting=stateWith();
+  await seedLocalState(waiting,{
+    syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting',
+    lastAppliedSyncRevision:'',lastAppliedWorkSyncRevision:'',lastAppliedProfileSnapshotRevision:''
+  });
+
+  const current=stateWith({
+    personal:[shortcut('shared','https://current.test/',900)],
+    work:[shortcut('shared-work','https://current-work.test/',900)]
+  });
+  const currentAtomic=await completeProfileSnapshotFixture(current,{
+    deviceId:'same-publisher',commitId:'current-atomic',publishedAt:1000
+  });
+  const stale=stateWith({
+    personal:[shortcut('shared','https://stale.test/',500)],
+    work:[shortcut('shared-work','https://stale-work.test/',500)]
+  });
+  await sync.set({
+    ...currentAtomic.entries,
+    ...remotePersonalEntries(stale,'stale-personal','same-publisher'),
+    ...remoteWorkEntries(stale,'stale-work','same-publisher')
+  });
+
+  const result=await send({type:'mosaicsync:restore-from-sync'});
+  const restored=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  assert.equal(result?.ok,true);
+  assert.equal(result?.sourceKind,'profile-snapshot');
+  assert.equal(restored.spaces.personal.shortcuts.find(item=>item.id==='shared')?.url,'https://current.test/');
+  assert.equal(restored.spaces.work.shortcuts.find(item=>item.id==='shared-work')?.url,'https://current-work.test/');
+  console.log(JSON.stringify({ok:true,newerAtomicSelected:true,sourceKind:result.sourceKind}));
 }
 else {
   throw new Error(`unknown scenario ${scenario}`);

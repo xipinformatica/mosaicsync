@@ -1,8 +1,22 @@
 # MosaicSync development
 
-> **Current release: 1.30.18.45.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.0.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.0 post-audit quality corrections
+
+- Intentional Sync reset is sentinel-first without requiring free quota: the orchestrator removes only enough old items to create capacity while retaining at least one old item, commits and verifies reset-intent, then removes every old key. If the browser stops or rejects the sentinel, the namespace cannot be empty and the initiating device remains unable to republish automatically.
+- Restore still chooses one coherent Personal+Work source. Divergent modern live ledgers remain preferred unless a complete atomic profile and both live ledgers have the same non-empty publisher and the atomic copy is at least as new in both Spaces and strictly newer in one. Cross-publisher, missing-clock and straddling cases remain conservative.
+- Remote image downloads have a 12-second abort boundary and stream-enforced 1 MB input cap before image decoding. Declared oversize responses fail before reading; undeclared oversize streams are cancelled as soon as the cap is crossed.
+- Deterministic package bytes are written to a sibling temporary file, validated, and atomically replace the final ZIP. A failed build leaves any previous final-named artifact intact and removes its temporary file.
+- The generated Firefox and Chromium New Tab harness executes the real Fit → Fill → Fit preview transition. No feature, permission, CSP, persisted schema or Sync/Recovery wire-format change is introduced.
+
+## 1.30.18.46 universal live image-style preview correction
+
+- The shortcut editor’s Image-style `change` event and `cover` class remain the existing live preview mechanism; no Save/persist path is added to selection changes.
+- One universal `#shortcutDialog .image-preview.cover > img` rule now appears after every responsive dialog image-size rule and has greater specificity than the contain-size selectors. Cover therefore renders 100% × 100% with `object-fit: cover` on normal desktop, short laptop and narrow layouts.
+- Removing the `cover` class immediately falls back to the existing responsive contain dimensions. The 1.30.18.45 folder-density correction and every Sync/Recovery/runtime contract remain unchanged.
 
 ## 1.30.18.45 folder density + live image-style preview correction
 

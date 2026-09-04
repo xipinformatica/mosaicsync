@@ -1,3 +1,19 @@
+## 1.31.0
+
+- Ships a no-new-features quality release from the certified 1.30.18.46 source and closes only findings reproduced by the multi-boundary audit.
+- Makes quota-full **Clear Sync copy** interruption-safe: reset capacity is created without ever emptying the namespace, reset-intent is committed and verified before old keys are retired, and a failed/interrupted reset keeps the initiator unable to republish stale data.
+- Makes Restore choose a newer complete atomic Personal+Work generation when—and only when—it demonstrably dominates older modern live ledgers from the same publisher in both Spaces. Incomparable, cross-publisher and newer-live cases retain the conservative live-source rule.
+- Bounds remote shortcut-image retrieval before decoding with a 1 MB streaming cap and 12-second abort boundary; undeclared oversized bodies are cancelled instead of being fully buffered.
+- Makes deterministic ZIP publication atomic so interruption preserves the previous valid final artifact, and adds real generated Firefox/Chromium behavioral coverage for the editor’s Fit → Fill → Fit preview.
+- No new feature, permission, host permission, CSP relaxation, telemetry, remote code, locale-catalog change, persisted state/profile schema change, or Sync/Recovery wire-format change.
+
+## 1.30.18.46
+
+- Completes the shortcut editor’s live **Image style** preview correction. A normal desktop responsive rule could still keep preview artwork at its contain dimensions after **Image — fill tile** selected cover mode.
+- Adds one universal dialog-specific cover rule after all responsive preview sizing so **Fit inside → Fill tile → Fit inside** is visible immediately on normal desktop, short laptop and narrow layouts without Save/Apply.
+- Replaces the incomplete selector-presence regression with a cascade-order/specificity contract proven to fail on untouched 1.30.18.45. The 1.30.18.45 folder-spacing correction is unchanged.
+- No Sync, Recovery, permission, CSP, localization-catalog, state/profile schema, browser-adapter or user-data-format change.
+
 ## 1.30.18.45
 
 - Tightens folder popover vertical density by removing roughly 15 px of accumulated header/grid/card dead space above shortcut artwork; title/close placement, tile size, horizontal spacing, labels, footer controls and drag behavior are unchanged.

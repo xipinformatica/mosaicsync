@@ -129,7 +129,7 @@ for (const browser of ["firefox", "chrome"]) {
     const remoteStart = sharedNewtab.indexOf('useShortcutImageUrl?.addEventListener("click", () => {');
     const remoteEnd = sharedNewtab.indexOf('\n  chooseDetectedFavicon?.addEventListener', remoteStart);
     const remote = sharedNewtab.slice(remoteStart, remoteEnd);
-    for (const awaited of ["permissionPromise", "saveState", "fetch", "response.blob", "imageBlobToDataUrl"]) {
+    for (const awaited of ["permissionPromise", "saveState", "fetchBoundedRemoteImageBlob", "imageBlobToDataUrl"]) {
       assert.match(remote, new RegExp(`await ${awaited.replace('.', '\\.')}`), `remote artwork path must await ${awaited}`);
     }
     assert.match(remote, /generation !== shortcutSyncPrepareGeneration \|\| !shortcutDialog\?\.open \|\| shortcutId\.value !== editorShortcutId/g);

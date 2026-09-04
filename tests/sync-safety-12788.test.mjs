@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.30.18.45");
+  assert.equal(VERSION, "1.31.0");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -64,7 +64,8 @@ for (const browser of ["firefox", "chrome"]) {
     const fn = src.slice(start, end);
     assert.match(fn, /const profileComplete =/);
     assert.match(fn, /const legacyComplete = Boolean\(!useAtomicProfile && remoteCoreUsable\(personalCore\) && isSnapshotUsable\(workSnapshot\)\)/);
-    assert.match(fn, /const useAtomicProfile = Boolean\(atomicProfile/);
+    assert.match(fn, /const restoreSource = selectCoherentRestoreSource\(/);
+    assert.match(fn, /const useAtomicProfile = restoreSource === "atomic"/);
     assert.match(fn, /\(!profileComplete && !legacyComplete\)/);
     assert.match(fn, /syncStatus:\s*waitIfMissing \? "waiting" : "error"/);
   });

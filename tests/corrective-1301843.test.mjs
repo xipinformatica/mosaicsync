@@ -27,22 +27,25 @@ for (const browser of ["firefox", "chrome"]) {
     assert.equal(out.onlyResetIntent, true);
     assert.equal(out.syncWaiting, true);
     assert.equal(out.noAutoRepublish, true);
-    assert.equal(out.clearCalls, 1);
+    assert.equal(out.clearCalls, 0);
   });
 }
 
-test("1.30.18.43 Clear Sync copy arms intentional reset locally before browser.storage.sync.clear and writes sentinel after", () => {
+test("1.31.0 Clear Sync copy arms locally, makes capacity, commits the sentinel, then removes old keys", () => {
   for (const browser of ["firefox", "chrome"]) {
     const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function clearSyncData()");
     const end = source.indexOf("async function readSyncSnapshot", start);
     const block = source.slice(start, end);
     const localReset = block.indexOf("markIntentionalSyncReset");
-    const clear = block.indexOf("browser.storage.sync.clear()");
+    const capacity = block.indexOf("planResetIntentCapacity");
     const sentinel = block.lastIndexOf("writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }");
+    const finalRemoval = block.indexOf("removeSyncItems(oldKeys)");
     assert.ok(localReset >= 0, `${browser}: reset must be armed locally`);
-    assert.ok(clear > localReset, `${browser}: namespace clear must happen after local reset protection is armed`);
-    assert.ok(sentinel > clear, `${browser}: reset sentinel must be written after quota-blocked data is cleared`);
+    assert.ok(capacity > localReset, `${browser}: capacity planning must happen after local reset protection is armed`);
+    assert.ok(sentinel > capacity, `${browser}: reset sentinel must be written after capacity planning`);
+    assert.ok(finalRemoval > sentinel, `${browser}: old keys must be removed only after reset-intent is durable`);
+    assert.doesNotMatch(block, /browser\.storage\.sync\.clear\(\)/, `${browser}: reset cannot expose an empty namespace before sentinel durability`);
   }
 });
 

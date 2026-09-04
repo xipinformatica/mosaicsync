@@ -322,6 +322,23 @@ try {
       sectionVisible: byId.get("frequentSitesSection")?.hidden === false
     };
   }
+
+  const imageStyle = byId.get("shortcutImageStyle");
+  const imagePreview = byId.get("imagePreview");
+  if (imageStyle && imagePreview) {
+    const baseClassPresent = imagePreview.classList.contains("image-preview");
+    imageStyle.value = "cover";
+    imageStyle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
+    const coverAfterFill = imagePreview.classList.contains("cover");
+    imageStyle.value = "contain";
+    imageStyle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
+    globalThis.__mosaicsyncSmokeImagePreview = {
+      baseClassPresent,
+      changeListeners: (imageStyle.listeners.get("change") || []).length,
+      coverAfterFill,
+      coverAfterFit: imagePreview.classList.contains("cover")
+    };
+  }
 } catch (error) {
   failures.push(error);
 }
@@ -343,6 +360,7 @@ const result = {
   frequentlyVisitedChangeListeners: (byId.get("settingsFrequentlyVisited")?.listeners.get("change") || []).length,
   frequentDisabled: globalThis.__mosaicsyncSmokeFrequentDisabled || null,
   frequentReenabled: globalThis.__mosaicsyncSmokeFrequentReenabled || null,
+  imagePreview: globalThis.__mosaicsyncSmokeImagePreview || null,
   phases: globalThis.__mosaicsyncStartupTiming?.phases || {}
 };
 
@@ -352,6 +370,8 @@ const ok = result.failures.length === 0 && result.consoleErrors.length === 0 && 
   (browserName === "chrome" ? result.topSitesOptionCalls === 0 : result.topSitesOptionCalls > 0) &&
   result.frequentlyVisitedVisible &&
   result.frequentlyVisitedChangeListeners > 0 && result.frequentDisabled?.optionsHidden && result.frequentDisabled?.sectionHidden &&
-  result.frequentReenabled?.optionsVisible && result.frequentReenabled?.sectionVisible;
+  result.frequentReenabled?.optionsVisible && result.frequentReenabled?.sectionVisible &&
+  result.imagePreview?.baseClassPresent && result.imagePreview?.changeListeners > 0 &&
+  result.imagePreview?.coverAfterFill && result.imagePreview?.coverAfterFit === false;
 console.log(JSON.stringify(result));
 process.exit(ok ? 0 : 1);

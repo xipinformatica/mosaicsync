@@ -173,6 +173,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   })();
 
   const REMOTE_IMAGE_INPUT_MAX_BYTES = 1_000_000;
+  const REMOTE_IMAGE_FETCH_TIMEOUT_MS = 12_000;
   const APPEARANCE_PREVIEW_TARGET_BYTES = 10_000;
   const FAVICON_LOCAL_TARGET_BYTES = 16_000;
   const FAVICON_LOCAL_MAX_SIDE = 192;
@@ -183,6 +184,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let imageOptimizerModulePromise = null;
   let renderManifestModulePromise = null;
   let registrableDomainModulePromise = null;
+  let boundedResponseModulePromise = null;
   const bootRenderManifest = globalThis.__mosaicsyncBootGrid?.manifest || null;
   const bootArtworkPreviews = new Map();
   const indexBootArtwork = item => {
@@ -204,9 +206,30 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     return module;
   };
   const loadRegistrableDomainModule = () => registrableDomainModulePromise ||= import("../core/registrable-domain.js");
+  const loadBoundedResponseModule = () => boundedResponseModulePromise ||= import("../core/bounded-response.js");
   const optimizeImageDataUrl = async (...args) => (await loadImageOptimizerModule()).optimizeImageDataUrl(...args);
   const optimizeImageFile = async (...args) => (await loadImageOptimizerModule()).optimizeImageFile(...args);
   const imageBlobToDataUrl = async (...args) => (await loadImageOptimizerModule()).imageBlobToDataUrl(...args);
+  async function fetchBoundedRemoteImageBlob(url) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REMOTE_IMAGE_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        credentials: "omit",
+        cache: "force-cache",
+        referrerPolicy: "no-referrer",
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(t("operationFailed"));
+      const { readBoundedResponseBlob } = await loadBoundedResponseModule();
+      return await readBoundedResponseBlob(response, REMOTE_IMAGE_INPUT_MAX_BYTES);
+    } catch (error) {
+      if (error?.message === t("operationFailed")) throw error;
+      throw new Error(t("operationFailed"));
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
   async function loadBookmarksModule() {
     if (bookmarksApi) return bookmarksApi;
     bookmarksModulePromise ||= import("../core/bookmarks.js");
@@ -4347,14 +4370,8 @@ ${site.url}`;
           if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         }
         if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
-        const response = await fetch(parsed.href, { credentials: "omit", cache: "force-cache", referrerPolicy: "no-referrer" });
+        const blob = await fetchBoundedRemoteImageBlob(parsed.href);
         if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
-        if (!response.ok) throw new Error(t("operationFailed"));
-        const declaredLength = Number(response.headers.get("content-length")) || 0;
-        if (declaredLength > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
-        const blob = await response.blob();
-        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
-        if (blob.size > REMOTE_IMAGE_INPUT_MAX_BYTES) throw new Error(t("operationFailed"));
         const image = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
         if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
         pendingShortcutBuiltinIcon = "";
@@ -6471,12 +6488,7 @@ ${site.url}`;
     if (shortcut.image || !["remote", "favicon"].includes(shortcut.imageSourceKind) || !shortcut.imageSourceUrl) return false;
     if (!webAccessGranted && !(await hasWebAccess())) return false;
     try {
-      const response = await fetch(shortcut.imageSourceUrl, { credentials: "omit", cache: "force-cache", referrerPolicy: "no-referrer" });
-      if (!response.ok) return false;
-      const declaredLength = Number(response.headers.get("content-length")) || 0;
-      if (declaredLength > REMOTE_IMAGE_INPUT_MAX_BYTES) return false;
-      const blob = await response.blob();
-      if (blob.size > REMOTE_IMAGE_INPUT_MAX_BYTES) return false;
+      const blob = await fetchBoundedRemoteImageBlob(shortcut.imageSourceUrl);
       shortcut.image = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
       if (shortcut.imageSourceKind === "favicon") shortcut.image = await normalizeDeviceFavicon(shortcut.image);
       shortcut.imageSyncData = "";

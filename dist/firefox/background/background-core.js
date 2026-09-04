@@ -110,7 +110,8 @@ import {
   writeLocalState
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, consumeExactExpectation, consumeExactSessionExpectations, countOwnEnumerable, hasOwnEnumerable, syncNamespaceFor, trimExpectationMap, trimSessionEntries } from "./runtime-utils.js";
-import { selectAtomicRecoverySnapshot } from "./sync-source-policy.js";
+import { selectAtomicRecoverySnapshot, selectCoherentRestoreSource } from "./sync-source-policy.js";
+import { planResetIntentCapacity } from "./sync-reset-policy.js";
 import { createRecoveryContinuity } from "./recovery-continuity.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
 import { createRecoveryGenerationLifecycle } from "./recovery-generation-lifecycle.js";
@@ -4378,11 +4379,25 @@ export function startBackground(adapter) {
     // the coherent live ledgers, or when it protects modern field-clock Settings
     // from a raw legacy whole-record ledger. Otherwise a complete modern live
     // Personal+Work pair is newer operational state and wins as a whole.
-    const useAtomicProfile = Boolean(atomicProfile && (
-      !liveProfileComplete ||
-      atomicMatchesLive ||
-      (atomicModern && !liveModern)
-    ));
+    const restoreSource = selectCoherentRestoreSource({
+      atomicAvailable: Boolean(atomicProfile),
+      liveComplete: liveProfileComplete,
+      atomicMatchesLive,
+      atomicModern,
+      liveModern,
+      atomic: {
+        originDeviceId: atomicProfile?.originDeviceId || "",
+        personalUpdatedAt: Number(atomicProfile?.personal?.updatedAt),
+        workUpdatedAt: Number(atomicProfile?.work?.updatedAt)
+      },
+      live: {
+        personalOriginDeviceId: sources.shared?.dataset?.originDeviceId || "",
+        workOriginDeviceId: workSnapshot?.dataset?.originDeviceId || "",
+        personalUpdatedAt: Number(sources.shared?.dataset?.updatedAt),
+        workUpdatedAt: Number(workSnapshot?.dataset?.updatedAt)
+      }
+    });
+    const useAtomicProfile = restoreSource === "atomic";
     const personalCore = useAtomicProfile
       ? {
           records: new Map(atomicProfile.personal.records),
@@ -5599,7 +5614,7 @@ export function startBackground(adapter) {
     // failure cannot leave this device disabled when no remote mutation happened.
     const existing = await browser.storage.sync.get(null);
     let armedMeta = meta;
-    let namespaceCleared = false;
+    let remoteMutationStarted = false;
     try {
       // Arm the reset locally before the browser namespace is emptied. The
       // continuity reset plus uninitialized await-remote mode make the removal
@@ -5609,14 +5624,36 @@ export function startBackground(adapter) {
       await markIntentionalSyncReset(armedMeta, epoch);
       await ensureSyncWatchAlarm(armedMeta);
 
-      // `storage.sync.clear()` is the critical 1.30.18.43 correction. The old
-      // reset wrote the sentinel first, which can fail exactly when Firefox Sync
-      // is at quota. Clearing the per-extension namespace needs no free quota.
-      await browser.storage.sync.clear();
-      namespaceCleared = true;
+      // Create quota for reset-intent without ever making the namespace empty.
+      // If interrupted before the sentinel is durable, at least one old item
+      // remains and peers stay in ordinary partial-delivery handling.
+      const capacity = planResetIntentCapacity(existing, SYNC_RESET_INTENT_KEY, resetIntent, {
+        fits: syncItemsFitInSnapshot,
+        entryBytes: syncEntryBytes,
+        compareStableText
+      });
+      if (capacity.removeKeys.length) {
+        await removeSyncItems(capacity.removeKeys);
+        remoteMutationStarted = true;
+      }
+
+      if (capacity.compactKey) {
+        await writeSyncItems({
+          [capacity.compactKey]: { schemaVersion: 1, kind: "reset-staging" },
+          [SYNC_RESET_INTENT_KEY]: resetIntent
+        }, { skipPreflight: true });
+      } else {
+        await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }, { skipPreflight: true });
+      }
+      remoteMutationStarted = true;
+
+      const committed = await browser.storage.sync.get(SYNC_RESET_INTENT_KEY);
+      if (!validResetIntent(committed?.[SYNC_RESET_INTENT_KEY])) {
+        throw new Error("Firefox Sync could not verify the MosaicSync reset marker.");
+      }
 
       // Retire stale write-suppression/evidence from the deleted namespace before
-      // installing the single reset sentinel. This also keeps a later fresh
+      // removing the old namespace. This also keeps a later fresh
       // authoritative bootstrap independent from pre-reset delivery history.
       expectedSyncChanges.clear();
       pendingSyncStorageChanges.clear();
@@ -5626,11 +5663,8 @@ export function startBackground(adapter) {
         await browser.storage.session.remove(SESSION_SYNC_EXPECTATIONS_KEY).catch(() => {});
       }
 
-      // The tiny sentinel is written only after space has been freed. Peers on
-      // 1.30.13+ treat it as an intentional reset and wait instead of resurrecting
-      // an old local profile. Skip the quota preflight because the namespace has
-      // just been cleared and this record is intentionally the only survivor.
-      await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }, { skipPreflight: true });
+      const oldKeys = Object.keys(existing || {}).filter(key => key !== SYNC_RESET_INTENT_KEY);
+      if (oldKeys.length) await removeSyncItems(oldKeys);
 
       const remaining = await browser.storage.sync.get(null);
       const remainingKeys = Object.keys(remaining || {});
@@ -5638,15 +5672,15 @@ export function startBackground(adapter) {
         throw new Error("Firefox Sync could not verify the cleared MosaicSync namespace.");
       }
     } catch (error) {
-      if (!namespaceCleared) {
-        // If Firefox refused the clear itself, restore the exact pre-reset local
-        // control state because no remote deletion was committed.
+      if (!remoteMutationStarted) {
+        // If Firefox refused the first remote mutation, restore the exact
+        // pre-reset local control state because the cloud was unchanged.
         await writeSyncContinuity(continuity, meta).catch(() => {});
         await writeLocalMeta(meta).catch(() => {});
         await ensureSyncWatchAlarm(meta).catch(() => {});
       } else {
-        // Once the namespace has been cleared it is unsafe to re-arm automatic
-        // publication merely because writing/verifying the sentinel failed. Keep
+        // Once any remote reset mutation has started it is unsafe to re-arm
+        // automatic publication merely because a later boundary failed. Keep
         // this device uninitialized (await-remote when Sync was enabled) and
         // surface the failure for an explicit retry.
         armedMeta = await writeLocalMeta({

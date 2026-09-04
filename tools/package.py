@@ -2,9 +2,11 @@
 """Create deterministic runtime ZIPs from dist/firefox and dist/chrome."""
 from pathlib import Path
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from release_contract import VERSION as CANONICAL_VERSION, validate_manifest, validate_zip
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
@@ -24,14 +26,25 @@ SOURCE_EXCLUDED_SUFFIXES = (".pyc", ".pyo", ".log", ".tmp", ".temp", ".bak", ".s
 
 def write_deterministic_zip(output: Path, entries) -> Path:
     """Write (archive_path, bytes) entries with one canonical ZIP policy."""
-    output.parent.mkdir(exist_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
     normalized = sorted(((str(rel).replace("\\", "/"), payload) for rel, payload in entries), key=lambda item: item[0])
-    with ZipFile(output, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
-        for rel, payload in normalized:
-            info = ZipInfo(rel, FIXED_TIME)
-            info.compress_type = ZIP_DEFLATED
-            info.external_attr = 0o100644 << 16
-            archive.writestr(info, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{output.name}.", suffix=".tmp", dir=output.parent)
+    os.close(descriptor)
+    temporary = Path(temporary_name)
+    try:
+        with ZipFile(temporary, "w", compression=ZIP_DEFLATED, compresslevel=9) as archive:
+            for rel, payload in normalized:
+                info = ZipInfo(rel, FIXED_TIME)
+                info.compress_type = ZIP_DEFLATED
+                info.external_attr = 0o100644 << 16
+                archive.writestr(info, payload, compress_type=ZIP_DEFLATED, compresslevel=9)
+        with ZipFile(temporary, "r") as archive:
+            corrupt = archive.testzip()
+            if corrupt is not None:
+                raise RuntimeError(f"Corrupt ZIP entry: {corrupt}")
+        os.replace(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
     return output
 
 def build_runtime() -> None:

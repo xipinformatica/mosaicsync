@@ -288,3 +288,5 @@
   #shortcutDialog .shortcut-color-picker{flex-wrap:nowrap;gap:5px;}
   #shortcutDialog .dialog-actions{margin-top:6px;}
 }
+
+#shortcutDialog .image-preview.cover > img{width:100%;height:100%;object-fit:cover;}
