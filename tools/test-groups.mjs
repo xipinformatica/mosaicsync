@@ -49,7 +49,8 @@ const GROUPS = Object.freeze({
       /corrective-1301846\.test\.mjs$/i,
       /corrective-1310\.test\.mjs$/i,
       /corrective-1311\.test\.mjs$/i,
-      /corrective-1313\.test\.mjs$/i
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-1314\.test\.mjs$/i
     ]
   },
   sync: {
@@ -144,7 +145,8 @@ const GROUPS = Object.freeze({
       /corrective-1301845\.test\.mjs$/i,
       /corrective-1301846\.test\.mjs$/i,
       /corrective-1310\.test\.mjs$/i,
-      /corrective-1313\.test\.mjs$/i
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-1314\.test\.mjs$/i
     ]
   }
 });

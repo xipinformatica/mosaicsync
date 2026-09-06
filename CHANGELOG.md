@@ -1,3 +1,9 @@
+## 1.31.4
+
+- Fixes the separate Light/Dark wallpaper darkness controls in Settings so long localized labels cannot overlap the neighbouring slider/control column. The translated label now owns a full-width row, with slider and percentage beneath it.
+- Adds robust wrapping for long unbreakable words such as German `Hintergrundabdunklung`, while keeping the same wording and the same Light/Dark wallpaper behavior.
+- Adds a permanent localization/layout regression across all 33 runtime locale catalogs. No new user-facing strings, permissions, Sync/Recovery behavior, persisted schema, CSP or browser-floor change.
+
 ## 1.31.3
 
 - Fixes first-run Frequently Visited permission recovery on new synchronized devices. When a complete synchronized profile already says Frequently Visited is ON, choosing that synchronized copy uses the existing Welcome click to request the device-local Top Sites permission immediately.

@@ -1,8 +1,12 @@
 # MosaicSync development
 
-> **Current release: 1.31.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.4 localization-safe separate wallpaper dim controls
+
+1.31.4 fixes a Settings layout defect exposed by long translations in the separate Light/Dark wallpaper controls. The darkness label previously shared one horizontal grid row with its slider and percentage, so unbreakable compound words such as German `Hintergrundabdunklung` could force the row wider than its half-card and visually overlap the neighbouring control. The label now spans a dedicated full-width row, with slider and percentage beneath it, and may wrap safely. The correction changes no wording, wallpaper behavior or persisted settings and is covered across all 33 shipped runtime locale catalogs.
 
 ## 1.31.3 synchronized Frequently Visited permission handoff + fresh-grid defaults
 

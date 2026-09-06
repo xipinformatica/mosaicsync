@@ -725,6 +725,7 @@ and generated into browser `_locales/` directories during build.
 Rules:
 
 - New user-facing text must go through the locale system.
+- Layouts that contain translated labels must tolerate long words and expanded translations; do not shorten a translation merely to hide a responsive-layout defect. Prefer resilient wrapping/grid ownership and cover representative long translations with regression tests.
 - Do not add an English-only fallback directly in a UI path and consider localization finished.
 - Do not manually edit generated runtime locale files under `dist/`.
 
