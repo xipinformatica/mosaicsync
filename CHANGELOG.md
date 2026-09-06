@@ -1,3 +1,10 @@
+## 1.31.3
+
+- Fixes first-run Frequently Visited permission recovery on new synchronized devices. When a complete synchronized profile already says Frequently Visited is ON, choosing that synchronized copy uses the existing Welcome click to request the device-local Top Sites permission immediately.
+- If the synchronized ON preference arrives later, MosaicSync shows a one-time localized permission step instead of requiring the user to discover the OFF → ON workaround; the existing inline Grant-permission action remains as a non-blocking fallback. Permission and browsing-history-derived sites remain device-local and are never synchronized.
+- Changes fresh/default grid geometry to **11 columns × 4 rows** while preserving each existing user's saved layout and the existing adjustable bounds.
+- Reuses existing translated permission strings across all 33 runtime locales; no new permission, host-permission, CSP, persisted schema, Sync/Recovery wire format, or browser-floor change.
+
 ## 1.31.2
 
 - Adds a root-level `DEVELOPER-GUIDE.md` as the canonical onboarding document for developers and automated code reviewers, covering repository ownership, authoritative state vs startup projections, First Paint, Sync/Reset/Restore/Recovery, browser adapters, privacy boundaries, tests, smoke/certification, packaging and frozen-architecture maintenance rules.

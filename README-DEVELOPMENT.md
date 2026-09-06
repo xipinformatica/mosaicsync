@@ -1,8 +1,14 @@
 # MosaicSync development
 
-> **Current release: 1.31.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.3 synchronized Frequently Visited permission handoff + fresh-grid defaults
+
+1.31.3 closes the first-run gap where Firefox Sync could correctly restore `frequentlyVisitedEnabled:true` on a new device while the device-local optional Top Sites permission was still absent. If a complete synchronized copy is already available when the user chooses it in Welcome, that same user gesture starts the optional permission request immediately. If the synchronized ON intent becomes authoritative only after the gesture has expired, Welcome/New Tab presents a one-time localized permission step; choosing Continue leaves the synchronized preference ON and the established inline Grant-permission recovery action remains available. The browser permission and all history-derived site candidates remain device-local and are never synchronized.
+
+Fresh/default profiles now start at 11 columns × 4 rows. Existing profiles keep their explicitly saved grid settings, and the existing user-selectable 6–12 column / 2–8 row bounds are unchanged. The critical CSS fallback is also 11 columns so a fresh profile does not first-paint with the former 8-column geometry before authoritative settings load.
 
 ## 1.31.2 developer-handoff documentation
 

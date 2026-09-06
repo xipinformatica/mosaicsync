@@ -11,6 +11,7 @@ import { PLATFORM_ID } from "../core/platform.js";
 import {
   DONATE_URL,
   FREQUENTLY_VISITED_PREF_KEY,
+  FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY,
   SPACE_IDS,
   SETTINGS_SYNC_CLOCK_KEYS,
   SUPPORT_URL,
@@ -19,7 +20,7 @@ import {
 import { fetchFirefoxShortcuts, prepareFirefoxShortcutFavicons, replaceWithFirefoxShortcuts } from "../core/importer.js";
 import { defaultDeviceName, nextMutationTime, normalizeDeviceName, normalizeState, now, stableStringify } from "../core/model.js";
 import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/storage.js";
-import { cleanupLegacyWebOriginPermissions, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
+import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -46,6 +47,11 @@ const resolutionTitle = document.getElementById("resolutionTitle");
 const resolutionText = document.getElementById("resolutionText");
 const chooseLocalButton = document.getElementById("chooseLocalButton");
 const chooseCloudButton = document.getElementById("chooseCloudButton");
+const frequentPermissionStep = document.getElementById("frequentPermissionStep");
+const welcomeFrequentPermissionTitle = document.getElementById("welcomeFrequentPermissionTitle");
+const welcomeFrequentPermissionText = document.getElementById("welcomeFrequentPermissionText");
+const welcomeFrequentPermissionButton = document.getElementById("welcomeFrequentPermissionButton");
+const welcomeFrequentPermissionContinue = document.getElementById("welcomeFrequentPermissionContinue");
 const syncHelp = document.getElementById("syncHelp");
 const status = document.getElementById("status");
 const welcomeDonateButton = document.getElementById("welcomeDonateButton");
@@ -58,6 +64,7 @@ let finishing = false;
 let webAccessGranted = false;
 let webAccessPrompted = false;
 let webAccessDecisionPromise = Promise.resolve(false);
+let pendingFrequentPermissionCompletionMessage = "";
 
 function selected(name) {
   return document.querySelector(`input[name="${name}"]:checked`)?.value || "";
@@ -99,6 +106,10 @@ refreshChoiceCards();
 function setStatus(message = "", kind = "") {
   status.textContent = translateText(message);
   status.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function markFrequentlyVisitedPermissionPrompted() {
+  try { localStorage.setItem(FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY, "1"); } catch {}
 }
 
 async function openDonationPage() {
@@ -221,6 +232,7 @@ async function completeOnboarding(message = t("setupComplete")) {
 
 function configureSourceStep(syncStatus = null) {
   latestSyncStatus = syncStatus;
+  if (frequentPermissionStep) frequentPermissionStep.hidden = true;
   introStep.hidden = true;
   sourceStep.hidden = false;
   syncStep.hidden = true;
@@ -355,7 +367,50 @@ syncContinueButton.addEventListener("click", event => {
   })();
 });
 
-async function continueAfterStartingSource(source) {
+function requestStartingSourceTopSitesPermissionFromGesture(source, syncStatus = latestSyncStatus) {
+  const shouldRequest = source === "local" || (
+    source === "cloud" &&
+    syncStatus?.hasRemoteData === true &&
+    syncStatus?.remoteFrequentlyVisitedEnabled === true
+  );
+  if (shouldRequest && source === "cloud") markFrequentlyVisitedPermissionPrompted();
+  return {
+    attempted: shouldRequest,
+    promise: shouldRequest ? requestTopSitesPermissionFromGesture() : Promise.resolve(true)
+  };
+}
+
+function showFrequentlyVisitedPermissionStep(completionMessage) {
+  if (!frequentPermissionStep) return false;
+  markFrequentlyVisitedPermissionPrompted();
+  pendingFrequentPermissionCompletionMessage = completionMessage || t("setupComplete");
+  introStep.hidden = true;
+  syncStep.hidden = true;
+  sourceStep.hidden = true;
+  resolutionPanel.hidden = true;
+  welcomeFrequentPermissionTitle.textContent = t("frequentlyVisited");
+  welcomeFrequentPermissionText.textContent = `${t("frequentPermissionRequired")} ${t("frequentDeviceLocalStatus")}`;
+  welcomeFrequentPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
+  welcomeFrequentPermissionContinue.textContent = t("continue");
+  frequentPermissionStep.hidden = false;
+  setStatus("");
+  return true;
+}
+
+async function completeOrOfferFrequentlyVisitedPermission(completionMessage, { permissionAttempted = false } = {}) {
+  if (!permissionAttempted) {
+    try {
+      const loaded = await ensureLocalStorage();
+      const enabled = loaded.state?.spaces?.personal?.settings?.frequentlyVisitedEnabled === true;
+      if (enabled && !(await hasTopSitesPermission())) {
+        if (showFrequentlyVisitedPermissionStep(completionMessage)) return;
+      }
+    } catch {}
+  }
+  await completeOnboarding(completionMessage);
+}
+
+async function continueAfterStartingSource(source, { frequentPermissionAttempted = false } = {}) {
   if (!syncOptedIn) {
     const message = source === "local"
       ? t("firefoxShortcutsImported")
@@ -375,9 +430,9 @@ async function continueAfterStartingSource(source) {
       await completeOnboarding(t("syncStarted"));
       return;
     }
-    await completeOnboarding(response.remoteUpdatedAt
+    await completeOrOfferFrequentlyVisitedPermission(response.remoteUpdatedAt
       ? t("syncedLayoutFromRestored", { time: formatTime(response.remoteUpdatedAt) })
-      : t("syncRestored"));
+      : t("syncRestored"), { permissionAttempted: frequentPermissionAttempted });
     return;
   }
 
@@ -402,16 +457,17 @@ sourceFinishButton.addEventListener("click", () => {
     return;
   }
 
-  // Top Sites is optional and requested only when the user deliberately
-  // chooses the browser's native shortcuts. The request must happen before awaits.
-  const topSitesPermissionPromise = source === "local"
-    ? requestTopSitesPermissionFromGesture()
-    : Promise.resolve(true);
+  // Firefox only allows optional permissions to be requested from a user
+  // gesture. Use this Finish setup click for native shortcuts and, when a
+  // complete synchronized copy has already arrived with FV enabled, for that
+  // device-local Top Sites permission too.
+  const topSitesRequest = requestStartingSourceTopSitesPermissionFromGesture(source, latestSyncStatus);
+  const topSitesPermissionPromise = topSitesRequest.promise;
 
   void (async () => {
     sourceFinishButton.disabled = true;
     try {
-      const topSitesGranted = await topSitesPermissionPromise;
+      const topSitesGranted = await Promise.resolve(topSitesPermissionPromise).catch(() => false);
       if (source === "local" && !topSitesGranted) {
         setStatus(t("shortcutAccessDeclined"), "warning");
         sourceFinishButton.disabled = false;
@@ -423,7 +479,7 @@ sourceFinishButton.addEventListener("click", () => {
       } else if (source === "empty") {
         await startEmpty();
       }
-      await continueAfterStartingSource(source);
+      await continueAfterStartingSource(source, { frequentPermissionAttempted: topSitesRequest.attempted });
     } catch (error) {
       console.error(error);
       setStatus(error.message || t("couldNotContinue"), "error");
@@ -473,25 +529,59 @@ chooseLocalButton.addEventListener("click", async () => {
   }
 });
 
-chooseCloudButton.addEventListener("click", async () => {
-  chooseLocalButton.disabled = true;
-  chooseCloudButton.disabled = true;
-  try {
-    const complete = Boolean(latestSyncStatus?.hasRemoteData);
-    setStatus(complete ? t("restoringSync") : t("waitingCompleteSync"));
-    const response = await sendSyncMessage(complete ? "mosaicsync:bootstrap-remote" : "mosaicsync:wait-for-remote");
-    if (response.pending) {
-      await completeOnboarding(t("syncStarted"));
-      return;
+chooseCloudButton.addEventListener("click", () => {
+  // Start the optional Top Sites request synchronously from this explicit
+  // synchronized-copy choice when the complete remote preference is known.
+  const topSitesRequest = requestStartingSourceTopSitesPermissionFromGesture("cloud", latestSyncStatus);
+  void (async () => {
+    chooseLocalButton.disabled = true;
+    chooseCloudButton.disabled = true;
+    try {
+      await Promise.resolve(topSitesRequest.promise).catch(() => false); // denial never blocks restoring the profile
+      const complete = Boolean(latestSyncStatus?.hasRemoteData);
+      setStatus(complete ? t("restoringSync") : t("waitingCompleteSync"));
+      const response = await sendSyncMessage(complete ? "mosaicsync:bootstrap-remote" : "mosaicsync:wait-for-remote");
+      if (response.pending) {
+        await completeOnboarding(t("syncStarted"));
+        return;
+      }
+      await completeOrOfferFrequentlyVisitedPermission(response.remoteUpdatedAt
+        ? t("syncedLayoutFromRestored", { time: formatTime(response.remoteUpdatedAt) })
+        : t("syncRestored"), { permissionAttempted: topSitesRequest.attempted });
+    } catch (error) {
+      setStatus(error.message || t("couldNotRestore"), "error");
+      chooseLocalButton.disabled = false;
+      chooseCloudButton.disabled = false;
     }
-    await completeOnboarding(response.remoteUpdatedAt
-      ? t("syncedLayoutFromRestored", { time: formatTime(response.remoteUpdatedAt) })
-      : t("syncRestored"));
-  } catch (error) {
-    setStatus(error.message || t("couldNotRestore"), "error");
-    chooseLocalButton.disabled = false;
-    chooseCloudButton.disabled = false;
-  }
+  })();
+});
+
+welcomeFrequentPermissionButton?.addEventListener("click", () => {
+  const permissionPromise = requestTopSitesPermissionFromGesture();
+  markFrequentlyVisitedPermissionPrompted();
+  void (async () => {
+    welcomeFrequentPermissionButton.disabled = true;
+    welcomeFrequentPermissionContinue.disabled = true;
+    try {
+      const granted = await permissionPromise;
+      if (!granted) {
+        setStatus(t("frequentPermissionDenied"), "warning");
+        welcomeFrequentPermissionButton.disabled = false;
+        welcomeFrequentPermissionContinue.disabled = false;
+        return;
+      }
+      await completeOnboarding(pendingFrequentPermissionCompletionMessage || t("setupComplete"));
+    } catch (error) {
+      console.error(error);
+      setStatus(t("frequentEnableFailed"), "error");
+      welcomeFrequentPermissionButton.disabled = false;
+      welcomeFrequentPermissionContinue.disabled = false;
+    }
+  })();
+});
+
+welcomeFrequentPermissionContinue?.addEventListener("click", () => {
+  void completeOnboarding(pendingFrequentPermissionCompletionMessage || t("setupComplete"));
 });
 
 async function initializeWelcome() {

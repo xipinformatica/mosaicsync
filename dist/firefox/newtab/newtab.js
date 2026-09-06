@@ -13,6 +13,7 @@ import {
   FREQUENTLY_VISITED_PREF_KEY,
   FREQUENTLY_VISITED_COUNT_PREF_KEY,
   FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY,
+  FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY,
   DEFAULT_SPACE_PREF_KEY,
   BOOKMARK_FOLDER_COLORS_PREF_KEY,
   SHORTCUT_COLOR_TAG_KEYS,
@@ -291,6 +292,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const frequentPermissionRecovery = document.getElementById("frequentPermissionRecovery");
   const frequentPermissionRecoveryText = document.getElementById("frequentPermissionRecoveryText");
   const frequentPermissionRecoveryButton = document.getElementById("frequentPermissionRecoveryButton");
+  const frequentSyncPermissionDialog = document.getElementById("frequentSyncPermissionDialog");
+  const frequentSyncPermissionTitle = document.getElementById("frequentSyncPermissionTitle");
+  const frequentSyncPermissionText = document.getElementById("frequentSyncPermissionText");
+  const frequentSyncPermissionStatus = document.getElementById("frequentSyncPermissionStatus");
+  const frequentSyncPermissionGrant = document.getElementById("frequentSyncPermissionGrant");
+  const frequentSyncPermissionContinue = document.getElementById("frequentSyncPermissionContinue");
   let launcherAuthorityVerified = false;
 
   function keepLauncherCacheVisualOnly() {
@@ -1070,6 +1077,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
       if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
       setFrequentlyVisitedOptionsVisibility(frequentlyVisitedEnabled);
+      if (!frequentlyVisitedEnabled) {
+        clearFrequentlyVisitedPermissionPrompted();
+        if (frequentSyncPermissionDialog?.open) frequentSyncPermissionDialog.close();
+      } else if (!previousFrequentEnabled) {
+        void maybeShowSyncedFrequentlyVisitedPermissionStep(previousFrequentEnabled);
+      }
       scheduleFrequentlyVisitedRefresh(0);
     }
     updateSpaceSwitcher();
@@ -1738,6 +1751,41 @@ ${site.url}`;
     if (frequentlyVisitedStatus) frequentlyVisitedStatus.textContent = t(key);
   }
 
+  function frequentlyVisitedPermissionPrompted() {
+    try { return localStorage.getItem(FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY) === "1"; }
+    catch { return false; }
+  }
+
+  function markFrequentlyVisitedPermissionPrompted() {
+    try { localStorage.setItem(FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY, "1"); } catch {}
+  }
+
+  function clearFrequentlyVisitedPermissionPrompted() {
+    try { localStorage.removeItem(FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY); } catch {}
+  }
+
+  function localizeFrequentlyVisitedPermissionStep() {
+    if (frequentSyncPermissionTitle) frequentSyncPermissionTitle.textContent = t("frequentlyVisited");
+    if (frequentSyncPermissionText) frequentSyncPermissionText.textContent = `${t("frequentPermissionRequired")} ${t("frequentDeviceLocalStatus")}`;
+    if (frequentSyncPermissionGrant) frequentSyncPermissionGrant.textContent = t("grantFrequentlyVisitedPermission");
+    if (frequentSyncPermissionContinue) frequentSyncPermissionContinue.textContent = t("continue");
+  }
+
+  async function maybeShowSyncedFrequentlyVisitedPermissionStep(previousEnabled = false) {
+    if (previousEnabled || !frequentlyVisitedEnabled || !frequentSyncPermissionDialog || frequentSyncPermissionDialog.open) return false;
+    if (frequentlyVisitedPermissionPrompted()) return false;
+    let permitted = false;
+    try { permitted = await hasTopSitesPermission(); } catch {}
+    if (!frequentlyVisitedEnabled || permitted || frequentSyncPermissionDialog.open) return false;
+    await ensureSecondaryStyles();
+    if (!frequentlyVisitedEnabled || frequentSyncPermissionDialog.open) return false;
+    markFrequentlyVisitedPermissionPrompted();
+    localizeFrequentlyVisitedPermissionStep();
+    if (frequentSyncPermissionStatus) frequentSyncPermissionStatus.textContent = "";
+    frequentSyncPermissionDialog.showModal();
+    return true;
+  }
+
   function setFrequentlyVisitedPermissionActionVisible(visible) {
     if (!frequentlyVisitedPermissionButton) return;
     frequentlyVisitedPermissionButton.hidden = visible !== true;
@@ -1956,6 +2004,10 @@ ${site.url}`;
     // extension context is starting. Reconcile once more after startup so an
     // already-granted Top Sites permission restores suggestions automatically.
     scheduleFrequentlyVisitedPermissionReconciliation();
+    // If the synchronized ON preference was already present before this New Tab
+    // loaded, there is no storage-change transition to catch. Offer the one-time
+    // device-local permission step after authoritative startup instead.
+    if (frequentlyVisitedEnabled) void maybeShowSyncedFrequentlyVisitedPermissionStep(false);
     scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 900);
     void preloadBackgroundForSettings(state.settings);
     preloadOtherSpaceBackgrounds();
@@ -5723,6 +5775,7 @@ ${site.url}`;
     if (frequentlyVisitedPermissionButton) frequentlyVisitedPermissionButton.textContent = t("grantFrequentlyVisitedPermission");
     if (frequentPermissionRecoveryText) frequentPermissionRecoveryText.textContent = t("frequentPermissionRequired");
     if (frequentPermissionRecoveryButton) frequentPermissionRecoveryButton.textContent = t("grantFrequentlyVisitedPermission");
+    if (typeof localizeFrequentlyVisitedPermissionStep === "function") localizeFrequentlyVisitedPermissionStep();
     if (wallpaperGalleryDialog?.open) renderWallpaperGallery();
     render();
     updateSyncUi(meta, lastSyncStatus);
@@ -6135,6 +6188,7 @@ ${site.url}`;
     // If the browser restores/grants Top Sites permission, suggestions should
     // return automatically without rebuilding or waking unrelated Settings work.
     if (permissionChangeAffectsTopSites(change) && frequentlyVisitedEnabled) {
+      if (frequentSyncPermissionDialog?.open) frequentSyncPermissionDialog.close();
       void clearSessionFrequentlyVisitedSuppression().finally(() => {
         frequentCandidateCacheAt = 0;
         frequentCandidateCache = [];
@@ -6958,12 +7012,15 @@ ${t("clearSyncWarning")}`);
     const wantsEnabled = settingsFrequentlyVisited.checked;
     // Firefox requires permissions.request() to be invoked synchronously from
     // the user's gesture. Start it before any awaited synchronized state write.
+    if (wantsEnabled) markFrequentlyVisitedPermissionPrompted();
+    else clearFrequentlyVisitedPermissionPrompted();
     const permissionPromise = wantsEnabled ? requestTopSitesPermissionFromGesture() : null;
     void (async () => {
       try {
         await persistFrequentlyVisitedPreference({ enabled: wantsEnabled });
         setFrequentlyVisitedOptionsVisibility(wantsEnabled);
         if (!wantsEnabled) {
+          if (frequentSyncPermissionDialog?.open) frequentSyncPermissionDialog.close();
           setFrequentlyVisitedPermissionActionVisible(false);
           setFrequentlyVisitedPermissionRecoveryVisible(false);
           frequentCandidateCacheAt = 0;
@@ -7005,6 +7062,7 @@ ${t("clearSyncWarning")}`);
 
   function requestFrequentlyVisitedPermissionRecoveryFromGesture(sourceButton) {
     // permissions.request() must begin synchronously inside the user's click.
+    if (typeof markFrequentlyVisitedPermissionPrompted === "function") markFrequentlyVisitedPermissionPrompted();
     // Both the Settings action and the launcher recovery action share this exact
     // path so an already-remembered ON preference never requires toggling OFF/ON.
     const permissionPromise = requestTopSitesPermissionFromGesture();
@@ -7041,6 +7099,38 @@ ${t("clearSyncWarning")}`);
   });
   frequentPermissionRecoveryButton?.addEventListener("click", () => {
     requestFrequentlyVisitedPermissionRecoveryFromGesture(frequentPermissionRecoveryButton);
+  });
+
+  frequentSyncPermissionGrant?.addEventListener("click", () => {
+    // Begin permissions.request() synchronously in the user's click stack.
+    const permissionPromise = requestTopSitesPermissionFromGesture();
+    markFrequentlyVisitedPermissionPrompted();
+    frequentSyncPermissionGrant.disabled = true;
+    if (frequentSyncPermissionContinue) frequentSyncPermissionContinue.disabled = true;
+    void (async () => {
+      try {
+        const granted = await permissionPromise;
+        if (!granted) {
+          if (frequentSyncPermissionStatus) frequentSyncPermissionStatus.textContent = t("frequentPermissionDenied");
+          return;
+        }
+        if (frequentSyncPermissionDialog.open) frequentSyncPermissionDialog.close();
+        setFrequentlyVisitedPermissionActionVisible(false);
+        setFrequentlyVisitedPermissionRecoveryVisible(false);
+        frequentCandidateCacheAt = 0;
+        frequentCandidateCache = [];
+        await refreshFrequentlyVisited();
+      } catch {
+        if (frequentSyncPermissionStatus) frequentSyncPermissionStatus.textContent = t("frequentEnableFailed");
+      } finally {
+        frequentSyncPermissionGrant.disabled = false;
+        if (frequentSyncPermissionContinue) frequentSyncPermissionContinue.disabled = false;
+      }
+    })();
+  });
+
+  frequentSyncPermissionContinue?.addEventListener("click", () => {
+    if (frequentSyncPermissionDialog?.open) frequentSyncPermissionDialog.close();
   });
 
   exportProfileButton?.addEventListener("click", async () => {
@@ -7407,6 +7497,12 @@ ${t("clearSyncWarning")}`);
             if (previousFrequentEnabled !== frequentlyVisitedEnabled || previousFrequentCount !== frequentlyVisitedCount) {
               frequentCandidateCacheAt = 0;
               frequentCandidateCache = [];
+              if (!frequentlyVisitedEnabled) {
+                clearFrequentlyVisitedPermissionPrompted();
+                if (frequentSyncPermissionDialog?.open) frequentSyncPermissionDialog.close();
+              } else if (!previousFrequentEnabled) {
+                void maybeShowSyncedFrequentlyVisitedPermissionStep(previousFrequentEnabled);
+              }
             }
             const canSkipExternalGridRender =
               !isSettingsOpen() &&

@@ -4192,6 +4192,11 @@ export function startBackground(adapter) {
       usage,
       hasRemoteSignal,
       hasRemoteData,
+      // The synchronized Frequently Visited preference may arrive before this
+      // installation has its device-local Top Sites permission. Expose only the
+      // synchronized ON/OFF intent so Welcome can use an existing user gesture
+      // to request that local permission; no history-derived sites are exposed.
+      remoteFrequentlyVisitedEnabled: hasRemoteData && core?.settings?.settings?.frequentlyVisitedEnabled === true,
       remoteState: !hasRemoteSignal ? "none" : (hasRemoteData ? "complete" : "partial"),
       remoteUpdatedAt: latestOrigin.updatedAt,
       remoteReceiptAt: statusMeta.lastRemoteReceiptAt,

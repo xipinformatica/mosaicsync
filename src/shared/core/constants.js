@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.31.2";
+export const VERSION = "1.31.3";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -39,6 +39,7 @@ export const RENDER_MANIFEST_KEY = "mosaicsync.render-manifest.v1";
 export const FREQUENTLY_VISITED_PREF_KEY = "mosaicsync.frequently-visited.v1";
 export const FREQUENTLY_VISITED_COUNT_PREF_KEY = "mosaicsync.frequently-visited-count.v1";
 export const FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY = "mosaicsync.frequently-visited-hidden-domains.v1";
+export const FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY = "mosaicsync.frequently-visited-permission-prompted.v1";
 export const DEFAULT_SPACE_PREF_KEY = "mosaicsync.default-space.v1";
 export const BOOKMARK_FOLDER_COLORS_PREF_KEY = "mosaicsync.bookmark-folder-colors.v1";
 export const SHORTCUT_ORDER_PREF_KEY = "mosaicsync.shortcut-order.v1";
@@ -190,8 +191,8 @@ export const SETTINGS_SYNC_CLOCK_GROUPS = Object.freeze({
 export const SETTINGS_SYNC_CLOCK_KEYS = Object.freeze(Object.keys(SETTINGS_SYNC_CLOCK_GROUPS));
 
 export const DEFAULT_SETTINGS = Object.freeze({
-  columns: 8,
-  rows: 8,
+  columns: 11,
+  rows: 4,
   tileSize: 76,
   backgroundColor: "#2b0050",
   backgroundColorCustomized: false,

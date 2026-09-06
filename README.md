@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.31.2**
+**Current source release: 1.31.3**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -87,11 +87,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.31.2** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.31.3** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.31.2 is a documentation-only developer-handoff release over the frozen 1.31.1 runtime. It adds a root-level **Developer Guide** that explains repository ownership, authoritative state versus startup projections, First Paint, Sync, Reset, Restore, Recovery, browser adapters, privacy boundaries, tests, browser smoke, deterministic certification, packaging, maintenance rules and a practical “where do I start?” map for future developers. The main README links to that guide prominently. Apart from the required release/version identity bump, no production logic, feature, permission, CSP, persisted schema, Sync/Recovery wire format, browser floor or adapter behavior changes.
+1.31.3 is a documentation-only developer-handoff release over the frozen 1.31.1 runtime. It adds a root-level **Developer Guide** that explains repository ownership, authoritative state versus startup projections, First Paint, Sync, Reset, Restore, Recovery, browser adapters, privacy boundaries, tests, browser smoke, deterministic certification, packaging, maintenance rules and a practical “where do I start?” map for future developers. The main README links to that guide prominently. Apart from the required release/version identity bump, no production logic, feature, permission, CSP, persisted schema, Sync/Recovery wire format, browser floor or adapter behavior changes.
 
 1.31.1 is the narrow post-audit corrective release for 1.31.0. A valid reset marker now blocks bootstrap on fresh/uninitialized devices before any old profile can be consumed or safety-published; Restore preserves still-authoritative live deletion tombstones when an atomic copy only looks equivalent at the visible-record level; quota staging preserves a key recognized by catastrophic Recovery as live-core evidence or fails before destructive staging; and failed/oversized remote-image requests explicitly cancel/abort their body/request. No features, permissions, CSP, persisted schemas, Sync/Recovery wire formats or browser floors change.
 

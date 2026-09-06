@@ -2101,9 +2101,9 @@ else if (scenario === 'sync-13017-legacy-snapshot-settings-protected') {
   const normalized=model.normalizeState(raw);
   assert.equal(result?.ok,true);
   assert.equal(normalized.spaces.personal.settings.rows,7,'decoded raw legacy snapshot must not revert explicit modern rows');
-  assert.equal(normalized.spaces.personal.settings.columns,8,'legacy unrelated whole-record write must not override modern explicit columns');
+  assert.equal(normalized.spaces.personal.settings.columns,11,'legacy unrelated whole-record write must not override modern columns');
   assert.equal(normalized.spaces.work.settings.rows,5,'decoded raw legacy Work snapshot must not revert explicit modern Work rows');
-  assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work whole-record write must not override unrelated modern Work columns');
+  assert.equal(normalized.spaces.work.settings.columns,11,'legacy Work whole-record write must not override unrelated modern Work columns');
   console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
 }
 
@@ -2159,9 +2159,9 @@ else if (scenario === 'sync-13017-legacy-shared-settings-protected') {
   const normalized=model.normalizeState(raw);
   assert.equal(result?.ok,true);
   assert.equal(normalized.spaces.personal.settings.rows,7,'raw legacy shared record must not revert explicit modern rows from a device snapshot');
-  assert.equal(normalized.spaces.personal.settings.columns,8,'legacy shared whole-record write must not claim unrelated modern settings');
+  assert.equal(normalized.spaces.personal.settings.columns,11,'legacy shared whole-record write must not claim unrelated modern settings');
   assert.equal(normalized.spaces.work.settings.rows,5,'raw legacy Work shared record must not revert explicit modern Work rows from a device snapshot');
-  assert.equal(normalized.spaces.work.settings.columns,8,'legacy Work shared record must not claim unrelated modern Work settings');
+  assert.equal(normalized.spaces.work.settings.columns,11,'legacy Work shared record must not claim unrelated modern Work settings');
   console.log(JSON.stringify({ok:true,rows:normalized.spaces.personal.settings.rows,columns:normalized.spaces.personal.settings.columns,workRows:normalized.spaces.work.settings.rows,workColumns:normalized.spaces.work.settings.columns}));
 }
 

@@ -162,6 +162,23 @@
     </section>
   </dialog>
 
+  <dialog id="frequentSyncPermissionDialog" class="dialog" aria-labelledby="frequentSyncPermissionTitle">
+    <section class="dialog-card">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Frequently visited</p>
+          <h2 id="frequentSyncPermissionTitle">Frequently visited</h2>
+        </div>
+      </div>
+      <p id="frequentSyncPermissionText" class="hint">Firefox permission is required to show frequently visited pages. Sites come from this browser only. Show and Count preferences sync; browsing history is never synchronized.</p>
+      <p id="frequentSyncPermissionStatus" class="feature-permission-status" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button id="frequentSyncPermissionContinue" class="secondary-button" type="button">Continue</button>
+        <button id="frequentSyncPermissionGrant" class="primary-button" type="button">Grant permission</button>
+      </div>
+    </section>
+  </dialog>
+
   <dialog id="shortcutDialog" class="dialog" aria-labelledby="shortcutDialogTitle">
     <form id="shortcutForm" class="dialog-card">
       <div class="dialog-heading">
@@ -268,7 +285,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.31.2</p>
+          <p class="eyebrow">MosaicSync · 1.31.3</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

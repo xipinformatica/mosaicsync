@@ -75,10 +75,10 @@ for(const browser of ['firefox','chrome']) {
 for(const browser of ['firefox','chrome']) {
   test(`1.30.18 production ${browser} protects explicit Settings from a raw legacy device snapshot`,()=>{
     const out=run(browser,'sync-13017-legacy-snapshot-settings-protected');
-    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,8); assert.equal(out.workRows,5); assert.equal(out.workColumns,8);
+    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,11); assert.equal(out.workRows,5); assert.equal(out.workColumns,11);
   });
   test(`1.30.18 production ${browser} protects explicit snapshot Settings from a raw legacy shared record`,()=>{
     const out=run(browser,'sync-13017-legacy-shared-settings-protected');
-    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,8); assert.equal(out.workRows,5); assert.equal(out.workColumns,8);
+    assert.equal(out.ok,true); assert.equal(out.rows,7); assert.equal(out.columns,11); assert.equal(out.workRows,5); assert.equal(out.workColumns,11);
   });
 }

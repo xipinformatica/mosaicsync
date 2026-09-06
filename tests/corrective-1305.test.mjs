@@ -79,6 +79,7 @@ test("1.30.5 locale refresh preserves the real outer Settings scroll owner", asy
     frequentlyVisitedStatusKey: "",
     PRODUCT_NAME: "MosaicSync",
     localizeDocument() {},
+    localizeFrequentlyVisitedPermissionStep() {},
     populateLanguageSelect() {},
     t(key) { return key; },
     updateBuiltinShortcutIconSelection() {},
