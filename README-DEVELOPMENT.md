@@ -1,8 +1,12 @@
 # MosaicSync development
 
-> **Current release: 1.31.0.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.1 post-audit corrective hardening
+
+1.31.1 is a narrow correction to the 1.31.0 freeze candidate. It closes four reproduced audit findings without reopening the five-step architecture program: reset-intent authority is checked before uninitialized bootstrap; coherent Restore source choice preserves relevant live deletion tombstones; quota staging and catastrophic-Recovery now share the same live-core evidence predicate; and abandoned remote-image requests are cancelled/aborted on terminal failure. The release adds generated Firefox/Chromium regressions for all three Sync/Restore failures plus direct resource-cancellation coverage. No feature, permission, CSP, schema, wire-format, adapter topology or browser-floor change is allowed in this correction.
 
 ## 1.31.0 post-audit quality corrections
 

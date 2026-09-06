@@ -7,30 +7,48 @@
 export function planResetIntentCapacity(all, resetKey, resetValue, {
   fits,
   entryBytes,
-  compareStableText
+  compareStableText,
+  isLiveCoreKey
 } = {}) {
   const values = all && typeof all === "object" && !Array.isArray(all) ? all : {};
   if (typeof resetKey !== "string" || !resetKey || typeof fits !== "function" ||
-      typeof entryBytes !== "function" || typeof compareStableText !== "function") {
+      typeof entryBytes !== "function" || typeof compareStableText !== "function" ||
+      typeof isLiveCoreKey !== "function") {
     throw new TypeError("Invalid Sync reset capacity inputs");
   }
   const resetItems = { [resetKey]: resetValue };
-  if (fits(values, resetItems)) return { removeKeys: [], compactKey: "" };
+  if (fits(values, resetItems)) return { removeKeys: [], compactKey: "", blocked: false };
 
-  const candidates = Object.keys(values)
-    .filter(key => key !== resetKey)
+  const allCandidates = Object.keys(values).filter(key => key !== resetKey);
+  const liveCandidates = allCandidates
+    .filter(isLiveCoreKey)
+    .sort((left, right) => entryBytes(left, values[left]) - entryBytes(right, values[right]) || compareStableText(left, right));
+
+  // Recovery treats only the live shared ledgers as evidence that the namespace
+  // still exists. If none is present, destructive staging could turn an already
+  // ambiguous partial namespace into false catastrophic-loss evidence. Fail
+  // before mutating instead; the user can retry after Sync finishes delivering.
+  if (!liveCandidates.length) return { removeKeys: [], compactKey: "", blocked: true };
+
+  // Preserve the smallest live-core key until reset-intent becomes durable. All
+  // other keys remain eligible for capacity removal, largest first. This makes
+  // the reset planner and catastrophic-Recovery predicate share one invariant.
+  const protectedKey = liveCandidates[0];
+  const candidates = allCandidates
+    .filter(key => key !== protectedKey)
     .sort((left, right) => entryBytes(right, values[right]) - entryBytes(left, values[left]) || compareStableText(left, right));
   const simulated = { ...values };
   const removeKeys = [];
-  while (candidates.length > 1) {
+  while (candidates.length) {
     const key = candidates.shift();
     delete simulated[key];
     removeKeys.push(key);
-    if (fits(simulated, resetItems)) return { removeKeys, compactKey: "" };
+    if (fits(simulated, resetItems)) return { removeKeys, compactKey: "", blocked: false };
   }
 
-  // Replacing the final old item with a tiny staging marker in the same browser
-  // write as reset-intent avoids a zero-item interval even for malformed legacy
-  // namespaces whose last item alone exceeds the modern quota model.
-  return { removeKeys, compactKey: candidates[0] || "" };
+  // If the preserved live item itself is too large to coexist with reset-intent,
+  // replace that same live-core key with a tiny staging marker atomically with
+  // reset-intent. Its key still satisfies Recovery's live-core predicate until
+  // reset authority is durable; there is never a metadata-only interval.
+  return { removeKeys, compactKey: protectedKey, blocked: false };
 }

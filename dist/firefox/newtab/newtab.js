@@ -224,6 +224,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       const { readBoundedResponseBlob } = await loadBoundedResponseModule();
       return await readBoundedResponseBlob(response, REMOTE_IMAGE_INPUT_MAX_BYTES);
     } catch (error) {
+      controller.abort();
       if (error?.message === t("operationFailed")) throw error;
       throw new Error(t("operationFailed"));
     } finally {

@@ -2367,6 +2367,112 @@ else if (scenario === 'sync-1310-newer-atomic-outranks-older-live') {
   assert.equal(restored.spaces.work.shortcuts.find(item=>item.id==='shared-work')?.url,'https://current-work.test/');
   console.log(JSON.stringify({ok:true,newerAtomicSelected:true,sourceKind:result.sourceKind}));
 }
+
+else if (scenario === 'sync-1311-reset-marker-blocks-uninitialized-bootstrap') {
+  const waiting=stateWith();
+  await seedLocalState(waiting,{
+    syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting',
+    lastAppliedSyncRevision:'',lastAppliedWorkSyncRevision:'',lastAppliedProfileSnapshotRevision:''
+  });
+  const oldRemote=stateWith({
+    personal:[shortcut('pre-reset','https://pre-reset.test/',500)],
+    work:[shortcut('pre-reset-work','https://pre-reset-work.test/',500)]
+  });
+  await sync.set({
+    ...remotePersonalEntries(oldRemote,'pre-reset-personal','old-device'),
+    ...remoteWorkEntries(oldRemote,'pre-reset-work','old-device'),
+    [constants.SYNC_RESET_INTENT_KEY]:{
+      schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',epoch:fakeNow-100,
+      initiatedByDevice:'reset-device',initiatedAt:fakeNow-100
+    }
+  });
+  const setCallsBefore=sync.stats.setCalls;
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(result?.reason,'intentional-remote-reset','a valid reset marker must outrank complete old data even for an uninitialized device');
+  assert.equal(meta.syncInitialized,false);
+  assert.equal(findCompactShortcut(raw,'pre-reset'),null,'pre-reset remote data must not be consumed');
+  assert.equal(sync.stats.setCalls,setCallsBefore,'waiting on reset authority must not publish a safety generation');
+  console.log(JSON.stringify({ok:true,waitedOnReset:true,remoteWasNotConsumed:true,noSafetyRepublish:true}));
+}
+
+else if (scenario === 'sync-1311-restore-live-tombstone-authority') {
+  const clean=stateWith({
+    personal:[shortcut('keep','https://keep.test/',500)],
+    work:[shortcut('work-keep','https://work-keep.test/',500)]
+  });
+  const waiting=stateWith({
+    personal:[shortcut('keep','https://keep.test/',500),shortcut('deleted','https://deleted.test/',100)],
+    work:[shortcut('work-keep','https://work-keep.test/',500)]
+  });
+  await seedLocalState(waiting,{
+    syncEnabled:true,syncInitialized:false,syncBootstrapMode:'await-remote',syncStatus:'waiting',
+    lastAppliedSyncRevision:'',lastAppliedWorkSyncRevision:'',lastAppliedProfileSnapshotRevision:''
+  });
+  const atomic=await completeProfileSnapshotFixture(clean,{
+    deviceId:'same-publisher',commitId:'atomic-before-delete',publishedAt:1000
+  });
+  const livePersonal=remotePersonalEntries(clean,'live-after-delete','same-publisher');
+  const liveWork=remoteWorkEntries(clean,'live-work-after-delete','same-publisher');
+  livePersonal[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('deleted')}`]=model.makeTombstone('deleted','same-publisher',fakeNow-1000);
+  await sync.set({...atomic.entries,...livePersonal,...liveWork});
+
+  const result=await send({type:'mosaicsync:restore-from-sync'});
+  const restored=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  assert.equal(result?.ok,true);
+  assert.equal(result?.sourceKind,'complete-legacy-ledgers','live tombstone authority must prevent an equivalent-looking atomic copy from overriding deletion state');
+  assert.equal(findCompactShortcut(restored,'deleted'),null,'deleted shortcut must stay deleted immediately after Restore');
+  console.log(JSON.stringify({ok:true,sourceKind:result.sourceKind,deletedStayedDeleted:true}));
+}
+
+else if (scenario === 'sync-1311-reset-preserves-live-core-evidence') {
+  const base=stateWith({personal:[shortcut('local','https://local.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  const longUrl=`https://live-core.test/${'x'.repeat(1700)}`;
+  const partial=stateWith({personal:[shortcut('last-live',longUrl,100)]});
+  const personal=model.workspaceStateNormalized(partial,'personal');
+  const liveRecord=model.flattenStateNormalized(personal,'remote-device').get('last-live');
+  await sync.set({[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('last-live')}`]:liveRecord});
+  const filler={};
+  for(let index=sync.data.size;index<constants.SYNC_QUOTA_MAX_ITEMS;index+=1) {
+    filler[`mosaicsync.audit.meta.${index}`]={kind:'audit-meta',index};
+  }
+  await sync.set(filler);
+  assert.equal(sync.data.size,constants.SYNC_QUOTA_MAX_ITEMS);
+
+  const normalSet=sync.set.bind(sync);
+  sync.set=async items=>{
+    if(Object.prototype.hasOwnProperty.call(items||{},constants.SYNC_RESET_INTENT_KEY)) {
+      sync.stats.setCalls+=1;
+      throw new Error('simulated sentinel failure after capacity staging');
+    }
+    return normalSet(items);
+  };
+  const cleared=await send({type:'mosaicsync:clear-sync-data'});
+  const after=await sync.get(null);
+  const keys=Object.keys(after);
+  const workPrefix=`${constants.SYNC_SPACE_PREFIX}work.`;
+  const liveCoreSurvived=keys.some(key=>key===constants.SYNC_SETTINGS_KEY||key===constants.SYNC_DATASET_KEY||key.startsWith(constants.SYNC_ITEM_PREFIX)||key===`${workPrefix}settings`||key===`${workPrefix}dataset`||key.startsWith(`${workPrefix}item.`));
+  assert.equal(cleared?.ok,false);
+  assert.equal(after[constants.SYNC_RESET_INTENT_KEY],undefined);
+  assert.equal(liveCoreSurvived,true,'capacity staging must preserve a key Recovery itself recognizes as live core');
+
+  await local.set({
+    [constants.LOCAL_META_KEY]:{...constants.DEFAULT_META,deviceId:'stale-peer',onboardingCompleted:true,syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-10000},
+    [constants.LOCAL_SYNC_CONTINUITY_KEY]:{
+      schemaVersion:constants.SYNC_CONTINUITY_SCHEMA_VERSION,established:true,lastHealthyAt:fakeNow-10000,
+      lastCompleteRevision:'old',lastPublisherDeviceId:'stale-peer',lastResetEpoch:0,personalTombstones:[],workTombstones:[],
+      lossState:'none',lossDetectedAt:0,recoveryEligibleAt:0,recoveryAttempts:0,lastRecoveredAt:0
+    }
+  });
+  const peerResult=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const peerContinuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.notEqual(peerResult?.reason,'remote-loss-quarantine');
+  assert.notEqual(peerContinuity?.lossState,'quarantine');
+  console.log(JSON.stringify({ok:true,resetFailedSafely:true,liveCoreSurvived:true,peerStayedOutOfRecovery:true}));
+}
+
 else {
   throw new Error(`unknown scenario ${scenario}`);
 }

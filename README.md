@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.31.0**
+**Current source release: 1.31.1**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -86,9 +86,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.31.0** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.31.1** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.31.1 is the narrow post-audit corrective release for 1.31.0. A valid reset marker now blocks bootstrap on fresh/uninitialized devices before any old profile can be consumed or safety-published; Restore preserves still-authoritative live deletion tombstones when an atomic copy only looks equivalent at the visible-record level; quota staging preserves a key recognized by catastrophic Recovery as live-core evidence or fails before destructive staging; and failed/oversized remote-image requests explicitly cancel/abort their body/request. No features, permissions, CSP, persisted schemas, Sync/Recovery wire formats or browser floors change.
 
 1.31.0 is a no-new-features quality release built from the certified 1.30.18.46 source. It closes two audit-demonstrated Sync safety gaps: an interrupted quota-full intentional reset can no longer expose an empty cloud before reset authority is durable, and Restore can select a demonstrably newer coherent atomic Personal+Work copy when older live ledgers from the same publisher remain visible. Remote shortcut images are read through a bounded, timed stream; release ZIPs are committed atomically; and the real generated editor preview now has behavioral coverage. Permissions, CSP, persisted schemas, wire formats and product features are unchanged.
 

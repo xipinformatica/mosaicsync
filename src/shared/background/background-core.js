@@ -670,17 +670,19 @@ export function startBackground(adapter) {
     return next;
   }
 
-  function hasLiveSyncCoreSignal(all) {
-    if (!all || typeof all !== "object") return false;
+  function isLiveSyncCoreKey(key) {
     const workNamespace = syncNamespace(WORK_SPACE_ID);
-    return Object.keys(all).some(key =>
-      key === SYNC_SETTINGS_KEY ||
+    return key === SYNC_SETTINGS_KEY ||
       key === SYNC_DATASET_KEY ||
       key.startsWith(SYNC_ITEM_PREFIX) ||
       key === workNamespace.settingsKey ||
       key === workNamespace.datasetKey ||
-      key.startsWith(workNamespace.itemPrefix)
-    );
+      key.startsWith(workNamespace.itemPrefix);
+  }
+
+  function hasLiveSyncCoreSignal(all) {
+    if (!all || typeof all !== "object") return false;
+    return Object.keys(all).some(isLiveSyncCoreKey);
   }
 
   function completeRemoteDescriptor(sources, workSnapshot) {
@@ -4361,14 +4363,25 @@ export function startBackground(adapter) {
 
     const sources = await readCoreSources();
     const resetIntent = sources.all?.[SYNC_RESET_INTENT_KEY];
-    if (validResetIntent(resetIntent) && meta.syncInitialized) return observeRemoteResetIntent(resetIntent, meta);
+    // Reset authority is global to the visible Sync namespace. A fresh or
+    // await-remote device must not consume a complete pre-reset profile merely
+    // because it has not initialized yet. Deliberate replacement publication
+    // removes the marker only after a complete new profile is committed.
+    if (validResetIntent(resetIntent)) return observeRemoteResetIntent(resetIntent, meta);
     const workSnapshot = await readSyncSnapshot(sources.all, { spaceId: WORK_SPACE_ID });
     const atomicProfile = sources.profile?.complete === true ? sources.profile : null;
     const liveProfileComplete = isSnapshotUsable(sources.shared) && isSnapshotUsable(workSnapshot);
     const settingsModern = settings => Number(settings?.schemaVersion) >= SYNC_SCHEMA_VERSION && settings?.settingsClock && typeof settings.settingsClock === "object";
     const atomicModern = Boolean(atomicProfile && settingsModern(atomicProfile.personal.settings) && settingsModern(atomicProfile.work.settings));
     const liveModern = Boolean(liveProfileComplete && settingsModern(sources.shared.settings) && settingsModern(workSnapshot.settings));
-    const atomicMatchesLive = Boolean(atomicProfile && liveProfileComplete &&
+    const restoreComparisonNow = Date.now();
+    const atomicPreservesLiveDeletions = Boolean(atomicProfile && liveProfileComplete &&
+      recordsPreserveDeletionAuthority(atomicProfile.personal.records, sources.shared.records, restoreComparisonNow) &&
+      recordsPreserveDeletionAuthority(atomicProfile.work.records, workSnapshot.records, restoreComparisonNow));
+    const livePreservesAtomicDeletions = Boolean(atomicProfile && liveProfileComplete &&
+      recordsPreserveDeletionAuthority(sources.shared.records, atomicProfile.personal.records, restoreComparisonNow) &&
+      recordsPreserveDeletionAuthority(workSnapshot.records, atomicProfile.work.records, restoreComparisonNow));
+    const atomicMatchesLive = Boolean(atomicProfile && liveProfileComplete && atomicPreservesLiveDeletions && livePreservesAtomicDeletions &&
       recordFingerprint(atomicProfile.personal.records) === recordFingerprint(sources.shared.records) &&
       settingsRecordEqual(atomicProfile.personal.settings, sources.shared.settings) &&
       recordFingerprint(atomicProfile.work.records) === recordFingerprint(workSnapshot.records) &&
@@ -4383,6 +4396,7 @@ export function startBackground(adapter) {
       atomicAvailable: Boolean(atomicProfile),
       liveComplete: liveProfileComplete,
       atomicMatchesLive,
+      atomicPreservesLiveDeletions,
       atomicModern,
       liveModern,
       atomic: {
@@ -5630,8 +5644,12 @@ export function startBackground(adapter) {
       const capacity = planResetIntentCapacity(existing, SYNC_RESET_INTENT_KEY, resetIntent, {
         fits: syncItemsFitInSnapshot,
         entryBytes: syncEntryBytes,
-        compareStableText
+        compareStableText,
+        isLiveCoreKey: isLiveSyncCoreKey
       });
+      if (capacity.blocked) {
+        throw new Error("Firefox Sync is still delivering MosaicSync data. Retry Clear Sync copy after synchronization finishes.");
+      }
       if (capacity.removeKeys.length) {
         await removeSyncItems(capacity.removeKeys);
         remoteMutationStarted = true;
@@ -6301,6 +6319,19 @@ export function startBackground(adapter) {
     }
     live.sort((a, b) => compareStableText(a.id, b.id));
     return fnv1a(stableStringify(live));
+  }
+
+  function recordsPreserveDeletionAuthority(candidateRecords, authorityRecords, now = Date.now()) {
+    const cutoff = Number(now) - TOMBSTONE_TTL_MS;
+    for (const authority of authorityRecords?.values?.() || []) {
+      if (authority?.kind !== "deleted" || typeof authority.id !== "string" || !authority.id) continue;
+      const deletedAt = Number(authority.deletedAt);
+      const modifiedAt = Number(authority.modifiedAt);
+      if (!Number.isFinite(deletedAt) || !Number.isFinite(modifiedAt) || deletedAt < cutoff) continue;
+      const candidate = candidateRecords?.get?.(authority.id);
+      if (!candidate || chooseNewerRecord(candidate, authority) !== candidate) return false;
+    }
+    return true;
   }
 
   function fnv1a(value) {

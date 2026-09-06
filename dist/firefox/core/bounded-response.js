@@ -4,10 +4,18 @@ export async function readBoundedResponseBlob(response, maxBytes) {
   const limit = Number(maxBytes);
   if (!response || !Number.isFinite(limit) || limit < 0) throw new TypeError("Invalid bounded response input");
   const declared = Number(response.headers?.get?.("content-length"));
-  if (Number.isFinite(declared) && declared > limit) throw new Error("Remote image is too large.");
   const contentType = String(response.headers?.get?.("content-type") || "");
-
   const reader = response.body?.getReader?.();
+  if (Number.isFinite(declared) && declared > limit) {
+    if (reader) {
+      try { await reader.cancel("Remote image is too large."); } catch {}
+      finally { reader.releaseLock?.(); }
+    } else {
+      try { await response.body?.cancel?.("Remote image is too large."); } catch {}
+    }
+    throw new Error("Remote image is too large.");
+  }
+
   if (!reader) {
     const blob = await response.blob();
     if (blob.size > limit) throw new Error("Remote image is too large.");

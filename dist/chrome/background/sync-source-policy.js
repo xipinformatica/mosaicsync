@@ -32,6 +32,10 @@ export function selectCoherentRestoreSource(observation = {}) {
   const liveComplete = observation?.liveComplete === true;
   if (!atomicAvailable) return "live";
   if (!liveComplete) return "atomic";
+  // A complete live ledger may contain a still-authoritative deletion tombstone
+  // that is intentionally absent from the display fingerprint. Never choose an
+  // atomic copy that would discard that deletion authority.
+  if (observation?.atomicPreservesLiveDeletions === false) return "live";
   if (observation?.atomicMatchesLive === true) return "atomic";
   if (observation?.atomicModern === true && observation?.liveModern !== true) return "atomic";
   if (observation?.atomicModern !== true || observation?.liveModern !== true) return "live";

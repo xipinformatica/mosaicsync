@@ -46,7 +46,8 @@ const GROUPS = Object.freeze({
       /corrective-1301844\.test\.mjs$/i,
       /corrective-1301845\.test\.mjs$/i,
       /corrective-1301846\.test\.mjs$/i,
-      /corrective-1310\.test\.mjs$/i
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i
     ]
   },
   sync: {
@@ -61,7 +62,8 @@ const GROUPS = Object.freeze({
       /corrective-1301842\.test\.mjs$/i,
       /corrective-1301843\.test\.mjs$/i,
       /corrective-1301844\.test\.mjs$/i,
-      /corrective-1310\.test\.mjs$/i
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -72,7 +74,8 @@ const GROUPS = Object.freeze({
       /corrective-1301819\.test\.mjs$/i,
       /corrective-1301842\.test\.mjs$/i,
       /corrective-1301843\.test\.mjs$/i,
-      /corrective-1310\.test\.mjs$/i
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i
     ]
   },
   security: {
@@ -102,7 +105,8 @@ const GROUPS = Object.freeze({
       /corrective-13012\.test\.mjs$/i,
       /corrective-1301838\.test\.mjs$/i,
       /test-architecture/i,
-      /corrective-1310\.test\.mjs$/i
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i
     ]
   },
   core: {
@@ -112,7 +116,8 @@ const GROUPS = Object.freeze({
       /utils\.test/i,
       /cache-bounds/i,
       /corrective-13010\.test\.mjs$/i,
-      /corrective-13018[3-8]\.test\.mjs$/i
+      /corrective-13018[3-8]\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i
     ]
   },
   release: {

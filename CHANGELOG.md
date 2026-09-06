@@ -1,3 +1,13 @@
+## 1.31.1
+
+- Closes the independent 1.31.0 audit's four reproduced findings without adding features or reopening frozen architecture work.
+- Makes valid **reset-intent** authoritative before bootstrap on every enabled device, including fresh/uninitialized `await-remote` profiles, so pre-reset Personal+Work data cannot be consumed or safety-republished while the reset marker is visible.
+- Makes Restore source selection deletion-aware: visible-record equality no longer hides still-valid live tombstones, and an atomic safety copy cannot override live deletion authority it does not preserve.
+- Aligns quota-full reset staging with catastrophic-Recovery classification by preserving a live-core key recognized by the existing Recovery predicate until reset-intent is durable; metadata-only states fail before destructive staging.
+- Cancels declared-oversize remote-image bodies immediately and aborts terminal failed image requests before timeout cleanup, covering the early-rejection/HTTP ownership gap left in 1.31.0.
+- Adds nine focused 1.31.1 regressions proven to fail 9/9 on untouched 1.31.0 and pass after the corrections; the previous ten 1.31.0 focused regressions and the 165-test Sync group remain green.
+- No feature, permission, host permission, CSP, telemetry, remote code, persisted schema, Sync/Recovery wire-format, browser-floor or adapter-topology change.
+
 ## 1.31.0
 
 - Ships a no-new-features quality release from the certified 1.30.18.46 source and closes only findings reproduced by the multi-boundary audit.
