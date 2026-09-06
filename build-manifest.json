@@ -3,7 +3,7 @@
   "generatedFrom": "canonical shared source + browser capability overlays + deterministic generated browser shells/locales/runtime data",
   "browsers": {
     "firefox": {
-      "version": "1.31.1",
+      "version": "1.31.2",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "2074c52fceddb2826159146f99ef32784be49aa053a490123d48fcf35f296e96",
@@ -83,7 +83,7 @@
         "core/bookmarks.js": "1cbb968a7a60031224a94d5d007aa1a27635e2c6058849dd654d0f961f8fee98",
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/concurrency.js": "5a5be30c0c749d1d61884e0056023300dbd06dafdcfe08320d9aa3b4c0d4d0e5",
-        "core/constants.js": "22743688f52674dda1249d78fdd3bfd229a63032698a9386520d45149ea9b606",
+        "core/constants.js": "15c4194dfe3d04244419ecf363218d0fe96ecd45d82ccdfedd0ac61330b4121e",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -140,7 +140,7 @@
         "core/storage.js": "5871b4f13b033145fa8861f61d4ba66b373c05cca8b510b30cabd53011ddf48b",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "455fa9522319c5e19c4bed72f920d9e95b08c405dfd0814f3cf2f37bc51d157c",
+        "manifest.json": "138bc0946ce6f29ed4e2ef00a030e9b8c3f7543f482cbcf6006d4c14e25bc528",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bootstrap-config.js": "76dab7278f1b582afdcc5708872a9eea93ceb60e951964028e43aa0a55740f40",
@@ -149,7 +149,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "399b40672370db7c5c9d1f2a3d79a429eacdba133dde040a38ac2685b357587b",
         "newtab/newtab-secondary.css": "0853e577632661fd4fbff7c90a9724f46c37b51172a8e2007406c56cad2bdbef",
-        "newtab/newtab.html": "7fc74db2672f920728bdd750d8aea1f2b4933c02dcd548034385334d14cf05b0",
+        "newtab/newtab.html": "d72682a2681a44f9d2f203e8c066f2e1a1bb9c4a7353755eaec90e8ad75b5604",
         "newtab/newtab.js": "3f8a8cf5d6339f980f6933c53a060bf4e2a866eb304a50ccc0e04932ac633a14",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
@@ -163,7 +163,7 @@
       }
     },
     "chrome": {
-      "version": "1.31.1",
+      "version": "1.31.2",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "0426e35a30ece3fe6164f1408272aef0f62d08ca1a718763f8f8b41e3e3effff",
@@ -248,7 +248,7 @@
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/browser-shim.js": "9538516c44f10cc0b76b2d40e948bd3fcd0928f67f82e07980f341485bf618c2",
         "core/concurrency.js": "5a5be30c0c749d1d61884e0056023300dbd06dafdcfe08320d9aa3b4c0d4d0e5",
-        "core/constants.js": "22743688f52674dda1249d78fdd3bfd229a63032698a9386520d45149ea9b606",
+        "core/constants.js": "15c4194dfe3d04244419ecf363218d0fe96ecd45d82ccdfedd0ac61330b4121e",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -305,7 +305,7 @@
         "core/storage.js": "5871b4f13b033145fa8861f61d4ba66b373c05cca8b510b30cabd53011ddf48b",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "3dc3c2a3a1b7c0052718b3ed1a9c2b5726ebd9414231f918a61c40cf677a4f0f",
+        "manifest.json": "db6194ea24cfa80b0a88549f0d1768228313a261cf93df6cc6831f2c1d2a63a4",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bootstrap-config.js": "76dab7278f1b582afdcc5708872a9eea93ceb60e951964028e43aa0a55740f40",
@@ -314,7 +314,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "399b40672370db7c5c9d1f2a3d79a429eacdba133dde040a38ac2685b357587b",
         "newtab/newtab-secondary.css": "0853e577632661fd4fbff7c90a9724f46c37b51172a8e2007406c56cad2bdbef",
-        "newtab/newtab.html": "5f45acc48c2889d66f503937e8cb660ebde96c7f4c8900a74ece34bfcc9dd054",
+        "newtab/newtab.html": "ed0f5503b8dee1ff9bdaea5402ae6bff784284903e74a92dce959aadd917e845",
         "newtab/newtab.js": "3f8a8cf5d6339f980f6933c53a060bf4e2a866eb304a50ccc0e04932ac633a14",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",

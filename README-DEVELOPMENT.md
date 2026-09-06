@@ -1,8 +1,12 @@
 # MosaicSync development
 
-> **Current release: 1.31.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.2 developer-handoff documentation
+
+1.31.2 keeps the 1.31.1 runtime frozen and adds no production behavior. The repository now includes root-level `DEVELOPER-GUIDE.md`, linked prominently from `README.md`, as the onboarding path for a developer or automated code reviewer seeing MosaicSync for the first time. The guide maps canonical source ownership, First Paint and non-authoritative startup projections, Normal Sync, intentional reset, tombstones, Restore, Recovery, browser adapters, artwork/privacy boundaries, MV3 concurrency, build/test/smoke/certification/package workflows, frozen-architecture warnings and the exact files to inspect for common maintenance tasks. Only release/version identity surfaces change in runtime files; permissions, CSP, schemas, Sync/Recovery wire formats, browser floors and product behavior remain identical to 1.31.1.
 
 ## 1.31.1 post-audit corrective hardening
 

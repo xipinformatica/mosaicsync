@@ -1,3 +1,9 @@
+## 1.31.2
+
+- Adds a root-level `DEVELOPER-GUIDE.md` as the canonical onboarding document for developers and automated code reviewers, covering repository ownership, authoritative state vs startup projections, First Paint, Sync/Reset/Restore/Recovery, browser adapters, privacy boundaries, tests, smoke/certification, packaging and frozen-architecture maintenance rules.
+- Adds a prominent **New developer? Start here** link from the main README and records the documentation-only handoff in development/release QA notes.
+- Keeps the audited 1.31.1 production runtime frozen: apart from the required release/version identity bump, there is no production logic, feature, permission, host-permission, CSP, persisted schema, Sync/Recovery wire-format, browser-floor or adapter-behavior change.
+
 ## 1.31.1
 
 - Closes the independent 1.31.0 audit's four reproduced findings without adding features or reopening frozen architecture work.
