@@ -455,6 +455,12 @@ When comparing remote sources, snapshots or restore candidates, visible-record e
 
 Do not "simplify" source comparison by considering only records currently visible in the UI.
 
+### Durable outbound journals fail closed
+
+Normal Sync uses durable `storage.local` journals for cumulative local mutations and cross-Space transactions. These journals are retry authority, not disposable caches. A failed journal read must therefore never be interpreted as an empty journal/`null` pending mutation, and an authority-changing operation such as Sync disable or intentional-reset cleanup must not proceed if journal cleanup could not be verified. Successful storage reads may prove that no journal exists; storage failures only prove that the state is unknown.
+
+This invariant prevents a second publication from starting over an unreadable earlier transaction and prevents stale pre-transition retry state from surviving a supposedly completed authority change. Preserve the existing journal schemas and idempotent publication order unless a demonstrated defect requires otherwise.
+
 ---
 
 ## 9. Intentional Sync reset is authoritative

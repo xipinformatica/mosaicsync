@@ -28,10 +28,23 @@ function makeStorageArea(initial = {}) {
   const stats = { getCalls: 0, getAllCalls: 0, setCalls: 0, removeCalls: 0, clearCalls: 0 };
   return {
     data, stats,
+    failNextGetAll: false,
+    failNextGetKeys: new Set(),
+    failNextRemoveKeys: new Set(),
     async get(keys = null) {
       stats.getCalls += 1;
-      if (keys === null || keys === undefined) stats.getAllCalls += 1;
-      if (keys === null || keys === undefined) return Object.fromEntries([...data].map(([k,v]) => [k, clone(v)]));
+      if (keys === null || keys === undefined) {
+        stats.getAllCalls += 1;
+        if (this.failNextGetAll) {
+          this.failNextGetAll = false;
+          throw new Error('simulated storage.get(null) failure');
+        }
+        return Object.fromEntries([...data].map(([k,v]) => [k, clone(v)]));
+      }
+      if (typeof keys === 'string' && this.failNextGetKeys.has(keys)) {
+        this.failNextGetKeys.delete(keys);
+        throw new Error(`simulated storage.get failure for ${keys}`);
+      }
       if (typeof keys === 'string') return data.has(keys) ? { [keys]: clone(data.get(keys)) } : {};
       if (Array.isArray(keys)) {
         const out={}; for (const k of keys) if (data.has(k)) out[k]=clone(data.get(k)); return out;
@@ -42,7 +55,16 @@ function makeStorageArea(initial = {}) {
       return {};
     },
     async set(items) { stats.setCalls += 1; for (const [k,v] of Object.entries(items || {})) data.set(k, clone(v)); },
-    async remove(keys) { stats.removeCalls += 1; for (const k of (Array.isArray(keys)?keys:[keys])) data.delete(k); },
+    async remove(keys) {
+      stats.removeCalls += 1;
+      const list = Array.isArray(keys) ? keys : [keys];
+      const failed = list.find(key => this.failNextRemoveKeys.has(key));
+      if (failed !== undefined) {
+        this.failNextRemoveKeys.delete(failed);
+        throw new Error(`simulated storage.remove failure for ${failed}`);
+      }
+      for (const k of list) data.delete(k);
+    },
     async clear() { stats.clearCalls += 1; data.clear(); },
     async getBytesInUse(keys = null) {
       const obj = await this.get(keys);
@@ -2471,6 +2493,77 @@ else if (scenario === 'sync-1311-reset-preserves-live-core-evidence') {
   assert.notEqual(peerResult?.reason,'remote-loss-quarantine');
   assert.notEqual(peerContinuity?.lossState,'quarantine');
   console.log(JSON.stringify({ok:true,resetFailedSafely:true,liveCoreSurvived:true,peerStayedOutOfRecovery:true}));
+}
+
+
+else if (scenario === 'sync-1315-cross-space-journal-read-fails-closed') {
+  const base=stateWith({personal:[shortcut('base','https://base.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  const pendingKey=`${constants.LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX}existing`;
+  await local.set({
+    [pendingKey]:{
+      schemaVersion:1,kind:'intent',intentId:'existing',createdAt:fakeNow-100,
+      fromSpaceId:'personal',toSpaceId:'work',shortcutIds:['moved'],
+      destination:{placeholder:true},source:{placeholder:true}
+    }
+  });
+  const edited=stateWith({personal:[shortcut('base','https://base.test/',100),shortcut('new','https://new.test/',500)]});
+  const oldRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  await local.set({[constants.LOCAL_STATE_KEY]:edited});
+  const syncSetsBefore=sync.stats.setCalls;
+  local.failNextGetAll=true;
+  for(const listener of events.onStorageChanged.listeners) listener({[constants.LOCAL_STATE_KEY]:{oldValue:oldRaw,newValue:edited}},'local');
+  await send({type:'mosaicsync:get-sync-status'});
+  const pendingAfter=(await local.get(pendingKey))[pendingKey];
+  assert.equal(sync.stats.setCalls,syncSetsBefore,'an unreadable durable cross-Space journal must block new Sync publication');
+  assert.ok(pendingAfter,'unreadable pending cross-Space authority must remain durable');
+  console.log(JSON.stringify({ok:true,blockedPublication:true,pendingPreserved:true}));
+}
+
+else if (scenario === 'sync-1315-local-journal-read-fails-closed') {
+  const base=stateWith({personal:[shortcut('base','https://base.test/',100)]});
+  const edited=stateWith({personal:[shortcut('base','https://base.test/',100),shortcut('new','https://new.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await local.set({
+    [constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{
+      schemaVersion:1,journalId:'existing-local',createdAt:fakeNow-100,before:clone(base),after:clone(edited)
+    },
+    [constants.LOCAL_STATE_KEY]:clone(edited)
+  });
+  const syncSetsBefore=sync.stats.setCalls;
+  local.failNextGetKeys.add(constants.LOCAL_PENDING_SYNC_MUTATION_KEY);
+  for(const listener of events.onStorageChanged.listeners) listener({[constants.LOCAL_STATE_KEY]:{oldValue:base,newValue:edited}},'local');
+  await send({type:'mosaicsync:get-sync-status'});
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(sync.stats.setCalls,syncSetsBefore,'an unreadable durable local mutation journal must block direct fallback publication');
+  assert.equal(pendingAfter?.journalId,'existing-local','unreadable local mutation authority must remain durable');
+  console.log(JSON.stringify({ok:true,blockedPublication:true,pendingPreserved:true}));
+}
+
+else if (scenario === 'sync-1315-cleanup-failure-blocks-disable') {
+  const base=stateWith({personal:[shortcut('base','https://base.test/',100)]});
+  const edited=stateWith({personal:[shortcut('base','https://base.test/',100),shortcut('pending','https://pending.test/',500)]});
+  await seedLocalState(edited,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await local.set({
+    [constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{
+      schemaVersion:1,journalId:'must-clear',createdAt:fakeNow-100,before:clone(base),after:clone(edited)
+    }
+  });
+  local.failNextRemoveKeys.add(constants.LOCAL_PENDING_SYNC_MUTATION_KEY);
+  const failed=await send({type:'mosaicsync:set-sync-enabled',enabled:false});
+  let meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  let pending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(failed?.ok,false,'failed durable cleanup must abort the Sync-disable authority transition');
+  assert.equal(meta.syncEnabled,true,'Sync must remain enabled when its pending durable journal could not be cleared');
+  assert.equal(pending?.journalId,'must-clear','failed cleanup must preserve the journal for an explicit retry');
+
+  const retried=await send({type:'mosaicsync:set-sync-enabled',enabled:false});
+  meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  pending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(retried?.ok,true,'the authority transition should succeed once durable storage recovers');
+  assert.equal(meta.syncEnabled,false);
+  assert.equal(pending,undefined,'successful retry must verify the durable journal was cleared');
+  console.log(JSON.stringify({ok:true,failedClosed:true,retrySucceeded:true,journalCleared:true}));
 }
 
 else {

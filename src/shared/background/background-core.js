@@ -4618,7 +4618,10 @@ export function startBackground(adapter) {
       return entries;
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not read pending cross-Space Sync transactions`, error);
-      return [];
+      // This journal is durable transaction authority. A failed read is not
+      // evidence that no transaction exists: fail closed so a second Sync
+      // publication cannot start while earlier cross-Space work is unknown.
+      throw error;
     }
   }
 
@@ -4649,7 +4652,10 @@ export function startBackground(adapter) {
       return value;
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not read pending local Sync mutation`, error);
-      return null;
+      // null means a successful read proved there is no pending mutation.
+      // Storage failure must remain distinguishable so callers cannot bypass
+      // the durable cumulative-before-state journal with a direct publication.
+      throw error;
     }
   }
 
@@ -4663,12 +4669,18 @@ export function startBackground(adapter) {
       return true;
     } catch (error) {
       console.warn(`${PRODUCT_NAME}: could not clear pending local Sync mutation`, error);
-      return false;
+      // Cleanup failure must abort authority-changing operations such as Sync
+      // disable/reset. Returning false here would make an uncleared durable
+      // journal indistinguishable from a benign journal-id mismatch.
+      throw error;
     }
   }
 
   async function clearAllPendingSyncRecoveryState() {
-    await Promise.allSettled([
+    // Authority transitions may proceed only after both durable journals were
+    // cleared successfully. A rejected read/remove must remain visible to the
+    // caller rather than being hidden behind allSettled().
+    await Promise.all([
       clearAllPendingCrossSpaceSync(),
       clearPendingLocalSyncMutation()
     ]);

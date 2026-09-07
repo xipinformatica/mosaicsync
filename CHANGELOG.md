@@ -1,3 +1,10 @@
+## 1.31.5
+
+- Makes durable pending Sync journals fail closed at the `storage.local` fault boundary. An unreadable cross-Space transaction journal is no longer treated as an empty list, so MosaicSync cannot begin a second publication while earlier cross-Space work is unknown.
+- Makes the cumulative local-mutation journal follow the same rule: a read failure no longer falls back to direct publication that bypasses the durable oldest-unsent before-state.
+- Makes pending-journal cleanup observable to authority-changing callers. Sync disable/reset-style cleanup now aborts if journal read/remove fails and succeeds on retry once durable storage recovers, rather than silently continuing with uncleared retry state.
+- Adds permanent Firefox/Chromium fault-injection regressions proven to fail 3/3 on untouched 1.31.4. No feature, permission, CSP, persisted schema, Sync/Recovery wire-format, journal schema or browser-floor change.
+
 ## 1.31.4
 
 - Fixes the separate Light/Dark wallpaper darkness controls in Settings so long localized labels cannot overlap the neighbouring slider/control column. The translated label now owns a full-width row, with slider and percentage beneath it.

@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.31.4**
+**Current source release: 1.31.5**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -87,9 +87,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.31.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.31.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.31.5 is a narrow Sync reliability correction over 1.31.4. Durable pending cross-Space and local-mutation journals now fail closed when `storage.local` cannot be read, so an unknown journal can never be mistaken for “no pending work.” Sync disable/reset-style authority transitions also stop if durable journal cleanup cannot be verified instead of silently continuing with uncleared retry state. Three permanent Firefox/Chromium fault-injection regressions cover unreadable cross-Space journals, unreadable local-mutation journals, and failed cleanup followed by a successful retry. No feature, permission, CSP, persisted schema, Sync/Recovery wire-format or browser-floor change is introduced.
 
 1.31.4 is a narrow localization-responsive Settings correction over 1.31.3. The separate Light/Dark wallpaper darkness controls now place the translated label on a full-width row above the slider and percentage, preventing long translations such as German `Hintergrundabdunklung` from colliding with the neighbouring control. No wording, permission, Sync/Recovery behavior, persisted schema, CSP or browser-floor change is introduced.
 

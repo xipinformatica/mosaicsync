@@ -1,8 +1,12 @@
 # MosaicSync development
 
-> **Current release: 1.31.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.31.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+## 1.31.5 durable Sync-journal fail-closed hardening
+
+1.31.5 closes a fault-boundary hole in the durable outbound Sync journals. A failed `storage.local` read is no longer converted to an empty cross-Space journal list or a `null` local-mutation journal, because inability to read durable retry authority is not evidence that no pending transaction exists. New publication therefore stops rather than bypassing unknown durable work. Cleanup of both journals is also fail-closed: Sync disable/reset-style authority transitions proceed only after journal reads/removals succeed, while a failed cleanup leaves the prior Sync authority intact so the user/browser can retry once storage recovers. The wire format, journal schema, normal successful publication ordering and Recovery architecture are unchanged.
 
 ## 1.31.4 localization-safe separate wallpaper dim controls
 
