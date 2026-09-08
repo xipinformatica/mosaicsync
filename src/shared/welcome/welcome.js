@@ -65,6 +65,7 @@ let webAccessGranted = false;
 let webAccessPrompted = false;
 let webAccessDecisionPromise = Promise.resolve(false);
 let pendingFrequentPermissionCompletionMessage = "";
+let pendingSourceCandidate = null;
 
 function selected(name) {
   return document.querySelector(`input[name="${name}"]:checked`)?.value || "";
@@ -138,11 +139,50 @@ async function sendSyncMessage(type, payload = {}) {
   return response;
 }
 
+function stageStartingSourceCandidate(source, state, preferences = null) {
+  pendingSourceCandidate = {
+    source,
+    state,
+    preferences: preferences && typeof preferences === "object" ? { ...preferences } : null
+  };
+}
+
+async function commitPendingSourceCandidate(expectedSource = "") {
+  const candidate = pendingSourceCandidate;
+  if (!candidate || (expectedSource && candidate.source !== expectedSource)) {
+    throw new Error(t("couldNotContinue"));
+  }
+
+  // LOCAL_STATE_KEY is authoritative. A Welcome source remains memory-only until
+  // source resolution has actually selected this computer, then becomes durable
+  // immediately before local bootstrap/publication or local-only completion.
+  await writeLocalState(candidate.state);
+  if (candidate.source === "profile" && candidate.preferences) {
+    await setLocalePreference(candidate.preferences.uiLocale || "auto");
+    // Preserve the imported preference independently from this installation's
+    // optional Top Sites permission. New Tab will expose a localized recovery
+    // action if the user still needs to grant that permission here.
+    try {
+      localStorage.setItem(
+        FREQUENTLY_VISITED_PREF_KEY,
+        candidate.preferences.frequentlyVisitedEnabled ? "1" : "0"
+      );
+    } catch {}
+    localizeDocument(document);
+  }
+  pendingSourceCandidate = null;
+}
+
+function discardPendingSourceCandidate() {
+  pendingSourceCandidate = null;
+}
+
 async function importThisFirefox() {
   // Fetch/prepare first. Those awaits may give the background worker time to
   // receive and persist a newer synchronized state. Re-read immediately before
-  // applying the import so setup can never overwrite that newer state with a
-  // stale snapshot captured at the start of the operation.
+  // staging the candidate so setup never derives from a stale snapshot captured
+  // at the start of the operation. Do not make the candidate authoritative until
+  // the user resolves any synchronized-source conflict.
   const imported = await prepareFirefoxShortcutFavicons(await fetchFirefoxShortcuts());
   if (!imported.length) {
     throw new Error(t("noFirefoxShortcuts"));
@@ -154,7 +194,7 @@ async function importThisFirefox() {
   const timestamp = nextMutationTime(state.updatedAt, state.settingsModifiedAt);
   if (stableStringify(state.settings) !== previousSettings) state.settingsModifiedAt = timestamp;
   state.updatedAt = timestamp;
-  await writeLocalState(state);
+  stageStartingSourceCandidate("local", state);
   return imported.length;
 }
 
@@ -163,7 +203,7 @@ async function startEmpty() {
   const state = loaded.state;
   state.shortcuts = [];
   state.updatedAt = nextMutationTime(state.updatedAt);
-  await writeLocalState(state);
+  stageStartingSourceCandidate("empty", state);
 }
 
 function stampImportedProfileState(importedState) {
@@ -204,18 +244,7 @@ function stampImportedProfileState(importedState) {
 async function importMosaicSyncProfile(file) {
   const parsed = await parseProfilePackage(await readProfileImportText(file));
   const importedState = stampImportedProfileState(parsed.state);
-  await writeLocalState(importedState);
-  await setLocalePreference(parsed.preferences.uiLocale || "auto");
-  // Preserve the imported preference independently from this installation's
-  // optional Top Sites permission. New Tab will expose a localized recovery
-  // action if the user still needs to grant that permission here.
-  try {
-    localStorage.setItem(
-      FREQUENTLY_VISITED_PREF_KEY,
-      parsed.preferences.frequentlyVisitedEnabled ? "1" : "0"
-    );
-  } catch {}
-  localizeDocument(document);
+  stageStartingSourceCandidate("profile", importedState, parsed.preferences);
 }
 
 async function completeOnboarding(message = t("setupComplete")) {
@@ -412,6 +441,7 @@ async function completeOrOfferFrequentlyVisitedPermission(completionMessage, { p
 
 async function continueAfterStartingSource(source, { frequentPermissionAttempted = false } = {}) {
   if (!syncOptedIn) {
+    await commitPendingSourceCandidate(source);
     const message = source === "local"
       ? t("firefoxShortcutsImported")
       : source === "profile"
@@ -445,6 +475,7 @@ async function continueAfterStartingSource(source, { frequentPermissionAttempted
     return;
   }
 
+  await commitPendingSourceCandidate(source);
   setStatus(t("publishingFirst"));
   const published = await sendSyncMessage("mosaicsync:bootstrap-local");
   await completeOnboarding(published.meta?.lastSyncWarning || t("computerSource"));
@@ -520,6 +551,7 @@ chooseLocalButton.addEventListener("click", async () => {
   chooseCloudButton.disabled = true;
   try {
     setStatus(t("usingComputerSource"));
+    await commitPendingSourceCandidate(pendingSourceCandidate?.source);
     const response = await sendSyncMessage("mosaicsync:bootstrap-local");
     await completeOnboarding(response.meta?.lastSyncWarning || t("computerSource"));
   } catch (error) {
@@ -541,6 +573,7 @@ chooseCloudButton.addEventListener("click", () => {
       const complete = Boolean(latestSyncStatus?.hasRemoteData);
       setStatus(complete ? t("restoringSync") : t("waitingCompleteSync"));
       const response = await sendSyncMessage(complete ? "mosaicsync:bootstrap-remote" : "mosaicsync:wait-for-remote");
+      discardPendingSourceCandidate();
       if (response.pending) {
         await completeOnboarding(t("syncStarted"));
         return;

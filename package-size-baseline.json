@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.32.0.7",
-      "rawBytes": 2246506,
-      "deflatedBytes": 661391,
+      "version": "1.32.0.8",
+      "rawBytes": 2247859,
+      "deflatedBytes": 661744,
       "categories": {
         "assets": {
           "files": 2,
@@ -59,7 +59,7 @@
         "shared-core": {
           "files": 25,
           "rawBytes": 274514,
-          "deflatedBytes": 78061
+          "deflatedBytes": 78060
         },
         "wallpapers": {
           "files": 29,
@@ -68,8 +68,8 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 53553,
-          "deflatedBytes": 13859
+          "rawBytes": 54906,
+          "deflatedBytes": 14213
         }
       },
       "largestFiles": [
@@ -152,6 +152,12 @@
           "deflatedBytes": 6642
         },
         {
+          "path": "welcome/welcome.js",
+          "category": "welcome",
+          "rawBytes": 26968,
+          "deflatedBytes": 6583
+        },
+        {
           "path": "core/i18n-locales/ja.js",
           "category": "localization",
           "rawBytes": 25233,
@@ -224,12 +230,6 @@
           "deflatedBytes": 6231
         },
         {
-          "path": "welcome/welcome.js",
-          "category": "welcome",
-          "rawBytes": 25615,
-          "deflatedBytes": 6229
-        },
-        {
           "path": "core/i18n-locales/ko.js",
           "category": "localization",
           "rawBytes": 22136,
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.32.0.7",
-      "rawBytes": 2268148,
-      "deflatedBytes": 675907,
+      "version": "1.32.0.8",
+      "rawBytes": 2269501,
+      "deflatedBytes": 676260,
       "categories": {
         "assets": {
           "files": 6,
@@ -313,7 +313,7 @@
         "shared-core": {
           "files": 26,
           "rawBytes": 285485,
-          "deflatedBytes": 81478
+          "deflatedBytes": 81477
         },
         "wallpapers": {
           "files": 29,
@@ -322,8 +322,8 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 53553,
-          "deflatedBytes": 13859
+          "rawBytes": 54906,
+          "deflatedBytes": 14213
         }
       },
       "largestFiles": [
@@ -406,6 +406,12 @@
           "deflatedBytes": 6642
         },
         {
+          "path": "welcome/welcome.js",
+          "category": "welcome",
+          "rawBytes": 26968,
+          "deflatedBytes": 6583
+        },
+        {
           "path": "core/i18n-locales/ja.js",
           "category": "localization",
           "rawBytes": 25233,
@@ -476,12 +482,6 @@
           "category": "localization",
           "rawBytes": 20669,
           "deflatedBytes": 6231
-        },
-        {
-          "path": "welcome/welcome.js",
-          "category": "welcome",
-          "rawBytes": 25615,
-          "deflatedBytes": 6229
         },
         {
           "path": "core/i18n-locales/ko.js",

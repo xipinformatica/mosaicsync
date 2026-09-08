@@ -3,7 +3,7 @@
   "generatedFrom": "canonical shared source + browser capability overlays + deterministic generated browser shells/locales/runtime data",
   "browsers": {
     "firefox": {
-      "version": "1.32.0.7",
+      "version": "1.32.0.8",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "2074c52fceddb2826159146f99ef32784be49aa053a490123d48fcf35f296e96",
@@ -85,7 +85,7 @@
         "core/bookmarks.js": "1cbb968a7a60031224a94d5d007aa1a27635e2c6058849dd654d0f961f8fee98",
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/concurrency.js": "5a5be30c0c749d1d61884e0056023300dbd06dafdcfe08320d9aa3b4c0d4d0e5",
-        "core/constants.js": "fde3e912d2cd8400bb10a87ab3fc2d3eef76084dee53df5be2cbfef1d3d4436c",
+        "core/constants.js": "d9711ba0793996a64200e1ea95b812b508aa8357c9b772f61d3e6638c139e34f",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -142,7 +142,7 @@
         "core/storage.js": "e64cffbb0771a3fa7ff5d10742df9188ac51361ef5cb8c1afe05d25380e06bd5",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "67bbc3d343df72aca47a1c1a6ce0afa81ac11b0f8112a2a8e8ca73ade5ff034c",
+        "manifest.json": "1ef98829760808e97a39af4b9af7d3fef59361e43321373880f6845eea36ac86",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bookmarks-controller.js": "d7061cf665b6040f26d7e98aaa4dc17347631a6bcedd2b27623483ffe1bc0ea8",
@@ -152,7 +152,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "8708d49aa606052c3a34d72df3bd6f34ef95e5f8fbfc16534afc308579dc20db",
         "newtab/newtab-secondary.css": "f22566ece1a133fa32287eba1c7f0f4dda37f9be0e264c640f4fd550d3bb4993",
-        "newtab/newtab.html": "ca4ddd16207c44fcb596432d0dd42a6bba7a35bf6c3027a5d4fa2f2492429242",
+        "newtab/newtab.html": "bcad88fb54d5c1d7574c049efc1560ff474e60141e7e98add187f2c53a64d86a",
         "newtab/newtab.js": "dac57983705dcfe61d044718c92fc4291291e8e338045b0600ee17085b196f54",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
@@ -162,11 +162,11 @@
         "newtab/ui-utils.js": "d4e1688df5b4c791932e3f2770973d725424a2ff0049a11c0dbe05504ca2667d",
         "welcome/welcome.css": "a350b289dd2ac24b88abdca177fd416a60454528215bcccbe4af3d368086ab24",
         "welcome/welcome.html": "6eb2fe48dcee9ed19e6c42098a888cc1d4c464b58569ff1237670b1f0d9890dc",
-        "welcome/welcome.js": "8e3bfcfb6606f870e1c059c362d524af196a21a4fcfb8c635c3ff50d4e927ac8"
+        "welcome/welcome.js": "4cde77317af2f8d07ffe1d6966bbfc757db53110f23158b08951782c624f39f1"
       }
     },
     "chrome": {
-      "version": "1.32.0.7",
+      "version": "1.32.0.8",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "0426e35a30ece3fe6164f1408272aef0f62d08ca1a718763f8f8b41e3e3effff",
@@ -253,7 +253,7 @@
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/browser-shim.js": "9538516c44f10cc0b76b2d40e948bd3fcd0928f67f82e07980f341485bf618c2",
         "core/concurrency.js": "5a5be30c0c749d1d61884e0056023300dbd06dafdcfe08320d9aa3b4c0d4d0e5",
-        "core/constants.js": "fde3e912d2cd8400bb10a87ab3fc2d3eef76084dee53df5be2cbfef1d3d4436c",
+        "core/constants.js": "d9711ba0793996a64200e1ea95b812b508aa8357c9b772f61d3e6638c139e34f",
         "core/errors.js": "83ada6ca90f8c879fdb2a3c43764700f1aa9d19ac422554977a767504fb1f40b",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "c22ac31ab57d64ca78fd7e0028b0504fea6f2e61a28a99d183c19842c24dce3d",
@@ -310,7 +310,7 @@
         "core/storage.js": "e64cffbb0771a3fa7ff5d10742df9188ac51361ef5cb8c1afe05d25380e06bd5",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "f9520379611ca678793cf68a241ed1435c05e6fe9e3f76a0de63845f17d8d0c4",
+        "manifest.json": "ab6e87e8ed790313ca57062acab49e66cd5799da457355724179bd9e627ebff5",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bookmarks-controller.js": "d7061cf665b6040f26d7e98aaa4dc17347631a6bcedd2b27623483ffe1bc0ea8",
@@ -320,7 +320,7 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "8708d49aa606052c3a34d72df3bd6f34ef95e5f8fbfc16534afc308579dc20db",
         "newtab/newtab-secondary.css": "f22566ece1a133fa32287eba1c7f0f4dda37f9be0e264c640f4fd550d3bb4993",
-        "newtab/newtab.html": "6a20b34c65e442a0b342bf67cdfe7e5899da4738e4fd7dc86f905f2e8d57d98d",
+        "newtab/newtab.html": "674195333d901cbffa752eab2a2f9956fb0c697d58927ac381084fd3a11973da",
         "newtab/newtab.js": "dac57983705dcfe61d044718c92fc4291291e8e338045b0600ee17085b196f54",
         "newtab/render-bootstrap.js": "6fd81e449780a7d189d0c20db8cb609ec9c6c6429b393dfa19bedef726a531a2",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
@@ -330,7 +330,7 @@
         "newtab/ui-utils.js": "d4e1688df5b4c791932e3f2770973d725424a2ff0049a11c0dbe05504ca2667d",
         "welcome/welcome.css": "a350b289dd2ac24b88abdca177fd416a60454528215bcccbe4af3d368086ab24",
         "welcome/welcome.html": "6eb2fe48dcee9ed19e6c42098a888cc1d4c464b58569ff1237670b1f0d9890dc",
-        "welcome/welcome.js": "8e3bfcfb6606f870e1c059c362d524af196a21a4fcfb8c635c3ff50d4e927ac8"
+        "welcome/welcome.js": "4cde77317af2f8d07ffe1d6966bbfc757db53110f23158b08951782c624f39f1"
       }
     }
   }

@@ -1,3 +1,9 @@
+## 1.32.0.8
+
+- Fixes a MEDIUM Welcome/setup source-authority race found by the complete persistence-intent audit: rerunning setup on an already-initialized Sync device can no longer publish a provisional Start-empty, Firefox-import or profile-import candidate before the user chooses which copy should win.
+- Keeps all three local starting-source candidates in Welcome page memory until authority is resolved. Local/no-remote flows commit immediately before local bootstrap/completion; “Use this computer” commits then publishes; “Use synchronized copy” discards the candidate without ever committing it. Imported device-local profile preferences are staged with the candidate.
+- Adds permanent red/green regressions for all three candidate paths and preserves the 1.32.0.7 Sync-eligibility/durable-authority contract unchanged. No feature, permission, persisted schema, Sync/Recovery wire format, first-paint path or browser-floor change.
+
 ## 1.32.0.7
 
 - Closes the residual first-Sync stale-meta durability race found by independent adversarial audit: an already-open New Tab can no longer suppress pending-journal protection merely because its cached Sync metadata has not yet observed durable `syncInitialized`/`syncEnabled` authority.

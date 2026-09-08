@@ -117,6 +117,6 @@ for (const browser of ["firefox", "chrome"]) {
 
 test("1.26.17.7 first-run profile import preserves Frequently Visited intent independently of Top Sites permission", () => {
   const src = fs.readFileSync("src/shared/welcome/welcome.js", "utf8");
-  assert.match(src, /parsed\.preferences\.frequentlyVisitedEnabled \? "1" : "0"/);
+  assert.match(src, /candidate\.preferences\.frequentlyVisitedEnabled \? "1" : "0"/);
   assert.doesNotMatch(src, /frequentlyVisitedEnabled\s*&&\s*hasTopSites/);
 });

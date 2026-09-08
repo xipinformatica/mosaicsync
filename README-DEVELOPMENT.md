@@ -1,10 +1,15 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
+
+
+## 1.32.0.8 — Welcome source-candidate authority correction
+
+A complete persistence-intent audit found one older Welcome/setup authority gap after the 1.32.0.7 Sync-eligibility correction. When setup was rerun on an already-initialized Sync device, choosing Start empty, importing current Firefox shortcuts or importing a MosaicSync profile wrote that candidate immediately into authoritative `LOCAL_STATE_KEY` before the later “which copy should win?” decision. The background could therefore observe and publish that provisional layout before the user chose the synchronized copy. 1.32.0.8 keeps all three local starting-source candidates memory-only until source resolution. Local-only/no-remote flows commit immediately before completion/bootstrap; the conflict panel commits only when “Use this computer” wins; choosing the synchronized copy never commits the candidate. Imported device-local preferences are staged with the profile candidate and applied only when that candidate wins. No Sync journal, Recovery, schema, permission, first-paint or browser-floor contract changes.
 
 ## 1.32.0.7 — Journey 3 final stale-meta Sync durability correction
 

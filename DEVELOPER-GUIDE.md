@@ -190,6 +190,8 @@ A cache may make the New Tab page appear immediately, but it is never allowed to
 
 If every disposable startup cache disappears, MosaicSync must still be able to reconstruct the correct profile from authoritative storage.
 
+Beginning with **1.32.0.8**, Welcome/setup source selection must preserve that same authority rule. “Start empty”, current-browser shortcut import and MosaicSync profile import are **provisional source candidates** until the source decision is resolved. They may be held in Welcome page memory, but they must not be written to authoritative `LOCAL_STATE_KEY` while a synchronized copy may still win. A candidate is committed only immediately before local-only completion or `bootstrap-local` after local authority has actually been selected. Choosing the synchronized copy discards the candidate without committing it. Imported device-local preferences travel with the provisional profile candidate and are applied only if that candidate wins. Do not solve setup conflicts by making `LOCAL_STATE_KEY` temporarily non-authoritative or by teaching the background to ignore selected local-state writes.
+
 ---
 
 ## 5. Where authoritative local state lives
