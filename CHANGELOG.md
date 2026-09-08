@@ -1,3 +1,17 @@
+## 1.32.0.6
+
+- Fixes two pre-existing Normal Sync bootstrap concurrency races found by the Journey-3 Step-7 freeze audit; both were reproduced in Firefox- and Chromium-shaped generated runtimes and also on untouched 1.31.5, so they were not introduced by Journey 3.
+- Makes remote Restore/await-remote persistence baseline-aware and continues from the actual rebased state, preventing a concurrent New Tab edit from being overwritten by a stale bootstrap snapshot.
+- Replaces late unconditional cumulative pending-journal cleanup in local/remote bootstrap with entry-generation `journalId` acknowledgement, so a newer durable retry journal created while bootstrap is in flight survives.
+- Adds thirteen permanent 1.32.0.6 regressions, proven red 13/13 on untouched 1.32.0.5 and green after correction. No feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change.
+
+## 1.32.0.5
+
+- Completes **3rd Maintainability Journey Step 6 — Contract Simplification / Proven Cleanup** without adding another ownership extraction.
+- Removes the redundant Bookmarks folder-color preference read from every New Tab's post-paint maintenance; the existing device-local preference is still read immediately before an opened Bookmarks tree is rendered.
+- Shrinks the Bookmarks controller contract by keeping its internally owned `open()` operation private to `bind()`, and removes a duplicate sidebar DOM rebuild during localized UI refresh.
+- Adds four permanent cleanup regressions, proven red on untouched 1.32.0.4 before the cleanup. Runtime reachability remains clean; no feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change.
+
 ## 1.32.0.4
 
 - Fixes a pre-existing MEDIUM durability race in pending Normal Sync journal acknowledgement/authority cleanup, discovered by the deep forensic audit before Journey-3 Step 6. A stale completed retry can no longer read journal A, race a newer New Tab write of journal B, and then delete B.

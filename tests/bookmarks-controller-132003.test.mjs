@@ -33,9 +33,10 @@ test("1.32.0.3 preserves secondary-style-before-Bookmarks-visibility ordering", 
   assert.match(owner, /async function open\(\)[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?bookmarksDialog\.showModal\(\)/);
 });
 
-test("1.32.0.3 preserves post-paint-only bookmark color preference hydration", () => {
-  assert.match(newtab, /function schedulePostPaintMaintenance\([\s\S]*?bookmarksController\.hydratePostPaintPreferences\(\)/);
-  assert.match(owner, /function hydratePostPaintPreferences\(\) \{[\s\S]*?bookmarkFolderColors = readBookmarkFolderColors\(\)/);
+test("1.32.0.3 keeps bookmark-folder colors device-local and outside first-paint authority", () => {
+  assert.match(owner, /function readBookmarkFolderColors\(\)[\s\S]*?localStorage\.getItem\(BOOKMARK_FOLDER_COLORS_PREF_KEY\)/);
+  assert.match(owner, /async function loadBookmarksIntoDialog\(\)[\s\S]*?bookmarkFolderColors = readBookmarkFolderColors\(\)[\s\S]*?renderBookmarkBrowser\(\)/);
+  assert.doesNotMatch(newtab, /BOOKMARK_FOLDER_COLORS_PREF_KEY|readBookmarkFolderColors/);
 });
 
 test("1.32.0.3 controller owns bookmark-local event wiring without adding global listeners", () => {
@@ -62,18 +63,27 @@ test("1.32.0.3 controller preserves close-toggle behavior without touching the l
   assert.ok(fs.existsSync(OWNER), "dedicated Bookmarks controller must exist");
   const moduleUrl = `${pathToFileURL(path.resolve(OWNER)).href}?test=${Date.now()}`;
   const { createBookmarksController } = await import(moduleUrl);
+  let clickHandler = null;
   let closed = 0;
   let loaded = 0;
-  const dialog = { open: true };
+  const dialog = { open: true, addEventListener() {} };
+  const button = {
+    addEventListener(type, handler) {
+      if (type === "click") clickHandler = handler;
+    }
+  };
   const controller = createBookmarksController({
     loadBookmarksModule: async () => { loaded += 1; return {}; },
     ensureSecondaryStyles: async () => true,
     closeDialog: value => { assert.equal(value, dialog); closed += 1; },
     positionFloatingMenu() {},
     graphemeSegmenter: null,
-    elements: { bookmarksDialog: dialog }
+    elements: { bookmarksButton: button, bookmarksDialog: dialog }
   });
-  await controller.open();
+  controller.bind();
+  assert.equal(typeof clickHandler, "function");
+  clickHandler();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(closed, 1);
   assert.equal(loaded, 0, "closing an already-open dialog must not touch browser Bookmarks API");
 });

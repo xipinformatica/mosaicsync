@@ -4205,6 +4205,15 @@ export function startBackground(adapter) {
     if (!meta.syncEnabled) {
       return { ok: false, error: "Firefox Account Sync permission is not enabled on this device.", meta };
     }
+    // A successful authoritative publication may supersede durable work that
+    // already existed when this exact local snapshot was captured. Remember only
+    // that generation: a newer New Tab journal created while publication is in
+    // flight must survive completion and remain crash/retry authority.
+    const pendingCandidate = preservePendingSyncRecovery ? null : await readPendingLocalSyncMutation();
+    const pendingAtStart = pendingCandidate &&
+      localStateSyncSignature(pendingCandidate.after) === localStateSyncSignature(state)
+      ? pendingCandidate
+      : null;
 
     await markSyncing(meta);
 
@@ -4296,7 +4305,9 @@ export function startBackground(adapter) {
     // sentinel, but only after a complete Personal+Work copy has been committed.
     const resetRead = await browser.storage.sync.get(SYNC_RESET_INTENT_KEY);
     if (validResetIntent(resetRead?.[SYNC_RESET_INTENT_KEY])) await removeSyncItems([SYNC_RESET_INTENT_KEY]);
-    if (!preservePendingSyncRecovery) await clearPendingLocalSyncMutation();
+    if (!preservePendingSyncRecovery && pendingAtStart) {
+      await clearPendingLocalSyncMutation(pendingAtStart.journalId);
+    }
     await ensureSyncWatchAlarm(refreshed);
     if (markContinuity) {
       const all = await browser.storage.sync.get(null);
@@ -4313,6 +4324,14 @@ export function startBackground(adapter) {
     if (!meta.syncEnabled) {
       return { ok: false, error: "Firefox Account Sync permission is not enabled on this device.", meta };
     }
+    // Capture only the durable local-mutation generation represented by the
+    // bootstrap's initial local baseline. Completion may acknowledge this exact
+    // generation, but must never delete a replacement journal written later.
+    const pendingCandidate = await readPendingLocalSyncMutation();
+    const pendingAtStart = pendingCandidate &&
+      localStateSyncSignature(pendingCandidate.after) === localStateSyncSignature(fullLocalState)
+      ? pendingCandidate
+      : null;
 
     const sources = await readCoreSources();
     const resetIntent = sources.all?.[SYNC_RESET_INTENT_KEY];
@@ -4472,7 +4491,11 @@ export function startBackground(adapter) {
         );
       }
     }
-    await setLocalStateSilently(mergedState);
+    // Remote bootstrap is a long-running read/merge/write operation. Persist
+    // against the local state that was captured at entry so the shared storage
+    // transaction can rebase any New Tab edit that committed while Sync data was
+    // being read. Continue with the state that actually won that rebase.
+    mergedState = await setLocalStateSilently(mergedState, { baseState: fullLocalState });
 
     const completedWaitingOnboarding = !meta.onboardingCompleted && meta.syncBootstrapMode === "await-remote";
     const observedMeta = observeRemoteCore(meta, remotePersonal);
@@ -4502,6 +4525,23 @@ export function startBackground(adapter) {
       syncWaitStartedAt: 0
     });
     refreshed = await writeLocalMeta(refreshed, { allowOnboardingChange: completedWaitingOnboarding });
+
+    // On first Sync delivery there is one unavoidable authority handoff: the
+    // remote baseline is committed while durable meta still says uninitialized,
+    // then Sync authority becomes initialized. A New Tab edit that wins between
+    // those two operations cannot journal itself yet. Recheck the compact local
+    // Sync signature after initialization; if such an edit exists, hydrate the
+    // latest authoritative profile and include it in the bootstrap publication.
+    // Any edit after this point sees initialized durable meta and therefore has
+    // normal durable journal protection.
+    if (!meta.syncInitialized) {
+      const latestRead = await browser.storage.local.get(LOCAL_STATE_KEY);
+      const latestRaw = latestRead?.[LOCAL_STATE_KEY];
+      if (latestRaw && localStateSyncSignature(latestRaw) !== localStateSyncSignature(mergedState)) {
+        mergedState = (await ensureLocalStorage()).state;
+      }
+    }
+
     await markSyncContinuityHealthy(refreshed, {
       revision: sources.profile?.revision || `${remotePersonal.revision || ""}|${remoteWork.revision || ""}`,
       publisherDeviceId: sources.profile?.originDeviceId || remotePersonal.originDeviceId || remoteWork.originDeviceId || "",
@@ -4528,7 +4568,7 @@ export function startBackground(adapter) {
       syncStatus: "ready",
       ...profileProtectionState(profilePublish, refreshed)
     });
-    await clearPendingLocalSyncMutation();
+    if (pendingAtStart) await clearPendingLocalSyncMutation(pendingAtStart.journalId);
     await ensureSyncWatchAlarm(refreshed);
     await scheduleMissingShortcutIconHydrationAfterSync({ force: true });
     return {
@@ -6080,7 +6120,7 @@ export function startBackground(adapter) {
   async function setLocalStateSilently(state, { baseState = null } = {}) {
     let signature = "";
     try {
-      await writeLocalState(state, {
+      return await writeLocalState(state, {
         baseState,
         beforeWrite: async normalized => {
           signature = localStateSyncSignature(normalized);

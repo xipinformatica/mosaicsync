@@ -1978,7 +1978,6 @@ ${site.url}`;
     shortcutUsage = readShortcutUsage();
     hiddenFrequentDomains = readHiddenFrequentDomains();
     deviceDefaultSpace = readDeviceDefaultSpacePreference();
-    bookmarksController.hydratePostPaintPreferences();
     if (settingsFrequentlyVisited) settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
     if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
     if (!frequentlyVisitedEnabled) {

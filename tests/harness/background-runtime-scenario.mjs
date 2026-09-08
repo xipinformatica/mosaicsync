@@ -108,6 +108,55 @@ if (scenario.startsWith("sync-13010-") && typeof nativeDecompressionStream === "
   };
 }
 
+// 1.32.0.6 bootstrap concurrency regressions need a real shared-lock queue so a
+// New Tab persistence transaction can deterministically win immediately before
+// the background bootstrap's local-state commit.
+let bootstrapRaceLockArmed = false;
+let bootstrapRaceLockCount = 0;
+let signalDelayedBootstrapLock = null;
+let releaseDelayedBootstrapLock = null;
+let delayedBootstrapLockEntered = null;
+let delayedBootstrapLockRelease = null;
+if (scenario === "sync-13206-restore-preserves-concurrent-edit" ||
+    scenario === "sync-13206-await-remote-preserves-concurrent-edit") {
+  delayedBootstrapLockEntered = new Promise(resolve => { signalDelayedBootstrapLock = resolve; });
+  delayedBootstrapLockRelease = new Promise(resolve => { releaseDelayedBootstrapLock = resolve; });
+  const held = new Map();
+  const queues = new Map();
+  const acquire = (name, callback) => new Promise((resolve, reject) => {
+    const run = async () => {
+      held.set(name, true);
+      try { resolve(await callback()); }
+      catch (error) { reject(error); }
+      finally {
+        const queue = queues.get(name) || [];
+        const next = queue.shift();
+        if (next) queueMicrotask(next);
+        else held.delete(name);
+      }
+    };
+    if (held.get(name)) {
+      if (!queues.has(name)) queues.set(name, []);
+      queues.get(name).push(run);
+    } else {
+      run();
+    }
+  });
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { locks: { request(name, callback) {
+      if (bootstrapRaceLockArmed) {
+        bootstrapRaceLockCount += 1;
+        if (bootstrapRaceLockCount === 2) {
+          signalDelayedBootstrapLock();
+          return delayedBootstrapLockRelease.then(() => acquire(name, callback));
+        }
+      }
+      return acquire(name, callback);
+    } } }
+  });
+}
+
 globalThis.fetch = async (url, options = {}) => {
   fetchLog.push({ url: String(url), options: clone(options) });
   return fetchHandler(String(url), options);
@@ -2564,6 +2613,309 @@ else if (scenario === 'sync-1315-cleanup-failure-blocks-disable') {
   assert.equal(meta.syncEnabled,false);
   assert.equal(pending,undefined,'successful retry must verify the durable journal was cleared');
   console.log(JSON.stringify({ok:true,failedClosed:true,retrySucceeded:true,journalCleared:true}));
+}
+
+
+else if (scenario === 'sync-13206-bootstrap-local-preserves-newer-journal') {
+  const base=stateWith({personal:[shortcut('base','https://base.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+
+  let releaseFirstSyncSet;
+  let firstSyncSetEntered;
+  const entered = new Promise(resolve => { firstSyncSetEntered = resolve; });
+  const release = new Promise(resolve => { releaseFirstSyncSet = resolve; });
+  const normalSyncSet = sync.set.bind(sync);
+  let blocked = false;
+  sync.set = async items => {
+    if (!blocked) {
+      blocked = true;
+      firstSyncSetEntered();
+      await release;
+    }
+    return normalSyncSet(items);
+  };
+
+  const bootPromise=send({type:'mosaicsync:bootstrap-local'});
+  await entered;
+
+  const edited=clone(base);
+  edited.spaces.personal.shortcuts.push(shortcut('newer','https://newer.test/',900));
+  edited.spaces.personal.updatedAt=900;
+  edited.updatedAt=900;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(base),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.ok(pendingDuring?.journalId,'the concurrent New Tab edit must create durable pending authority');
+
+  releaseFirstSyncSet();
+  const result=await bootPromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  const remote=(await sync.get(null));
+  const remoteHasNewer=Object.values(remote).some(value=>value && typeof value==='object' && value.id==='newer' && value.kind!=='deleted');
+
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='newer'),true,'the newer edit must remain authoritative locally');
+  assert.equal(remoteHasNewer,false,'the older authoritative publication must not pretend it included the later edit');
+  assert.equal(pendingAfter?.journalId,pendingDuring.journalId,'bootstrapLocal must preserve a newer journal generation it did not publish');
+  console.log(JSON.stringify({ok:true,pendingPreserved:true,localHasNewer:true,remoteHasNewer:false}));
+}
+
+else if (scenario === 'sync-13206-bootstrap-remote-preserves-newer-journal') {
+  const base=stateWith({
+    personal:[shortcut('base','https://base.test/',100)],
+    work:[shortcut('work-base','https://work-base.test/',100)]
+  });
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set({
+    ...remotePersonalEntries(base,'remote-personal','remote-device'),
+    ...remoteWorkEntries(base,'remote-work','remote-device')
+  });
+
+  let releaseFirstSyncSet;
+  let firstSyncSetEntered;
+  const entered = new Promise(resolve => { firstSyncSetEntered = resolve; });
+  const release = new Promise(resolve => { releaseFirstSyncSet = resolve; });
+  const normalSyncSet = sync.set.bind(sync);
+  let blocked = false;
+  sync.set = async items => {
+    if (!blocked) {
+      blocked = true;
+      firstSyncSetEntered();
+      await release;
+    }
+    return normalSyncSet(items);
+  };
+
+  const restorePromise=send({type:'mosaicsync:restore-from-sync'});
+  await entered;
+
+  const currentRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const current=model.normalizeState(currentRaw);
+  const edited=clone(current);
+  edited.spaces.personal.shortcuts.push(shortcut('newer-remote-race','https://newer-remote-race.test/',950));
+  edited.spaces.personal.updatedAt=950;
+  edited.updatedAt=950;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(current),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.ok(pendingDuring?.journalId,'the concurrent edit during restore must be durably journaled');
+
+  releaseFirstSyncSet();
+  const result=await restorePromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='newer-remote-race'),true,'the later edit must remain local');
+  assert.equal(pendingAfter?.journalId,pendingDuring.journalId,'bootstrapRemote must not delete a journal generation created after its initial baseline');
+  console.log(JSON.stringify({ok:true,pendingPreserved:true,localHasNewer:true}));
+}
+
+else if (scenario === 'sync-13206-await-remote-preserves-concurrent-edit') {
+  const localBase=stateWith({personal:[shortcut('local-before-sync','https://local-before-sync.test/',150)]});
+  const remoteBase=stateWith({
+    personal:[shortcut('remote','https://remote.test/',500)],
+    work:[shortcut('remote-work','https://remote-work.test/',500)]
+  });
+  await seedLocalState(localBase,{
+    syncEnabled:true,
+    syncInitialized:false,
+    syncBootstrapMode:'await-remote',
+    syncStatus:'waiting'
+  });
+  await sync.set({
+    ...remotePersonalEntries(remoteBase,'remote-personal-await','remote-device'),
+    ...remoteWorkEntries(remoteBase,'remote-work-await','remote-device')
+  });
+
+  bootstrapRaceLockArmed = true;
+  bootstrapRaceLockCount = 0;
+  const reconcilePromise=send({type:'mosaicsync:reconcile-now'});
+  await delayedBootstrapLockEntered;
+
+  const currentRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const current=model.normalizeState(currentRaw);
+  const edited=clone(current);
+  edited.spaces.personal.shortcuts.push(shortcut('during-delivery-edit','https://during-delivery-edit.test/',999));
+  edited.spaces.personal.updatedAt=999;
+  edited.updatedAt=999;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(current),
+    recordSyncMutation:false
+  });
+
+  releaseDelayedBootstrapLock();
+  const result=await reconcilePromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='during-delivery-edit'),true,
+    'automatic await-remote bootstrap must rebase and preserve an edit committed after its baseline');
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='remote'),true,
+    'the verified remote profile must still be applied');
+  console.log(JSON.stringify({ok:true,editSurvived:true,action:result?.action||'',lockRequests:bootstrapRaceLockCount}));
+}
+
+else if (scenario === 'sync-13206-restore-preserves-concurrent-edit') {
+  const base=stateWith({
+    personal:[shortcut('base','https://base.test/',100)],
+    work:[shortcut('work-base','https://work-base.test/',100)]
+  });
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set({
+    ...remotePersonalEntries(base,'remote-personal-overwrite','remote-device'),
+    ...remoteWorkEntries(base,'remote-work-overwrite','remote-device')
+  });
+
+  bootstrapRaceLockArmed = true;
+  bootstrapRaceLockCount = 0;
+  const restorePromise=send({type:'mosaicsync:restore-from-sync'});
+  await delayedBootstrapLockEntered;
+
+  const currentRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const current=model.normalizeState(currentRaw);
+  const edited=clone(current);
+  edited.spaces.personal.shortcuts.push(shortcut('concurrent-user-edit','https://concurrent-user-edit.test/',999));
+  edited.spaces.personal.updatedAt=999;
+  edited.updatedAt=999;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(current),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.ok(pendingDuring?.journalId,'concurrent edit must be durable before restore resumes');
+
+  releaseDelayedBootstrapLock();
+  const result=await restorePromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='concurrent-user-edit'),true,
+    'explicit Restore must rebase and preserve a concurrent persisted user edit');
+  assert.equal(pendingAfter?.journalId,pendingDuring.journalId,
+    'Restore completion must not delete the concurrent edit journal that replaced its entry-time generation');
+  console.log(JSON.stringify({ok:true,editSurvived:true,pendingPreserved:true,lockRequests:bootstrapRaceLockCount}));
+}
+
+
+else if (scenario === 'sync-13206-bootstrap-local-snapshot-journal-gap-preserves-newer') {
+  const base=stateWith({personal:[shortcut('base','https://base.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+
+  let signalPendingRead;
+  let releasePendingRead;
+  const entered = new Promise(resolve => { signalPendingRead = resolve; });
+  const release = new Promise(resolve => { releasePendingRead = resolve; });
+  const normalLocalGet = local.get.bind(local);
+  let blocked = false;
+  local.get = async keys => {
+    if (!blocked && keys === constants.LOCAL_PENDING_SYNC_MUTATION_KEY) {
+      blocked = true;
+      signalPendingRead();
+      await release;
+    }
+    return normalLocalGet(keys);
+  };
+
+  const bootPromise=send({type:'mosaicsync:bootstrap-local'});
+  await entered;
+
+  // The bootstrap already captured `base`, but its separate journal read has not
+  // resolved yet. Commit a newer state+journal atomically in this exact gap.
+  const edited=clone(base);
+  edited.spaces.personal.shortcuts.push(shortcut('gap-edit','https://gap-edit.test/',925));
+  edited.spaces.personal.updatedAt=925;
+  edited.updatedAt=925;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(base),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await normalLocalGet(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.ok(pendingDuring?.journalId);
+
+  releasePendingRead();
+  const result=await bootPromise;
+  assert.equal(result?.ok,true);
+  const pendingAfter=(await normalLocalGet(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  const remote=(await sync.get(null));
+  const remoteHasGapEdit=Object.values(remote).some(value=>value && typeof value==='object' && value.id==='gap-edit' && value.kind!=='deleted');
+  assert.equal(remoteHasGapEdit,false,'bootstrapLocal must publish only the state it captured before the gap edit');
+  assert.equal(pendingAfter?.journalId,pendingDuring.journalId,
+    'a journal read after snapshot capture is not superseded unless its after-state matches that captured snapshot');
+  console.log(JSON.stringify({ok:true,pendingPreserved:true,remoteHasGapEdit:false}));
+}
+
+else if (scenario === 'sync-13206-await-remote-late-uninitialized-edit-is-published') {
+  const localBase=stateWith({personal:[shortcut('local-before-sync','https://local-before-sync.test/',150)]});
+  const remoteBase=stateWith({
+    personal:[shortcut('remote','https://remote.test/',500)],
+    work:[shortcut('remote-work','https://remote-work.test/',500)]
+  });
+  await seedLocalState(localBase,{
+    syncEnabled:true,
+    syncInitialized:false,
+    syncBootstrapMode:'await-remote',
+    syncStatus:'waiting'
+  });
+  await sync.set({
+    ...remotePersonalEntries(remoteBase,'remote-personal-late','remote-device'),
+    ...remoteWorkEntries(remoteBase,'remote-work-late','remote-device')
+  });
+
+  let signalQuotaRead;
+  let releaseQuotaRead;
+  const entered = new Promise(resolve => { signalQuotaRead = resolve; });
+  const release = new Promise(resolve => { releaseQuotaRead = resolve; });
+  const normalGetBytes = sync.getBytesInUse.bind(sync);
+  let blocked = false;
+  sync.getBytesInUse = async keys => {
+    if (!blocked) {
+      blocked = true;
+      signalQuotaRead();
+      await release;
+    }
+    return normalGetBytes(keys);
+  };
+
+  const reconcilePromise=send({type:'mosaicsync:reconcile-now'});
+  await entered;
+
+  // bootstrapRemote has committed its merged local state, but durable meta is
+  // still uninitialized while refreshQuota is paused. This user edit therefore
+  // cannot create an outbound journal yet and must be swept into bootstrap before
+  // the authority handoff completes.
+  const currentRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const current=model.normalizeState(currentRaw);
+  const edited=clone(current);
+  edited.spaces.personal.shortcuts.push(shortcut('late-uninitialized-edit','https://late-uninitialized-edit.test/',997));
+  edited.spaces.personal.updatedAt=997;
+  edited.updatedAt=997;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(current),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(pendingDuring,undefined,'durable meta is still uninitialized in this deliberately exposed handoff window');
+
+  releaseQuotaRead();
+  const result=await reconcilePromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const remote=(await sync.get(null));
+  const remoteHasLate=Object.values(remote).some(value=>value && typeof value==='object' && value.id==='late-uninitialized-edit' && value.kind!=='deleted');
+  assert.equal(finalLocal.spaces.personal.shortcuts.some(item=>item.id==='late-uninitialized-edit'),true);
+  assert.equal(remoteHasLate,true,
+    'first-Sync bootstrap must re-read and publish an edit that committed before initialized durable authority became active');
+  console.log(JSON.stringify({ok:true,lateEditPreserved:true,lateEditPublished:true}));
 }
 
 else {

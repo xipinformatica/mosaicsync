@@ -1,8 +1,20 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+
+## 1.32.0.6 — Journey 3 freeze-audit bootstrap concurrency correction
+
+The Step-7 freeze audit found two pre-existing Normal Sync bootstrap races, so the maintainability freeze remains conditional on this narrow corrective release. Remote bootstrap now participates in the existing baseline/rebase persistence contract and uses the actual committed rebased state for subsequent Sync publication. Local and remote bootstrap completion now acknowledge only the entry-time cumulative pending-journal `journalId`, so a newer replacement generation remains durable. Thirteen permanent regressions cover explicit Restore, automatic await-remote delivery, local authoritative publication and Firefox/Chromium generated-runtime parity. No ownership extraction, feature, schema, permission, Sync/Recovery wire-format or first-paint change is introduced.
+
+
+## 1.32.0.5 — Journey 3 Step 6 proven contract cleanup
+
+Step 6 does not introduce another ownership extraction. It removes only redundant glue left intentionally intact during the mechanical Step-5 Bookmarks move. The Bookmarks controller now keeps `open()` private to its own event wiring; `newtab.js` no longer performs the redundant post-paint bookmark-folder-color hydration call; and localized refresh no longer rebuilds the sidebar twice. Folder colors are still read and validated inside `loadBookmarksIntoDialog()` immediately before rendering the browser-owned bookmark tree.
+
+This cleanup removes one device-local `localStorage` read from every New Tab that never opens Bookmarks and one duplicate DOM rebuild during Bookmarks relocalization. It adds no first-paint await, browser API call, storage operation, network work, timer, serialization or Sync/Recovery dependency. Four permanent `contract-simplification-13205` regressions were proven red on untouched 1.32.0.4 before the cleanup. Runtime reachability remains clean, so the retained review-only exports from the earlier dead-code audit remain intentionally retained.
 
 
 ## 1.32.0.4 — forensic Sync durability correction before Step 6

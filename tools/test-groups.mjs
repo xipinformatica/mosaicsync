@@ -37,6 +37,7 @@ const GROUPS = Object.freeze({
       /localization/i,
       /newtab/i,
       /bookmarks-controller/i,
+      /contract-simplification/i,
       /settings-footer/i,
       /theme-wallpaper/i,
       /ui-polish/i,
@@ -70,7 +71,8 @@ const GROUPS = Object.freeze({
       /corrective-1311\.test\.mjs$/i,
       /corrective-1313\.test\.mjs$/i,
       /corrective-1315\.test\.mjs$/i,
-      /corrective-13204\.test\.mjs$/i
+      /corrective-13204\.test\.mjs$/i,
+      /corrective-13206\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -137,6 +139,7 @@ const GROUPS = Object.freeze({
       /dead-code-retirement/i,
       /maintenance-/i,
       /bookmarks-controller/i,
+      /contract-simplification/i,
       /release-/i,
       /optimization-/i,
       /performance-hardening/i,
@@ -151,7 +154,8 @@ const GROUPS = Object.freeze({
       /corrective-1310\.test\.mjs$/i,
       /corrective-1313\.test\.mjs$/i,
       /corrective-1314\.test\.mjs$/i,
-      /corrective-13204\.test\.mjs$/i
+      /corrective-13204\.test\.mjs$/i,
+      /corrective-13206\.test\.mjs$/i
     ]
   }
 });

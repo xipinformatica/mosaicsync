@@ -398,12 +398,7 @@ export function createBookmarksController({
 
   function refreshLocalizedUi() {
     if (!bookmarkTree.length) return;
-    renderBookmarkSidebar();
     renderBookmarkBrowser();
-  }
-
-  function hydratePostPaintPreferences() {
-    bookmarkFolderColors = readBookmarkFolderColors();
   }
 
   function bind() {
@@ -420,8 +415,6 @@ export function createBookmarksController({
     bind,
     closeColorMenu,
     closeColorMenuIfOutside,
-    hydratePostPaintPreferences,
-    open,
     refreshLocalizedUi
   });
 }
