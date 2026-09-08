@@ -38,8 +38,6 @@ import {
   LOCAL_SYNC_DIAGNOSTICS_KEY,
   LOCAL_SYNC_CONTINUITY_KEY,
   LOCAL_SYNC_RECOVERY_STATUS_KEY,
-  LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX,
-  LOCAL_PENDING_SYNC_MUTATION_KEY,
   LOCAL_PRE_SPACES_BACKUP_KEY,
   LOCAL_STATE_KEY,
   MAX_EXPECTATIONS,
@@ -111,6 +109,25 @@ import {
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, consumeExactExpectation, consumeExactSessionExpectations, countOwnEnumerable, hasOwnEnumerable, syncNamespaceFor, trimExpectationMap, trimSessionEntries } from "./runtime-utils.js";
 import { selectAtomicRecoverySnapshot, selectCoherentRestoreSource } from "./sync-source-policy.js";
+import {
+  datasetRevision,
+  latestSyncOrigin,
+  markAppliedRemoteCore,
+  markAppliedSnapshot,
+  markAppliedWorkSnapshot,
+  observeRemoteCore,
+  remoteCoreUsable
+} from "./sync-remote-observation.js";
+import {
+  CROSS_SPACE_SYNC_TRANSACTION_VERSION,
+  clearAllPendingSyncRecoveryState,
+  clearPendingCrossSpaceSync,
+  clearPendingLocalSyncMutation,
+  pendingCrossSpaceSyncKey,
+  readPendingCrossSpaceSyncEntries,
+  readPendingLocalSyncMutation,
+  writePendingCrossSpaceSync
+} from "./sync-pending-journal.js";
 import { planResetIntentCapacity } from "./sync-reset-policy.js";
 import { createRecoveryContinuity } from "./recovery-continuity.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
@@ -718,20 +735,22 @@ export function startBackground(adapter) {
   async function observeRemoteResetIntent(intent, meta) {
     if (!validResetIntent(intent)) return null;
     await markIntentionalSyncReset(meta, Number(intent.epoch));
-    await clearAllPendingSyncRecoveryState();
-    const next = await writeLocalMeta({
-      ...meta,
-      // A peer that observes an explicit reset must never resurrect its old local
-      // copy, but it also should not silently drop out of Sync forever. Keep it in
-      // the existing safe await-remote mode so a later explicit “Use this device”
-      // publication from any peer can automatically become the new source.
-      syncEnabled: true,
-      syncInitialized: false,
-      syncBootstrapMode: "await-remote",
-      syncStatus: "waiting",
-      lastSyncError: "",
-      lastSyncWarning: "",
-      syncWaitStartedAt: Date.now()
+    let next;
+    await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC, async () => {
+      next = await writeLocalMeta({
+        ...meta,
+        // A peer that observes an explicit reset must never resurrect its old local
+        // copy, but it also should not silently drop out of Sync forever. Keep it in
+        // the existing safe await-remote mode so a later explicit “Use this device”
+        // publication from any peer can automatically become the new source.
+        syncEnabled: true,
+        syncInitialized: false,
+        syncBootstrapMode: "await-remote",
+        syncStatus: "waiting",
+        lastSyncError: "",
+        lastSyncWarning: "",
+        syncWaitStartedAt: Date.now()
+      }, { persistenceLockHeld: true });
     });
     await ensureSyncWatchAlarm(next);
     return { ok: true, skipped: true, reason: "intentional-remote-reset", meta: next };
@@ -1189,34 +1208,36 @@ export function startBackground(adapter) {
     }
     if (!handlesDataCollectionPermission || !permissions?.data_collection?.length) return;
     enqueue(async () => {
-      await clearAllPendingSyncRecoveryState();
-      const meta = await readLocalMeta();
-      if (!meta.syncEnabled) return;
-      const next = await writeLocalMeta({
-        ...meta,
-        syncEnabled: false,
-        syncInitialized: false,
-        syncBootstrapMode: "none",
-        syncStatus: "off",
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncSkippedAssets: 0,
-        syncFastSnapshotFallback: false,
-        syncProfileProtection: "unknown",
-        syncProfileProtectionReason: "",
-        syncWaitStartedAt: 0,
-        lastAppliedSyncRevision: "",
-        lastAppliedWorkSyncRevision: "",
-        lastAppliedDeviceSnapshotRevision: "",
-        lastAppliedProfileSnapshotRevision: "",
-        lastProfileSnapshotPublishedAt: 0,
-        lastRemoteReceiptAt: 0,
-        lastRemoteReceiptRevision: "",
-        lastRemoteReceiptUpdatedAt: 0,
-        lastRemoteReceiptOriginDeviceId: "",
-        lastRemoteReceiptProvenanceExact: false
+      let next = null;
+      await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC, async () => {
+        const meta = await readLocalMeta();
+        if (!meta.syncEnabled) return;
+        next = await writeLocalMeta({
+          ...meta,
+          syncEnabled: false,
+          syncInitialized: false,
+          syncBootstrapMode: "none",
+          syncStatus: "off",
+          lastSyncError: "",
+          lastSyncWarning: "",
+          syncSkippedAssets: 0,
+          syncFastSnapshotFallback: false,
+          syncProfileProtection: "unknown",
+          syncProfileProtectionReason: "",
+          syncWaitStartedAt: 0,
+          lastAppliedSyncRevision: "",
+          lastAppliedWorkSyncRevision: "",
+          lastAppliedDeviceSnapshotRevision: "",
+          lastAppliedProfileSnapshotRevision: "",
+          lastProfileSnapshotPublishedAt: 0,
+          lastRemoteReceiptAt: 0,
+          lastRemoteReceiptRevision: "",
+          lastRemoteReceiptUpdatedAt: 0,
+          lastRemoteReceiptOriginDeviceId: "",
+          lastRemoteReceiptProvenanceExact: false
+        }, { persistenceLockHeld: true });
       });
-      await ensureSyncWatchAlarm(next);
+      if (next) await ensureSyncWatchAlarm(next);
     });
   });
 
@@ -3504,32 +3525,34 @@ export function startBackground(adapter) {
 
     if (!enabled) {
       clearDeviceSnapshotDecodeCache();
-      await clearAllPendingSyncRecoveryState();
-      const next = await writeLocalMeta({
-        ...previous,
-        syncEnabled: false,
-        syncInitialized: false,
-        syncBootstrapMode: "none",
-        syncStatus: "off",
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncSkippedAssets: 0,
-        syncFastSnapshotFallback: false,
-        ...(resetProfileProtectionOnSyncDisable ? {
-          syncProfileProtection: "unknown",
-          syncProfileProtectionReason: ""
-        } : {}),
-        syncWaitStartedAt: 0,
-        lastAppliedSyncRevision: "",
-        lastAppliedWorkSyncRevision: "",
-        lastAppliedDeviceSnapshotRevision: "",
-        lastAppliedProfileSnapshotRevision: "",
-        lastProfileSnapshotPublishedAt: 0,
-        lastRemoteReceiptAt: 0,
-        lastRemoteReceiptRevision: "",
-        lastRemoteReceiptUpdatedAt: 0,
-        lastRemoteReceiptOriginDeviceId: "",
-        lastRemoteReceiptProvenanceExact: false
+      let next;
+      await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC, async () => {
+        next = await writeLocalMeta({
+          ...previous,
+          syncEnabled: false,
+          syncInitialized: false,
+          syncBootstrapMode: "none",
+          syncStatus: "off",
+          lastSyncError: "",
+          lastSyncWarning: "",
+          syncSkippedAssets: 0,
+          syncFastSnapshotFallback: false,
+          ...(resetProfileProtectionOnSyncDisable ? {
+            syncProfileProtection: "unknown",
+            syncProfileProtectionReason: ""
+          } : {}),
+          syncWaitStartedAt: 0,
+          lastAppliedSyncRevision: "",
+          lastAppliedWorkSyncRevision: "",
+          lastAppliedDeviceSnapshotRevision: "",
+          lastAppliedProfileSnapshotRevision: "",
+          lastProfileSnapshotPublishedAt: 0,
+          lastRemoteReceiptAt: 0,
+          lastRemoteReceiptRevision: "",
+          lastRemoteReceiptUpdatedAt: 0,
+          lastRemoteReceiptOriginDeviceId: "",
+          lastRemoteReceiptProvenanceExact: false
+        }, { persistenceLockHeld: true });
       });
       await ensureSyncWatchAlarm(next);
       return { ok: true, meta: next, action: "disabled" };
@@ -3885,10 +3908,6 @@ export function startBackground(adapter) {
     };
   }
 
-  function remoteCoreUsable(core) {
-    return Boolean(core?.settings && core?.records instanceof Map);
-  }
-
   function assetIdsByUsage(all) {
     const shortcut = new Set();
     for (const value of Object.values(all || {})) {
@@ -3941,65 +3960,6 @@ export function startBackground(adapter) {
       free: Math.max(0, SYNC_QUOTA_BYTES - total),
       total
     };
-  }
-
-  function datasetRevision(dataset) {
-    if (!dataset || typeof dataset !== "object") return "";
-    const commitId = typeof dataset.commitId === "string" ? dataset.commitId : "";
-    if (commitId) return `commit:${commitId}`;
-    const updatedAt = Number(dataset.updatedAt) || 0;
-    const fingerprint = typeof dataset.recordFingerprint === "string" ? dataset.recordFingerprint : "";
-    if (!updatedAt && !fingerprint) return "";
-    return `legacy:${updatedAt}:${fingerprint}`;
-  }
-
-  function markAppliedSnapshot(meta, dataset) {
-    const revision = datasetRevision(dataset);
-    return revision ? { ...meta, lastAppliedSyncRevision: revision } : meta;
-  }
-
-  function markAppliedWorkSnapshot(meta, dataset) {
-    const revision = datasetRevision(dataset);
-    return revision ? { ...meta, lastAppliedWorkSyncRevision: revision } : meta;
-  }
-
-  function observeRemoteCore(meta, core) {
-    if (!remoteCoreUsable(core) || !core.revision) return meta;
-    const provenanceExact = core.provenanceExact === true;
-    const exactOriginDeviceId = provenanceExact && typeof core.originDeviceId === "string"
-      ? core.originDeviceId
-      : "";
-    if (exactOriginDeviceId && exactOriginDeviceId === meta.deviceId) return meta;
-
-    // 1.30.18.41 could persist a device name against a collaborative ledger merely
-    // because that device had the newest recovery publication. Clear that stale
-    // attribution even when the ledger revision itself has not changed. Do not
-    // manufacture a new receipt timestamp for this metadata-only correction.
-    if (meta.lastRemoteReceiptRevision === core.revision) {
-      if ((meta.lastRemoteReceiptOriginDeviceId || "") === exactOriginDeviceId &&
-          meta.lastRemoteReceiptProvenanceExact === provenanceExact) return meta;
-      return {
-        ...meta,
-        lastRemoteReceiptOriginDeviceId: exactOriginDeviceId,
-        lastRemoteReceiptProvenanceExact: provenanceExact
-      };
-    }
-    return {
-      ...meta,
-      lastRemoteReceiptAt: Date.now(),
-      lastRemoteReceiptRevision: core.revision,
-      lastRemoteReceiptUpdatedAt: Number(core.updatedAt) || 0,
-      // Shared ledgers are collaborative merge products. Naming their last writer
-      // as the source of the whole received layout is false provenance. Only an
-      // atomic device/profile generation has exact source attribution.
-      lastRemoteReceiptOriginDeviceId: exactOriginDeviceId,
-      lastRemoteReceiptProvenanceExact: provenanceExact
-    };
-  }
-
-  function markAppliedRemoteCore(meta, deviceRevision = "") {
-    if (!deviceRevision) return meta;
-    return { ...meta, lastAppliedDeviceSnapshotRevision: deviceRevision };
   }
 
   async function reconcileIfNewCommit(reason = "message", providedMeta = null, pendingLocalAlreadyRetried = false) {
@@ -4112,18 +4072,6 @@ export function startBackground(adapter) {
       lastReconcileOutcome: outcome
     });
     return result;
-  }
-
-  function latestSyncOrigin(core, snapshot, workCore, workSnapshot) {
-    const personalUpdatedAt = Number(core?.updatedAt) || (Number.isFinite(snapshot?.dataset?.updatedAt) ? snapshot.dataset.updatedAt : 0);
-    const workUpdatedAt = Number(workCore?.updatedAt) || Number(workSnapshot?.dataset?.updatedAt) || 0;
-    const useWork = workUpdatedAt > personalUpdatedAt;
-    const preferredCore = useWork ? workCore : core;
-    const preferredDataset = useWork ? workSnapshot?.dataset : snapshot?.dataset;
-    return {
-      updatedAt: Math.max(personalUpdatedAt, workUpdatedAt),
-      deviceId: preferredCore?.originDeviceId || (typeof preferredDataset?.originDeviceId === "string" ? preferredDataset.originDeviceId : "")
-    };
   }
 
   async function getSyncStatus() {
@@ -4594,106 +4542,6 @@ export function startBackground(adapter) {
   }
 
 
-  const CROSS_SPACE_SYNC_TRANSACTION_VERSION = 1;
-
-  async function readPendingCrossSpaceSyncEntries() {
-    try {
-      const stored = await browser.storage.local.get(null);
-      const entries = [];
-      for (const [key, value] of Object.entries(stored || {})) {
-        if (!key.startsWith(LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX)) continue;
-        if (!value || value.schemaVersion !== CROSS_SPACE_SYNC_TRANSACTION_VERSION) continue;
-        if (!SPACE_IDS_FOR_SYNC.has(value.fromSpaceId) || !SPACE_IDS_FOR_SYNC.has(value.toSpaceId) || value.fromSpaceId === value.toSpaceId) continue;
-        if (value.kind === "intent") {
-          if (!value.destination || !value.source) continue;
-        } else if (value.kind !== "transaction" || !value.destination?.writes || !value.source?.writes) {
-          continue;
-        }
-        entries.push({ key, value });
-      }
-      entries.sort((a, b) => {
-        const timeDiff = (Number(a.value?.createdAt) || 0) - (Number(b.value?.createdAt) || 0);
-        return timeDiff || (a.key < b.key ? -1 : (a.key > b.key ? 1 : 0));
-      });
-      return entries;
-    } catch (error) {
-      console.warn(`${PRODUCT_NAME}: could not read pending cross-Space Sync transactions`, error);
-      // This journal is durable transaction authority. A failed read is not
-      // evidence that no transaction exists: fail closed so a second Sync
-      // publication cannot start while earlier cross-Space work is unknown.
-      throw error;
-    }
-  }
-
-  async function writePendingCrossSpaceSync(key, transaction) {
-    if (typeof key !== "string" || !key.startsWith(LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX)) {
-      throw new Error("Invalid pending cross-Space Sync transaction key.");
-    }
-    await browser.storage.local.set({ [key]: transaction });
-    return transaction;
-  }
-
-  async function clearPendingCrossSpaceSync(key) {
-    if (typeof key !== "string" || !key.startsWith(LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX)) return;
-    await browser.storage.local.remove(key);
-  }
-
-  async function clearAllPendingCrossSpaceSync() {
-    const entries = await readPendingCrossSpaceSyncEntries();
-    if (entries.length) await browser.storage.local.remove(entries.map(entry => entry.key));
-  }
-
-  async function readPendingLocalSyncMutation() {
-    try {
-      const stored = await browser.storage.local.get(LOCAL_PENDING_SYNC_MUTATION_KEY);
-      const value = stored?.[LOCAL_PENDING_SYNC_MUTATION_KEY];
-      if (!value || value.schemaVersion !== 1 || typeof value.journalId !== "string" || !value.journalId) return null;
-      if (!value.before || typeof value.before !== "object" || !value.after || typeof value.after !== "object") return null;
-      return value;
-    } catch (error) {
-      console.warn(`${PRODUCT_NAME}: could not read pending local Sync mutation`, error);
-      // null means a successful read proved there is no pending mutation.
-      // Storage failure must remain distinguishable so callers cannot bypass
-      // the durable cumulative-before-state journal with a direct publication.
-      throw error;
-    }
-  }
-
-  async function clearPendingLocalSyncMutation(journalId = "") {
-    try {
-      if (journalId) {
-        const current = await readPendingLocalSyncMutation();
-        if (!current || current.journalId !== journalId) return false;
-      }
-      await browser.storage.local.remove(LOCAL_PENDING_SYNC_MUTATION_KEY);
-      return true;
-    } catch (error) {
-      console.warn(`${PRODUCT_NAME}: could not clear pending local Sync mutation`, error);
-      // Cleanup failure must abort authority-changing operations such as Sync
-      // disable/reset. Returning false here would make an uncleared durable
-      // journal indistinguishable from a benign journal-id mismatch.
-      throw error;
-    }
-  }
-
-  async function clearAllPendingSyncRecoveryState() {
-    // Authority transitions may proceed only after both durable journals were
-    // cleared successfully. A rejected read/remove must remain visible to the
-    // caller rather than being hidden behind allSettled().
-    await Promise.all([
-      clearAllPendingCrossSpaceSync(),
-      clearPendingLocalSyncMutation()
-    ]);
-  }
-
-  function pendingCrossSpaceSyncKey(transaction) {
-    const id = typeof transaction?.intentId === "string" && transaction.intentId
-      ? transaction.intentId
-      : (typeof transaction?.transactionId === "string" ? transaction.transactionId : "");
-    if (!id) return "";
-    return `${LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX}${id}`;
-  }
-
   const SPACE_IDS_FOR_SYNC = new Set([PERSONAL_SPACE_ID, WORK_SPACE_ID]);
 
   function workspaceMutationPayload(oldFullState, newFullState, meta, spaceId, timestamp) {
@@ -4965,7 +4813,7 @@ export function startBackground(adapter) {
   }
 
   async function retryPendingCrossSpaceSync(meta = null) {
-    const entries = await readPendingCrossSpaceSyncEntries();
+    const entries = await readPendingCrossSpaceSyncEntries(SPACE_IDS_FOR_SYNC);
     let currentMeta = meta || await readLocalMeta();
     for (const entry of entries) {
       currentMeta = await executePendingCrossSpaceSync(entry, currentMeta);
@@ -5201,7 +5049,7 @@ export function startBackground(adapter) {
 
     // Never begin a second cross-namespace publication while an earlier one is
     // incomplete. The durable journal is replayed first and each step is idempotent.
-    const existingPendingEntries = await readPendingCrossSpaceSyncEntries();
+    const existingPendingEntries = await readPendingCrossSpaceSyncEntries(SPACE_IDS_FOR_SYNC);
     for (const entry of existingPendingEntries) {
       meta = await executePendingCrossSpaceSync(entry, meta);
     }
@@ -5727,7 +5575,7 @@ export function startBackground(adapter) {
     }
 
     await clearAssetGcLedger();
-    await clearAllPendingSyncRecoveryState();
+    await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC);
 
     const [usedBytes, remaining] = await Promise.all([
       browser.storage.sync.getBytesInUse(null),

@@ -6,8 +6,9 @@ import { readFile } from "node:fs/promises";
 for (const browser of ["firefox", "chrome"]) {
   test(`1.26.3 ${browser} colored bookmark folders use the full chosen color`, async () => {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
+    const bookmarksController = await readFile(`dist/${browser}/newtab/bookmarks-controller.js`, "utf8");
     const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
-    assert.match(js, /--bookmark-folder-contrast[\s\S]*?hexLuminance\(color\)/,
+    assert.match(bookmarksController, /--bookmark-folder-contrast[\s\S]*?hexLuminance\(color\)/,
       `${browser}: folder colors must select a readable text contrast`);
     assert.match(css, /\.bookmark-folder-button\.has-folder-color,[\s\S]*?background:\s*var\(--bookmark-folder-color\);[\s\S]*?color:\s*var\(--bookmark-folder-contrast\);/,
       `${browser}: the full folder surface must use the chosen color`);

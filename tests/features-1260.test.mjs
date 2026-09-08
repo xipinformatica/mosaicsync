@@ -41,7 +41,7 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.31.5");
+  assert.equal(VERSION, "1.32.0.4");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
 });
@@ -113,6 +113,7 @@ test("profile backup carries the frequently-visited count but not device Space c
 test("1.26.0 New Tab interaction code implements requested mouse, Space and frequent-site behavior in both browsers", async () => {
   for (const browser of ["firefox", "chrome"]) {
     const js = await readFile(`dist/${browser}/newtab/newtab.js`, "utf8");
+    const bookmarksController = await readFile(`dist/${browser}/newtab/bookmarks-controller.js`, "utf8");
     assert.match(js, /card\.addEventListener\("contextmenu", event => \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*openShortcutInNewTab\(item\);/s,
       `${browser}: shortcut right-click should open a background tab`);
     assert.match(js, /card\.addEventListener\("auxclick"[\s\S]*?event\.button !== 1[\s\S]*?expect-shortcut-navigation/,
@@ -122,7 +123,7 @@ test("1.26.0 New Tab interaction code implements requested mouse, Space and freq
     assert.match(js, /event\.altKey[\s\S]*event\.shiftKey[\s\S]*event\.code === "Digit1"[\s\S]*"personal"[\s\S]*event\.code === "Digit2"[\s\S]*"work"/,
       `${browser}: Alt+Shift+1/2 Space switching missing`);
     assert.match(js, /FREQUENTLY_VISITED_COUNT_PREF_KEY/, `${browser}: frequent count preference missing`);
-    assert.match(js, /BOOKMARK_FOLDER_COLORS_PREF_KEY/, `${browser}: bookmark-folder color preference missing`);
+    assert.match(bookmarksController, /BOOKMARK_FOLDER_COLORS_PREF_KEY/, `${browser}: bookmark-folder color preference missing`);
   }
 });
 

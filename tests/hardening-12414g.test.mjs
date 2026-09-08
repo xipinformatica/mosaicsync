@@ -152,12 +152,15 @@ test("1.24.14g read-only Sync status failures stay out of durable error state on
   }
 });
 
-test("1.24.14g Firefox permission revocation clears all pending Sync recovery journals before disabling Sync", async () => {
+test("1.24.14g Firefox permission revocation serializes journal cleanup with disabled authority without nesting Web Locks", async () => {
   const source = readBackgroundSource("firefox");
   const start = source.indexOf("browser.permissions?.onRemoved?.addListener");
   const end = source.indexOf("const REMOTE_IMAGE_MAX_BYTES", start);
   const block = source.slice(start, end);
-  const clearIndex = block.indexOf("await clearAllPendingSyncRecoveryState()");
-  const metaIndex = block.indexOf("const meta = await readLocalMeta()");
-  assert.ok(clearIndex >= 0 && metaIndex > clearIndex, "journal cleanup must happen before permission-disable metadata handling");
+  const clearIndex = block.indexOf("await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC, async () => {");
+  const metaIndex = block.indexOf("const meta = await readLocalMeta()", clearIndex);
+  const disabledIndex = block.indexOf("syncEnabled: false", metaIndex);
+  const heldIndex = block.indexOf("persistenceLockHeld: true", disabledIndex);
+  assert.ok(clearIndex >= 0 && metaIndex > clearIndex && disabledIndex > metaIndex && heldIndex > disabledIndex,
+    "journal cleanup and permission-disable metadata must share one serialized transition using the already-held lock path");
 });

@@ -14,6 +14,12 @@ export function readBackgroundSource(browser, { built = true } = {}) {
   const recoveryGenerationLifecyclePath = built
     ? `dist/${name}/background/recovery-generation-lifecycle.js`
     : "src/shared/background/recovery-generation-lifecycle.js";
+  const syncRemoteObservationPath = built
+    ? `dist/${name}/background/sync-remote-observation.js`
+    : "src/shared/background/sync-remote-observation.js";
+  const syncPendingJournalPath = built
+    ? `dist/${name}/background/sync-pending-journal.js`
+    : "src/shared/background/sync-pending-journal.js";
   const corePath = built
     ? `dist/${name}/background/background-core.js`
     : "src/shared/background/background-core.js";
@@ -22,7 +28,7 @@ export function readBackgroundSource(browser, { built = true } = {}) {
     : "src/shared/background/background.js";
   // Platform source first preserves historical extraction tests for browser-only
   // primitives; canonical shared semantics follow from the one background core.
-  return [adapterPath, recoveryGenerationFormatPath, recoveryGenerationStorePath, recoveryGenerationLifecyclePath, corePath, entryPath]
+  return [adapterPath, recoveryGenerationFormatPath, recoveryGenerationStorePath, recoveryGenerationLifecyclePath, syncRemoteObservationPath, syncPendingJournalPath, corePath, entryPath]
     .map(path => fs.readFileSync(path, "utf8"))
     .join("\n\n");
 }

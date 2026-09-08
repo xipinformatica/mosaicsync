@@ -613,10 +613,21 @@ async function persistNormalizedState(normalized, {
     // state inside the same write lock and rebase only this caller's delta when
     // its baseline no longer matches. The same read also carries the durable
     // unsent-mutation journal when this is a Sync-relevant user edit.
-    const transactionRead = await browser.storage.local.get(recordSyncMutation
-      ? [LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_PENDING_SYNC_MUTATION_KEY]
-      : [LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY]);
+    const transactionKeys = [LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY];
+    if (recordSyncMutation) transactionKeys.push(LOCAL_PENDING_SYNC_MUTATION_KEY);
+    if (recordSyncMutation || effectiveCrossSpaceSyncIntent) transactionKeys.push(LOCAL_META_KEY);
+    const transactionRead = await browser.storage.local.get(transactionKeys);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
+    // Callers decide whether an edit is Sync-relevant from their in-memory meta,
+    // but a tab can be queued behind an authority transition for a few milliseconds.
+    // Recheck the durable meta inside this same persistence lock/read so a stale
+    // caller cannot recreate outbound journal authority after Sync was disabled or
+    // reset. Adding LOCAL_META_KEY to the existing get changes no I/O count.
+    const durableSyncMeta = transactionRead[LOCAL_META_KEY];
+    const durableSyncMetaPresent = Boolean(durableSyncMeta && typeof durableSyncMeta === "object");
+    const syncDurabilityActive = !durableSyncMetaPresent || Boolean(
+      durableSyncMeta.syncEnabled && durableSyncMeta.syncInitialized
+    );
 
     // Fine-grained Settings clocks are inferred at the persistence boundary. UI
     // callers continue mutating ordinary settings exactly as before; only groups
@@ -631,7 +642,7 @@ async function persistNormalizedState(normalized, {
 
         // Cross-Space recovery journals must describe the state that actually
         // won the local rebase, not the stale pre-rebase intent.
-        if (effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
+        if (syncDurabilityActive && effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
           const inferDeviceId = intent => {
             for (const side of [intent.destination, intent.source]) {
               for (const record of side?.upserts || []) {
@@ -711,12 +722,12 @@ async function persistNormalizedState(normalized, {
       }
     }
 
-    if (effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
+    if (syncDurabilityActive && effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
       const intentId = typeof effectiveCrossSpaceSyncIntent.intentId === "string" ? effectiveCrossSpaceSyncIntent.intentId.trim() : "";
       if (intentId) writes[`${LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX}${intentId}`] = effectiveCrossSpaceSyncIntent;
     }
 
-    if (recordSyncMutation && !effectiveCrossSpaceSyncIntent) {
+    if (syncDurabilityActive && recordSyncMutation && !effectiveCrossSpaceSyncIntent) {
       const previousPending = transactionRead[LOCAL_PENDING_SYNC_MUTATION_KEY];
       const pendingBefore = previousPending?.before && typeof previousPending.before === "object"
         ? previousPending.before
@@ -837,8 +848,12 @@ export async function readLocalMeta() {
   return ensureDeviceId(result[LOCAL_META_KEY] || DEFAULT_META);
 }
 
-export async function writeLocalMeta(meta, { allowOnboardingChange = false, allowDeviceNameChange = false } = {}) {
-  return withPersistenceWriteLock(async () => {
+export async function writeLocalMeta(meta, {
+  allowOnboardingChange = false,
+  allowDeviceNameChange = false,
+  persistenceLockHeld = false
+} = {}) {
+  const commit = async () => {
     const stored = await browser.storage.local.get(LOCAL_META_KEY);
     const hasStoredMeta = Boolean(stored?.[LOCAL_META_KEY] && typeof stored[LOCAL_META_KEY] === "object");
     const current = ensureDeviceId(hasStoredMeta ? stored[LOCAL_META_KEY] : (meta || DEFAULT_META));
@@ -864,7 +879,15 @@ export async function writeLocalMeta(meta, { allowOnboardingChange = false, allo
     await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
     await writeSessionRenderMetaBestEffort(normalized);
     return normalized;
-  });
+  };
+
+  // Authority-transition cleanup already owns LOCAL_ASSET_WRITE_LOCK_NAME while
+  // it removes durable retry journals. Its callback uses this narrowly-scoped
+  // escape hatch so the metadata commit remains in that transaction without
+  // requesting the same non-reentrant Web Lock a second time. Normal callers
+  // must leave persistenceLockHeld=false.
+  if (persistenceLockHeld) return commit();
+  return withPersistenceWriteLock(commit);
 }
 
 /**

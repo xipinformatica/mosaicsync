@@ -34,7 +34,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.31.5");
+  assert.equal(VERSION, "1.32.0.4");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -60,7 +60,7 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browser} fresh bootstrap cannot finalize from Personal alone`, async () => {
     const src = readBackgroundSource(browser);
     const start = src.indexOf("async function bootstrapRemote");
-    const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
+    const end = src.indexOf("const SPACE_IDS_FOR_SYNC", start);
     const fn = src.slice(start, end);
     assert.match(fn, /const profileComplete =/);
     assert.match(fn, /const legacyComplete = Boolean\(!useAtomicProfile && remoteCoreUsable\(personalCore\) && isSnapshotUsable\(workSnapshot\)\)/);
@@ -73,7 +73,7 @@ for (const browser of ["firefox", "chrome"]) {
   test(`1.27.8.8 ${browser} waiting-profile local edits merge and publish after complete arrival`, async () => {
     const src = readBackgroundSource(browser);
     const start = src.indexOf("async function bootstrapRemote");
-    const end = src.indexOf("const CROSS_SPACE_SYNC_TRANSACTION_VERSION", start);
+    const end = src.indexOf("const SPACE_IDS_FOR_SYNC", start);
     const fn = src.slice(start, end);
     assert.match(fn, /mergeRecordMaps\(remote\.records, localRecords\)/);
     assert.match(fn, /pushLocalMutation\(remoteOnlyState, mergedState, refreshed\)/);

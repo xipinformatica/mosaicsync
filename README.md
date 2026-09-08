@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.31.5**
+**Current source release: 1.32.0.4**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -17,9 +17,9 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 - Development notes: [README-DEVELOPMENT.md](README-DEVELOPMENT.md)
 - Release history: [CHANGELOG.md](CHANGELOG.md)
 
-### Maintenance Infrastructure
+### Maintainability programs
 
-The five-step production-code refinement program is frozen at 1.30.18.32. Maintenance Infrastructure releases improve guardrails around that frozen runtime rather than continuing architectural churn. M1 added dependency-free real-browser smoke automation; M2 added one fail-closed end-to-end release-certification command, `npm run certify`; M3 made the accumulated architecture knowledge permanent; M4+M5 now organize the regression suite into simple targeted commands and add a small deterministic property/fuzz layer at high-value data trust boundaries. See [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x is the 3rd Maintainability Journey: Ownership & Auditability.** This journey is deliberately zero-new-features work: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.3 extracted the Bookmarks-dialog UI lifecycle from the New Tab orchestrator; **1.32.0.4 is a focused reliability checkpoint that fixes a pre-existing journal-cleanup concurrency race before Journey 3 continues.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -87,11 +87,19 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.31.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.32.0.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.31.5 is a narrow Sync reliability correction over 1.31.4. Durable pending cross-Space and local-mutation journals now fail closed when `storage.local` cannot be read, so an unknown journal can never be mistaken for “no pending work.” Sync disable/reset-style authority transitions also stop if durable journal cleanup cannot be verified instead of silently continuing with uncleared retry state. Three permanent Firefox/Chromium fault-injection regressions cover unreadable cross-Space journals, unreadable local-mutation journals, and failed cleanup followed by a successful retry. No feature, permission, CSP, persisted schema, Sync/Recovery wire-format or browser-floor change is introduced.
+1.32.0.4 is a focused reliability correction discovered during the forensic checkpoint after Step 5. Pending Normal Sync journal acknowledgement and authority-transition cleanup now share the same cross-context local persistence lock as authoritative New Tab state+journal writes. Combined cleanup removes cross-Space and cumulative local-mutation authority in one fail-closed storage operation, and Sync-relevant New Tab writes revalidate the durable enabled/initialized meta inside their existing transaction read before creating new retry authority. The user's local edit still persists if Sync was disabled/reset while the tab waited; only stale outbound journal creation is suppressed. No extra storage operation, feature, permission, persisted schema, journal schema, Sync/Recovery wire format or browser-floor change is introduced.
+
+1.32.0.3 is Step 5 of the **3rd Maintainability Journey** (Step 4 was absorbed into the Step-2 remote-observation extraction). It mechanically moves the Bookmarks dialog's UI state, folder-color rendering, search/folder navigation, permission-dialog lifecycle and bookmark-local event wiring from `newtab.js` into `newtab/bookmarks-controller.js`. The browser Bookmarks API remains lazy-loaded through the existing `core/bookmarks.js` path, bookmark-folder color preferences are still hydrated in the existing post-paint maintenance phase, and no first-paint await, storage.local/storage.sync work, Sync/Recovery behavior or feature semantics move into the controller.
+
+1.32.0.2 is Step 3 of the **3rd Maintainability Journey**. It mechanically extracts durable pending Normal Sync journal storage mechanics from `background-core.js` into `background/sync-pending-journal.js`: cross-Space journal validation/enumeration, background-owned journal write/advance/clear, cumulative local-mutation journal read/clear, combined authority-transition cleanup and journal-key construction. Crucially, `core/storage.js` still creates the initial cross-Space intent and cumulative local-mutation journal atomically with authoritative local state, while `background-core.js` still decides when retries/publication happen. No extra storage operation, Sync write, Promise layer or startup/first-paint work is introduced.
+
+1.32.0.1 is the first production build of the **3rd Maintainability Journey**. It mechanically extracts remote Sync observation/applied-state bookkeeping from `background-core.js` into `background/sync-remote-observation.js`: dataset revision interpretation, observed receipt/provenance metadata, applied-revision markers and latest Personal/Work origin selection. The module is synchronous and browser-neutral; it performs no storage access, Sync publication, reconciliation, Recovery work, scheduling or additional awaiting. Existing behavior, permissions, CSP, persisted schemas, Sync/Recovery wire formats and browser floors are unchanged.
+
+1.31.5 is the preceding narrow Sync reliability correction over 1.31.4. Durable pending cross-Space and local-mutation journals fail closed when `storage.local` cannot be read, so an unknown journal cannot be mistaken for “no pending work.” Sync disable/reset-style authority transitions also stop if durable journal cleanup cannot be verified. Three permanent Firefox/Chromium fault-injection regressions protect those failure boundaries.
 
 1.31.4 is a narrow localization-responsive Settings correction over 1.31.3. The separate Light/Dark wallpaper darkness controls now place the translated label on a full-width row above the slider and percentage, preventing long translations such as German `Hintergrundabdunklung` from colliding with the neighbouring control. No wording, permission, Sync/Recovery behavior, persisted schema, CSP or browser-floor change is introduced.
 

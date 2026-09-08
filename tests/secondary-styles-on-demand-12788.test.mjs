@@ -91,6 +91,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.27.8.8 ${browser} gates launcher-reachable secondary UI and keeps automatic web-access prompt critical`, () => {
     const src = fs.readFileSync(`dist/${browser}/newtab/newtab.js`, "utf8");
+    const bookmarksController = fs.readFileSync(`dist/${browser}/newtab/bookmarks-controller.js`, "utf8");
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
     const loader = fs.readFileSync(`dist/${browser}/newtab/secondary-style-bootstrap.js`, "utf8");
@@ -105,11 +106,12 @@ for (const browser of ["firefox", "chrome"]) {
       [/async function showDropChoice[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?dropChoice\.hidden = false/, "drop-choice menu"],
       [/async function openFolder[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?folderPopover\.hidden = false/, "folder popover"],
       [/async function openShortcutEditor[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?shortcutDialog\.showModal\(\)/, "shortcut editor"],
-      [/async function openBookmarks[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?bookmarksDialog\.showModal\(\)/, "Bookmarks dialog"],
       [/async function openSettings[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?settingsDialog\.hidden = false/, "Settings dialog"],
       [/function showToast[\s\S]*?ensureSecondaryStyles\(\)\.then[\s\S]*?toast\.classList\.add\("visible"\)/, "toast"]
     ];
     for (const [pattern, label] of ordered) assert.match(src, pattern, `${label} must wait for secondary CSS before becoming visible`);
+
+    assert.match(bookmarksController, /async function open\(\)[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?bookmarksDialog\.showModal\(\)/, "Bookmarks dialog must wait for secondary CSS before becoming visible");
 
     const brandBody = src.match(/function triggerBrandHello\(\) \{([\s\S]*?)\n  \}/)?.[1] || "";
     assert.doesNotMatch(brandBody, /ensureSecondaryStyles/, "first logo hover must never activate deferred CSS");

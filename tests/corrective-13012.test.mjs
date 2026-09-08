@@ -58,7 +58,7 @@ test("1.30.12 browser lifecycle handlers never reset durable MosaicSync state fr
     assert.match(block, /lifecycle metadata, not\s*\/\/ proof that MosaicSync has never existed/);
     assert.doesNotMatch(block, /if \(details\.reason === ["']install["']\)\s*\{[^}]*writeLocalMeta/s,
       "reason=install must never authorize a metadata reset");
-    assert.doesNotMatch(block, /clearAllPendingSyncRecoveryState\(\)/,
+    assert.doesNotMatch(block, /clearAllPendingSyncRecoveryState\(/,
       "ambiguous install lifecycle must not clear recovery state");
     assert.doesNotMatch(block, /storage\.local\.remove\(/,
       "ambiguous install lifecycle must not delete local durable/recovery keys");

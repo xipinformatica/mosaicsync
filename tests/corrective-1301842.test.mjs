@@ -75,7 +75,7 @@ test("1.30.18.42 live reconciliation ignores Recovery-only generation churn", ()
   for (const browser of ["firefox", "chrome"]) {
     const source = readBackgroundSource(browser, { built: false });
     const start = source.indexOf("async function reconcileIfNewCommit");
-    const end = source.indexOf("function latestSyncOrigin", start);
+    const end = source.indexOf("async function getSyncStatus", start);
     const block = source.slice(start, end);
     assert.match(block, /const liveRevisionChanged = Boolean\([\s\S]*?sharedRevision[\s\S]*?lastAppliedSyncRevision[\s\S]*?workRevision[\s\S]*?lastAppliedWorkSyncRevision/);
     assert.doesNotMatch(block.slice(block.indexOf("const liveRevisionChanged"), block.indexOf("let contentUnchanged")), /deviceRevision|profileRevision/,
@@ -103,7 +103,7 @@ test("1.30.18.42 production Sync core enforces atomic Recovery and coalesced sto
 
     const personalStart = source.indexOf("function combinedRemoteCore");
     const workStart = source.indexOf("function combinedWorkRemoteCore", personalStart);
-    const usableStart = source.indexOf("function remoteCoreUsable", workStart);
+    const usableStart = source.indexOf("function assetIdsByUsage", workStart);
     const personalBlock = source.slice(personalStart, workStart);
     const workBlock = source.slice(workStart, usableStart);
     assert.doesNotMatch(personalBlock, /mergeRecordMaps/);

@@ -302,6 +302,21 @@ process.on("unhandledRejection", error => failures.push(error));
 try {
   await import(`${pathToFileURL(path.join(root, `dist/${browserName}/newtab/newtab.js`)).href}?smoke=${process.pid}`);
   await new Promise(resolve => setTimeout(resolve, 320));
+
+  byId.get("bookmarksButton")?.click();
+  await new Promise(resolve => setTimeout(resolve, 100));
+  const bookmarksDialog = byId.get("bookmarksDialog");
+  globalThis.__mosaicsyncSmokeBookmarks = {
+    buttonClickListeners: (byId.get("bookmarksButton")?.listeners.get("click") || []).length,
+    opened: bookmarksDialog?.open === true,
+    searchInputListeners: (byId.get("bookmarksSearch")?.listeners.get("input") || []).length,
+    closeListeners: (bookmarksDialog?.listeners.get("close") || []).length
+  };
+  if (bookmarksDialog?.open) {
+    bookmarksDialog.close();
+    bookmarksDialog.dispatchEvent({ type: "close", preventDefault() {}, stopPropagation() {} });
+  }
+
   byId.get("settingsButton")?.click();
   await new Promise(resolve => setTimeout(resolve, 40));
 
@@ -358,6 +373,7 @@ const result = {
   topSitesOptionCalls,
   frequentlyVisitedVisible: byId.get("frequentSitesSection")?.hidden === false,
   frequentlyVisitedChangeListeners: (byId.get("settingsFrequentlyVisited")?.listeners.get("change") || []).length,
+  bookmarks: globalThis.__mosaicsyncSmokeBookmarks || null,
   frequentDisabled: globalThis.__mosaicsyncSmokeFrequentDisabled || null,
   frequentReenabled: globalThis.__mosaicsyncSmokeFrequentReenabled || null,
   imagePreview: globalThis.__mosaicsyncSmokeImagePreview || null,
@@ -369,7 +385,10 @@ const ok = result.failures.length === 0 && result.consoleErrors.length === 0 && 
   result.storageListeners > 0 && result.topSitesCalls > 1 &&
   (browserName === "chrome" ? result.topSitesOptionCalls === 0 : result.topSitesOptionCalls > 0) &&
   result.frequentlyVisitedVisible &&
-  result.frequentlyVisitedChangeListeners > 0 && result.frequentDisabled?.optionsHidden && result.frequentDisabled?.sectionHidden &&
+  result.frequentlyVisitedChangeListeners > 0 &&
+  result.bookmarks?.buttonClickListeners > 0 && result.bookmarks?.opened &&
+  result.bookmarks?.searchInputListeners > 0 && result.bookmarks?.closeListeners > 0 &&
+  result.frequentDisabled?.optionsHidden && result.frequentDisabled?.sectionHidden &&
   result.frequentReenabled?.optionsVisible && result.frequentReenabled?.sectionVisible &&
   result.imagePreview?.baseClassPresent && result.imagePreview?.changeListeners > 0 &&
   result.imagePreview?.coverAfterFill && result.imagePreview?.coverAfterFit === false;

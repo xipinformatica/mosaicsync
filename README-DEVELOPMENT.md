@@ -1,8 +1,33 @@
 # MosaicSync development
 
-> **Current release: 1.31.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
+
+
+## 1.32.0.4 — forensic Sync durability correction before Step 6
+
+The post-Step-5 forensic audit found a pre-existing concurrency gap in durable pending Normal Sync journal cleanup. A completed retry could read an older cumulative journal, yield while a New Tab atomically persisted newer local state + a newer journal, then remove the shared journal key and accidentally delete that newer retry authority. Combined authority cleanup could also remove one journal class before a second remove failed, and a stale New Tab could recreate pending authority around a Sync disable/reset transition.
+
+1.32.0.4 corrects the race without adding browser-storage I/O. `background/sync-pending-journal.js` now serializes journal writes/acknowledgements/authority cleanup with the existing `LOCAL_ASSET_WRITE_LOCK_NAME` cross-context persistence lock. Combined cross-Space + local-mutation cleanup uses one fail-closed `storage.local.remove([...keys])` call. Authority-changing callers keep their metadata commit inside the same serialized transition through the explicit already-held-lock `writeLocalMeta` path, avoiding a nested non-reentrant Web-Lock request. If that metadata commit fails after cleanup, the exact removed journals are restored before unlock; this compensation runs only on failure. `core/storage.js` adds `LOCAL_META_KEY` to the existing transaction read only when outbound journal creation is requested; if durable Sync authority became disabled or uninitialized while a stale tab waited, the user's local state still commits but no fresh outbound journal is created. Missing legacy/test meta retains the prior caller-directed behavior.
+
+Seven deterministic regressions reproduce the stale conditional clear, partial cleanup failure, queued authority-transition writer, stale local-mutation writer and stale cross-Space writer. They were proven red 7/7 on the vulnerable 1.32.0.3 candidate before the correction. This is a reliability fix, not another maintainability extraction; Step 6 remains paused until this release is certified.
+
+## 1.32.0.3 — 3rd Maintainability Journey, Step 5
+
+Step 5 chooses exactly one New Tab ownership boundary: the Bookmarks dialog UI lifecycle. `src/shared/newtab/bookmarks-controller.js` now owns bookmark-dialog mutable UI state, folder/search rendering, folder-color persistence/rendering, permission-dialog handling and bookmark-local listeners. `newtab.js` remains the orchestration root and still owns first-paint/startup, global menu coordination and the lazy `core/bookmarks.js` loader used by both the dialog and Frequently Visited's explicit “Add to bookmarks” action.
+
+The extraction must preserve startup behavior. `bookmarks-controller.js` is a static New Tab dependency, but it performs no top-level storage/network/browser work, adds no first-paint await and keeps the existing folder-color `localStorage` read in `schedulePostPaintMaintenance()`. The browser Bookmarks API is still dynamically imported only when needed. Ten dedicated Step-5 regressions, the full generated New Tab runtime smoke (now opening the Bookmarks dialog on both browser shapes), startup tests and explicit pre/post module-load measurements protect the boundary.
+
+## 1.32.0.2 — 3rd Maintainability Journey, Step 3
+
+Step 3 mechanically moves the safe background-side durable pending Sync journal storage owner into `src/shared/background/sync-pending-journal.js`. The module owns cross-Space journal validation/enumeration, background-side journal write/advance/clear, cumulative local-mutation journal read/clear, combined authority-transition cleanup and durable journal-key construction. It retains the 1.31.5 fail-closed rule: a failed `storage.local` read/remove remains an error and must never be interpreted as “no pending work.”
+
+Two responsibilities deliberately do **not** move. `src/shared/core/storage.js` still creates the initial cross-Space intent and cumulative local-mutation journal in the same `storage.local.set(...)` transaction as authoritative local state, preserving crash safety without an extra storage write. `background-core.js` still decides when to replay, publish, reconcile, mark Sync state or execute destination-first cross-Space phases. The new module must not use `storage.sync`, Recovery generation APIs, alarms/timers, network work or New Tab/DOM code. Nine dedicated Step-3 regressions freeze this ownership split in addition to the existing 1.31.5 fault-injection coverage.
+
+## 1.32.0.1 — 3rd Maintainability Journey, Step 2
+
+The 3rd Maintainability Journey begins with one mechanical ownership extraction only. `src/shared/background/sync-remote-observation.js` now owns the existing synchronous remote Sync observation/applied-state policy: dataset revision interpretation, remote receipt/provenance bookkeeping, applied Personal/Work/device revision markers and latest Personal/Work origin selection. `background-core.js` remains the sole effectful orchestrator for storage, publication, reconciliation, Recovery, durable journals, alarms, diagnostics and mutation ordering. The extracted module must remain browser-neutral and synchronous; no new storage/network work, Promise layer, startup/first-paint dependency, schema, permission or wire-format change is allowed. Eight dedicated ownership/behavior regressions freeze this boundary.
 
 ## 1.31.5 durable Sync-journal fail-closed hardening
 

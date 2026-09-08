@@ -369,12 +369,44 @@ src/shared/newtab/newtab.html
 src/shared/newtab/newtab.js
 src/shared/newtab/newtab-critical.css
 src/shared/newtab/newtab-secondary.css
+src/shared/newtab/bookmarks-controller.js
 src/shared/newtab/ui-utils.js
 src/shared/newtab/appearance-color.js
 src/shared/newtab/builtin-icons.js
 ```
 
 `newtab-critical.css` is especially sensitive because it participates in the first visible frame. Moving styling out of critical CSS can create a technically correct final UI that still flashes, shifts or paints incorrectly during startup.
+
+### Bookmarks dialog ownership
+
+Beginning with **1.32.0.3** (3rd Maintainability Journey, Step 5), the Bookmarks dialog UI has one dedicated New Tab owner:
+
+```text
+src/shared/newtab/bookmarks-controller.js
+```
+
+It owns:
+
+- the Bookmarks dialog's mutable UI state (tree/folder/item projections and active folder);
+- bookmark-folder color preference validation, persistence and visual application;
+- folder/sidebar/search result rendering and bookmark-link DOM construction;
+- the Bookmarks permission/read dialog lifecycle;
+- Bookmarks-local button/search/dialog listeners and color-popover lifecycle.
+
+It may read/write only the existing device-local bookmark-folder color preference in `localStorage`, and it may use the DOM elements/dependencies passed by `newtab.js`. Browser bookmark data remains browser-owned and is read through the existing lazily loaded `core/bookmarks.js` API; it is not copied into MosaicSync authoritative state or Sync.
+
+The module must **not** own or depend on:
+
+- `storage.local` / `storage.sync` profile persistence;
+- Normal Sync or Recovery;
+- startup/session render caches or first-paint bootstrap modules;
+- network/image fetching;
+- background scheduling, alarms or queues;
+- platform-specific browser branching.
+
+`newtab.js` remains the orchestrator for first-paint/startup, global pointer/Escape coordination, the lazy browser-Bookmarks module loader and cross-feature actions such as Frequently Visited's explicit “Add to bookmarks” command. The existing folder-color preference read remains in `schedulePostPaintMaintenance()` through the controller method, so the extraction does not pull storage work earlier. The browser Bookmarks module remains dynamically imported only when needed.
+
+This controller is part of the static New Tab module graph, so keep its top-level work trivial and do not add awaits or side effects to module evaluation. Permanent protection lives in `tests/bookmarks-controller-132003.test.mjs`, the bookmark color/secondary-style historical regressions, and the generated New Tab runtime smoke, which now opens the Bookmarks dialog on both Firefox- and Chrome-shaped runtimes. The boundary exists so a developer can audit the Bookmarks UI without first reading the full New Tab orchestrator.
 
 Settings has another important boundary: while Settings is open, lightweight Light/Dark preview presentation may update immediately, but full-page wallpaper/background/dim painting is deliberately isolated/deferred to avoid a historical Firefox compositor failure.
 
@@ -428,8 +460,86 @@ Useful supporting files include:
 ```text
 src/shared/background/sync-source-policy.js
 src/shared/background/sync-reset-policy.js
+src/shared/background/sync-remote-observation.js
+src/shared/background/sync-pending-journal.js
 src/shared/background/runtime-utils.js
 ```
+
+### Remote observation / applied-state ownership
+
+Beginning with **1.32.0.1** (3rd Maintainability Journey, Step 2), remote Sync observation/applied-state bookkeeping has one dedicated browser-neutral owner:
+
+```text
+src/shared/background/sync-remote-observation.js
+```
+
+It exists to answer a narrow question: **how should already-read remote Sync metadata be interpreted and reflected in local observation/applied-state bookkeeping?**
+
+It owns:
+
+- conversion of dataset commit/fingerprint metadata into the stable revision string used by Normal Sync;
+- the small `remoteCoreUsable()` structural predicate used by observation/status policy;
+- receipt/provenance bookkeeping for newly observed remote cores;
+- `lastApplied*Revision` bookkeeping for Personal, Work and device Recovery-generation revision markers;
+- selection of the latest Personal/Work origin descriptor used by Sync status presentation.
+
+It may **read only the objects passed to it by the caller** and may **return updated metadata objects**. It does not persist those objects itself.
+
+It must not depend on:
+
+- `browser` / Chrome APIs;
+- `storage.local` or `storage.sync`;
+- Sync publication/writes;
+- Recovery storage/generation logic;
+- durable pending journals;
+- alarms, timers, queues or MV3 event listeners;
+- New Tab / DOM code.
+
+The module is synchronous. It adds no storage/network work and no additional Promise/`await` layer. It is on the Normal Sync decision path, but **not** the New Tab startup/first-paint path. `background-core.js` remains the effectful orchestrator and decides when observations are persisted, when reconciliation occurs and when Sync/Recovery effects run.
+
+Permanent protection lives in `tests/sync-remote-observation-13201.test.mjs` plus the existing Sync/Recovery corrective tests, especially `corrective-1301842.test.mjs` and distributed/convergence tests. The boundary exists to make provenance/applied-state policy independently auditable without splitting the actual reconciliation state machine or adding runtime work.
+
+### Durable pending Sync journal ownership
+
+Beginning with **1.32.0.2** (3rd Maintainability Journey, Step 3), the safe background-side durable pending Normal Sync journal mechanics have one dedicated owner:
+
+```text
+src/shared/background/sync-pending-journal.js
+```
+
+It owns **how already-authorized durable retry intent is stored, validated, enumerated and cleared** in the background process:
+
+- the cross-Space transaction journal schema-version constant;
+- validation and deterministic oldest-first enumeration of pending cross-Space intent/transaction records;
+- background-side writes that upgrade/advance an existing cross-Space journal;
+- clearing one or all validated cross-Space journal records;
+- validation/read of the cumulative local-mutation journal;
+- journal-ID-protected clearing of the cumulative local-mutation journal so an older successful retry cannot delete newer work;
+- combined authority-transition cleanup of both durable retry journals;
+- construction of cross-Space journal storage keys.
+
+The module may read or write only the existing pending-journal keys in `storage.local`. Cross-Space enumeration intentionally retains the existing single `storage.local.get(null)` read because those journal records are prefix-addressed and may have independent intent IDs. It must preserve the **1.31.5 fail-closed rule**: a rejected journal read/remove means durable retry authority is unknown or uncleared and the error must remain visible to the caller.
+
+Beginning with **1.32.0.4**, journal mutation/acknowledgement and authority-transition cleanup also participate in the existing cross-context local persistence Web Lock (`LOCAL_ASSET_WRITE_LOCK_NAME`; the historical string is retained for rolling-version compatibility). A conditional local-journal clear must hold this lock from journal read through removal. Combined authority cleanup must enumerate while locked and remove the validated cross-Space keys plus the cumulative local-mutation key in one `storage.local.remove([...keys])` operation. Authority-changing callers keep the metadata commit inside that same serialized transition by calling `writeLocalMeta(..., { persistenceLockHeld: true })`; this narrowly-scoped path skips a second request for the already-held, non-reentrant Web Lock. If that metadata commit fails after cleanup, the journal owner restores the exact removed durable authority snapshot before releasing the lock (compensating I/O occurs only on that failure path). `core/storage.js` reuses its existing locked transaction read to observe `LOCAL_META_KEY` whenever pending Sync intent is requested, so a stale New Tab may persist its local edit but must not recreate outbound journal authority after durable Sync became disabled/uninitialized. Do not replace this with an unlocked read→compare→remove sequence or add a second hot-path meta read.
+
+Two responsibilities explicitly **do not belong** to this module:
+
+1. **Initial journal creation remains in `src/shared/core/storage.js`.** The authoritative local profile and its corresponding cross-Space intent or cumulative local-mutation retry record are committed in the same `storage.local.set(...)` transaction. Splitting that write would create a crash window or add another browser-storage operation, so Journey 3 deliberately leaves this ownership untouched.
+2. **Retry/publication orchestration remains in `background-core.js`.** The core still decides when to replay pending work, preserves destination-first cross-Space publication, performs `storage.sync` writes, publishes complete profile generations, reconciles remote state, updates metadata and schedules alarms.
+
+The journal module must not depend on:
+
+- `storage.sync` or any Sync publication writer;
+- Recovery generation/store/lifecycle modules;
+- reconciliation/source-selection policy;
+- alarms, timers, queues or MV3 event registration;
+- network/image code;
+- New Tab / DOM code;
+- `core/storage.js` as a persistence service.
+
+This module is on the Normal Sync retry/publication path and authority-transition cleanup path, but **not** on New Tab startup/first-paint. The extraction adds no storage read/write compared with 1.32.0.1: existing I/O calls moved with their helpers. `background-core.js` passes its existing `SPACE_IDS_FOR_SYNC` set into journal enumeration so the extraction does not allocate a second space-lookup structure.
+
+Permanent protection lives in `tests/sync-pending-journal-13202.test.mjs`, the 1.31.5 fault-injection tests in `tests/corrective-1315.test.mjs`, the 1.32.0.4 deterministic concurrency/fault tests in `tests/corrective-13204.test.mjs`, the cumulative-journal/cross-Space tests in `tests/hardening-12414m.test.mjs`, and the existing runtime Sync scenarios. The boundary exists to make durable retry authority independently auditable **without** moving the atomic local-write contract or the Sync state machine.
 
 ### The most important Sync principle
 
@@ -458,6 +568,8 @@ Do not "simplify" source comparison by considering only records currently visibl
 ### Durable outbound journals fail closed
 
 Normal Sync uses durable `storage.local` journals for cumulative local mutations and cross-Space transactions. These journals are retry authority, not disposable caches. A failed journal read must therefore never be interpreted as an empty journal/`null` pending mutation, and an authority-changing operation such as Sync disable or intentional-reset cleanup must not proceed if journal cleanup could not be verified. Successful storage reads may prove that no journal exists; storage failures only prove that the state is unknown.
+
+As of 1.32.0.2, `background/sync-pending-journal.js` owns background-side validation/read/advance/clear mechanics, while `core/storage.js` still creates initial retry intent atomically with authoritative local state and `background-core.js` still decides when work is retried/published. As of 1.32.0.4, both sides share the same named persistence lock for journal mutation/acknowledgement. Authority transitions hold that lock across combined journal cleanup and their metadata commit, using the explicit already-held-lock `writeLocalMeta` option to avoid a nested non-reentrant Web-Lock request; if the metadata commit fails, removed journals are restored before unlock. The local writer also revalidates durable Sync authority using its already-existing transaction read. Do not collapse these three responsibilities into one module merely for structural symmetry.
 
 This invariant prevents a second publication from starting over an unreadable earlier transaction and prevents stale pre-transition retry state from surviving a supposedly completed authority change. Preserve the existing journal schemas and idempotent publication order unless a demonstrated defect requires otherwise.
 
@@ -1069,6 +1181,7 @@ Use this table as a navigation map.
 | Change Settings behavior | `src/shared/newtab/newtab.js` | appearance/UI tests; ADR-007 if visual appearance is involved |
 | Change first-frame/startup rendering | `src/shared/newtab/*bootstrap*.js`, `newtab-critical.css`, `storage.js` | startup tests, benchmark, ADR-001 |
 | Change Sync merge/convergence | `src/shared/background/background-core.js`, `model.js` | `test:sync`, ADR-004/005/006 |
+| Change remote Sync observation/applied-state policy | `src/shared/background/sync-remote-observation.js` | `test:sync` + `sync-remote-observation-13201.test.mjs`; background core remains effect owner |
 | Change Restore source selection | `src/shared/background/sync-source-policy.js` | Sync + Recovery tests |
 | Change intentional Sync reset | `src/shared/background/sync-reset-policy.js`, `background-core.js` | Sync/Recovery tests; ADR-006 |
 | Change Recovery format | `recovery-generation-format.js` | Recovery tests; ADR-004/005 |
@@ -1078,6 +1191,7 @@ Use this table as a navigation map.
 | Change favicon discovery/recovery | `background-core.js`, browser background adapters | browser/core/favicon tests; ADR-002/003 |
 | Change native Top Sites behavior | `src/shared/core/platform.js`, `src/chrome/core/platform.js` | browser/parity tests; ADR-003 |
 | Change Frequently Visited | `newtab.js`, `frequent-geometry-bootstrap.js`, `storage.js`, platform adapter | startup/newtab/browser tests; ADR-002 |
+| Change Bookmarks dialog UI | `src/shared/newtab/bookmarks-controller.js`, `core/bookmarks.js` | `test:newtab`, `bookmarks-controller-132003.test.mjs`; keep browser data device-local |
 | Change image limits/processing | `image-limits.js`, `image-data.js`, `image-optimizer.js`, `svg-safety.js` | security/profile/favicon tests |
 | Change profile import/export | `profile.js`, `importer.js` | import/profile/security tests |
 | Change localization | `src/shared/core/i18n-locales/`, `manifest-locales.json` | localization/hardcoded-UI tests |

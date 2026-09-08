@@ -1,3 +1,25 @@
+## 1.32.0.4
+
+- Fixes a pre-existing MEDIUM durability race in pending Normal Sync journal acknowledgement/authority cleanup, discovered by the deep forensic audit before Journey-3 Step 6. A stale completed retry can no longer read journal A, race a newer New Tab write of journal B, and then delete B.
+- Serializes pending-journal mutation/cleanup against the existing cross-context local persistence Web Lock, and clears cross-Space + local-mutation authority in one fail-closed `storage.local.remove(...)` operation for Sync-disable/reset-style transitions.
+- Rechecks durable Sync enable/initialized authority inside the existing local persistence transaction read before creating a pending local-mutation or cross-Space journal, so a stale New Tab may still save its local edit after a transition but cannot recreate outbound retry authority. This adds no browser-storage operation.
+- Includes the already-audited Journey-3 Step-5 Bookmarks ownership extraction from the superseded 1.32.0.3 candidate: the Bookmarks dialog UI lifecycle moves to `newtab/bookmarks-controller.js` while the lazy browser Bookmarks API loader, post-paint preference hydration and first-paint/startup ownership remain unchanged.
+- Adds seven permanent deterministic race/fault regressions, proven red 7/7 on the vulnerable 1.32.0.3 candidate and green after correction; the Bookmarks extraction retains its ten red/green ownership regressions. No feature, permission, persisted schema, journal schema, Sync/Recovery wire format or browser-floor change.
+
+## 1.32.0.2
+
+- Continues the **3rd Maintainability Journey — Ownership & Auditability** with one mechanical Step-3 extraction: durable pending Normal Sync journal storage mechanics now have the dedicated shared owner `background/sync-pending-journal.js`.
+- Preserves the crash-safety boundary discovered in the Step-1 inventory: `core/storage.js` still commits the initial cross-Space intent or cumulative local-mutation journal atomically with authoritative local state, so the extraction adds no second storage write and cannot create a state-without-retry-authority gap.
+- Keeps retry/publication/reconciliation authority in `background-core.js`; destination-first cross-Space ordering, journal schemas, 1.31.5 fail-closed read/clear semantics, Recovery separation and Sync wire formats are unchanged.
+- Adds nine permanent Step-3 ownership/behavior regressions, proven red 9/9 on untouched 1.32.0.1 before extraction, while preserving the existing 1.31.5 fault-injection and cross-Space retry protections. No feature, UI, permission, CSP, persisted schema, Sync/Recovery wire format or browser-floor change.
+
+## 1.32.0.1
+
+- Starts the **3rd Maintainability Journey — Ownership & Auditability** with one mechanical production boundary only: remote Sync observation/applied-state bookkeeping moves from `background-core.js` to the shared browser-neutral `background/sync-remote-observation.js` owner.
+- The extracted owner preserves the existing dataset revision, receipt/provenance, applied-revision and latest-origin semantics without adding browser/storage reads, Sync writes, Recovery work, timers, queues, Promise layers or first-paint/startup work.
+- Adds eight permanent boundary/behavior regressions, proven red 8/8 on untouched 1.31.5 and green after extraction, and updates historical source-shape probes to follow the new owner without weakening their Sync/Recovery assertions.
+- No feature, permission, CSP, persisted schema, Sync/Recovery wire format, journal schema, browser-floor or user-visible behavior change.
+
 ## 1.31.5
 
 - Makes durable pending Sync journals fail closed at the `storage.local` fault boundary. An unreadable cross-Space transaction journal is no longer treated as an empty list, so MosaicSync cannot begin a second publication while earlier cross-Space work is unknown.
