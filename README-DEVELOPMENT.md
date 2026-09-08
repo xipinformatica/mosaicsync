@@ -1,9 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.6.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.7.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+
+## 1.32.0.7 — Journey 3 final stale-meta Sync durability correction
+
+Independent adversarial audit found one residual first-Sync handoff window after 1.32.0.6's final bootstrap reread: durable Sync authority could already be initialized while an already-open New Tab still held stale cached meta and therefore suppressed cumulative pending-journal recording for a genuine user mutation. 1.32.0.7 makes the ownership contract explicit: New Tab persistence identifies whether a write is a user Sync-eligible mutation; the shared persistence transaction, under its existing write lock and fresh durable-meta reread, alone decides whether Normal Sync durability is active and therefore whether the mutation receives a pending journal. This avoids another inherently racy "last reread" in bootstrap and preserves deliberate non-Sync internal/device-local writes.
+
+The permanent regression injects the edit after bootstrap's post-initialization reread in both Firefox- and Chromium-shaped generated runtimes, proves the edit remains local, proves the already-running bootstrap does not pretend to publish it, and proves the exact newer pending journal survives for normal reconciliation. No feature, permission, schema, Sync/Recovery format, first-paint, or browser-floor change.
 
 ## 1.32.0.6 — Journey 3 freeze-audit bootstrap concurrency correction
 

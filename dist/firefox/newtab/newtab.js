@@ -1203,7 +1203,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
       baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
+      recordSyncMutation: true
     });
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
@@ -1248,7 +1248,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const persisted = await writeLocalStateWithBaseline(migrated, {
       baseState: loaded.compactBaseline,
       baseStateIsCompact: Boolean(loaded.compactBaseline),
-      recordSyncMutation: publishLegacyIntent && loaded.meta?.syncEnabled && loaded.meta?.syncInitialized
+      recordSyncMutation: publishLegacyIntent
     });
     const written = persisted.state;
     const compactBaseline = persisted.compactBaseline;
@@ -2501,7 +2501,7 @@ ${site.url}`;
     const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
       baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
+      recordSyncMutation: true
     });
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
@@ -2525,7 +2525,7 @@ ${site.url}`;
     const persisted = await writeLocalStateWithBaseline(state, {
       baseState,
       baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
+      recordSyncMutation: true
     });
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
@@ -2607,7 +2607,7 @@ ${site.url}`;
       baseState,
       baseStateIsCompact: Boolean(baseState),
       crossSpaceSyncIntent,
-      recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent && meta?.syncEnabled && meta?.syncInitialized
+      recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent
     });
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
@@ -6860,7 +6860,7 @@ ${t("clearSyncWarning")}`);
       pendingSettingsDraft.clear();
       state = importedState;
       const persisted = await writeLocalStateWithBaseline(state, {
-        recordSyncMutation: meta?.syncEnabled && meta?.syncInitialized
+        recordSyncMutation: true
       });
       state = persisted.state;
       writeBaseline = persisted.compactBaseline;

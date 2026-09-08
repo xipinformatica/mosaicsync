@@ -81,6 +81,30 @@ const events = {
 const local = makeStorageArea();
 const sync = makeStorageArea();
 const session = makeStorageArea();
+
+// Adjudication-only hook for Claude F1: pause bootstrapRemote after its
+// post-initialization LOCAL_STATE_KEY recheck, at markSyncContinuityHealthy's
+// continuity write, so another New Tab can persist with stale cached meta.
+let signalPostHandoffContinuityWrite = null;
+let releasePostHandoffContinuityWrite = null;
+let postHandoffContinuityEntered = null;
+let postHandoffContinuityRelease = null;
+if (scenario === "adjudicate-claude-f1-post-recheck-stale-meta") {
+  postHandoffContinuityEntered = new Promise(resolve => { signalPostHandoffContinuityWrite = resolve; });
+  postHandoffContinuityRelease = new Promise(resolve => { releasePostHandoffContinuityWrite = resolve; });
+  const normalLocalSet = local.set.bind(local);
+  let blockedContinuityWrite = false;
+  local.set = async items => {
+    const meta = local.data.get('mosaicsync.meta');
+    const hasContinuity = Object.prototype.hasOwnProperty.call(items || {}, 'mosaicsync.sync-continuity.v1');
+    if (!blockedContinuityWrite && hasContinuity && meta?.syncEnabled === true && meta?.syncInitialized === true) {
+      blockedContinuityWrite = true;
+      signalPostHandoffContinuityWrite();
+      await postHandoffContinuityRelease;
+    }
+    return normalLocalSet(items);
+  };
+}
 if (/^sync-loss-1301(?:3|4|9)-/.test(scenario)) {
   sync.getBytesInUse = async function(keys = null) {
     const obj = await this.get(keys);
@@ -2916,6 +2940,64 @@ else if (scenario === 'sync-13206-await-remote-late-uninitialized-edit-is-publis
   assert.equal(remoteHasLate,true,
     'first-Sync bootstrap must re-read and publish an edit that committed before initialized durable authority became active');
   console.log(JSON.stringify({ok:true,lateEditPreserved:true,lateEditPublished:true}));
+}
+
+
+else if (scenario === 'adjudicate-claude-f1-post-recheck-stale-meta') {
+  const localBase=stateWith({personal:[shortcut('local-before-sync','https://local-before-sync.test/',150)]});
+  const remoteBase=stateWith({
+    personal:[shortcut('remote','https://remote.test/',500)],
+    work:[shortcut('remote-work','https://remote-work.test/',500)]
+  });
+  await seedLocalState(localBase,{
+    syncEnabled:true,
+    syncInitialized:false,
+    syncBootstrapMode:'await-remote',
+    syncStatus:'waiting'
+  });
+  await sync.set({
+    ...remotePersonalEntries(remoteBase,'remote-personal-f1','remote-device'),
+    ...remoteWorkEntries(remoteBase,'remote-work-f1','remote-device')
+  });
+
+  const reconcilePromise=send({type:'mosaicsync:reconcile-now'});
+  await postHandoffContinuityEntered;
+
+  // We are now after bootstrapRemote's one-time post-initialization local-state
+  // recheck. Durable meta is initialized, while a New Tab may still have stale
+  // cached meta from before the storage.onChanged notification. New Tab persistence
+  // must describe this as a Sync-eligible user mutation and let durable meta decide
+  // whether journal authority is active.
+  const durableMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(durableMeta?.syncInitialized,true,'hook must be after durable Sync authority initialization');
+  const currentRaw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const current=model.normalizeState(currentRaw);
+  const edited=clone(current);
+  edited.spaces.personal.shortcuts.push(shortcut('post-recheck-stale-meta-edit','https://post-recheck-stale-meta.test/',998));
+  edited.spaces.personal.updatedAt=998;
+  edited.updatedAt=998;
+  edited.shortcuts=edited.spaces.personal.shortcuts;
+  await storageCore.writeLocalState(edited,{
+    baseState:storageCore.createWriteBaseline(current),
+    recordSyncMutation:true
+  });
+  const pendingDuring=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.ok(pendingDuring?.journalId,'initialized durable authority must journal the late Sync-eligible edit despite stale cached UI meta');
+
+  releasePostHandoffContinuityWrite();
+  const result=await reconcilePromise;
+  assert.equal(result?.ok,true);
+  const finalLocal=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const pendingAfter=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  const remote=(await sync.get(null));
+  const localHas=finalLocal.spaces.personal.shortcuts.some(item=>item.id==='post-recheck-stale-meta-edit');
+  const remoteHas=Object.values(remote).some(value=>value && typeof value==='object' && value.id==='post-recheck-stale-meta-edit' && value.kind!=='deleted');
+  assert.equal(pendingAfter?.journalId,pendingDuring.journalId,'bootstrap must preserve the later journal generation it did not publish');
+  const second=await send({type:'mosaicsync:reconcile-now'});
+  const remote2=(await sync.get(null));
+  const remoteHasAfterReconcile=Object.values(remote2).some(value=>value && typeof value==='object' && value.id==='post-recheck-stale-meta-edit' && value.kind!=='deleted');
+  const pendingAfterReconcile=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  console.log(JSON.stringify({ok:true,localHas,remoteHas,pendingAfter:Boolean(pendingAfter),pendingPreserved:true,secondOk:second?.ok,remoteHasAfterReconcile,pendingAfterReconcile:Boolean(pendingAfterReconcile)}));
 }
 
 else {

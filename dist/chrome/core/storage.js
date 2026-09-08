@@ -618,11 +618,12 @@ async function persistNormalizedState(normalized, {
     if (recordSyncMutation || effectiveCrossSpaceSyncIntent) transactionKeys.push(LOCAL_META_KEY);
     const transactionRead = await browser.storage.local.get(transactionKeys);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
-    // Callers decide whether an edit is Sync-relevant from their in-memory meta,
-    // but a tab can be queued behind an authority transition for a few milliseconds.
-    // Recheck the durable meta inside this same persistence lock/read so a stale
-    // caller cannot recreate outbound journal authority after Sync was disabled or
-    // reset. Adding LOCAL_META_KEY to the existing get changes no I/O count.
+    // Callers identify whether an edit is semantically eligible for Normal Sync;
+    // they must not decide whether durable Sync authority is active from cached UI
+    // metadata. Recheck durable meta inside this persistence lock/read so authority
+    // transitions, including first-Sync initialization and disable/reset, determine
+    // whether an eligible edit receives durable pending-journal protection. Adding
+    // LOCAL_META_KEY to the existing get changes no I/O count.
     const durableSyncMeta = transactionRead[LOCAL_META_KEY];
     const durableSyncMetaPresent = Boolean(durableSyncMeta && typeof durableSyncMeta === "object");
     const syncDurabilityActive = !durableSyncMetaPresent || Boolean(

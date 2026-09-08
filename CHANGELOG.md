@@ -1,3 +1,9 @@
+## 1.32.0.7
+
+- Closes the residual first-Sync stale-meta durability race found by independent adversarial audit: an already-open New Tab can no longer suppress pending-journal protection merely because its cached Sync metadata has not yet observed durable `syncInitialized`/`syncEnabled` authority.
+- New Tab now marks genuine user mutations as Sync-eligible independently of cached authority state; the existing locked persistence boundary re-reads durable Sync meta and decides whether cumulative pending-journal protection is active. Cache-only/device-local writes and dedicated cross-Space transaction handling remain unchanged.
+- Adds permanent Firefox/Chromium generated-runtime regression coverage for the post-bootstrap-recheck window. No feature, permission, persisted schema, Sync/Recovery wire format, first-paint path or browser-floor change.
+
 ## 1.32.0.6
 
 - Fixes two pre-existing Normal Sync bootstrap concurrency races found by the Journey-3 Step-7 freeze audit; both were reproduced in Firefox- and Chromium-shaped generated runtimes and also on untouched 1.31.5, so they were not introduced by Journey 3.

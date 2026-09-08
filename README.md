@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.32.0.6**
+**Current source release: 1.32.0.7**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -19,7 +19,7 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 
 ### Maintainability programs
 
-MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x is the 3rd Maintainability Journey: Ownership & Auditability.** This journey is deliberately zero-new-features work: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction and fixed the forensic journal-cleanup concurrency race; **1.32.0.6 is the narrow Step-7 freeze-audit corrective release, fixing two pre-existing Sync bootstrap concurrency races without adding another ownership boundary.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x is the 3rd Maintainability Journey: Ownership & Auditability.** This journey is deliberately zero-new-features work: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction and fixed the forensic journal-cleanup concurrency race; **1.32.0.7 is the final narrow Step-7 corrective release: it closes the residual first-Sync stale-meta durability window found by independent adversarial audit, without adding another ownership boundary.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -87,11 +87,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.32.0.6** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.32.0.7** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.32.0.6 is the narrow corrective release required by the Journey-3 Step-7 freeze audit. Remote Restore/await-remote bootstrap now uses the existing baseline-aware local persistence contract so a New Tab edit committed during long-running Sync reads cannot be overwritten, and bootstrap completion acknowledges only the pending local-mutation journal generation present at entry so a newer durable retry generation cannot be deleted accidentally. The Journey-3 ownership boundaries and 1.32.0.5 Bookmarks cleanup remain unchanged. No feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced.
+1.32.0.7 is the final narrow corrective release required by the Journey-3 freeze process. It retains 1.32.0.6 baseline-aware bootstrap persistence and generation-specific journal acknowledgement, and closes the remaining first-Sync authority-handoff window by separating user-mutation Sync eligibility from cached UI Sync authority: New Tab marks genuine user mutations as eligible, while the persistence transaction re-reads durable Sync metadata under its existing write lock to decide whether pending-journal protection is active. No feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced.
 
 1.32.0.3 is Step 5 of the **3rd Maintainability Journey** (Step 4 was absorbed into the Step-2 remote-observation extraction). It mechanically moves the Bookmarks dialog's UI state, folder-color rendering, search/folder navigation, permission-dialog lifecycle and bookmark-local event wiring from `newtab.js` into `newtab/bookmarks-controller.js`. The browser Bookmarks API remains lazy-loaded through the existing `core/bookmarks.js` path, bookmark-folder color preferences are still hydrated in the existing post-paint maintenance phase, and no first-paint await, storage.local/storage.sync work, Sync/Recovery behavior or feature semantics move into the controller.
 

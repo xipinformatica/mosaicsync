@@ -163,7 +163,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(src, /const permissionPromise = wantsEnabled \? requestTopSitesPermissionFromGesture\(\) : null/);
     assert.match(src, /publishLegacyIntent = enabled \|\| count !== DEFAULT_STATE\.settings\.frequentlyVisitedCount/,
       "legacy OFF/default devices must not race and overwrite another computer's legacy ON intent");
-    assert.match(src, /recordSyncMutation: publishLegacyIntent && loaded\.meta\?\.syncEnabled && loaded\.meta\?\.syncInitialized/);
+    assert.match(src, /recordSyncMutation: publishLegacyIntent/);
   });
 
   test(`1.27.8.5 ${browser} folder-open hydration cannot overwrite a concurrent structural edit`, () => {
