@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.32.0.8**
+**Current source release: 1.32.0.9**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -19,7 +19,7 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 
 ### Maintainability programs
 
-MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x is the 3rd Maintainability Journey: Ownership & Auditability.** This journey is deliberately zero-new-features work: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction and fixed the forensic journal-cleanup concurrency race; **1.32.0.8 is the final narrow post-freeze corrective release: Welcome/setup source candidates remain provisional until the user actually chooses local authority, preventing an already-initialized Sync profile from being overwritten before the final source decision.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x is the 3rd Maintainability Journey: Ownership & Auditability.** This journey is deliberately zero-new-features work: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction and fixed the forensic journal-cleanup concurrency race; **1.32.0.9 is the final narrow post-freeze corrective release: cross-Space user intent is now independent of cached Sync status, while fresh durable authority inside the persistence lock decides whether the dedicated crash-safe transaction journal is active.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -87,11 +87,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.32.0.8** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.32.0.9** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.32.0.8 is a final narrow post-freeze authority correction discovered by the complete persistence-intent audit. Welcome/setup source choices such as Start empty, Firefox shortcut import and MosaicSync profile import are now staged only in page memory while MosaicSync checks for an existing synchronized source. The candidate becomes authoritative local state only when this computer actually wins the source decision; choosing the synchronized copy discards the provisional candidate without ever publishing it. The 1.32.0.7 Sync-eligibility/durable-authority contract remains unchanged. No feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced.
+1.32.0.9 is a narrow post-freeze Sync durability correction discovered by an independent persistence-intent audit. Cross-Space drag and shortcut-editor Space moves now always describe the user's semantic move intent instead of gating that intent on cached New Tab Sync metadata. The existing locked persistence boundary continues to read fresh durable Sync authority and decides whether the dedicated destination-first transaction journal is active; durable Sync OFF still ignores stale caller intent. The 1.32.0.8 Welcome source-authority correction and 1.32.0.7 Sync-eligibility contract remain intact. No feature, permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced.
 
 1.32.0.3 is Step 5 of the **3rd Maintainability Journey** (Step 4 was absorbed into the Step-2 remote-observation extraction). It mechanically moves the Bookmarks dialog's UI state, folder-color rendering, search/folder navigation, permission-dialog lifecycle and bookmark-local event wiring from `newtab.js` into `newtab/bookmarks-controller.js`. The browser Bookmarks API remains lazy-loaded through the existing `core/bookmarks.js` path, bookmark-folder color preferences are still hydrated in the existing post-paint maintenance phase, and no first-paint await, storage.local/storage.sync work, Sync/Recovery behavior or feature semantics move into the controller.
 

@@ -1,11 +1,15 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.8.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+
+## 1.32.0.9 — cross-Space semantic intent / durable authority correction
+
+Cross-Space moves now follow the same ownership rule established for ordinary user mutations in 1.32.0.7: the New Tab page describes **what the user did**, while the persistence layer decides from fresh durable metadata **whether Sync protection is active**. Drag and shortcut-editor Space moves always construct a `crossSpaceSyncIntent`; `persistNormalizedState()` re-reads `LOCAL_META_KEY` inside the existing persistence lock and writes the dedicated per-move journal only when durable Sync is enabled and initialized. Never reintroduce cached `meta.syncEnabled` / `meta.syncInitialized` gating around cross-Space intent construction. This preserves destination-first crash recovery even when an open page briefly has stale Sync status, while the inverse stale-cache direction remains safe because durable Sync OFF discards the intent. No wire-format or journal-schema change.
 
 ## 1.32.0.8 — Welcome source-candidate authority correction
 

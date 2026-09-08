@@ -2444,14 +2444,16 @@ ${site.url}`;
       position,
       targetFolderId
     });
-    const crossSpaceSyncIntent = meta.syncEnabled && meta.syncInitialized
-      ? createCrossSpaceSyncIntentNormalized(beforeMove, next, {
-          fromSpaceId: drag.sourceSpaceId,
-          toSpaceId: targetSpaceId,
-          shortcutIds: [drag.shortcutId],
-          deviceId: meta.deviceId
-        })
-      : null;
+    // A cross-Space move is semantic user intent regardless of whether this
+    // New Tab's cached Sync metadata has observed the latest authority state.
+    // Always describe the move; the locked persistence boundary re-reads durable
+    // Sync meta and decides whether the dedicated recovery journal is active.
+    const crossSpaceSyncIntent = createCrossSpaceSyncIntentNormalized(beforeMove, next, {
+      fromSpaceId: drag.sourceSpaceId,
+      toSpaceId: targetSpaceId,
+      shortcutIds: [drag.shortcutId],
+      deviceId: meta.deviceId
+    });
     state = next;
     if (!destinationContainsShortcut(targetSpaceId, drag.shortcutId)) throw new Error(t("moveSpaceFailed"));
 
@@ -4597,14 +4599,14 @@ ${site.url}`;
           fromSpaceId: editingSourceSpaceId,
           toSpaceId: destinationSpaceId
         });
-        crossSpaceSyncIntent = meta.syncEnabled && meta.syncInitialized
-          ? createCrossSpaceSyncIntentNormalized(beforeMove, movedState, {
-              fromSpaceId: editingSourceSpaceId,
-              toSpaceId: destinationSpaceId,
-              shortcutIds: [savedShortcutId],
-              deviceId: meta.deviceId
-            })
-          : null;
+        // Describe cross-Space intent from the user's action, not cached Sync
+        // authority. persistNormalizedState owns the fresh durable-meta decision.
+        crossSpaceSyncIntent = createCrossSpaceSyncIntentNormalized(beforeMove, movedState, {
+          fromSpaceId: editingSourceSpaceId,
+          toSpaceId: destinationSpaceId,
+          shortcutIds: [savedShortcutId],
+          deviceId: meta.deviceId
+        });
         state = movedState;
         if (!destinationContainsShortcut(destinationSpaceId, savedShortcutId)) throw new Error(t("moveSpaceFailed"));
       }

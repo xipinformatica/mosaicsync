@@ -1,3 +1,9 @@
+## 1.32.0.9
+
+- Fixes a MEDIUM cross-Space Sync durability gap found by independent persistence-intent audit: drag and shortcut-editor Space moves no longer suppress their semantic cross-Space intent because an already-open New Tab has stale cached Sync metadata.
+- The existing locked persistence boundary remains the authority owner: durable Sync ON stores the dedicated destination-first transaction journal; durable Sync OFF ignores stale caller intent and cannot resurrect pending Sync work. Opposite-direction moves therefore keep separate crash-safe journals instead of collapsing into one ambiguous cumulative diff.
+- Adds permanent red/green source-contract coverage plus Firefox/Chromium generated-runtime journal regressions. No feature, permission, persisted schema, Sync/Recovery wire format, browser-floor, Recovery or first-paint change.
+
 ## 1.32.0.8
 
 - Fixes a MEDIUM Welcome/setup source-authority race found by the complete persistence-intent audit: rerunning setup on an already-initialized Sync device can no longer publish a provisional Start-empty, Firefox-import or profile-import candidate before the user chooses which copy should win.
