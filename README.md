@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.32.1.1**
+**Current source release: 1.32.1.2**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -19,7 +19,7 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 
 ### Maintainability programs
 
-MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x completed the 3rd Maintainability Journey: Ownership & Auditability.** That structural journey is frozen: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction; later corrective releases hardened the audited concurrency boundaries. **1.32.1 introduced the scoped Custom Branding feature; 1.32.1.1 is its narrow visual corrective, making the custom logo/text replace the existing upper-left MosaicSync logo/name while keeping the mascot/effect intact. Branding remains device-local, excluded from browser Sync/Recovery, and travels only inside explicit MosaicSync profile export/import.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x completed the 3rd Maintainability Journey: Ownership & Auditability.** That structural journey is frozen: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction; later corrective releases hardened the audited concurrency boundaries. **1.32.1 introduced the scoped Custom Branding feature; 1.32.1.1 corrected its visual placement; 1.32.1.2 is the localization semantic-completeness corrective. It completes the Recovery manager and Custom Branding translations across every non-English UI catalog, localizes the remaining Recovery `Sync storage` label, and adds permanent integrity gates against silent English fallbacks or visible static UI text that bypasses the catalog. Branding remains device-local, excluded from browser Sync/Recovery, and travels only inside explicit MosaicSync profile export/import.** See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
 
 ## Why the source is here
 
@@ -87,9 +87,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.32.1.1** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.32.1.2** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
+
+1.32.1.2 is a localization-only corrective over 1.32.1.1. It completes the Recovery safety-copy manager and Custom Branding wording in every non-English runtime catalog using each locale's existing MosaicSync terminology and UI context, localizes the remaining `Sync storage` Recovery eyebrow through the source catalog, and adds permanent tests that reject unreviewed exact-English multi-word fallbacks in non-English catalogs and visible New Tab literals outside the localization contract. The runtime catalogs now contain 473 keys in all 33 supported UI languages. No feature behavior, permissions, persisted data, profile format, Sync/Recovery wire format, CSP or browser floor changes.
 
 1.32.1.1 corrects the Custom Branding presentation: when enabled, the custom logo replaces the built-in MosaicSync mark and the custom text replaces the `MosaicSync` name in the existing upper-left brand slot. The separate centered branding surface from 1.32.1 is removed, so branding no longer competes geometrically with the centered Spaces selector. The existing Hello mascot/effect stays attached to the same brand control, horizontal logos retain their aspect ratio, and disabling branding restores the built-in identity. The device-local storage and profile-v3 export/import contracts from 1.32.1 are unchanged.
 

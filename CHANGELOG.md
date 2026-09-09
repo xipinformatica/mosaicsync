@@ -1,3 +1,9 @@
+## 1.32.1.2
+
+- Completes the Recovery safety-copy manager and Custom Branding translations across all 32 non-English UI catalogs, using each locale's established MosaicSync terminology rather than English placeholder text. All 33 runtime catalogs now share the same 473-key contract.
+- Localizes the remaining Recovery-dialog `Sync storage` label through the normal catalog instead of leaving it as an English-only static literal.
+- Adds permanent semantic localization gates that reject unreviewed exact-English multi-word fallbacks in non-English catalogs, explicitly protect the new Recovery/Branding surfaces, and detect visible New Tab UI literals that bypass localization. No feature, permission, persisted-schema, profile-format, Sync/Recovery wire-format, CSP, first-paint or browser-floor change.
+
 ## 1.32.1.1
 
 - Fixes the Custom Branding launcher placement introduced in 1.32.1: an enabled custom logo and text now **replace the existing upper-left MosaicSync logo and name** instead of rendering in a separate centered surface that could be covered by the Spaces selector.

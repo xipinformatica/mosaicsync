@@ -1,9 +1,16 @@
 # MosaicSync development
 
-> **Current release: 1.32.1.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.1.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
+
+
+## 1.32.1.2 — localization semantic-completeness corrective
+
+1.32.1.2 closes the localization-audit gap exposed after 1.32.1.1. All 33 source UI catalogs now carry the same 473-key contract. The complete Recovery safety-copy manager and Custom Branding surfaces are contextually translated across all 32 non-English catalogs, and the previously hard-coded Recovery eyebrow `Sync storage` is promoted into the normal source-string catalog so runtime localization owns it.
+
+The corrective adds `tests/localization-integrity-13212.test.mjs`. It rejects unreviewed exact-English multi-word fallbacks in non-English catalogs, explicitly guards the Recovery/Custom Branding surfaces, and scans visible New Tab static text/labels for literals that bypass the localization catalog unless they are reviewed invariants. Legitimately identical or borrowed terms are documented as narrow exceptions instead of silently weakening the gate. No runtime feature logic, permissions, Sync/Recovery data model, profile format, persisted schema, browser floor, first-paint ownership or Custom Branding storage boundary changes.
 
 
 
