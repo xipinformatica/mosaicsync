@@ -1,11 +1,19 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.9.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.0.10.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+
+## 1.32.0.10 — Recovery safety-copy storage management
+
+1.32.0.10 is a narrow post-freeze user feature motivated by Firefox Sync quota pressure. The normal Recovery retention policy remains conservative, but Settings now exposes a guarded manager for verified complete Recovery generations only. It can show copy size/date by device, delete one superseded generation, retire all superseded generations while keeping each device's newest complete copy, or remove an old device's whole Recovery set only when the current device still owns a verified complete fallback.
+
+Manual cleanup follows the existing Recovery ownership model rather than exposing raw Sync keys. `recovery-generation-lifecycle.js` plans eligibility from decoded verified complete generations. The privileged background reads Sync state, calculates bytes, and performs deletion through the existing expected-change-aware `removeSyncItems()` helper. Before any destructive action, the background takes a fresh full Sync view and calls `confirmedManualRecoveryCleanupKeys()`; eligibility loss cancels the action. Incomplete/torn/orphan generations are reported only as unmanaged Recovery usage and cannot be targeted manually.
+
+The New Tab manager is lazy: it loads only when the user opens **Manage** beside Recovery safety copies, so it adds no first-paint storage read, await, DOM work or browser API call. New Tab has no direct destructive `storage.sync` access. Live layout/settings, cumulative pending Sync mutations, cross-Space transaction journals, reset authority and device-local artwork are never part of manual Recovery cleanup.
 
 ## 1.32.0.9 — cross-Space semantic intent / durable authority correction
 

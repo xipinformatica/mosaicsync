@@ -206,6 +206,7 @@ export function startBackground(adapter) {
   const {
     clearDeviceSnapshotDecodeCache,
     compareDeviceSnapshotGenerationRecency,
+    deviceSnapshotKeysForRoot,
     isDeviceSnapshotKey,
   } = recoveryGenerationFormat;
   const recoveryGenerationLifecycle = createRecoveryGenerationLifecycle({
@@ -215,11 +216,14 @@ export function startBackground(adapter) {
   });
   const {
     confirmedDeviceSnapshotGarbageCollectionKeys,
+    confirmedManualRecoveryCleanupKeys,
     confirmedSupersededDeviceSnapshotKeys,
     planDeviceSnapshotGarbageCollection,
     planDeviceSnapshotPublicationCapacity,
+    planManualRecoveryCleanup,
     supersededDeviceSnapshotRootKeys,
-    syncItemsFitInSnapshot
+    syncItemsFitInSnapshot,
+    verifiedProfileDeviceSnapshotDescriptors
   } = recoveryGenerationLifecycle;
   const recoveryGenerationStore = createRecoveryGenerationStore({
     format: recoveryGenerationFormat,
@@ -3454,6 +3458,10 @@ export function startBackground(adapter) {
         return Promise.resolve({ ok: true, cancelled: cancelFaviconChoiceRequest(message.requestId) });
       case "mosaicsync:get-sync-status":
         return enqueue(getSyncStatus, { persistSyncError: false });
+      case "mosaicsync:get-recovery-copies":
+        return enqueue(getRecoveryStorageManagement, { persistSyncError: false });
+      case "mosaicsync:cleanup-recovery-copies":
+        return enqueue(() => cleanupRecoveryCopies(message));
       case "mosaicsync:set-device-name":
         return enqueue(() => setDeviceName(message.deviceName));
       case "mosaicsync:set-sync-enabled":
@@ -4072,6 +4080,116 @@ export function startBackground(adapter) {
       lastReconcileOutcome: outcome
     });
     return result;
+  }
+
+  async function recoveryStorageModel(baseMeta = null, all = null) {
+    const meta = baseMeta || await readLocalMeta();
+    const values = all && typeof all === "object" ? all : await browser.storage.sync.get(null);
+    const snapshots = await readDeviceSnapshots(values);
+    const roots = verifiedProfileDeviceSnapshotDescriptors(values, snapshots)
+      .sort((a, b) => compareDeviceSnapshotGenerationRecency(a, b));
+    const recoveryKeys = Object.keys(values).filter(isDeviceSnapshotKey);
+    const rootKeySets = new Map(roots.map(root => [root.key, deviceSnapshotKeysForRoot(values, root.key)]));
+    const rootByteEntries = await Promise.all(roots.map(async root => [
+      root.key,
+      Math.max(0, Number(await browser.storage.sync.getBytesInUse(rootKeySets.get(root.key))) || 0)
+    ]));
+    const rootBytes = new Map(rootByteEntries);
+    const managedBytes = [...rootBytes.values()].reduce((sum, value) => sum + value, 0);
+    const totalBytes = recoveryKeys.length
+      ? Math.max(0, Number(await browser.storage.sync.getBytesInUse(recoveryKeys)) || 0)
+      : 0;
+    const safePlan = planManualRecoveryCleanup(values, snapshots, {
+      mode: "superseded",
+      currentDeviceId: meta.deviceId
+    });
+    const safeCleanupBytes = safePlan.rootKeys.reduce((sum, rootKey) => sum + (rootBytes.get(rootKey) || 0), 0);
+    const grouped = new Map();
+    for (const root of roots) {
+      const list = grouped.get(root.deviceId) || [];
+      list.push(root);
+      grouped.set(root.deviceId, list);
+    }
+    const devices = [...grouped.entries()].map(([deviceId, list]) => {
+      list.sort(compareDeviceSnapshotGenerationRecency);
+      const currentDevice = deviceId === meta.deviceId;
+      const name = currentDevice
+        ? (normalizeDeviceName(meta.deviceName) || readSyncedDeviceName(values, deviceId))
+        : readSyncedDeviceName(values, deviceId);
+      return {
+        deviceId,
+        deviceName: name || "",
+        currentDevice,
+        canRemoveDevice: !currentDevice && (grouped.get(meta.deviceId)?.length || 0) > 0,
+        bytes: list.reduce((sum, root) => sum + (rootBytes.get(root.key) || 0), 0),
+        latestAt: Math.max(...list.map(root => Number(root.publishedAt) || Number(root.updatedAt) || 0), 0),
+        generations: list.map((root, index) => ({
+          rootKey: root.key,
+          commitId: root.commitId,
+          publishedAt: Number(root.publishedAt) || 0,
+          updatedAt: Number(root.updatedAt) || 0,
+          bytes: rootBytes.get(root.key) || 0,
+          latest: index === 0,
+          canDelete: index > 0
+        }))
+      };
+    }).sort((a, b) => Number(b.currentDevice) - Number(a.currentDevice) || b.latestAt - a.latestAt || compareStableText(a.deviceId, b.deviceId));
+
+    return {
+      ok: true,
+      totalBytes,
+      managedBytes,
+      unmanagedBytes: Math.max(0, totalBytes - managedBytes),
+      safeCleanupBytes,
+      safeCleanupCount: safePlan.rootKeys.length,
+      currentDeviceId: meta.deviceId || "",
+      devices
+    };
+  }
+
+  async function getRecoveryStorageManagement() {
+    const [meta, all] = await Promise.all([
+      readLocalMeta(),
+      browser.storage.sync.get(null)
+    ]);
+    return recoveryStorageModel(meta, all);
+  }
+
+  async function cleanupRecoveryCopies(message = {}) {
+    const mode = ["superseded", "generation", "device"].includes(message?.mode) ? message.mode : "";
+    if (!mode) return { ok: false, error: "Unknown Recovery cleanup action." };
+
+    const meta = await readLocalMeta();
+    if (!meta.syncEnabled) return { ok: false, error: "Sync must be enabled to manage Recovery safety copies." };
+    const initial = await browser.storage.sync.get(null);
+    const initialSnapshots = await readDeviceSnapshots(initial);
+    const plan = planManualRecoveryCleanup(initial, initialSnapshots, {
+      mode,
+      rootKey: typeof message.rootKey === "string" ? message.rootKey : "",
+      deviceId: typeof message.deviceId === "string" ? message.deviceId : "",
+      currentDeviceId: meta.deviceId
+    });
+    if (!plan.rootKeys.length) return { ok: false, error: "That Recovery copy is protected or no longer available." };
+
+    // Manual cleanup is deliberately two-phase: build a conservative plan from
+    // one complete view, then take a fresh Sync view immediately before deletion.
+    // A generation that became newest/last, or an old-device set that lost its
+    // outside fallback, must stop being deletable while this worker yielded.
+    const latest = await browser.storage.sync.get(null);
+    const latestSnapshots = await readDeviceSnapshots(latest);
+    const keys = confirmedManualRecoveryCleanupKeys(latest, latestSnapshots, plan);
+    if (!keys.length) return { ok: false, error: "Recovery copies changed while MosaicSync was checking them. Refresh and try again." };
+    const confirmedRoots = plan.rootKeys.filter(rootKey => keys.includes(rootKey));
+    const removedBytes = Math.max(0, Number(await browser.storage.sync.getBytesInUse(keys)) || 0);
+    await removeSyncItems(keys);
+    clearDeviceSnapshotDecodeCache();
+
+    const refreshed = await getRecoveryStorageManagement();
+    return {
+      ...refreshed,
+      removedBytes,
+      removedGenerations: confirmedRoots.length
+    };
   }
 
   async function getSyncStatus() {

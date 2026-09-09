@@ -1,3 +1,10 @@
+## 1.32.0.10
+
+- Adds guarded **Recovery safety-copy storage management** to Settings so users can inspect how much Firefox Sync space complete Recovery generations use and reclaim superseded copies without exposing raw Sync keys.
+- Safe cleanup keeps the newest verified complete Recovery generation for every device. Individual deletion is limited to superseded generations. Whole-device removal is limited to non-current devices and requires this current device to retain its own verified complete Recovery fallback.
+- Manual cleanup is planned by the Recovery lifecycle owner and revalidated from a fresh Sync snapshot immediately before expected-change-aware deletion. Torn/incomplete/orphan Recovery data, live layout/settings, pending Normal Sync journals and reset authority are never manually deletable.
+- The manager is lazy and adds no New Tab first-paint work. No permission, persisted-schema, Sync/Recovery wire-format or browser-floor change.
+
 ## 1.32.0.9
 
 - Fixes a MEDIUM cross-Space Sync durability gap found by independent persistence-intent audit: drag and shortcut-editor Space moves no longer suppress their semantic cross-Space intent because an already-open New Tab has stale cached Sync metadata.

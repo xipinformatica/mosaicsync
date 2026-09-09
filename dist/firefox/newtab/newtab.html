@@ -285,7 +285,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.32.0.9</p>
+          <p class="eyebrow">MosaicSync · 1.32.0.10</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -587,7 +587,7 @@
             <summary>Technical Sync details</summary>
             <div class="sync-storage-grid">
               <span>Layout &amp; settings</span><strong id="syncUsageCore">0 KB</strong>
-              <span>Recovery safety copies</span><strong id="syncUsageRecovery">0 KB</strong>
+              <span>Recovery safety copies</span><span class="sync-storage-value-action"><strong id="syncUsageRecovery">0 KB</strong><button id="recoveryCopiesManageButton" class="sync-storage-manage-button" type="button" aria-haspopup="dialog" aria-controls="recoveryCopiesDialog">Manage</button></span>
               <span>Shortcut images</span><strong id="syncUsageShortcuts">0 KB</strong>
               <span>Sync metadata / cleanup</span><strong id="syncUsageOverhead">0 KB</strong>
               <span class="sync-storage-free">Free</span><strong id="syncUsageFree" class="sync-storage-free">100 KB</strong>
@@ -740,6 +740,30 @@
       </div>
       <div id="wallpaperGalleryGrid" class="wallpaper-gallery-grid" aria-label="Wallpaper gallery"></div>
     </div>
+  </dialog>
+
+
+  <dialog id="recoveryCopiesDialog" class="dialog recovery-copies-dialog" aria-labelledby="recoveryCopiesTitle">
+    <section class="dialog-card recovery-copies-card">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">Sync storage</p>
+          <h2 id="recoveryCopiesTitle">Recovery safety copies</h2>
+          <p id="recoveryCopiesIntro" class="recovery-copies-intro">These complete safety copies help MosaicSync recover if the normal synchronized layout disappears unexpectedly.</p>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="recoveryCopiesDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+      <div id="recoveryCopiesSummary" class="recovery-copies-summary" role="status" aria-live="polite"></div>
+      <div id="recoverySafeCleanup" class="recovery-safe-cleanup" hidden>
+        <div>
+          <strong id="recoverySafeCleanupTitle">Safe cleanup available</strong>
+          <small id="recoverySafeCleanupDetail"></small>
+        </div>
+        <button id="recoverySafeCleanupButton" class="secondary-button" type="button"></button>
+      </div>
+      <div id="recoveryCopiesList" class="recovery-copies-list"></div>
+      <p id="recoveryCopiesFootnote" class="hint recovery-copies-footnote">Safe cleanup and individual deletion always keep the newest complete copy for each device. Removing an old device can remove its whole Recovery set only while this device retains a complete Recovery fallback. Live layout data, pending Sync journals and reset authority are never deleted here.</p>
+    </section>
   </dialog>
 
 

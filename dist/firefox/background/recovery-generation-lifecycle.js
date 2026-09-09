@@ -301,6 +301,73 @@ export function createRecoveryGenerationLifecycle({
     };
   }
 
+  function manualRecoveryGroups(all, snapshots) {
+    const groups = new Map();
+    for (const root of verifiedProfileDeviceSnapshotDescriptors(all, snapshots)) {
+      const list = groups.get(root.deviceId) || [];
+      list.push(root);
+      groups.set(root.deviceId, list);
+    }
+    for (const list of groups.values()) list.sort(compareDeviceSnapshotGenerationRecency);
+    return groups;
+  }
+
+  function planManualRecoveryCleanup(all, snapshots, { mode = "", rootKey = "", deviceId = "", currentDeviceId = "" } = {}) {
+    const values = all && typeof all === "object" ? all : {};
+    const groups = manualRecoveryGroups(values, snapshots);
+    let rootKeys = [];
+
+    if (mode === "superseded") {
+      for (const list of groups.values()) rootKeys.push(...list.slice(1).map(entry => entry.key));
+    } else if (mode === "generation") {
+      const target = String(rootKey || "");
+      if (target) {
+        for (const list of groups.values()) {
+          const index = list.findIndex(entry => entry.key === target);
+          if (index > 0) {
+            rootKeys = [target];
+            break;
+          }
+        }
+      }
+    } else if (mode === "device") {
+      const targetDevice = String(deviceId || "");
+      const current = String(currentDeviceId || "");
+      if (targetDevice && current && targetDevice !== current) {
+        const target = groups.get(targetDevice) || [];
+        const currentFallbacks = groups.get(current) || [];
+        // Removing an old device is intentionally stricter than deleting a
+        // superseded generation: the device performing the cleanup must itself
+        // retain a verified complete Recovery fallback. Do not rely on a third
+        // remote device remaining available across the destructive operation.
+        if (target.length && currentFallbacks.length > 0) rootKeys = target.map(entry => entry.key);
+      }
+    }
+
+    return Object.freeze({
+      mode: ["superseded", "generation", "device"].includes(mode) ? mode : "",
+      rootKey: String(rootKey || ""),
+      deviceId: String(deviceId || ""),
+      currentDeviceId: String(currentDeviceId || ""),
+      rootKeys: [...new Set(rootKeys)]
+    });
+  }
+
+  function confirmedManualRecoveryCleanupKeys(latest, latestSnapshots, plan) {
+    const values = latest && typeof latest === "object" ? latest : {};
+    const requested = new Set(Array.isArray(plan?.rootKeys) ? plan.rootKeys : []);
+    if (!requested.size) return [];
+    const refreshed = planManualRecoveryCleanup(values, latestSnapshots, {
+      mode: plan?.mode,
+      rootKey: plan?.rootKey,
+      deviceId: plan?.deviceId,
+      currentDeviceId: plan?.currentDeviceId
+    });
+    const stillEligible = new Set(refreshed.rootKeys);
+    const rootKeys = [...requested].filter(rootKey => stillEligible.has(rootKey));
+    return [...new Set(rootKeys.flatMap(rootKey => deviceSnapshotKeysForRoot(values, rootKey)))];
+  }
+
   function confirmedDeviceSnapshotGarbageCollectionKeys(latest, latestSnapshots, observation) {
     const values = latest && typeof latest === "object" ? latest : {};
     const snapshots = Array.isArray(latestSnapshots) ? latestSnapshots : [];
@@ -327,10 +394,12 @@ export function createRecoveryGenerationLifecycle({
 
   return Object.freeze({
     confirmedDeviceSnapshotGarbageCollectionKeys,
+    confirmedManualRecoveryCleanupKeys,
     confirmedSupersededDeviceSnapshotKeys,
     currentDeviceSnapshotRootHeader,
     planDeviceSnapshotGarbageCollection,
     planDeviceSnapshotPublicationCapacity,
+    planManualRecoveryCleanup,
     supersededDeviceSnapshotRootKeys,
     syncItemsFitInSnapshot,
     verifiedProfileDeviceSnapshotDescriptors

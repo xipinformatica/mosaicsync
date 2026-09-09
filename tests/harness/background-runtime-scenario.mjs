@@ -454,6 +454,66 @@ async function completeProfileSnapshotFixture(baseState, {
   return { rootKey, root, entries, parts, personalRecords, workRecords, personalSettings, workSettings };
 }
 
+async function modernCompleteProfileSnapshotFixture(baseState, {
+  deviceId = "recovery-manager-device",
+  commitId = "recovery-manager-generation",
+  publishedAt = 500,
+  chunkChars = 1400
+} = {}) {
+  const personal = model.workspaceStateNormalized(baseState, "personal");
+  const work = model.workspaceStateNormalized(baseState, "work");
+  const personalRecords = model.flattenStateNormalized(personal, deviceId);
+  const workRecords = model.flattenStateNormalized(work, deviceId);
+  const personalSettings = model.makeSettingsRecordNormalized(personal, deviceId);
+  const workSettings = model.makeSettingsRecordNormalized(work, deviceId);
+  const payload = {
+    version: constants.DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    records: [...personalRecords.values()],
+    settings: personalSettings,
+    workRecords: [...workRecords.values()],
+    workSettings
+  };
+  const encoded = await gzipBase64ForFixture(payload);
+  const parts = [];
+  for (let offset = 0; offset < encoded.data.length; offset += chunkChars) parts.push(encoded.data.slice(offset, offset + chunkChars));
+  const deviceRoot = `${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent(deviceId)}`;
+  const rootKey = `${deviceRoot}.snapshot.${encodeURIComponent(commitId)}`;
+  const updatedAt = Math.max(Number(personal.updatedAt) || 0, Number(work.updatedAt) || 0);
+  const root = {
+    schemaVersion: constants.DEVICE_SNAPSHOT_SCHEMA_VERSION,
+    kind: "device-snapshot-manifest",
+    chunkSchemaVersion: constants.DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+    chunkKeyMode: "generation",
+    snapshotId: commitId,
+    deviceId, commitId, publishedAt, updatedAt,
+    liveRecordCount: liveRecordCountForFixture(personalRecords),
+    recordFingerprint: recordFingerprintForFixture(personalRecords),
+    settingsModifiedAt: Number(personalSettings.modifiedAt) || 0,
+    encoding: "gzip-base64",
+    compressedBytes: encoded.compressedBytes,
+    jsonChars: encoded.jsonChars,
+    profileSnapshotVersion: constants.PROFILE_SNAPSHOT_SCHEMA_VERSION,
+    profileComplete: true,
+    workLiveRecordCount: liveRecordCountForFixture(workRecords),
+    workRecordFingerprint: recordFingerprintForFixture(workRecords),
+    workSettingsModifiedAt: Number(workSettings.modifiedAt) || 0,
+    parts: parts.length,
+    dataChars: encoded.data.length,
+    dataFingerprint: fnv1aForFixture(encoded.data)
+  };
+  const entries = { [rootKey]: root };
+  parts.forEach((data, index) => {
+    entries[`${rootKey}.chunk.${index}`] = {
+      schemaVersion: constants.DEVICE_SNAPSHOT_CHUNK_SCHEMA_VERSION,
+      kind: "device-snapshot-chunk",
+      chunkKeyMode: "generation",
+      snapshotId: commitId,
+      deviceId, commitId, publishedAt, index, total: parts.length, data
+    };
+  });
+  return { rootKey, root, entries };
+}
+
 function previousDescriptorForFixture(root) {
   const fields = [
     "commitId", "publishedAt", "updatedAt", "liveRecordCount", "recordFingerprint", "settingsModifiedAt",
@@ -2998,6 +3058,73 @@ else if (scenario === 'adjudicate-claude-f1-post-recheck-stale-meta') {
   const remoteHasAfterReconcile=Object.values(remote2).some(value=>value && typeof value==='object' && value.id==='post-recheck-stale-meta-edit' && value.kind!=='deleted');
   const pendingAfterReconcile=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
   console.log(JSON.stringify({ok:true,localHas,remoteHas,pendingAfter:Boolean(pendingAfter),pendingPreserved:true,secondOk:second?.ok,remoteHasAfterReconcile,pendingAfterReconcile:Boolean(pendingAfterReconcile)}));
+}
+
+else if (scenario === 'recovery-manager-132010-safe-cleanup') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-b',deviceName:'Current'});
+  const localOld=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'local-old',publishedAt:100});
+  const localNew=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'local-new',publishedAt:200});
+  const remoteOld=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote-old',publishedAt:300});
+  const remoteNew=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote-new',publishedAt:400});
+  const liveSentinels={
+    [constants.SYNC_DATASET_KEY]:{kind:'dataset',schemaVersion:constants.SYNC_SCHEMA_VERSION,commitId:'live',updatedAt:999,liveRecordCount:0,settingsModifiedAt:0},
+    [constants.SYNC_RESET_INTENT_KEY]:{schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',intentId:'keep-reset',updatedAt:998},
+    [`${constants.SYNC_DEVICE_NAME_PREFIX}${encodeURIComponent('old-device')}`]:{schemaVersion:constants.SYNC_DEVICE_NAME_SCHEMA_VERSION,kind:'device-name',deviceId:'old-device',name:'Old device',updatedAt:997}
+  };
+  await sync.set({...localOld.entries,...localNew.entries,...remoteOld.entries,...remoteNew.entries,...liveSentinels});
+  const before=await send({type:'mosaicsync:get-recovery-copies'});
+  assert.equal(before?.ok,true);
+  assert.equal(before.safeCleanupCount,2);
+  const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'superseded'});
+  assert.equal(result?.ok,true);
+  assert.equal(result.removedGenerations,2);
+  const after=await sync.get(null);
+  assert.equal(Object.hasOwn(after,localOld.rootKey),false);
+  assert.equal(Object.hasOwn(after,remoteOld.rootKey),false);
+  assert.equal(Object.hasOwn(after,localNew.rootKey),true);
+  assert.equal(Object.hasOwn(after,remoteNew.rootKey),true);
+  for (const key of Object.keys(liveSentinels)) assert.equal(Object.hasOwn(after,key),true,`manual Recovery cleanup touched unrelated key ${key}`);
+  console.log(JSON.stringify({ok:true,safeCleanupCount:before.safeCleanupCount,removedGenerations:result.removedGenerations,newestProtected:true,unrelatedKeysProtected:true}));
+}
+
+else if (scenario === 'recovery-manager-132010-device-revalidation') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-b'});
+  const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'current',publishedAt:500});
+  const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote',publishedAt:400});
+  await sync.set({...current.entries,...remote.entries});
+  const originalGet=sync.get.bind(sync);
+  let nullReads=0;
+  sync.get=async keys=>{
+    if (keys===null || keys===undefined) {
+      nullReads+=1;
+      if (nullReads===2) {
+        for (const key of [...sync.data.keys()]) if (key===current.rootKey || key.startsWith(`${current.rootKey}.chunk.`)) sync.data.delete(key);
+      }
+    }
+    return originalGet(keys);
+  };
+  const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'old-device'});
+  assert.equal(result?.ok,false,'cleanup must fail closed after losing current-device fallback during revalidation');
+  const after=await sync.get(null);
+  assert.equal(Object.hasOwn(after,remote.rootKey),true,'old-device Recovery must survive cancelled revalidation');
+  console.log(JSON.stringify({ok:true,revalidationCancelled:true,remotePreserved:true}));
+}
+
+else if (scenario === 'recovery-manager-132010-remove-failure') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-b'});
+  const old=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'old',publishedAt:100});
+  const newest=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'new',publishedAt:200});
+  await sync.set({...old.entries,...newest.entries});
+  sync.failNextRemoveKeys.add(old.rootKey);
+  const failedResponse=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'generation',rootKey:old.rootKey});
+  assert.equal(failedResponse?.ok,false,'storage removal failure must return explicit failure instead of cleanup success');
+  const after=await sync.get(null);
+  assert.equal(Object.hasOwn(after,old.rootKey),true);
+  assert.equal(Object.hasOwn(after,newest.rootKey),true);
+  console.log(JSON.stringify({ok:true,failedClosed:failedResponse?.ok===false,oldPreserved:true,newestPreserved:true}));
 }
 
 else {

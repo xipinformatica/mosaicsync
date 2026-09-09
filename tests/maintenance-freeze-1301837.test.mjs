@@ -18,13 +18,13 @@ function staticBareImports(source) {
   return out;
 }
 
-test("1.32.0.9 compatibility floors and permission budget stay explicit and least-privilege", () => {
+test("1.32.0.10 compatibility floors and permission budget stay explicit and least-privilege", () => {
   const firefox = json("src/firefox/manifest.json");
   const chrome = json("src/chrome/manifest.json");
 
-  assert.equal(firefox.version, "1.32.0.9");
-  assert.equal(chrome.version, "1.32.0.9");
-  assert.equal(chrome.version_name, "1.32.0.9");
+  assert.equal(firefox.version, "1.32.0.10");
+  assert.equal(chrome.version, "1.32.0.10");
+  assert.equal(chrome.version_name, "1.32.0.10");
   assert.equal(firefox.browser_specific_settings.gecko.strict_min_version, "140.0");
   assert.equal(chrome.minimum_chrome_version, "104");
 
@@ -46,7 +46,7 @@ test("1.32.0.9 compatibility floors and permission budget stay explicit and leas
   }
 });
 
-test("1.32.0.9 repository remains dependency-free and maintenance ESM uses built-ins/local modules only", () => {
+test("1.32.0.10 repository remains dependency-free and maintenance ESM uses built-ins/local modules only", () => {
   const pkg = json("package.json");
   for (const key of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
     assert.deepEqual(pkg[key] || {}, {}, `${key} must remain empty unless deliberately reviewed`);
@@ -67,7 +67,7 @@ test("1.32.0.9 repository remains dependency-free and maintenance ESM uses built
   assert.deepEqual(bare, []);
 });
 
-test("1.32.0.9 compatibility and maintenance policy preserve the reviewed freeze boundary", () => {
+test("1.32.0.10 compatibility and maintenance policy preserve the reviewed freeze boundary", () => {
   const compatibility = read("docs/COMPATIBILITY.md");
   const policy = read("docs/MAINTENANCE-POLICY.md");
   const infrastructure = read("docs/MAINTENANCE-INFRASTRUCTURE.md");
@@ -85,7 +85,7 @@ test("1.32.0.9 compatibility and maintenance policy preserve the reviewed freeze
   assert.match(infrastructure, /1\.30\.18\.38[\s\S]*post-audit corrective/i);
 });
 
-test("1.32.0.9 architecture map links the permanent post-freeze compatibility and maintenance references", () => {
+test("1.32.0.10 architecture map links the permanent post-freeze compatibility and maintenance references", () => {
   const architecture = read("docs/ARCHITECTURE.md");
   assert.match(architecture, /docs\/COMPATIBILITY\.md/);
   assert.match(architecture, /docs\/MAINTENANCE-POLICY\.md/);

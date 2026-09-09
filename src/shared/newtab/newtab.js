@@ -486,6 +486,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const syncStorageBreakdown = document.querySelector(".sync-storage-breakdown");
   const syncUsageCore = document.getElementById("syncUsageCore");
   const syncUsageRecovery = document.getElementById("syncUsageRecovery");
+  const recoveryCopiesManageButton = document.getElementById("recoveryCopiesManageButton");
+  const recoveryCopiesDialog = document.getElementById("recoveryCopiesDialog");
+  const recoveryCopiesSummary = document.getElementById("recoveryCopiesSummary");
+  const recoverySafeCleanup = document.getElementById("recoverySafeCleanup");
+  const recoverySafeCleanupTitle = document.getElementById("recoverySafeCleanupTitle");
+  const recoverySafeCleanupDetail = document.getElementById("recoverySafeCleanupDetail");
+  const recoverySafeCleanupButton = document.getElementById("recoverySafeCleanupButton");
+  const recoveryCopiesList = document.getElementById("recoveryCopiesList");
+  const recoveryCopiesFootnote = document.getElementById("recoveryCopiesFootnote");
   const syncUsageShortcuts = document.getElementById("syncUsageShortcuts");
   const syncUsageOverhead = document.getElementById("syncUsageOverhead");
   const syncUsageFree = document.getElementById("syncUsageFree");
@@ -5962,6 +5971,175 @@ ${site.url}`;
     return response;
   }
 
+  let recoveryCopiesBusy = false;
+
+  function recoveryDeviceDisplayName(device) {
+    const id = shortSyncId(device?.deviceId) || "—";
+    const base = String(device?.deviceName || "").trim() || t("recoveryDeviceLabel", { id });
+    return device?.currentDevice ? `${base} · ${t("thisDevice")}` : base;
+  }
+
+  function setRecoveryCopiesBusy(busy) {
+    recoveryCopiesBusy = busy === true;
+    recoveryCopiesDialog?.classList.toggle("recovery-copies-busy", recoveryCopiesBusy);
+    recoveryCopiesDialog?.querySelectorAll?.("[data-recovery-action]").forEach(button => {
+      button.disabled = recoveryCopiesBusy;
+    });
+    if (recoverySafeCleanupButton) recoverySafeCleanupButton.disabled = recoveryCopiesBusy;
+  }
+
+  function renderRecoveryCopies(model) {
+    if (!recoveryCopiesList || !recoveryCopiesSummary) return;
+    const devices = Array.isArray(model?.devices) ? model.devices : [];
+    const completeCount = devices.reduce((sum, device) => sum + (Array.isArray(device.generations) ? device.generations.length : 0), 0);
+    recoveryCopiesSummary.textContent = t("recoveryCopiesSummary", {
+      count: completeCount,
+      size: formatBytes(model?.managedBytes || 0)
+    });
+    if ((Number(model?.unmanagedBytes) || 0) > 0) {
+      recoveryCopiesSummary.textContent += ` ${t("recoveryCopiesUnmanaged", { size: formatBytes(model.unmanagedBytes) })}`;
+    }
+    if (recoverySafeCleanupTitle) recoverySafeCleanupTitle.textContent = t("recoverySafeCleanupTitle");
+    if (recoverySafeCleanupDetail) recoverySafeCleanupDetail.textContent = t("recoverySafeCleanupDetail", {
+      count: Number(model?.safeCleanupCount) || 0
+    });
+    if (recoverySafeCleanupButton) {
+      recoverySafeCleanupButton.textContent = t("recoveryFreeSafely", { size: formatBytes(model?.safeCleanupBytes || 0) });
+      recoverySafeCleanupButton.dataset.recoveryAction = "superseded";
+      recoverySafeCleanupButton.dataset.recoveryCount = String(Number(model?.safeCleanupCount) || 0);
+      recoverySafeCleanupButton.dataset.recoveryBytes = String(Number(model?.safeCleanupBytes) || 0);
+    }
+    if (recoverySafeCleanup) recoverySafeCleanup.hidden = !(Number(model?.safeCleanupCount) > 0 && Number(model?.safeCleanupBytes) > 0);
+    if (recoveryCopiesFootnote) recoveryCopiesFootnote.textContent = t("recoveryManagerFootnote");
+
+    recoveryCopiesList.replaceChildren();
+    if (!devices.length) {
+      const empty = document.createElement("div");
+      empty.className = "recovery-copies-empty";
+      empty.textContent = t("recoveryNoCompleteCopies");
+      recoveryCopiesList.append(empty);
+      return;
+    }
+
+    for (const device of devices) {
+      const card = document.createElement("section");
+      card.className = "recovery-device-card";
+
+      const heading = document.createElement("div");
+      heading.className = "recovery-device-heading";
+      const title = document.createElement("div");
+      title.className = "recovery-device-title";
+      const strong = document.createElement("strong");
+      strong.textContent = recoveryDeviceDisplayName(device);
+      const small = document.createElement("small");
+      const generations = Array.isArray(device.generations) ? device.generations : [];
+      small.textContent = `${generations.length} · ${formatBytes(device.bytes || 0)}`;
+      title.append(strong, small);
+      heading.append(title);
+
+      if (device.canRemoveDevice) {
+        const actions = document.createElement("div");
+        actions.className = "recovery-device-actions";
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger-button";
+        remove.dataset.recoveryAction = "device";
+        remove.textContent = t("recoveryRemoveDeviceCopies");
+        remove.addEventListener("click", () => {
+          const label = recoveryDeviceDisplayName(device);
+          const confirmed = window.confirm(t("recoveryConfirmDevice", {
+            device: label,
+            size: formatBytes(device.bytes || 0)
+          }));
+          if (confirmed) void performRecoveryCleanup({ mode: "device", deviceId: device.deviceId });
+        });
+        actions.append(remove);
+        heading.append(actions);
+      }
+      card.append(heading);
+
+      const list = document.createElement("div");
+      list.className = "recovery-generation-list";
+      generations.forEach((generation, index) => {
+        const row = document.createElement("div");
+        row.className = "recovery-generation-row";
+        const copy = document.createElement("div");
+        copy.className = "recovery-generation-copy";
+        const name = document.createElement("strong");
+        name.textContent = generation.latest ? t("recoveryLatestCopy") : t("recoveryPreviousCopy");
+        if (generation.latest) {
+          const badge = document.createElement("span");
+          badge.className = "recovery-generation-badge";
+          badge.textContent = t("recoveryProtected");
+          name.append(badge);
+        }
+        const detail = document.createElement("small");
+        detail.textContent = `${formatSyncTime(generation.publishedAt || generation.updatedAt)} · ${formatBytes(generation.bytes || 0)}`;
+        copy.append(name, detail);
+        row.append(copy);
+
+        if (generation.canDelete) {
+          const remove = document.createElement("button");
+          remove.type = "button";
+          remove.className = "danger-button";
+          remove.dataset.recoveryAction = "generation";
+          remove.textContent = t("recoveryDeletePrevious");
+          remove.addEventListener("click", () => {
+            const confirmed = window.confirm(t("recoveryConfirmGeneration", { size: formatBytes(generation.bytes || 0) }));
+            if (confirmed) void performRecoveryCleanup({ mode: "generation", rootKey: generation.rootKey });
+          });
+          row.append(remove);
+        } else {
+          const protectedText = document.createElement("span");
+          protectedText.className = "recovery-generation-protected";
+          protectedText.textContent = t("recoveryProtected");
+          row.append(protectedText);
+        }
+        list.append(row);
+      });
+      card.append(list);
+      recoveryCopiesList.append(card);
+    }
+    setRecoveryCopiesBusy(recoveryCopiesBusy);
+  }
+
+  async function loadRecoveryCopies() {
+    if (recoveryCopiesBusy) return;
+    setRecoveryCopiesBusy(true);
+    try {
+      const response = await sendSyncMessage("mosaicsync:get-recovery-copies");
+      renderRecoveryCopies(response);
+    } catch (error) {
+      if (recoveryCopiesSummary) recoveryCopiesSummary.textContent = error.message || t("operationFailed");
+    } finally {
+      setRecoveryCopiesBusy(false);
+    }
+  }
+
+  async function performRecoveryCleanup(payload) {
+    if (recoveryCopiesBusy) return;
+    setRecoveryCopiesBusy(true);
+    try {
+      const response = await sendSyncMessage("mosaicsync:cleanup-recovery-copies", payload);
+      renderRecoveryCopies(response);
+      showSyncFeedback(t("recoveryCleanupComplete", {
+        size: formatBytes(response.removedBytes || 0),
+        count: Number(response.removedGenerations) || 0
+      }));
+      await refreshSyncStatus().catch(() => {});
+    } catch (error) {
+      showSyncFeedback(error.message || t("operationFailed"));
+      // The cleanup request may have failed because eligibility changed while
+      // the background revalidated it. Drop the busy guard before refreshing so
+      // the dialog never leaves stale destructive controls visible.
+      setRecoveryCopiesBusy(false);
+      await loadRecoveryCopies().catch(() => {});
+      return;
+    } finally {
+      setRecoveryCopiesBusy(false);
+    }
+  }
+
   function shortSyncId(value) {
     const clean = String(value || "").replace(/[^a-z0-9]/gi, "");
     return clean ? clean.slice(-6).toUpperCase() : "";
@@ -6167,6 +6345,7 @@ ${site.url}`;
     syncQuotaText.title = t("syncItemsUsed", { count: meta.syncItemCount || 0 });
     if (syncUsageCore) syncUsageCore.textContent = formatBytes(usage.core);
     if (syncUsageRecovery) syncUsageRecovery.textContent = formatBytes(usage.recovery);
+    if (recoveryCopiesManageButton) recoveryCopiesManageButton.disabled = !enabled || syncing || usage.recovery <= 0;
     if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatBytes(usage.shortcutArtwork);
     if (syncUsageOverhead) syncUsageOverhead.textContent = formatBytes(usage.overhead);
     if (syncUsageFree) syncUsageFree.textContent = formatBytes(usage.free);
@@ -6386,6 +6565,23 @@ ${site.url}`;
   settingsDeviceNameInput?.addEventListener("keydown", event => {
     if (event.key === "Enter") { event.preventDefault(); void saveCurrentDeviceName(); }
     else if (event.key === "Escape") { event.preventDefault(); closeDeviceNameEditor(); }
+  });
+
+  recoveryCopiesManageButton?.addEventListener("click", () => {
+    if (!recoveryCopiesDialog) return;
+    if (!recoveryCopiesDialog.open) recoveryCopiesDialog.showModal();
+    void loadRecoveryCopies();
+  });
+
+  recoverySafeCleanupButton?.addEventListener("click", () => {
+    const count = Number(recoverySafeCleanupButton.dataset.recoveryCount) || 0;
+    const bytes = Number(recoverySafeCleanupButton.dataset.recoveryBytes) || 0;
+    if (!count || !bytes) return;
+    const confirmed = window.confirm(t("recoveryConfirmSafeCleanup", {
+      count,
+      size: formatBytes(bytes)
+    }));
+    if (confirmed) void performRecoveryCleanup({ mode: "superseded" });
   });
 
   settingsSyncEnabled?.addEventListener("click", event => {
