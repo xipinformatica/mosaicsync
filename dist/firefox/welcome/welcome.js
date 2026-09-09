@@ -23,6 +23,7 @@ import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/st
 import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
+import { readCustomBranding, writeCustomBranding } from "../core/custom-branding.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 localizeDocument(document);
@@ -139,11 +140,14 @@ async function sendSyncMessage(type, payload = {}) {
   return response;
 }
 
-function stageStartingSourceCandidate(source, state, preferences = null) {
+function stageStartingSourceCandidate(source, state, preferences = null, branding = null) {
   pendingSourceCandidate = {
     source,
     state,
-    preferences: preferences && typeof preferences === "object" ? { ...preferences } : null
+    preferences: preferences && typeof preferences === "object" ? { ...preferences } : null,
+    // Profile branding remains memory-only until source resolution chooses this
+    // candidate. Firefox/empty candidates intentionally never touch branding.
+    branding: source === "profile" && branding && typeof branding === "object" ? { ...branding } : null
   };
 }
 
@@ -156,7 +160,26 @@ async function commitPendingSourceCandidate(expectedSource = "") {
   // LOCAL_STATE_KEY is authoritative. A Welcome source remains memory-only until
   // source resolution has actually selected this computer, then becomes durable
   // immediately before local bootstrap/publication or local-only completion.
-  await writeLocalState(candidate.state);
+  // Custom Branding follows the same authority decision but stays storage.local
+  // only: it never participates in Sync/Recovery. Roll it back if the state
+  // commit fails so a rejected source cannot leave half an imported profile.
+  let previousBranding = null;
+  let brandingCommitted = false;
+  if (candidate.source === "profile" && candidate.branding) {
+    previousBranding = await readCustomBranding({ failClosed: true });
+    await writeCustomBranding(candidate.branding);
+    brandingCommitted = true;
+  }
+  try {
+    await writeLocalState(candidate.state);
+  } catch (error) {
+    if (brandingCommitted) {
+      try { await writeCustomBranding(previousBranding); } catch (rollbackError) {
+        console.error("MosaicSync could not roll back imported Custom Branding.", rollbackError);
+      }
+    }
+    throw error;
+  }
   if (candidate.source === "profile" && candidate.preferences) {
     await setLocalePreference(candidate.preferences.uiLocale || "auto");
     // Preserve the imported preference independently from this installation's
@@ -244,7 +267,7 @@ function stampImportedProfileState(importedState) {
 async function importMosaicSyncProfile(file) {
   const parsed = await parseProfilePackage(await readProfileImportText(file));
   const importedState = stampImportedProfileState(parsed.state);
-  stageStartingSourceCandidate("profile", importedState, parsed.preferences);
+  stageStartingSourceCandidate("profile", importedState, parsed.preferences, parsed.branding);
 }
 
 async function completeOnboarding(message = t("setupComplete")) {

@@ -30,9 +30,14 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(critical, /\.folder-mosaic-cell img/);
 
     for (const selector of launcherOwnedSecondaryForbidden) {
-      assert.equal(secondary.includes(selector), false,
+      const reDeclared = selector === ".brand"
+        ? /(?:^|[},])\.brand(?:\s*,|\s*\{)/m.test(secondary)
+        : secondary.includes(selector);
+      assert.equal(reDeclared, false,
         `${selector} is launcher-visible and must not be re-declared by deferred secondary CSS`);
     }
+    assert.match(secondary, /\.brand-button\.custom-branding-active\{/,
+      "the reviewed post-paint Custom Branding state may extend the critical brand button without redefining the base .brand owner");
 
     assert.match(secondary, /\.folder-item-tile img\{/,
       "folder-popover image behavior remains in secondary UI CSS");

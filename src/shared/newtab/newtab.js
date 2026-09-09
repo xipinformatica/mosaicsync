@@ -183,6 +183,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let profileModulePromise = null;
   let bookmarksModulePromise = null;
   let imageOptimizerModulePromise = null;
+  let customBrandingModulePromise = null;
   let renderManifestModulePromise = null;
   let registrableDomainModulePromise = null;
   let boundedResponseModulePromise = null;
@@ -200,6 +201,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const loadImporterModule = () => importerModulePromise ||= import("../core/importer.js");
   const loadProfileModule = () => profileModulePromise ||= import("../core/profile.js");
   const loadImageOptimizerModule = () => imageOptimizerModulePromise ||= import("../core/image-optimizer.js");
+  const loadCustomBrandingModule = () => customBrandingModulePromise ||= import("../core/custom-branding.js");
   const loadRenderManifestModule = async () => {
     renderManifestModulePromise ||= import("./render-manifest.js");
     const module = await renderManifestModulePromise;
@@ -280,6 +282,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const syncPendingChooseSource = document.getElementById("syncPendingChooseSource");
   const syncPendingMessage = document.getElementById("syncPendingMessage");
   const brand = document.querySelector(".brand");
+  const brandMark = document.getElementById("brandMark");
+  const brandName = document.getElementById("brandName");
   const spaceSwitcher = document.getElementById("spaceSwitcher");
   const spaceButtons = [...(spaceSwitcher?.querySelectorAll("[data-space-id]") || [])];
   const settingsButton = document.getElementById("settingsButton");
@@ -422,6 +426,17 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const exportProfileButton = document.getElementById("exportProfileButton");
   const importProfileButton = document.getElementById("importProfileButton");
   const importProfileFile = document.getElementById("importProfileFile");
+  const customBrandingButton = document.getElementById("customBrandingButton");
+  const customBrandingDialog = document.getElementById("customBrandingDialog");
+  const customBrandingEnabled = document.getElementById("customBrandingEnabled");
+  const customBrandingTextInput = document.getElementById("customBrandingTextInput");
+  const customBrandingLogoFile = document.getElementById("customBrandingLogoFile");
+  const customBrandingLogoPreview = document.getElementById("customBrandingLogoPreview");
+  const customBrandingLogoImage = document.getElementById("customBrandingLogoImage");
+  const customBrandingLogoEmpty = document.getElementById("customBrandingLogoEmpty");
+  const customBrandingRemoveLogo = document.getElementById("customBrandingRemoveLogo");
+  const customBrandingReset = document.getElementById("customBrandingReset");
+  const customBrandingSave = document.getElementById("customBrandingSave");
   const settingsAutoSiteIcons = document.getElementById("settingsAutoSiteIcons");
   const settingsWebAccessStatus = document.getElementById("settingsWebAccessStatus");
   const settingsWebAccessButton = document.getElementById("settingsWebAccessButton");
@@ -535,6 +550,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let shortcutArtworkEdited = false;
   let shortcutSyncPrepareGeneration = 0;
   let backgroundUploadGeneration = 0;
+  let customBrandingUploadGeneration = 0;
+  let customBranding = null;
+  let customBrandingDraft = null;
   let systemThemeResolutionGeneration = 0;
   let detectedFaviconGeneration = 0;
   let detectedFaviconPickerUrl = "";
@@ -1981,6 +1999,78 @@ ${site.url}`;
     });
   }
 
+  function paintBrandIdentity(branding) {
+    customBranding = branding;
+    const visible = Boolean(branding?.enabled && (branding?.logo || branding?.text));
+
+    // Custom Branding owns the existing MosaicSync identity slot. It never
+    // creates a second launcher surface: the user's logo/text replace the
+    // built-in mark/name while the existing Hello mascot remains anchored to
+    // the same brand button.
+    brandHelloButton?.classList.toggle("custom-branding-active", visible);
+    brandHelloButton?.classList.toggle("custom-branding-no-logo", visible && !branding?.logo);
+
+    if (!visible) {
+      if (brandMark) {
+        brandMark.src = "../assets/icon.svg";
+        brandMark.hidden = false;
+      }
+      if (brandName) {
+        brandName.textContent = PRODUCT_NAME;
+        brandName.hidden = false;
+      }
+      return;
+    }
+
+    if (brandMark) {
+      if (branding.logo) {
+        brandMark.src = branding.logo;
+        brandMark.hidden = false;
+      } else {
+        brandMark.hidden = true;
+      }
+    }
+    if (brandName) {
+      brandName.textContent = branding.text || "";
+      brandName.hidden = !branding.text;
+    }
+  }
+
+  async function refreshBrandIdentity() {
+    const module = await loadCustomBrandingModule();
+    const branding = await module.readCustomBranding();
+    if (!module.customBrandingIsVisible(branding)) {
+      paintBrandIdentity(branding);
+      return branding;
+    }
+    // The branding surface is intentionally secondary CSS. Do not unhide it
+    // until that stylesheet is available, avoiding an unstyled startup flash.
+    if (await ensureSecondaryStyles()) paintBrandIdentity(branding);
+    return branding;
+  }
+
+  function refreshCustomBrandingPreview() {
+    const draft = customBrandingDraft || { enabled: false, text: "", logo: "" };
+    if (customBrandingEnabled) customBrandingEnabled.checked = draft.enabled === true;
+    if (customBrandingTextInput) customBrandingTextInput.value = typeof draft.text === "string" ? draft.text : "";
+    if (customBrandingLogoImage) {
+      if (draft.logo) { customBrandingLogoImage.src = draft.logo; customBrandingLogoImage.hidden = false; }
+      else { customBrandingLogoImage.hidden = true; customBrandingLogoImage.removeAttribute("src"); }
+    }
+    if (customBrandingLogoEmpty) customBrandingLogoEmpty.hidden = Boolean(draft.logo);
+    if (customBrandingRemoveLogo) customBrandingRemoveLogo.disabled = !draft.logo;
+  }
+
+  async function openCustomBrandingDialog() {
+    await ensureSecondaryStyles();
+    const module = await loadCustomBrandingModule();
+    customBrandingDraft = { ...(await module.readCustomBranding({ failClosed: true })) };
+    customBrandingUploadGeneration += 1;
+    refreshCustomBrandingPreview();
+    localizeDocument(customBrandingDialog);
+    if (!customBrandingDialog?.open) customBrandingDialog?.showModal();
+  }
+
   function schedulePostPaintMaintenance() {
     syncFrequentlyVisitedLocalsFromState(state);
     shortcutOrderMode = readShortcutOrderPreference();
@@ -2010,6 +2100,7 @@ ${site.url}`;
     // device-local permission step after authoritative startup instead.
     if (frequentlyVisitedEnabled) void maybeShowSyncedFrequentlyVisitedPermissionStep(false);
     scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 900);
+    scheduleIdleWork(() => refreshBrandIdentity().catch(() => {}), 80);
     void preloadBackgroundForSettings(state.settings);
     preloadOtherSpaceBackgrounds();
     if (meta.syncEnabled && !meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
@@ -5616,6 +5707,68 @@ ${site.url}`;
   settingsLightWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
   settingsDarkWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
 
+  customBrandingButton?.addEventListener("click", () => { void openCustomBrandingDialog().catch(error => showToast(error?.message || t("operationFailed"))); });
+  customBrandingDialog?.addEventListener("close", () => { customBrandingUploadGeneration += 1; customBrandingDraft = null; });
+  customBrandingLogoFile?.addEventListener("change", async () => {
+    const file = customBrandingLogoFile.files?.[0];
+    customBrandingLogoFile.value = "";
+    if (!file) return;
+    const generation = ++customBrandingUploadGeneration;
+    try {
+      const module = await loadCustomBrandingModule();
+      if (!module.CUSTOM_BRANDING_ALLOWED_MIME_TYPES.includes(String(file.type || "").toLowerCase())) {
+        throw new Error(t("brandingLogoInvalid"));
+      }
+      const optimized = await optimizeImageFile(file, {
+        maxWidth: module.CUSTOM_BRANDING_LOGO_MAX_WIDTH,
+        maxHeight: module.CUSTOM_BRANDING_LOGO_MAX_HEIGHT,
+        minWidth: 120,
+        minHeight: 48,
+        targetBytes: module.CUSTOM_BRANDING_LOGO_TARGET_BYTES,
+        initialQuality: 0.94,
+        maxInputBytes: module.CUSTOM_BRANDING_LOGO_INPUT_MAX_BYTES
+      });
+      if (generation !== customBrandingUploadGeneration || !customBrandingDialog?.open) return;
+      customBrandingDraft = { ...(customBrandingDraft || module.DEFAULT_CUSTOM_BRANDING), logo: module.normalizeCustomBrandingLogo(optimized, { strict: true }) };
+      refreshCustomBrandingPreview();
+    } catch (error) {
+      console.warn(`${PRODUCT_NAME}: Custom Branding logo rejected`, error);
+      showToast(t("brandingLogoInvalid"));
+    }
+  });
+  customBrandingRemoveLogo?.addEventListener("click", async () => {
+    const module = await loadCustomBrandingModule();
+    customBrandingUploadGeneration += 1;
+    customBrandingDraft = { ...(customBrandingDraft || module.DEFAULT_CUSTOM_BRANDING), logo: "" };
+    refreshCustomBrandingPreview();
+  });
+  customBrandingReset?.addEventListener("click", async () => {
+    const module = await loadCustomBrandingModule();
+    customBrandingUploadGeneration += 1;
+    customBrandingDraft = { ...module.DEFAULT_CUSTOM_BRANDING };
+    refreshCustomBrandingPreview();
+  });
+  customBrandingSave?.addEventListener("click", async () => {
+    customBrandingSave.disabled = true;
+    try {
+      const module = await loadCustomBrandingModule();
+      const saved = await module.writeCustomBranding({
+        ...(customBrandingDraft || module.DEFAULT_CUSTOM_BRANDING),
+        enabled: customBrandingEnabled?.checked === true,
+        text: customBrandingTextInput?.value ?? ""
+      });
+      customBranding = saved;
+      paintBrandIdentity(saved);
+      closeDialog(customBrandingDialog);
+      showToast(t("brandingSaved"));
+    } catch (error) {
+      console.error(error);
+      showToast(t("brandingSaveFailed"));
+    } finally {
+      customBrandingSave.disabled = false;
+    }
+  });
+
   settingsBackgroundFile.addEventListener("change", async () => {
     const file = settingsBackgroundFile.files?.[0];
     if (!file) return;
@@ -7000,11 +7153,13 @@ ${t("clearSyncWarning")}`);
       exportProfileButton.disabled = true;
       const { createProfilePackage, profileFileName, serializeProfilePackage } = await loadProfileModule();
       const exportLoaded = await ensureLocalStorage({ hydrateAssets: "all" });
+      const brandingModule = await loadCustomBrandingModule();
+      const exportedBranding = await brandingModule.readCustomBranding({ failClosed: true });
       const profilePackage = await createProfilePackage(exportLoaded.state, {
         uiLocale: getLocalePreference(),
         frequentlyVisitedEnabled,
         frequentlyVisitedCount
-      });
+      }, exportedBranding);
       const blob = new Blob([serializeProfilePackage(profilePackage)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -7054,12 +7209,26 @@ ${t("clearSyncWarning")}`);
         });
       }
       importedState = selectActiveSpaceNormalized(importedState, importedState.activeSpaceId);
-      stateMutationGeneration += 1;
-      pendingSettingsDraft.clear();
-      state = importedState;
-      const persisted = await writeLocalStateWithBaseline(state, {
-        recordSyncMutation: true
-      });
+      const brandingModule = await loadCustomBrandingModule();
+      const previousBranding = await brandingModule.readCustomBranding({ failClosed: true });
+      const importedBranding = await brandingModule.writeCustomBranding(parsed.branding);
+      let persisted;
+      try {
+        stateMutationGeneration += 1;
+        pendingSettingsDraft.clear();
+        state = importedState;
+        persisted = await writeLocalStateWithBaseline(state, {
+          recordSyncMutation: true
+        });
+      } catch (error) {
+        try { await brandingModule.writeCustomBranding(previousBranding); } catch (rollbackError) {
+          console.error(`${PRODUCT_NAME}: could not roll back imported Custom Branding`, rollbackError);
+        }
+        throw error;
+      }
+      customBranding = importedBranding;
+      if (brandingModule.customBrandingIsVisible(importedBranding)) await ensureSecondaryStyles();
+      paintBrandIdentity(importedBranding);
       state = persisted.state;
       writeBaseline = persisted.compactBaseline;
       await setLocalePreference(parsed.preferences.uiLocale || "auto");

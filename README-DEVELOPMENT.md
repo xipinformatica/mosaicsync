@@ -1,11 +1,26 @@
 # MosaicSync development
 
-> **Current release: 1.32.0.10.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.1.1.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
 
 
+
+## 1.32.1.1 — Custom Branding identity-slot correction
+
+1.32.1.1 fixes the visual ownership error in the initial Custom Branding presentation. Custom branding no longer owns a separate absolute/centered launcher surface. `newtab.html` exposes IDs on the existing built-in brand mark/name and `newtab.js` switches those exact nodes between the MosaicSync identity and the user-provided identity. The existing `brandHelloButton` remains the sole Hello/mascot owner.
+
+The correction stays post-paint exactly like 1.32.1: visible branding first ensures the secondary stylesheet is available, then swaps the existing brand mark/name. Horizontal custom logos use bounded `max-width`/`max-height` rules with preserved aspect ratio. The centered Spaces selector, critical first-paint stylesheet, device-local branding schema, profile-v3 backup format, Sync/Recovery boundaries, permissions and browser floors are unchanged.
+
+
+
+
+## 1.32.1 — Custom Branding
+
+1.32.1 adds a deliberately narrow device-local branding domain: one optional PNG/JPEG/WebP logo and one exact text line. The domain is stored only in `storage.local`; it is not part of synchronized state, Sync clocks, pending journals, Recovery generations or automatic cross-device propagation. Profile format v3 explicitly embeds the branding record so export/import remains self-contained and browser-neutral, while v1/v2 profiles remain supported.
+
+New Tab reads branding only from post-paint maintenance and loads its presentation/editor CSS from the secondary stylesheet before making the branding surface visible. Settings validates/optimizes raster uploads to a bounded canonical copy. Normal profile import and Welcome source selection both treat branding transactionally with the authoritative local profile decision and roll it back if the corresponding local state commit fails. The built-in MosaicSync mascot/Hello effect remains independent and unchanged.
 
 ## 1.32.0.10 — Recovery safety-copy storage management
 

@@ -22,8 +22,8 @@
     <div id="appearancePreviewLayer" class="appearance-preview-layer" hidden aria-hidden="true"><img id="appearancePreviewImage" class="appearance-preview-image" alt="" aria-hidden="true" hidden></div>
     <header class="brand" aria-label="MosaicSync brand">
       <span id="brandHelloButton" class="brand-button">
-        <span class="brand-logo-wrap">
-          <img class="brand-mark" src="../assets/icon.svg" alt="" aria-hidden="true">
+        <span id="brandLogoWrap" class="brand-logo-wrap">
+          <img id="brandMark" class="brand-mark" src="../assets/icon.svg" alt="" aria-hidden="true">
           <span id="brandHelloEasterEgg" class="brand-easter-egg" aria-hidden="true">
             <span class="brand-easter-mascot">
               <svg viewBox="0 0 40 30" focusable="false" fill="currentColor" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -38,9 +38,10 @@
             <span class="brand-easter-bubble"><svg class="brand-easter-bubble-bg" viewBox="0 0 52 25" preserveAspectRatio="none" aria-hidden="true" focusable="false"><rect x="1.5" y="1.5" width="49" height="22" rx="11" ry="11"/></svg><span class="brand-easter-bubble-text">Hello!</span></span>
           </span>
         </span>
-        <span class="brand-name">MosaicSync</span>
+        <span id="brandName" class="brand-name" data-i18n-skip>MosaicSync</span>
       </span>
     </header>
+
 
     <nav id="spaceSwitcher" class="space-switcher space-switcher-first-paint-pending" aria-label="Spaces">
       <button class="space-button" type="button" data-space-id="personal" aria-pressed="true" data-i18n-skip></button>
@@ -285,7 +286,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.32.0.10</p>
+          <p class="eyebrow">MosaicSync · 1.32.1.1</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -427,6 +428,7 @@
         <div class="section-heading-row">
           <h3>Background</h3>
           <div class="background-heading-actions">
+            <button id="customBrandingButton" class="secondary-button compact-branding-button" type="button" aria-haspopup="dialog" aria-controls="customBrandingDialog">Custom branding</button>
             <div class="background-color-control">
               <button id="settingsBackgroundColorButton" class="background-color-chip" type="button" title="Background color" aria-label="Choose background color" aria-haspopup="dialog" aria-expanded="false">
                 <span id="settingsBackgroundColorSwatch" class="background-color-swatch" aria-hidden="true"></span>
@@ -727,6 +729,62 @@
       </div>
     </form>
   </aside>
+
+  <dialog id="customBrandingDialog" class="dialog custom-branding-dialog" aria-labelledby="customBrandingTitle">
+    <form id="customBrandingForm" class="dialog-card custom-branding-card" method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <p class="eyebrow">New Tab identity</p>
+          <h2 id="customBrandingTitle">Custom branding</h2>
+          <p class="custom-branding-intro">Add one local logo and one line of text while keeping the MosaicSync mascot and Hello effect intact.</p>
+        </div>
+        <button class="icon-button dialog-close-button" type="button" data-close-dialog="customBrandingDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+
+      <div class="custom-branding-local-note">
+        <strong>Device-local only</strong>
+        <span>Included in MosaicSync profile export/import, but never sent through browser Sync or Recovery.</span>
+      </div>
+
+      <label class="switch-control custom-branding-enabled" for="customBrandingEnabled">
+        <input id="customBrandingEnabled" type="checkbox">
+        <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
+        <span class="switch-label">Show custom branding</span>
+      </label>
+
+      <div class="custom-branding-editor">
+        <div class="custom-branding-field">
+          <span class="custom-branding-field-label">Logo</span>
+          <div class="custom-branding-logo-row">
+            <div id="customBrandingLogoPreview" class="custom-branding-logo-preview">
+              <img id="customBrandingLogoImage" alt="" aria-hidden="true" hidden>
+              <span id="customBrandingLogoEmpty">No logo selected</span>
+            </div>
+            <div class="custom-branding-logo-actions">
+              <label class="file-button" for="customBrandingLogoFile">Choose logo</label>
+              <input id="customBrandingLogoFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp">
+              <button id="customBrandingRemoveLogo" class="text-button" type="button">Remove logo</button>
+            </div>
+          </div>
+          <small>PNG, JPEG or WebP. MosaicSync stores a bounded local copy for reliable backup and restore.</small>
+        </div>
+
+        <label class="custom-branding-field" for="customBrandingTextInput">
+          <span class="custom-branding-field-label">Custom text</span>
+          <input id="customBrandingTextInput" type="text" maxlength="120" autocomplete="off" spellcheck="false" placeholder="e.g. XIP Informàtica">
+          <small>Your text is kept verbatim and is never translated.</small>
+        </label>
+      </div>
+
+      <div class="custom-branding-dialog-actions">
+        <button id="customBrandingReset" class="text-button" type="button">Restore default</button>
+        <span class="custom-branding-dialog-spacer"></span>
+        <button class="secondary-button" type="button" data-close-dialog="customBrandingDialog">Cancel</button>
+        <button id="customBrandingSave" class="primary-button" type="button">Save branding</button>
+      </div>
+    </form>
+  </dialog>
+
 
   <dialog id="wallpaperGalleryDialog" class="dialog wallpaper-gallery-dialog" aria-labelledby="wallpaperGalleryTitle">
     <div class="dialog-card wallpaper-gallery-card">

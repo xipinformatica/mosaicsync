@@ -29,6 +29,7 @@ const GROUPS = Object.freeze({
       /accessibility/i,
       /appearance/i,
       /features/i,
+      /custom-branding/i,
       /folder/i,
       /frequent/i,
       /hardcoded-ui/i,
@@ -99,6 +100,7 @@ const GROUPS = Object.freeze({
     description: "Import validation, URL safety, hardening, hostile input and corruption handling",
     patterns: [
       /hardening/i,
+      /custom-branding/i,
       /security/i,
       /imports/i,
       /profile-security/i,
@@ -131,6 +133,7 @@ const GROUPS = Object.freeze({
     description: "Core state/storage utilities and cross-cutting model invariants",
     patterns: [
       /storage-registry/i,
+      /custom-branding/i,
       /utils\.test/i,
       /cache-bounds/i,
       /corrective-13010\.test\.mjs$/i,
@@ -143,6 +146,7 @@ const GROUPS = Object.freeze({
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
       /build-/i,
+      /custom-branding/i,
       /complexity-inventory/i,
       /dead-code-retirement/i,
       /maintenance-/i,

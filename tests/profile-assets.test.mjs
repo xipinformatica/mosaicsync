@@ -9,7 +9,7 @@ const {normalizeState}=await import("../dist/firefox/core/model.js");
 const storage=await import("../dist/firefox/core/storage.js");
 const profile=await import("../dist/firefox/core/profile.js");
 
-test("content-addressed assets deduplicate and v2 profiles round-trip", async()=>{
+test("content-addressed assets deduplicate and v3 profiles round-trip", async()=>{
   const img=`data:image/png;base64,${Buffer.from("same".repeat(200)).toString("base64")}`, t=Date.now();
   const raw={schemaVersion:16,activeSpaceId:"personal",spaces:{personal:{shortcuts:[0,1].map(i=>({type:"shortcut",id:`s${i}`,title:`S${i}`,url:`https://s${i}.test/`,image:img,imageSyncKind:"device",imageSourceKind:"favicon",imageStyle:"contain",position:i,createdAt:t,modifiedAt:t,source:"manual"})),settings:{...constants.DEFAULT_SETTINGS},settingsModifiedAt:t,updatedAt:t},work:{shortcuts:[],settings:{...constants.DEFAULT_SETTINGS,spaceName:"Work"},settingsModifiedAt:t,updatedAt:t}}};
   await storage.writeLocalState(normalizeState(raw));
@@ -17,7 +17,7 @@ test("content-addressed assets deduplicate and v2 profiles round-trip", async()=
   assert.equal(assetKeys.length,1);
   const all=await storage.ensureLocalStorage({hydrateAssets:"all"});
   const pkg=await profile.createProfilePackage(all.state,{uiLocale:"nap"});
-  assert.equal(pkg.formatVersion,2); assert.equal(Object.keys(pkg.profile.assets).length,1);
+  assert.equal(pkg.formatVersion,3); assert.equal(Object.keys(pkg.profile.assets).length,1);
   const parsed=await profile.parseProfilePackage(profile.serializeProfilePackage(pkg));
   assert.equal(parsed.state.spaces.personal.shortcuts[1].image,img);
   const tampered=structuredClone(pkg); tampered.profile.assets[Object.keys(tampered.profile.assets)[0]] += "A";

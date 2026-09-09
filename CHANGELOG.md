@@ -1,3 +1,16 @@
+## 1.32.1.1
+
+- Fixes the Custom Branding launcher placement introduced in 1.32.1: an enabled custom logo and text now **replace the existing upper-left MosaicSync logo and name** instead of rendering in a separate centered surface that could be covered by the Spaces selector.
+- Keeps the existing MosaicSync Hello mascot/effect anchored to the same brand control, restores the original MosaicSync identity immediately when branding is disabled, and preserves horizontal logo aspect ratio within a bounded brand area.
+- Adds permanent placement/replacement regressions. Branding remains device-local, profile-v3 export/import behavior is unchanged, and there are no Sync/Recovery, permission, persisted-schema, wire-format or browser-floor changes.
+
+## 1.32.1
+
+- Adds optional **Custom Branding**: one device-local PNG/JPEG/WebP logo and one exact Unicode text line in a fixed MosaicSync-controlled New Tab presentation, without replacing the built-in mascot or Hello effect.
+- Keeps branding completely outside browser Sync, Sync clocks, pending journals and Recovery. Branding moves between installations only through explicit MosaicSync profile export/import.
+- Advances the browser-neutral profile backup format to **v3**, embedding the actual bounded branding asset and text for self-contained round trips; v1/v2 profiles remain importable and restore default branding.
+- Keeps first paint protected: branding is read only after interaction-ready/post-paint maintenance and its UI/presentation CSS remains in the secondary stylesheet. No new permissions or browser-floor changes.
+
 ## 1.32.0.10
 
 - Adds guarded **Recovery safety-copy storage management** to Settings so users can inspect how much Firefox Sync space complete Recovery generations use and reclaim superseded copies without exposing raw Sync keys.

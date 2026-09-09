@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.32.0.10";
+export const VERSION = "1.32.1.1";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -18,6 +18,7 @@ export const LOCAL_STATE_KEY = "mosaicsync.state";
 export const LOCAL_META_KEY = "mosaicsync.meta";
 export const LOCAL_PRE_SPACES_BACKUP_KEY = "mosaicsync.pre-spaces-backup.v1";
 export const LOCAL_ACTIVE_SPACE_KEY = "mosaicsync.active-space.v1";
+export const LOCAL_CUSTOM_BRANDING_KEY = "mosaicsync.custom-branding.v1";
 export const LOCAL_ASSET_GC_KEY = "mosaicsync.asset-gc";
 export const LOCAL_ASSET_PREFIX = "mosaicsync.local-asset.v1.";
 export const LOCAL_ASSET_INDEX_KEY = "mosaicsync.local-assets.v1";

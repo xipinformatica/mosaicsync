@@ -6,11 +6,12 @@
 /*
  * Browser-neutral MosaicSync profile backup format.
  *
- * Format v2 mirrors the 1.24.6 content-addressed local asset store: profile
- * structure is compact and heavy image bytes are deduplicated in `assets`.
- * Format v1 remains importable for backwards compatibility.
+ * Format v3 extends the browser-neutral profile with device-local Custom
+ * Branding. Format v2 introduced content-addressed local assets; v1/v2 remain
+ * importable for backwards compatibility. Branding is intentionally not Sync.
  */
 import { PRODUCT_NAME, VERSION } from "./constants.js";
+import { DEFAULT_CUSTOM_BRANDING, normalizeCustomBranding } from "./custom-branding.js";
 import { ERROR_CODES, codedError } from "./errors.js";
 import { normalizeState, repairWorkspaceRecordIdsNormalized, stableStringify } from "./model.js";
 import {
@@ -21,7 +22,7 @@ import {
 } from "./local-assets.js";
 
 export const PROFILE_FORMAT = "mosaicsync-profile";
-export const PROFILE_FORMAT_VERSION = 2;
+export const PROFILE_FORMAT_VERSION = 3;
 export const PROFILE_FILE_EXTENSION = ".mosaicsync";
 
 // This is deliberately an abuse/OOM ceiling, not a normal profile quota.
@@ -108,7 +109,7 @@ function canonicalProfileV2(state) {
   };
 }
 
-function packageBody({ state, preferences, exportedAt }) {
+function packageBody({ state, preferences, branding, exportedAt }) {
   const projected = canonicalProfileV2(state);
   return {
     format: PROFILE_FORMAT,
@@ -121,13 +122,14 @@ function packageBody({ state, preferences, exportedAt }) {
     profile: {
       state: projected.state,
       assets: projected.assets,
-      preferences: normalizePreferences(preferences)
+      preferences: normalizePreferences(preferences),
+      branding: normalizeCustomBranding(branding, { strict: true })
     }
   };
 }
 
-export async function createProfilePackage(state, preferences = {}) {
-  const body = packageBody({ state, preferences, exportedAt: Date.now() });
+export async function createProfilePackage(state, preferences = {}, branding = DEFAULT_CUSTOM_BRANDING) {
+  const body = packageBody({ state, preferences, branding, exportedAt: Date.now() });
   const checksum = await sha256Hex(stableStringify(body));
   return {
     ...body,
@@ -216,12 +218,21 @@ export async function parseProfilePackage(text) {
   }
 
   const state = version >= 2 ? parseV2State(raw.profile, v2Envelope) : repairProfileRecordIds(raw.profile.state);
+  let branding = { ...DEFAULT_CUSTOM_BRANDING };
+  if (version >= 3) {
+    try {
+      branding = normalizeCustomBranding(raw.profile.branding, { strict: true });
+    } catch {
+      throw codedError(ERROR_CODES.PROFILE_DAMAGED, "This MosaicSync profile is damaged or has been modified.");
+    }
+  }
   return {
     formatVersion: version,
     exportedAt: Number(raw.exportedAt) || 0,
     sourceVersion: typeof raw.application?.version === "string" ? raw.application.version : "",
     state,
-    preferences: normalizePreferences(raw.profile.preferences)
+    preferences: normalizePreferences(raw.profile.preferences),
+    branding
   };
 }
 
