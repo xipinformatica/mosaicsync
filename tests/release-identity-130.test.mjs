@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-const VERSION = "1.33.0.4";
+const VERSION = "1.33.0.6";
 
 test("1.30 has one exact release identity across public/runtime surfaces", () => {
   const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
@@ -13,8 +13,8 @@ test("1.30 has one exact release identity across public/runtime surfaces", () =>
   const readme = fs.readFileSync("README.md", "utf8");
   const developerGuide = fs.readFileSync("DEVELOPER-GUIDE.md", "utf8");
   const devReadme = fs.readFileSync("README-DEVELOPMENT.md", "utf8");
-  const releaseNotes = fs.readFileSync("docs/RELEASE-1.33.0.4.md", "utf8");
-  const qa = fs.readFileSync("docs/QA-1.33.0.4.md", "utf8");
+  const releaseNotes = fs.readFileSync("docs/RELEASE-1.33.0.6.md", "utf8");
+  const qa = fs.readFileSync("docs/QA-1.33.0.6.md", "utf8");
   const baseline = JSON.parse(fs.readFileSync("package-size-baseline.json", "utf8"));
   const buildManifest = JSON.parse(fs.readFileSync("build-manifest.json", "utf8"));
   assert.equal(ff.version, VERSION);
@@ -44,5 +44,5 @@ test("1.30 public changelog keeps internal candidates out of the public release 
     assert.doesNotMatch(changelog, new RegExp(`^## ${unpublished.replaceAll(".", "\\.")}(?:\\s|$)`, "m"));
   }
   const headings = [...changelog.matchAll(/^## ([^\n]+)$/gm)].map(match => match[1]);
-  assert.deepEqual(headings.slice(0, 68), [VERSION, "1.33.0.3", "1.33.0.2", "1.33.0.1", "1.32.1.8", "1.32.1.7", "1.32.1.6", "1.32.1.5", "1.32.1.4", "1.32.1.3", "1.32.1.2", "1.32.1.1", "1.32.1", "1.32.0.10", "1.32.0.9", "1.32.0.8", "1.32.0.7", "1.32.0.6", "1.32.0.5", "1.32.0.4", "1.32.0.2", "1.32.0.1", "1.31.5", "1.31.4", "1.31.3", "1.31.2", "1.31.1", "1.31.0", "1.30.18.46", "1.30.18.45", "1.30.18.44", "1.30.18.43", "1.30.18.42", "1.30.18.41", "1.30.18.40", "1.30.18.39", "1.30.18.38", "1.30.18.37", "1.30.18.36", "1.30.18.35", "1.30.18.34", "1.30.18.33", "1.30.18.32", "1.30.18.31", "1.30.18.30", "1.30.18.29", "1.30.18.28", "1.30.18.27", "1.30.18.26 — withdrawn", "1.30.18.25", "1.30.18.24", "1.30.18.23", "1.30.18.22", "1.30.18.21", "1.30.18.20", "1.30.18.19", "1.30.18.18", "1.30.18.17", "1.30.18.16", "1.30.18.15", "1.30.18.14", "1.30.18.13", "1.30.18.12", "1.30.18.11", "1.30.18.10", "1.30.18.9", "1.30.18.8", "1.30.18.7"]);
+  assert.deepEqual(headings.slice(0, 70), [VERSION, "1.33.0.5", "1.33.0.4", "1.33.0.3", "1.33.0.2", "1.33.0.1", "1.32.1.8", "1.32.1.7", "1.32.1.6", "1.32.1.5", "1.32.1.4", "1.32.1.3", "1.32.1.2", "1.32.1.1", "1.32.1", "1.32.0.10", "1.32.0.9", "1.32.0.8", "1.32.0.7", "1.32.0.6", "1.32.0.5", "1.32.0.4", "1.32.0.2", "1.32.0.1", "1.31.5", "1.31.4", "1.31.3", "1.31.2", "1.31.1", "1.31.0", "1.30.18.46", "1.30.18.45", "1.30.18.44", "1.30.18.43", "1.30.18.42", "1.30.18.41", "1.30.18.40", "1.30.18.39", "1.30.18.38", "1.30.18.37", "1.30.18.36", "1.30.18.35", "1.30.18.34", "1.30.18.33", "1.30.18.32", "1.30.18.31", "1.30.18.30", "1.30.18.29", "1.30.18.28", "1.30.18.27", "1.30.18.26 — withdrawn", "1.30.18.25", "1.30.18.24", "1.30.18.23", "1.30.18.22", "1.30.18.21", "1.30.18.20", "1.30.18.19", "1.30.18.18", "1.30.18.17", "1.30.18.16", "1.30.18.15", "1.30.18.14", "1.30.18.13", "1.30.18.12", "1.30.18.11", "1.30.18.10", "1.30.18.9", "1.30.18.8", "1.30.18.7"]);
 });

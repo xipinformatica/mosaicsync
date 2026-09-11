@@ -7,7 +7,7 @@ Snow Leopard II begins from frozen correctness baseline **1.32.1.8**. Its rule i
 - **Step 0 — Instrumentation and immutable baseline: DONE in 1.33.0.1.** Adds local-only performance tooling, machine-readable benchmark distributions, deterministic New Tab structural budgets, package-size capture, storage API call-site inventory, and richer real-browser startup snapshots when drivers are available. No product telemetry or persistence is added.
 - **Step 1 — New Tab critical-path census: DONE in 1.33.0.2.** Freezes parser/bootstrap, static-module, eager DOM-binding and startup-phase ownership into `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json`. The census confirms that 534/642 initial elements and 165/200 eager ID bindings belong to secondary Settings/dialog UI, while 24 static modules / ~654 KB are evaluated before the main module body runs.
 - **Step 2 — State computation and serialization: DONE in 1.33.0.3.** Exact persisted compact state now becomes the optimistic-write baseline by detached clone instead of normalize+projection, and persistence/Sync/rebase carry normalized-state proof into Settings-clock stamping rather than revalidating the same intended tree. External/persisted trust boundaries remain defensive.
-- **Step 3 — DOM/CSS/lazy secondary UI: IN PROGRESS in 1.33.0.4.** The Wallpaper Gallery is the first pilot extraction: its shell and two eager bindings leave startup and are created on first use. Continue one natural UI boundary at a time; do not move the full Settings surface in one release.
+- **Step 3 — DOM/CSS/lazy secondary UI: IN PROGRESS through 1.33.0.6.** Step 3A (1.33.0.4) moved Wallpaper Gallery behind first use; 1.33.0.5 hardened focused coverage/census accounting; Step 3B (1.33.0.6) moves the Bookmarks dialog shell and dedicated controller out of ordinary startup while preserving the same controller ownership and lazy browser-Bookmarks API boundary. Continue one natural UI boundary at a time; do not move the full Settings surface in one release.
 - **Step 4 — Asset/image/network frugality.** Reduce unnecessary decode/allocation/preload work without first-frame regressions.
 - **Step 5 — Storage/background frugality.** Remove only I/O proven redundant without weakening freshness or concurrency revalidation.
 - **Step 6 — Lifetime and memory.** Stress repeated New Tab/UI cycles and fix demonstrated retention.
@@ -104,3 +104,25 @@ Canonical Step-3A snapshot: `docs/SNOW-LEOPARD-II-STEP3A-1.33.0.4.json`.
 - Close-button and backdrop wiring is installed at mount time because startup's `[data-close-dialog]` scan intentionally cannot see lazily-created controls.
 
 This is a pilot, not Step-3 completion. The next slice should use the same measured-before/measured-after discipline and preserve first-use UX.
+
+### 1.33.0.5 process hardening
+
+No production Step-3B change is introduced. Canonical Step-3A remains the dynamic Wallpaper Gallery module from 1.33.0.4. Focused Startup/New Tab groups now include `optimization-13304.test.mjs`, and structural census parsing masks raw `<script>`/`<style>` contents before tag counting so raw-text strings cannot inflate live-DOM metrics.
+
+
+Canonical Step-3B snapshot: `docs/SNOW-LEOPARD-II-STEP3B-1.33.0.6.json`.
+
+## Step 3B lazy Bookmarks UI
+
+1.33.0.6 applies the Step-3A pattern to the next low-risk interaction-only surface: Bookmarks.
+
+- Initial live DOM falls from **631 → 598 elements**; secondary live elements fall **523 → 490**.
+- Eager ID bindings fall **198 → 186**; secondary eager bindings fall **163 → 151**.
+- The static New Tab module closure falls **24 → 23 modules / 655,718 → 640,462 raw bytes**.
+- Startup HTML falls **52,027 → 49,564 bytes**. Combined startup HTML + static-module source falls by **17,719 raw bytes**.
+- `bookmarks-controller.js` and the new safe `bookmarks-shell.js` are dynamically loaded on first Bookmarks use; `core/bookmarks.js` remains lazy as before.
+- The persistent Bookmarks launcher button installs only the first-use loader. Once loaded, the historical dedicated Bookmarks controller resumes ownership of its button, permission control, search, close/reset lifecycle and folder-color menu.
+- The dialog shell is constructed only with DOM APIs (`createElement`/`createElementNS`/`textContent`/attributes). Executable HTML sinks remain prohibited.
+- Package payload grows modestly because the deferred programmatic shell still ships: roughly **+5.6 KB raw / +1.7 KB deflated** per browser versus 1.33.0.5. Step 3 optimizes startup work, not archive size.
+
+No wall-clock startup claim is made until compatible real-browser driver pairs are available.

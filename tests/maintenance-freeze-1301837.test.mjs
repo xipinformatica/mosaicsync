@@ -22,9 +22,9 @@ test("1.33.0.2 compatibility floors and permission budget stay explicit and leas
   const firefox = json("src/firefox/manifest.json");
   const chrome = json("src/chrome/manifest.json");
 
-  assert.equal(firefox.version, "1.33.0.4");
-  assert.equal(chrome.version, "1.33.0.4");
-  assert.equal(chrome.version_name, "1.33.0.4");
+  assert.equal(firefox.version, "1.33.0.6");
+  assert.equal(chrome.version, "1.33.0.6");
+  assert.equal(chrome.version_name, "1.33.0.6");
   assert.equal(firefox.browser_specific_settings.gecko.strict_min_version, "140.0");
   assert.equal(chrome.minimum_chrome_version, "104");
 

@@ -2,6 +2,7 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { resolve, dirname, relative, extname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { maskRawTextElementContents } from "./critical-path-html.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const shared = resolve(root, "src/shared");
@@ -229,7 +230,7 @@ try {
 
 const htmlSource = await readFile(resolve(shared, "newtab/newtab.html"), "utf8");
 const newtabSource = await readFile(resolve(shared, "newtab/newtab.js"), "utf8");
-const html = parseHtmlStructure(htmlSource);
+const html = parseHtmlStructure(maskRawTextElementContents(htmlSource));
 const parserCriticalPath = await collectParserPath(htmlSource);
 const modules = await collectStaticAndDeferredModules("newtab/newtab.js");
 const eagerDomBindings = collectEagerDomBindings(newtabSource, html.ids);

@@ -23,6 +23,7 @@ export function createBookmarksController({
   closeDialog,
   positionFloatingMenu,
   graphemeSegmenter,
+  openOnBind = false,
   elements = {}
 } = {}) {
   const {
@@ -409,6 +410,7 @@ export function createBookmarksController({
     bookmarksDialog?.addEventListener("click", event => {
       if (event.target === bookmarksDialog) closeDialog(bookmarksDialog);
     });
+    if (openOnBind) void open();
   }
 
   return Object.freeze({

@@ -99,7 +99,6 @@ import {
 } from "../core/i18n.js";
 import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
-import { createBookmarksController } from "./bookmarks-controller.js";
 import "./builtin-icons.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -337,40 +336,54 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const webAccessPromptAllow = document.getElementById("webAccessPromptAllow");
   const webAccessPromptDismiss = document.getElementById("webAccessPromptDismiss");
 
-  const bookmarksDialog = document.getElementById("bookmarksDialog");
-  const bookmarksPermissionState = document.getElementById("bookmarksPermissionState");
-  const bookmarksPermissionButton = document.getElementById("bookmarksPermissionButton");
-  const bookmarksBrowser = document.getElementById("bookmarksBrowser");
-  const bookmarksSearch = document.getElementById("bookmarksSearch");
-  const bookmarksCount = document.getElementById("bookmarksCount");
-  const bookmarkFolderTree = document.getElementById("bookmarkFolderTree");
-  const bookmarkBreadcrumbs = document.getElementById("bookmarkBreadcrumbs");
-  const bookmarkFolderCards = document.getElementById("bookmarkFolderCards");
-  const bookmarkItems = document.getElementById("bookmarkItems");
-  const bookmarksEmpty = document.getElementById("bookmarksEmpty");
-  const bookmarksStatus = document.getElementById("bookmarksStatus");
-  const bookmarksController = createBookmarksController({
-    loadBookmarksModule,
-    ensureSecondaryStyles,
-    closeDialog,
-    positionFloatingMenu,
-    graphemeSegmenter,
-    elements: {
-      bookmarksButton,
-      bookmarksDialog,
-      bookmarksPermissionState,
-      bookmarksPermissionButton,
-      bookmarksBrowser,
-      bookmarksSearch,
-      bookmarksCount,
-      bookmarkFolderTree,
-      bookmarkBreadcrumbs,
-      bookmarkFolderCards,
-      bookmarkItems,
-      bookmarksEmpty,
-      bookmarksStatus
+  let bookmarksDialog = null;
+  let bookmarksController = null;
+  let bookmarksControllerPromise = null;
+
+  async function ensureBookmarksController() {
+    if (bookmarksController) return bookmarksController;
+    if (!bookmarksControllerPromise) {
+      bookmarksControllerPromise = (async () => {
+        // Start CSS and code acquisition together so first use does not turn
+        // two independent secondary resources into serial latency.
+        const secondaryStylesReady = ensureSecondaryStyles();
+        const [controllerModule, shellModule] = await Promise.all([
+          import("./bookmarks-controller.js"),
+          import("./bookmarks-shell.js")
+        ]);
+        const elements = shellModule.mountBookmarksShell(document, () => closeDialog(bookmarksDialog));
+        bookmarksDialog = elements.bookmarksDialog;
+        const controller = controllerModule.createBookmarksController({
+          loadBookmarksModule,
+          ensureSecondaryStyles,
+          closeDialog,
+          positionFloatingMenu,
+          graphemeSegmenter,
+          openOnBind: true,
+          elements: { ...elements, bookmarksButton }
+        });
+        controller.bind();
+        await secondaryStylesReady;
+        bookmarksController = controller;
+        return controller;
+      })().catch(error => {
+        bookmarksControllerPromise = null;
+        throw error;
+      });
     }
-  });
+    return bookmarksControllerPromise;
+  }
+
+  function activateBookmarksOnFirstUse() {
+    // This one launcher listener exists only until the interaction-only owner is
+    // loaded. From then on bookmarks-controller.js owns the button as before.
+    bookmarksButton?.removeEventListener("click", activateBookmarksOnFirstUse);
+    void ensureBookmarksController().catch(error => {
+      console.warn(`${PRODUCT_NAME}: could not initialize Bookmarks`, error);
+      bookmarksButton?.addEventListener("click", activateBookmarksOnFirstUse, { once: true });
+      showToast(error?.message || t("operationFailed"));
+    });
+  }
 
   const shortcutDialog = document.getElementById("shortcutDialog");
   const shortcutForm = document.getElementById("shortcutForm");
@@ -2713,7 +2726,7 @@ ${site.url}`;
     devMark("newtab:space-switch:start");
     const generation = ++spaceSwitchGeneration;
     closeFrequentContextMenu();
-    bookmarksController.closeColorMenu();
+    bookmarksController?.closeColorMenu();
     closeDropChoice();
     closeFolder();
     if (!state?.spaces) {
@@ -5687,7 +5700,7 @@ ${site.url}`;
     render();
     updateSyncUi(meta, lastSyncStatus);
     setFrequentlyVisitedStatus(frequentlyVisitedStatusKey);
-    bookmarksController.refreshLocalizedUi();
+    bookmarksController?.refreshLocalizedUi();
     if (isSettingsOpen()) {
       void refreshWebAccessUi().catch(error => console.warn(`${PRODUCT_NAME}: website permission status unavailable`, error));
     }
@@ -7072,7 +7085,7 @@ ${t("clearSyncWarning")}`);
     });
   }
   settingsButton.addEventListener("click", () => { void openSettings(); });
-  bookmarksController.bind();
+  bookmarksButton?.addEventListener("click", activateBookmarksOnFirstUse, { once: true });
   settingsLanguage?.addEventListener("change", async () => {
     await setLocalePreference(settingsLanguage.value);
     refreshLocalizedUi();
@@ -7396,7 +7409,7 @@ ${t("clearSyncWarning")}`);
 
   document.addEventListener("pointerdown", event => {
     if (frequentContextMenu?.isConnected && !frequentContextMenu.contains(event.target)) closeFrequentContextMenu();
-    bookmarksController.closeColorMenuIfOutside(event.target);
+    bookmarksController?.closeColorMenuIfOutside(event.target);
     if (!backgroundColorPopover?.hidden && backgroundColorControl && !backgroundColorControl.contains(event.target)) {
       closeBackgroundColorPicker();
     }
@@ -7418,7 +7431,7 @@ ${t("clearSyncWarning")}`);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") {
       closeFrequentContextMenu();
-      bookmarksController.closeColorMenu();
+      bookmarksController?.closeColorMenu();
       // Settings is deliberately not a native <dialog> anymore, so preserve the
       // browser-native Escape affordance explicitly. Keep the panel behind the
       // native wallpaper picker until that child dialog closes itself.

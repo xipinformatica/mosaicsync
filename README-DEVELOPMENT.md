@@ -1,4 +1,12 @@
-Current release: 1.33.0.4
+Current release: 1.33.0.6
+
+## 1.33.0.6 — Snow Leopard II Step 3B: lazy Bookmarks UI
+
+1.33.0.6 moves the Bookmarks dialog shell and dedicated Bookmarks controller out of ordinary New Tab startup. The persistent launcher button owns only the first-use dynamic loader; after activation, the existing controller resumes its historical UI ownership and `core/bookmarks.js` remains lazy. The measured structural result versus 1.33.0.5 is 631→598 initial live elements, 523→490 secondary elements, 198→186 eager ID bindings, and 24→23 static modules / 655,718→640,462 raw static-module bytes. The safe programmatic shell adds a small deferred package payload; Step 3 optimizes startup work rather than archive size.
+
+## 1.33.0.5 — Snow Leopard II Step 3A process hardening
+
+1.33.0.5 is the process-only follow-up requested as ".4.1"; Chromium requires a maximum of four numeric version components, so the valid unified identity advances to 1.33.0.5. The canonical 1.33.0.4 dynamic Wallpaper Gallery implementation is unchanged. Its regression file now belongs to focused Startup/New Tab certification, and the critical-path census masks raw script/style contents before structural DOM counting. Step 3 remains in progress.
 
 ## 1.33.0.4 — Snow Leopard II Step 3A: lazy Wallpaper Gallery pilot
 

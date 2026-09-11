@@ -1,3 +1,20 @@
+## 1.33.0.6
+
+- Continues **Snow Leopard II Step 3** with Step 3B: the Bookmarks dialog shell and dedicated controller leave ordinary New Tab startup and are loaded on first Bookmarks use.
+- Preserves the existing Bookmarks controller as the owner after activation; browser Bookmarks API access remains lazy and device-local folder-color preferences remain outside Sync/Recovery.
+- Reduces initial live DOM **631→598**, secondary elements **523→490**, eager ID bindings **198→186**, and static New Tab module closure **24→23 modules / 655,718→640,462 raw bytes**.
+- Uses safe programmatic DOM construction for the deferred shell; no executable HTML sink, remote markup or new permission is introduced.
+- Package payload grows modestly because the deferred shell still ships; this release optimizes startup parse/allocation/evaluation work rather than archive size.
+- No persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.5
+
+- Process-only follow-up to canonical 1.33.0.4 (requested as ".4.1"; Chrome requires a four-component technical version, so the unified release is 1.33.0.5).
+- Adds `tests/optimization-13304.test.mjs` to the focused Startup and New Tab groups so Step-3A lazy Wallpaper Gallery coverage runs during focused certification.
+- Hardens `tools/critical-path-census.mjs` by masking raw `<script>`/`<style>` contents before structural tag counting; HTML-looking strings can no longer inflate live-DOM metrics.
+- Canonical 1.33.0.4 Wallpaper Gallery production code is unchanged; Step 3 remains in progress.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
 ## 1.33.0.4
 
 - Begins **Snow Leopard II Step 3 — DOM/CSS/lazy secondary UI** with a deliberately narrow Wallpaper Gallery pilot rather than moving the whole Settings surface at once.

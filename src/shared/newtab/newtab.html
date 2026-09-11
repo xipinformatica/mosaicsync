@@ -119,50 +119,6 @@
     </button>
   </main>
 
-  <dialog id="bookmarksDialog" class="dialog bookmarks-dialog" aria-labelledby="bookmarksDialogTitle">
-    <section class="dialog-card bookmarks-card">
-      <div class="dialog-heading bookmarks-heading">
-        <div>
-          <p class="eyebrow">Firefox</p>
-          <h2 id="bookmarksDialogTitle">Bookmarks</h2>
-        </div>
-        <button class="icon-button dialog-close-button" type="button" data-close-dialog="bookmarksDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
-      </div>
-
-      <div id="bookmarksPermissionState" class="bookmarks-permission-state" hidden>
-        <div class="bookmarks-permission-icon" aria-hidden="true">☆</div>
-        <h3>Show your Firefox bookmarks</h3>
-        <p>MosaicSync can display your bookmark folders without copying them into MosaicSync or Firefox Sync.</p>
-        <button id="bookmarksPermissionButton" class="primary-button" type="button">Allow bookmark access</button>
-      </div>
-
-      <div id="bookmarksBrowser" class="bookmarks-browser" hidden>
-        <div class="bookmarks-toolbar">
-          <label class="bookmarks-search-field">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
-            <input id="bookmarksSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search bookmarks" aria-label="Search bookmarks">
-          </label>
-          <span id="bookmarksCount" class="bookmarks-count"></span>
-        </div>
-        <div class="bookmarks-layout">
-          <aside class="bookmarks-sidebar" aria-label="Bookmark folders">
-            <div id="bookmarkFolderTree" class="bookmark-folder-tree"></div>
-          </aside>
-          <section class="bookmarks-main" aria-live="polite">
-            <div id="bookmarkBreadcrumbs" class="bookmark-breadcrumbs"></div>
-            <div id="bookmarkFolderCards" class="bookmark-folder-cards"></div>
-            <div id="bookmarkItems" class="bookmark-items"></div>
-            <div id="bookmarksEmpty" class="bookmarks-empty" hidden>
-              <strong>No bookmarks here</strong>
-              <span>Choose another folder or search your bookmarks.</span>
-            </div>
-          </section>
-        </div>
-      </div>
-      <div id="bookmarksStatus" class="bookmarks-status" role="status" aria-live="polite"></div>
-    </section>
-  </dialog>
-
   <dialog id="frequentSyncPermissionDialog" class="dialog" aria-labelledby="frequentSyncPermissionTitle">
     <section class="dialog-card">
       <div class="dialog-heading">
@@ -286,7 +242,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.33.0.4</p>
+          <p class="eyebrow">MosaicSync · 1.33.0.6</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

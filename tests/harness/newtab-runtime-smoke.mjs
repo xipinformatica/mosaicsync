@@ -8,6 +8,8 @@ if (!new Set(["firefox", "chrome"]).has(browserName)) throw new Error(`unsupport
 const scheme = browserName === "chrome" ? "chrome-extension" : "moz-extension";
 const html = await fs.readFile(path.join(root, `dist/${browserName}/newtab/newtab.html`), "utf8");
 
+let dynamicIdRegistry = null;
+
 class FakeStyle {
   constructor() { this.values = new Map(); }
   setProperty(name, value) { this.values.set(name, String(value)); }
@@ -93,7 +95,14 @@ class FakeElement {
     if (index >= 0) this.parentElement.children.splice(index, 1, node);
   }
   remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(value => value !== this); }
-  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  setAttribute(name, value) {
+    const text = String(value);
+    this.attributes.set(name, text);
+    if (name === "id") {
+      this.id = text;
+      dynamicIdRegistry?.set(text, this);
+    }
+  }
   getAttribute(name) { return this.attributes.get(name) ?? null; }
   removeAttribute(name) { this.attributes.delete(name); }
   hasAttribute(name) { return this.attributes.has(name); }
@@ -147,6 +156,7 @@ class WebStorage {
 }
 
 const byId = new Map();
+dynamicIdRegistry = byId;
 for (const match of html.matchAll(/<([a-zA-Z0-9-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)) {
   const [, tagName, attrs, id] = match;
   const element = new FakeElement(tagName, id);
@@ -182,6 +192,7 @@ const document = {
   },
   querySelectorAll(selector) { return selector === "[data-color-swatch]" ? swatches : []; },
   createElement(tagName) { return new FakeElement(tagName); },
+  createElementNS(_namespace, tagName) { return new FakeElement(tagName); },
   createDocumentFragment() { const fragment = new FakeElement("fragment"); fragment.__fragment = true; return fragment; },
   createTextNode(text) { const node = new FakeElement("#text"); node.textContent = String(text); return node; },
   addEventListener() {},

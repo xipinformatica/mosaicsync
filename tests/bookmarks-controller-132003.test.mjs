@@ -12,7 +12,8 @@ const newtab = read(NEWTAB);
 const owner = read(OWNER);
 
 test("1.32.0.3 gives the Bookmarks dialog one dedicated New Tab UI owner", () => {
-  assert.match(newtab, /import \{ createBookmarksController \} from "\.\/bookmarks-controller\.js";/);
+  assert.match(newtab, /import\("\.\/bookmarks-controller\.js"\)/, "the dedicated owner may be loaded lazily");
+  assert.doesNotMatch(newtab, /^import \{ createBookmarksController \} from "\.\/bookmarks-controller\.js";/m);
   assert.match(owner, /export function createBookmarksController/);
 });
 
@@ -45,8 +46,8 @@ test("1.32.0.3 controller owns bookmark-local event wiring without adding global
 });
 
 test("1.32.0.3 keeps global menu coordination in the New Tab orchestrator", () => {
-  assert.match(newtab, /document\.addEventListener\("pointerdown"[\s\S]*?bookmarksController\.closeColorMenuIfOutside\(event\.target\)/);
-  assert.match(newtab, /if \(event\.key === "Escape"\)[\s\S]*?bookmarksController\.closeColorMenu\(\)/);
+  assert.match(newtab, /document\.addEventListener\("pointerdown"[\s\S]*?bookmarksController\?\.closeColorMenuIfOutside\(event\.target\)/);
+  assert.match(newtab, /if \(event\.key === "Escape"\)[\s\S]*?bookmarksController\?\.closeColorMenu\(\)/);
 });
 
 test("1.32.0.3 keeps the modal popover palette inside the Bookmarks dialog", () => {

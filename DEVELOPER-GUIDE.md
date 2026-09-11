@@ -1,3 +1,13 @@
+## 1.33.0.6 Snow Leopard II Step-3B lazy Bookmarks contract
+
+Bookmarks is an interaction-only surface. The persistent `#bookmarksButton` remains in the primary launcher, but `#bookmarksDialog`, its descendant controls, `newtab/bookmarks-controller.js`, and `newtab/bookmarks-shell.js` must remain absent from the initial live DOM/static module closure. The first-use loader may dynamically acquire the shell/controller and secondary CSS, but after activation the existing Bookmarks controller remains the dedicated owner of button toggling, permission/search handling, close/reset lifecycle and folder-color menu. `core/bookmarks.js` must remain lazy. The shell must use safe DOM construction APIs only; do not introduce `innerHTML`, `outerHTML`, `insertAdjacentHTML`, remote markup or new authority/storage ownership.
+
+Permanent protection: `tests/optimization-13306.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP3B-1.33.0.6.json`.
+
+## 1.33.0.5 Snow Leopard II Step-3A process-hardening contract
+
+Canonical Step-3A production behavior remains the 1.33.0.4 dynamically imported Wallpaper Gallery shell. Focused `startup` and `newtab` certification must include `tests/optimization-13304.test.mjs`. Structural HTML census tooling must mask raw `<script>` and `<style>` contents before tag counting so HTML-looking strings do not masquerade as live DOM; masking must preserve source length/line positions. These are tooling/test obligations only and do not justify changing the canonical lazy-gallery runtime.
+
 ## 1.33.0.4 Snow Leopard II lazy secondary-UI contract
 
 Step 3 begins with one interaction-only shell at a time. The Wallpaper Gallery is no longer permitted in initial `newtab.html` or eager `getElementById()` wiring; `newtab/wallpaper-gallery-shell.js` must remain dynamically imported on first use. Because lazy construction adds an asynchronous boundary, child UI must capture and revalidate the owning Settings `__mosaicOwnershipGeneration` before `showModal()`. Dynamically created `[data-close-dialog]` controls must install their own close wiring instead of relying on the startup-only document scan. Do not move larger Settings/dialog surfaces behind lazy construction until the previous slice is regression-tested and its structural reduction is frozen.
