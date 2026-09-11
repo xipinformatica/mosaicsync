@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { webcrypto } from "node:crypto";
+import { TINY_PNG_VARIANTS } from "./harness/raster-fixtures.mjs";
 
 globalThis.crypto ||= webcrypto;
 
@@ -33,7 +34,7 @@ const storage = await import("../dist/firefox/core/storage.js");
 const localAssets = await import("../dist/firefox/core/local-assets.js");
 
 function iconData(id) {
-  return `data:image/png;base64,${Buffer.from(`folder-${id}-pixels`.repeat(35)).toString("base64")}`;
+  return TINY_PNG_VARIANTS[Number(id) % TINY_PNG_VARIANTS.length];
 }
 function child(id, position, image) {
   return {

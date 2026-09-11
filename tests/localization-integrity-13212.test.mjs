@@ -67,7 +67,7 @@ const REVIEWED_SAME_SPELLING = new Set([
 ]);
 
 
-test("1.32.1.2 every non-English locale translates the Recovery and Custom Branding surfaces", async () => {
+test("1.32.1.3 every non-English locale translates the Recovery and Custom Branding surfaces", async () => {
   for (const file of localeFiles) {
     if (file === "en.js") continue;
     const messages = await load(file);
@@ -78,7 +78,7 @@ test("1.32.1.2 every non-English locale translates the Recovery and Custom Brand
 });
 
 
-test("1.32.1.2 every exact-English non-English catalog cell is explicitly reviewed", async () => {
+test("1.32.1.3 every exact-English non-English catalog cell is explicitly reviewed", async () => {
   for (const file of localeFiles) {
     if (file === "en.js") continue;
     const messages = await load(file);
@@ -92,7 +92,7 @@ test("1.32.1.2 every exact-English non-English catalog cell is explicitly review
   }
 });
 
-test("1.32.1.2 non-English catalogs reject unreviewed exact-English multi-word fallbacks", async () => {
+test("1.32.1.3 non-English catalogs reject unreviewed exact-English multi-word fallbacks", async () => {
   for (const file of localeFiles) {
     if (file === "en.js") continue;
     const messages = await load(file);
@@ -131,7 +131,7 @@ function isVersionEyebrow(value) {
   return /^MosaicSync · \d+(?:\.\d+)+$/u.test(value);
 }
 
-test("1.32.1.2 visible New Tab HTML literals are localizable or explicitly invariant", async () => {
+test("1.32.1.3 visible New Tab HTML literals are localizable or explicitly invariant", async () => {
   const html = await readFile(resolve("src/shared/newtab/newtab.html"), "utf8");
   const englishValues = new Set(Object.values(english));
   const stripped = html

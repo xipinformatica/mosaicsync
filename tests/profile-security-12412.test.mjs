@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash, webcrypto } from "node:crypto";
+import { TINY_PNG } from "./harness/raster-fixtures.mjs";
 globalThis.crypto ||= webcrypto;
 
 const constants = await import("../dist/firefox/core/constants.js");
@@ -9,7 +10,7 @@ const profile = await import("../dist/firefox/core/profile.js");
 
 function sampleState() {
   const t = Date.now();
-  const image = `data:image/png;base64,${Buffer.from("profile-secure".repeat(80)).toString("base64")}`;
+  const image = TINY_PNG;
   return model.normalizeState({
     shortcuts: [{
       type: "shortcut", id: "secure", title: "Secure", url: "https://secure.example/",

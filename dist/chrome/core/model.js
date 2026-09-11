@@ -508,6 +508,59 @@ export function repairTopLevelPositions(items) {
   });
 }
 
+export function visibleTopLevelCapacity(settings) {
+  const columns = clampInt(settings?.columns, 6, 12, DEFAULT_SETTINGS.columns);
+  const rows = clampInt(settings?.rows, 2, 8, DEFAULT_SETTINGS.rows);
+  return columns * rows;
+}
+
+export function repairTopLevelPositionsWithinCapacity(items, capacity) {
+  const limit = Math.max(0, Math.trunc(Number(capacity) || 0));
+  const source = Array.isArray(items) ? items : [];
+  if (!limit || source.length > limit) return repairTopLevelPositions(source);
+  const used = new Set();
+  const sorted = [...source].sort(comparePositionThenModified);
+  return sorted.map(item => {
+    let position = Number.isInteger(item.position) && item.position >= 0 && item.position < limit && !used.has(item.position)
+      ? item.position
+      : -1;
+    if (position < 0) {
+      position = 0;
+      while (position < limit && used.has(position)) position += 1;
+    }
+    used.add(position);
+    if (item.type === "folder") {
+      return {
+        ...item,
+        position,
+        items: item.items
+          .slice()
+          .sort(comparePositionThenModified)
+          .map((child, childIndex) => ({ ...child, position: childIndex }))
+      };
+    }
+    return { ...item, position };
+  });
+}
+
+export function expandGridSettingsToFit(settings, itemCount) {
+  const safe = normalizeSettings(settings);
+  const count = Math.max(0, Math.trunc(Number(itemCount) || 0));
+  if (count <= safe.columns * safe.rows || count > 12 * 8) return safe;
+  let best = null;
+  for (let columns = safe.columns; columns <= 12; columns += 1) {
+    for (let rows = safe.rows; rows <= 8; rows += 1) {
+      const capacity = columns * rows;
+      if (capacity < count) continue;
+      const candidate = { columns, rows, capacity, areaDelta: capacity - count, change: (columns - safe.columns) + (rows - safe.rows) };
+      if (!best || candidate.areaDelta < best.areaDelta ||
+          (candidate.areaDelta === best.areaDelta && candidate.change < best.change) ||
+          (candidate.areaDelta === best.areaDelta && candidate.change === best.change && rows < best.rows)) best = candidate;
+    }
+  }
+  return best ? { ...safe, columns: best.columns, rows: best.rows } : safe;
+}
+
 function normalizeOptionalBackgroundDim(value) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
@@ -640,6 +693,8 @@ export function normalizeWorkspace(raw, memo = null) {
   };
   if (!raw || typeof raw !== "object") return safe;
 
+  safe.settings = normalizeSettings(raw.settings, memo);
+
   if (Array.isArray(raw.shortcuts)) {
     const normalized = [];
     for (let index = 0; index < raw.shortcuts.length; index += 1) {
@@ -656,10 +711,13 @@ export function normalizeWorkspace(raw, memo = null) {
         if (shortcut) normalized.push(shortcut);
       }
     }
-    safe.shortcuts = repairWorkspaceRecordIdsNormalized({ shortcuts: repairTopLevelPositions(normalized) }).shortcuts;
+    safe.settings = expandGridSettingsToFit(safe.settings, normalized.length);
+    const capacity = visibleTopLevelCapacity(safe.settings);
+    safe.shortcuts = repairWorkspaceRecordIdsNormalized({
+      shortcuts: repairTopLevelPositionsWithinCapacity(normalized, capacity)
+    }).shortcuts;
   }
 
-  safe.settings = normalizeSettings(raw.settings, memo);
   safe.settingsModifiedAt = Number.isFinite(raw.settingsModifiedAt)
     ? raw.settingsModifiedAt
     : (Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0);
@@ -824,6 +882,8 @@ export function moveShortcutOutOfFolder(state, { shortcutId, spaceId = "", posit
   if (typeof shortcutId !== "string" || !shortcutId || !Number.isInteger(position) || position < 0) return normalized;
 
   const workspace = normalizeWorkspace(normalized.spaces[targetSpaceId]);
+  const capacity = visibleTopLevelCapacity(workspace.settings);
+  if (position >= capacity || workspace.shortcuts.length >= capacity) return normalized;
   if (workspace.shortcuts.some(item => item.position === position)) return normalized;
 
   let folderIndex = -1;
@@ -870,7 +930,7 @@ export function moveShortcutOutOfFolder(state, { shortcutId, spaceId = "", posit
   }
 
   workspace.shortcuts.push(moved);
-  workspace.shortcuts = repairTopLevelPositions(workspace.shortcuts);
+  workspace.shortcuts = repairTopLevelPositionsWithinCapacity(workspace.shortcuts, capacity);
   workspace.updatedAt = timestamp;
 
   const spaces = {
@@ -917,6 +977,14 @@ export function moveShortcutBetweenSpacesNormalized(normalized, { shortcutId, fr
     item?.id === shortcutId || (item?.type === "folder" && item.items.some(child => child?.id === shortcutId))
   );
   if (destinationAlreadyHasId) return sourceState;
+  const destinationFolderCandidate = targetFolderId
+    ? destination.shortcuts.find(item => item?.type === "folder" && item.id === targetFolderId)
+    : null;
+  const destinationCapacity = visibleTopLevelCapacity(destination.settings);
+  if (!destinationFolderCandidate) {
+    if (destination.shortcuts.length >= destinationCapacity) return sourceState;
+    if (Number.isInteger(position) && (position < 0 || position >= destinationCapacity)) return sourceState;
+  }
   let moved = null;
   let sourceFolder = null;
   let sourceFolderIndex = -1;
@@ -954,9 +1022,7 @@ export function moveShortcutBetweenSpacesNormalized(normalized, { shortcutId, fr
   }
 
   moved = { ...moved, modifiedAt: timestamp, spaceMoveAt: timestamp };
-  const destinationFolder = targetFolderId
-    ? destination.shortcuts.find(item => item?.type === "folder" && item.id === targetFolderId)
-    : null;
+  const destinationFolder = destinationFolderCandidate;
 
   if (destinationFolder) {
     moved.position = destinationFolder.items.length;
@@ -966,28 +1032,26 @@ export function moveShortcutBetweenSpacesNormalized(normalized, { shortcutId, fr
     const occupied = new Set(destination.shortcuts.map(item => item.position));
     let desiredPosition = Number.isInteger(position) && position >= 0 ? position : null;
     if (desiredPosition == null) {
-      const capacity = destination.settings.columns * destination.settings.rows;
       desiredPosition = 0;
-      while (desiredPosition < capacity && occupied.has(desiredPosition)) desiredPosition += 1;
-      while (occupied.has(desiredPosition)) desiredPosition += 1;
+      while (desiredPosition < destinationCapacity && occupied.has(desiredPosition)) desiredPosition += 1;
+      if (desiredPosition >= destinationCapacity) return sourceState;
     }
 
     const occupant = destination.shortcuts.find(item => item.position === desiredPosition);
     if (occupant) {
-      const capacity = destination.settings.columns * destination.settings.rows;
       let displacedPosition = 0;
-      while (displacedPosition < capacity && (occupied.has(displacedPosition) || displacedPosition === desiredPosition)) displacedPosition += 1;
-      if (displacedPosition >= capacity) return sourceState;
+      while (displacedPosition < destinationCapacity && (occupied.has(displacedPosition) || displacedPosition === desiredPosition)) displacedPosition += 1;
+      if (displacedPosition >= destinationCapacity) return sourceState;
       occupant.position = displacedPosition;
       occupant.modifiedAt = timestamp;
     }
 
     moved.position = desiredPosition;
     destination.shortcuts.push(moved);
-    destination.shortcuts = repairTopLevelPositions(destination.shortcuts);
+    destination.shortcuts = repairTopLevelPositionsWithinCapacity(destination.shortcuts, destinationCapacity);
   }
 
-  source.shortcuts = repairTopLevelPositions(source.shortcuts);
+  source.shortcuts = repairTopLevelPositionsWithinCapacity(source.shortcuts, visibleTopLevelCapacity(source.settings));
   source.updatedAt = timestamp;
   destination.updatedAt = timestamp;
 

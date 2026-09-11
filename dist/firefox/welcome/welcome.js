@@ -23,7 +23,7 @@ import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/st
 import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
-import { readCustomBranding, writeCustomBranding } from "../core/custom-branding.js";
+import { beginCustomBrandingImport, rollbackCustomBrandingImport } from "../core/custom-branding.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 localizeDocument(document);
@@ -163,18 +163,15 @@ async function commitPendingSourceCandidate(expectedSource = "") {
   // Custom Branding follows the same authority decision but stays storage.local
   // only: it never participates in Sync/Recovery. Roll it back if the state
   // commit fails so a rejected source cannot leave half an imported profile.
-  let previousBranding = null;
-  let brandingCommitted = false;
+  let brandingTransaction = null;
   if (candidate.source === "profile" && candidate.branding) {
-    previousBranding = await readCustomBranding({ failClosed: true });
-    await writeCustomBranding(candidate.branding);
-    brandingCommitted = true;
+    brandingTransaction = await beginCustomBrandingImport(candidate.branding);
   }
   try {
     await writeLocalState(candidate.state);
   } catch (error) {
-    if (brandingCommitted) {
-      try { await writeCustomBranding(previousBranding); } catch (rollbackError) {
+    if (brandingTransaction) {
+      try { await rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
         console.error("MosaicSync could not roll back imported Custom Branding.", rollbackError);
       }
     }

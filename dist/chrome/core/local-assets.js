@@ -13,7 +13,7 @@
  */
 import { DEFAULT_SPACE_ID, SPACE_IDS } from "./constants.js";
 import { assetIdForDataUrl } from "./model.js";
-import { parseImageDataUrl } from "./image-data.js";
+import { validateRasterDataUrl } from "./raster-validation.js";
 
 const LOCAL_ASSET_ID_RE = /^a[0-9a-z]+-[0-9a-z]+$/;
 const LOCAL_ASSET_ID_MAX_CHARS = 64;
@@ -34,7 +34,7 @@ export function isLocalAssetId(value) {
 }
 
 export function validateLocalAsset(id, dataUrl, memo = null) {
-  return isLocalAssetId(id) && typeof dataUrl === "string" && Boolean(parseImageDataUrl(dataUrl)) && assetIdForDataUrl(dataUrl, memo) === id;
+  return isLocalAssetId(id) && typeof dataUrl === "string" && Boolean(validateRasterDataUrl(dataUrl)) && assetIdForDataUrl(dataUrl, memo) === id;
 }
 
 function projectShortcut(item, assets, referencedIds, memo = null) {

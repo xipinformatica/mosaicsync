@@ -41,7 +41,7 @@ for (const browser of ["firefox", "chrome"]) {
     const source = sourceFor(browser, "newtab.js");
     let context;
     context = vm.createContext({
-      state: { settings: { columns: 10, rows: 4, tileSize: 76 } },
+      state: { shortcuts: [], settings: { columns: 10, rows: 4, tileSize: 76 } },
       settingsColumns: { value: "8" }, // stale before external refresh
       settingsRows: { value: "4" },
       settingsTileSize: { value: "76" },
@@ -53,6 +53,8 @@ for (const browser of ["firefox", "chrome"]) {
         const n = Number(value);
         return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.trunc(n))) : fallback;
       },
+      visibleTopLevelCapacity(settings) { return Number(settings.columns) * Number(settings.rows); },
+      repairTopLevelPositionsWithinCapacity(items) { return items; },
       markSettingsChanged() {},
       rememberPendingSettings(keys) { for (const key of keys) context.pendingSettingsDraft.set(key, context.state.settings[key]); },
       applySettings() {}, render() {},

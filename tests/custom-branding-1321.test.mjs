@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { webcrypto } from "node:crypto";
+import { TINY_PNG, TINY_WEBP, TINY_GIF } from "./harness/raster-fixtures.mjs";
 
 globalThis.crypto ||= webcrypto;
 
@@ -25,9 +26,9 @@ const model = await import("../dist/firefox/core/model.js");
 const branding = await import("../dist/firefox/core/custom-branding.js");
 const profile = await import("../dist/firefox/core/profile.js");
 
-const png = `data:image/png;base64,${Buffer.from("branding-logo-bytes").toString("base64")}`;
-const webp = `data:image/webp;base64,${Buffer.from("branding-webp-bytes").toString("base64")}`;
-const gif = `data:image/gif;base64,${Buffer.from("branding-gif-bytes").toString("base64")}`;
+const png = TINY_PNG;
+const webp = TINY_WEBP;
+const gif = TINY_GIF;
 const unicodeText = "XIP Informàtica · 日本 · Καλημέρα";
 
 async function recomputeIntegrity(pkg) {
@@ -38,7 +39,7 @@ async function recomputeIntegrity(pkg) {
 }
 
 test("1.32.1.1 Custom Branding is a separate versioned storage.local domain", () => {
-  assert.equal(constants.VERSION, "1.32.1.2");
+  assert.equal(constants.VERSION, "1.32.1.3");
   assert.equal(constants.LOCAL_CUSTOM_BRANDING_KEY, "mosaicsync.custom-branding.v1");
   assert.equal(branding.CUSTOM_BRANDING_SCHEMA_VERSION, 1);
   assert.deepEqual(branding.DEFAULT_CUSTOM_BRANDING, { schemaVersion: 1, enabled: false, text: "", logo: "" });
@@ -139,10 +140,10 @@ test("1.32.1.1 source ownership keeps branding outside Sync/Recovery and transac
   const backgroundSource = backgroundFiles.map(name => fs.readFileSync(`src/shared/background/${name}`, "utf8")).join("\n");
   assert.equal(backgroundSource.includes("LOCAL_CUSTOM_BRANDING_KEY"), false, "Sync/Recovery background must not own the branding key");
   assert.equal(backgroundSource.includes("custom-branding.js"), false, "Sync/Recovery background must not import branding");
-  assert.match(newtab, /const previousBranding = await brandingModule\.readCustomBranding\(\{ failClosed: true \}\)/);
+  assert.match(newtab, /beginCustomBrandingImport\(parsed\.branding\)/);
   assert.match(newtab, /could not roll back imported Custom Branding/);
   assert.match(welcome, /stageStartingSourceCandidate\("profile", importedState, parsed\.preferences, parsed\.branding\)/);
   assert.match(welcome, /branding: source === "profile"/);
-  assert.match(welcome, /await writeCustomBranding\(previousBranding\)/);
+  assert.match(welcome, /rollbackCustomBrandingImport\(brandingTransaction\)/);
   assert.match(welcome, /function discardPendingSourceCandidate\(\) \{\s*pendingSourceCandidate = null;/);
 });

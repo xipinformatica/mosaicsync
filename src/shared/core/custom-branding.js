@@ -11,7 +11,7 @@
  * The profile backup layer explicitly opts it into export/import instead.
  */
 import { LOCAL_CUSTOM_BRANDING_KEY } from "./constants.js";
-import { parseImageDataUrl } from "./image-data.js";
+import { validateRasterDataUrl } from "./raster-validation.js";
 
 export const CUSTOM_BRANDING_SCHEMA_VERSION = 1;
 export const CUSTOM_BRANDING_TEXT_MAX_CHARS = 120;
@@ -26,6 +26,19 @@ export const CUSTOM_BRANDING_ALLOWED_MIME_TYPES = Object.freeze([
   "image/webp"
 ]);
 const ALLOWED_MIME_TYPES = new Set(CUSTOM_BRANDING_ALLOWED_MIME_TYPES);
+
+const CUSTOM_BRANDING_WRITE_LOCK_NAME = "mosaicsync.custom-branding.write.v1";
+
+async function withCustomBrandingWriteLock(callback) {
+  const locks = globalThis.navigator?.locks;
+  if (locks?.request) return locks.request(CUSTOM_BRANDING_WRITE_LOCK_NAME, callback);
+  return callback();
+}
+
+function brandingEqual(left, right) {
+  return left?.schemaVersion === right?.schemaVersion && left?.enabled === right?.enabled &&
+    left?.text === right?.text && left?.logo === right?.logo;
+}
 
 export const DEFAULT_CUSTOM_BRANDING = Object.freeze({
   schemaVersion: CUSTOM_BRANDING_SCHEMA_VERSION,
@@ -57,7 +70,7 @@ export function normalizeCustomBrandingLogo(value, { strict = false } = {}) {
     if (strict) throw new Error("Invalid custom branding logo.");
     return "";
   }
-  const parsed = parseImageDataUrl(value);
+  const parsed = validateRasterDataUrl(value, { allowedMimeTypes: CUSTOM_BRANDING_ALLOWED_MIME_TYPES });
   if (!parsed || !ALLOWED_MIME_TYPES.has(parsed.mimeType) || parsed.byteLength > CUSTOM_BRANDING_LOGO_MAX_BYTES) {
     if (strict) throw new Error("Invalid custom branding logo.");
     return "";
@@ -104,7 +117,31 @@ export async function readCustomBranding({ failClosed = false } = {}) {
 
 export async function writeCustomBranding(value) {
   const branding = normalizeCustomBranding(value, { strict: true });
-  await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: branding });
-  return branding;
+  return withCustomBrandingWriteLock(async () => {
+    await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: branding });
+    return branding;
+  });
+}
+
+export async function beginCustomBrandingImport(value) {
+  const branding = normalizeCustomBranding(value, { strict: true });
+  return withCustomBrandingWriteLock(async () => {
+    const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
+    const previous = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
+    await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: branding });
+    return { previous, written: branding };
+  });
+}
+
+export async function rollbackCustomBrandingImport(transaction) {
+  const previous = normalizeCustomBranding(transaction?.previous, { strict: true });
+  const written = normalizeCustomBranding(transaction?.written, { strict: true });
+  return withCustomBrandingWriteLock(async () => {
+    const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
+    const current = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
+    if (!brandingEqual(current, written)) return { rolledBack: false, current };
+    await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: previous });
+    return { rolledBack: true, current: previous };
+  });
 }
 

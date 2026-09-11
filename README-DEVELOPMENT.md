@@ -1,6 +1,12 @@
+
+## 1.32.1.3 — adversarial correctness corrective
+
+1.32.1.3 closes the five confirmed defects from the 1.32.1.3 adversarial forensic audit without reopening Journey 3 or changing Normal Sync/Recovery formats. Top-level placement is capacity-aware across ordinary add, Frequently Visited insertion, cross-Space moves, folder ungrouping and live grid shrink; full destinations reject before mutation and normalization repairs legacy/imported positions into the visible grid when the record count fits.
+
+Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
 # MosaicSync development
 
-> **Current release: 1.32.1.2.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.1.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 

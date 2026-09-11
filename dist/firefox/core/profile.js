@@ -36,6 +36,50 @@ export const PROFILE_IMPORT_MAX_BYTES = PROFILE_IMPORT_MAX_CHARS;
 
 const encoder = new TextEncoder();
 
+const PROFILE_PREFLIGHT_MAX_DEPTH = 64;
+const PROFILE_PREFLIGHT_MAX_NODES = 50_000;
+const PROFILE_PREFLIGHT_MAX_ARRAY_ITEMS = 10_000;
+const PROFILE_PREFLIGHT_MAX_OBJECT_KEYS = 2_000;
+const PROFILE_MAX_TOP_LEVEL_ITEMS_PER_SPACE = 96;
+
+function preflightProfileStructure(root) {
+  const stack = [{ value: root, depth: 0 }];
+  let nodes = 0;
+  while (stack.length) {
+    const { value, depth } = stack.pop();
+    if (value === null || typeof value !== "object") continue;
+    nodes += 1;
+    if (nodes > PROFILE_PREFLIGHT_MAX_NODES || depth > PROFILE_PREFLIGHT_MAX_DEPTH) {
+      throw codedError(ERROR_CODES.PROFILE_DAMAGED, "This MosaicSync profile is too structurally complex to import safely.");
+    }
+    if (Array.isArray(value)) {
+      if (value.length > PROFILE_PREFLIGHT_MAX_ARRAY_ITEMS) {
+        throw codedError(ERROR_CODES.PROFILE_DAMAGED, "This MosaicSync profile is too structurally complex to import safely.");
+      }
+      for (let index = value.length - 1; index >= 0; index -= 1) stack.push({ value: value[index], depth: depth + 1 });
+      continue;
+    }
+    const keys = Object.keys(value);
+    if (keys.length > PROFILE_PREFLIGHT_MAX_OBJECT_KEYS) {
+      throw codedError(ERROR_CODES.PROFILE_DAMAGED, "This MosaicSync profile is too structurally complex to import safely.");
+    }
+    for (let index = keys.length - 1; index >= 0; index -= 1) stack.push({ value: value[keys[index]], depth: depth + 1 });
+  }
+}
+
+function assertTopLevelProfileCapacity(rawState) {
+  const candidates = [];
+  if (Array.isArray(rawState?.shortcuts)) candidates.push(rawState.shortcuts);
+  for (const spaceId of ["personal", "work"]) {
+    if (Array.isArray(rawState?.spaces?.[spaceId]?.shortcuts)) candidates.push(rawState.spaces[spaceId].shortcuts);
+  }
+  for (const shortcuts of candidates) {
+    if (shortcuts.length > PROFILE_MAX_TOP_LEVEL_ITEMS_PER_SPACE) {
+      throw codedError(ERROR_CODES.PROFILE_DAMAGED, "This MosaicSync profile contains more top-level items than the maximum visible grid can recover.");
+    }
+  }
+}
+
 export function isProfileImportTextLengthAllowed(length) {
   return Number.isFinite(Number(length)) && Number(length) >= 0 && Number(length) <= PROFILE_IMPORT_MAX_CHARS;
 }
@@ -207,7 +251,9 @@ export async function parseProfilePackage(text) {
   } catch {
     throw codedError(ERROR_CODES.PROFILE_INVALID_FILE, "The selected file is not valid MosaicSync profile data.");
   }
+  preflightProfileStructure(raw);
   assertPackageShape(raw);
+  assertTopLevelProfileCapacity(raw.profile.state);
   const version = Number(raw.formatVersion);
   const v2Envelope = version >= 2 ? assertV2AssetEnvelope(raw.profile) : null;
 

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { webcrypto } from "node:crypto";
+import { TINY_PNG_VARIANTS } from "./harness/raster-fixtures.mjs";
 globalThis.crypto ||= webcrypto;
 
 class Area {
@@ -65,8 +66,8 @@ function stateWithImage(image, modifiedAt = 100) {
 
 test("1.24.14l failed local stale-asset deletion persists a retry ledger and startup reclaims it safely", async () => {
   local.data = {}; session.data = {}; local.failNextRemove = false;
-  const oldImage = `data:image/png;base64,${Buffer.from("old-artwork".repeat(100)).toString("base64")}`;
-  const newImage = `data:image/png;base64,${Buffer.from("new-artwork".repeat(100)).toString("base64")}`;
+  const oldImage = TINY_PNG_VARIANTS[0];
+  const newImage = TINY_PNG_VARIANTS[1];
   const oldId = model.assetIdForDataUrl(oldImage);
   const newId = model.assetIdForDataUrl(newImage);
 
@@ -96,7 +97,7 @@ test("1.24.14l failed local stale-asset deletion persists a retry ledger and sta
 
 test("1.24.14l pending local cleanup never deletes an asset that became referenced again", async () => {
   local.data = {}; session.data = {}; local.failNextRemove = false;
-  const image = `data:image/png;base64,${Buffer.from("reused-artwork".repeat(100)).toString("base64")}`;
+  const image = TINY_PNG_VARIANTS[2];
   const id = model.assetIdForDataUrl(image);
   const written = await storage.writeLocalState(stateWithImage(image, 200));
   const compact = structuredClone(local.data[constants.LOCAL_STATE_KEY]);

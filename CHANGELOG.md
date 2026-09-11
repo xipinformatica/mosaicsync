@@ -1,3 +1,9 @@
+## 1.32.1.3
+
+- Closes all five confirmed defects from the 1.32.1.2 adversarial forensic audit: top-level mutations can no longer create invisible out-of-grid items; hostile profile imports get bounded structural preflight and real raster validation; Custom Branding import rollback is serialized against newer branding saves; and failed Settings imports no longer install rejected state in memory before durable commit succeeds.
+- Centralizes visible top-level capacity policy for add/Frequently Visited/cross-Space/ungroup/grid-shrink paths. Full destinations reject without mutating the source, and valid legacy/imported positions are deterministically repaired into the visible grid when capacity permits.
+- Keeps profile format v3 and the established Normal Sync/Recovery contracts unchanged. No new permission, Sync/Recovery wire-format, persisted-state schema, CSP or browser-floor change.
+
 ## 1.32.1.2
 
 - Completes the Recovery safety-copy manager and Custom Branding translations across all 32 non-English UI catalogs, using each locale's established MosaicSync terminology rather than English placeholder text. All 33 runtime catalogs now share the same 473-key contract.

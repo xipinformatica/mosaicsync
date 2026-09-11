@@ -27,6 +27,7 @@ import {
   DONATE_URL,
   LOCAL_META_KEY,
   LOCAL_STATE_KEY,
+  LOCAL_CUSTOM_BRANDING_KEY,
   LOCAL_SYNC_RECOVERY_STATUS_KEY,
   PRODUCT_NAME,
   RENDER_MANIFEST_KEY,
@@ -68,7 +69,8 @@ import {
   replaceWorkspaceTrustedNormalized,
   now,
   selectActiveSpaceNormalized,
-  repairTopLevelPositions,
+  repairTopLevelPositionsWithinCapacity,
+  visibleTopLevelCapacity,
   stableStringify,
   uid,
   validHex
@@ -1485,6 +1487,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     const exactPosition = Number.isInteger(position) && position >= 0 ? position : null;
     if (exactPosition !== null && state.shortcuts.some(item => item.position === exactPosition)) return false;
     const targetPosition = exactPosition ?? firstEmptyTopLevelPosition();
+    if (!Number.isInteger(targetPosition) || targetPosition < 0 || targetPosition >= visibleTopLevelCapacity(state.settings)) {
+      showToast(t("operationFailed"));
+      return false;
+    }
     const timestamp = nextMutationTime(state.updatedAt, state.shortcuts.map(item => item.modifiedAt));
     const shortcut = {
       type: "shortcut", id: uid(), title, url, image: "", imageSyncData: "", imageSyncKind: "none",
@@ -2702,7 +2708,7 @@ ${site.url}`;
     // not: those pixels must never outrank a layout/title/URL edit from another PC.
     if (!localCacheOnly) {
       state.updatedAt = nextMutationTime(state.updatedAt);
-      state.shortcuts = repairTopLevelPositions(state.shortcuts);
+      state.shortcuts = repairTopLevelPositionsWithinCapacity(state.shortcuts, visibleTopLevelCapacity(state.settings));
     }
     stateMutationGeneration += 1;
     const persisted = await writeLocalStateWithBaseline(state, {
@@ -3628,15 +3634,13 @@ ${site.url}`;
   }
 
   function firstEmptyTopLevelPosition(preferred = null) {
-    const capacity = state.settings.columns * state.settings.rows;
+    const capacity = visibleTopLevelCapacity(state.settings);
     const occupied = new Set(state.shortcuts.map(item => item.position));
-    if (Number.isInteger(preferred) && preferred >= 0 && !occupied.has(preferred)) return preferred;
+    if (Number.isInteger(preferred) && preferred >= 0 && preferred < capacity && !occupied.has(preferred)) return preferred;
     for (let position = 0; position < capacity; position += 1) {
       if (!occupied.has(position)) return position;
     }
-    let position = capacity;
-    while (occupied.has(position)) position += 1;
-    return position;
+    return null;
   }
 
   async function showDropChoice(sourceId, targetId, targetSlot) {
@@ -4039,6 +4043,13 @@ ${site.url}`;
     const folder = getTopLevelItem(activeFolderId);
     if (folder?.type !== "folder") return;
 
+    const capacity = visibleTopLevelCapacity(state.settings);
+    const requiredTopLevelCount = state.shortcuts.length - 1 + folder.items.length;
+    if (requiredTopLevelCount > capacity) {
+      showToast(t("operationFailed"));
+      return;
+    }
+
     const folderPosition = folder.position;
     state.shortcuts = state.shortcuts.filter(item => item.id !== folder.id);
     const occupied = new Set(state.shortcuts.map(item => item.position));
@@ -4046,15 +4057,17 @@ ${site.url}`;
 
     folder.items.forEach((item, index) => {
       let position;
-      if (index === 0 && !occupied.has(folderPosition)) {
+      if (index === 0 && folderPosition < capacity && !occupied.has(folderPosition)) {
         position = folderPosition;
       } else {
         position = 0;
-        while (occupied.has(position)) position += 1;
+        while (position < capacity && occupied.has(position)) position += 1;
       }
+      if (position >= capacity) return;
       occupied.add(position);
       state.shortcuts.push({ ...item, position, modifiedAt: ungroupTimestamp });
     });
+    state.shortcuts = repairTopLevelPositionsWithinCapacity(state.shortcuts, capacity);
 
     closeFolder();
     await saveState();
@@ -4626,6 +4639,19 @@ ${site.url}`;
       const id = shortcutId.value;
       const record = id ? findShortcutRecord(id) : null;
       let savedShortcutId = id;
+      const destinationSpaceId = isMultipleSpacesEnabled() && SPACE_IDS.includes(editingDestinationSpaceId)
+        ? editingDestinationSpaceId
+        : editingSourceSpaceId;
+      const movedAcrossSpaces = destinationSpaceId !== editingSourceSpaceId;
+      if (movedAcrossSpaces) {
+        const destination = state.spaces?.[destinationSpaceId];
+        if (!destination || destination.shortcuts.length >= visibleTopLevelCapacity(destination.settings)) {
+          throw new Error(t("moveSpaceFailed"));
+        }
+      }
+      if (!record && !editingParentFolderId && !movedAcrossSpaces && firstEmptyTopLevelPosition(editingPreferredPosition) == null) {
+        throw new Error(t("operationFailed"));
+      }
 
       if (record) {
         const mutationTimestamp = nextMutationTime(state.updatedAt, record.item.modifiedAt, record.parentFolder?.modifiedAt);
@@ -4650,6 +4676,8 @@ ${site.url}`;
         };
         if (record.parentFolder) record.parentFolder.modifiedAt = mutationTimestamp;
       } else {
+        const newTopLevelPosition = editingParentFolderId ? 0 : firstEmptyTopLevelPosition(editingPreferredPosition);
+        if (!editingParentFolderId && newTopLevelPosition == null) throw new Error(t("operationFailed"));
         const newShortcut = {
           type: "shortcut",
           id: uid(),
@@ -4666,7 +4694,7 @@ ${site.url}`;
           imageSourceUrl: pendingShortcutImageSourceUrl,
           imageIsFallback: pendingShortcutImageIsFallback,
           imageStyle: shortcutImageStyle.value === "cover" ? "cover" : "contain",
-          position: firstEmptyTopLevelPosition(editingPreferredPosition),
+          position: newTopLevelPosition,
           createdAt: now(),
           modifiedAt: now(),
           source: "manual"
@@ -4687,10 +4715,6 @@ ${site.url}`;
         }
       }
 
-      const destinationSpaceId = isMultipleSpacesEnabled() && SPACE_IDS.includes(editingDestinationSpaceId)
-        ? editingDestinationSpaceId
-        : editingSourceSpaceId;
-      const movedAcrossSpaces = destinationSpaceId !== editingSourceSpaceId;
       let crossSpaceSyncIntent = null;
       if (movedAcrossSpaces) {
         const beforeMove = state;
@@ -5670,7 +5694,16 @@ ${site.url}`;
       : clampInt(control.value, 2, 8, state.settings.rows);
     if (next === state.settings[field]) return;
 
+    const nextSettings = { ...state.settings, [field]: next };
+    const nextCapacity = visibleTopLevelCapacity(nextSettings);
+    if (state.shortcuts.length > nextCapacity) {
+      control.value = String(state.settings[field]);
+      showToast(t("operationFailed"));
+      return;
+    }
+
     state.settings[field] = next;
+    state.shortcuts = repairTopLevelPositionsWithinCapacity(state.shortcuts, nextCapacity);
     markSettingsChanged();
     rememberPendingSettings([field]);
     applySettings();
@@ -7210,22 +7243,21 @@ ${t("clearSyncWarning")}`);
       }
       importedState = selectActiveSpaceNormalized(importedState, importedState.activeSpaceId);
       const brandingModule = await loadCustomBrandingModule();
-      const previousBranding = await brandingModule.readCustomBranding({ failClosed: true });
-      const importedBranding = await brandingModule.writeCustomBranding(parsed.branding);
+      const brandingTransaction = await brandingModule.beginCustomBrandingImport(parsed.branding);
+      const importedBranding = brandingTransaction.written;
       let persisted;
       try {
-        stateMutationGeneration += 1;
-        pendingSettingsDraft.clear();
-        state = importedState;
-        persisted = await writeLocalStateWithBaseline(state, {
+        persisted = await writeLocalStateWithBaseline(importedState, {
           recordSyncMutation: true
         });
       } catch (error) {
-        try { await brandingModule.writeCustomBranding(previousBranding); } catch (rollbackError) {
+        try { await brandingModule.rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
           console.error(`${PRODUCT_NAME}: could not roll back imported Custom Branding`, rollbackError);
         }
         throw error;
       }
+      stateMutationGeneration += 1;
+      pendingSettingsDraft.clear();
       customBranding = importedBranding;
       if (brandingModule.customBrandingIsVisible(importedBranding)) await ensureSecondaryStyles();
       paintBrandIdentity(importedBranding);
@@ -7478,6 +7510,16 @@ ${t("clearSyncWarning")}`);
 
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
+
+    const brandingChange = changes[LOCAL_CUSTOM_BRANDING_KEY];
+    if (brandingChange) {
+      void loadCustomBrandingModule().then(module => {
+        const incoming = module.normalizeCustomBranding(brandingChange.newValue);
+        customBranding = incoming;
+        if (module.customBrandingIsVisible(incoming)) return ensureSecondaryStyles().then(() => paintBrandIdentity(incoming));
+        paintBrandIdentity(incoming);
+      }).catch(error => console.warn(`${PRODUCT_NAME}: could not adopt Custom Branding change`, error));
+    }
 
     const stateChange = changes[LOCAL_STATE_KEY];
     if (stateChange?.newValue) {

@@ -40,6 +40,16 @@ Useful companion documents:
 
 If you only have 30 minutes before touching code, read this guide, then `docs/ARCHITECTURE.md`, then the ADR that covers the subsystem you intend to change.
 
+### Current corrective invariants
+
+The current post-audit corrective adds three maintenance rules that future changes must preserve:
+
+- **Visible top-level capacity is authoritative.** A successful add, Frequently Visited insertion, cross-Space move, folder ungroup or grid-layout change must never create a top-level position outside `rows × columns`; full-grid operations must reject before destructive mutation.
+- **Profile import is an untrusted boundary.** Raw structure is bounded before recursive/hash-heavy work, and imported raster assets receive strict container/geometry validation before becoming durable local artwork. Runtime compatibility validation for already-stored legacy artwork is intentionally separate.
+- **Import rollback must not overwrite newer local authority.** Custom Branding rollback is conditional on still owning the value it wrote, and an imported profile candidate must not replace live New Tab state before the durable state commit succeeds.
+
+These protections are correctness-driven and do not change Normal Sync/Recovery ownership, profile format v3, or Custom Branding's device-local-only boundary.
+
 ---
 
 ## 2. The first rule: edit `src/`, not `dist/`
