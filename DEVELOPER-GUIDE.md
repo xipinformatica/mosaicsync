@@ -52,6 +52,12 @@ The current post-audit corrective adds three maintenance rules that future chang
 
 These protections are correctness-driven and do not change Normal Sync/Recovery ownership, profile format v3, or Custom Branding's device-local-only boundary.
 
+The current New Tab UI corrective also preserves three presentation-ownership rules:
+
+- **Sync status must not invent provenance.** Dataset authorship (the newest synchronized change) and local receipt timing are separate concepts. Exact incoming provenance may show the synchronized friendly device name; collaborative/non-exact provenance must be described as combined changes rather than attributed to one guessed sender.
+- **Folder scrolling is content-driven.** The folder panel owns the viewport height and the item grid is the flexible scroll region. Do not reintroduce a fixed pixel ceiling that can create a scrollbar even when all rows fit.
+- **Settings owns its child dialogs.** Wallpaper Gallery, Custom Branding and Recovery safety copies are modal children launched from the fixed Settings panel. Global outside-click/Escape handling must never close Settings behind an open Settings-owned child dialog; closing the child returns to Settings.
+
 ---
 
 ## 2. The first rule: edit `src/`, not `dist/`

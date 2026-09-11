@@ -82,7 +82,7 @@ test("1.30 automatic favicon recovery always performs a bounded quality follow-u
 });
 
 test("1.30 Sync copy wording distinguishes foreign receipt from this device publishing", () => {
-  assert.match(english, /"received":"Received from another device"/);
+  assert.match(english, /"received":"Combined changes from your other devices"/);
   assert.match(newtab, /t\("received"\)/);
   assert.doesNotMatch(english, /"syncTimingTitle":"[^"]*every minute/i);
   assert.doesNotMatch(english, /"syncWaitAvailable":"[^"]*every minute/i);

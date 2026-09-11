@@ -7312,6 +7312,10 @@ ${t("clearSyncWarning")}`);
   shortcutDialog.addEventListener("click", event => {
     if (event.target === shortcutDialog) closeDialog(shortcutDialog);
   });
+  function isSettingsChildDialogOpen() {
+    return Boolean(wallpaperGalleryDialog?.open || customBrandingDialog?.open || recoveryCopiesDialog?.open);
+  }
+
   document.addEventListener("pointerdown", event => {
     if (frequentContextMenu?.isConnected && !frequentContextMenu.contains(event.target)) closeFrequentContextMenu();
     bookmarksController.closeColorMenuIfOutside(event.target);
@@ -7328,7 +7332,7 @@ ${t("clearSyncWarning")}`);
       }
     }
 
-    if (isSettingsOpen() && !wallpaperGalleryDialog?.open && !settingsDialog.contains(event.target) && !settingsButton.contains(event.target)) {
+    if (isSettingsOpen() && !isSettingsChildDialogOpen() && !settingsDialog.contains(event.target) && !settingsButton.contains(event.target)) {
       closeDialog(settingsDialog);
     }
   });
@@ -7340,13 +7344,13 @@ ${t("clearSyncWarning")}`);
       // Settings is deliberately not a native <dialog> anymore, so preserve the
       // browser-native Escape affordance explicitly. Keep the panel behind the
       // native wallpaper picker until that child dialog closes itself.
-      if (isSettingsOpen() && !wallpaperGalleryDialog?.open) closeSettingsPanel();
+      if (isSettingsOpen() && !isSettingsChildDialogOpen()) closeSettingsPanel();
       return;
     }
     if (!event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey || !isMultipleSpacesEnabled()) return;
     const target = event.target;
     if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(target.tagName))) return;
-    if (isSettingsOpen() || shortcutDialog?.open || bookmarksDialog?.open || wallpaperGalleryDialog?.open) return;
+    if (isSettingsOpen() || shortcutDialog?.open || bookmarksDialog?.open || isSettingsChildDialogOpen()) return;
     const spaceId = event.code === "Digit1" ? "personal" : event.code === "Digit2" ? "work" : "";
     if (!spaceId) return;
     event.preventDefault();

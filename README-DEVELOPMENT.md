@@ -1,3 +1,12 @@
+## 1.32.1.5 — Settings child-dialog and Sync-status UI corrective
+
+1.32.1.5 is a narrow New Tab UI corrective over 1.32.1.4. It does not change Normal Sync/Recovery state, wire formats, profile format or permissions.
+
+- Sync status keeps dataset authorship and incoming receipt timing separate. Exact receipt provenance resolves to the synchronized friendly device name; collaborative/non-exact provenance uses a truthful multi-device label rather than an invented single sender.
+- Folder popovers no longer use the old fixed `305px` item-area ceiling. The panel is a bounded column flex layout and the item grid scrolls only when its real content exceeds the viewport-constrained available height.
+- Settings now has one child-dialog ownership predicate covering Wallpaper Gallery, Custom Branding and Recovery safety copies. Outside-click/Escape logic cannot close Settings behind one of those native child dialogs.
+- `tests/corrective-13215.test.mjs` permanently protects the three regressions, including every-locale collaborative Sync wording.
+
 ## 1.32.1.4 — normalization fixed-point corrective
 
 1.32.1.4 closes a Sync-reachable normalization defect found by the independent unknown-unknowns/state-machine audit. When two valid top-level records arrived with the same position, `repairTopLevelPositionsWithinCapacity()` could assign the loser a lower free slot while returning the array in pre-repair order. A second normalization then reordered the array even though no user data changed. Ordinary two-device Sync can create this shape when different devices concurrently move different shortcuts into the same slot.
@@ -14,7 +23,7 @@ The fresh post-fix chaos audit also exposed a no-op rebase edge in `concurrency.
 Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
 # MosaicSync development
 
-> **Current release: 1.32.1.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.1.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 

@@ -140,7 +140,7 @@ test("1.30.18.15 receipt attribution uses the named device and has an ID fallbac
   const source = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
   const code = [extractFunction(source, "shortSyncId"), extractFunction(source, "syncReceiptSourceLabel")].join("\n");
   const messages = {
-    received: "Received from another device",
+    received: "Combined changes from your other devices",
     receivedFromDevice: "Received from {name}",
     anotherDevice: "Another device",
     thisDevice: "This device",
@@ -155,8 +155,8 @@ test("1.30.18.15 receipt attribution uses the named device and has an ID fallbac
   vm.runInContext(`${code}; this.label = syncReceiptSourceLabel;`, ctx);
   assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "work-device", lastRemoteReceiptOriginDeviceName: "Work PC", lastRemoteReceiptProvenanceExact: true }), "Received from Work PC");
   assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "remote-ABC123", lastRemoteReceiptOriginDeviceName: "", lastRemoteReceiptProvenanceExact: true }), "Received from Another device · ABC123");
-  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "", lastRemoteReceiptOriginDeviceName: "", lastRemoteReceiptProvenanceExact: false }), "Received from another device");
-  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "legacy-misattributed", lastRemoteReceiptOriginDeviceName: "CachyOS", lastRemoteReceiptProvenanceExact: false }), "Received from another device");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "", lastRemoteReceiptOriginDeviceName: "", lastRemoteReceiptProvenanceExact: false }), "Combined changes from your other devices");
+  assert.equal(ctx.label({ lastRemoteReceiptOriginDeviceId: "legacy-misattributed", lastRemoteReceiptOriginDeviceName: "CachyOS", lastRemoteReceiptProvenanceExact: false }), "Combined changes from your other devices");
   assert.match(source, /remoteReceiptAt\s*\?\s*syncReceiptSourceLabel\(status, meta\)/s, "receipt card must render the resolved source label");
 });
 

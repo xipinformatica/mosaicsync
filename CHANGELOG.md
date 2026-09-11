@@ -1,3 +1,10 @@
+## 1.32.1.5
+
+- Clarifies Sync status direction/provenance: exact incoming receipts show the friendly source-device name, while collaborative/non-exact receipts are labelled as combined changes from the user’s other devices instead of implying one unknown sender.
+- Fixes folder popovers showing a scrollbar when all shortcuts already fit by replacing the fixed item-area height with viewport-bounded flex sizing; scrolling remains available only for genuine overflow.
+- Keeps Settings open behind Settings-owned child dialogs (Recovery safety copies, Custom Branding and Wallpaper Gallery), including outside-click/Escape handling, so closing a child returns to the Settings panel.
+- Adds permanent UI/provenance regressions across all 33 locales. No permission, persisted-schema, profile-format, Sync/Recovery wire-format, CSP or browser-floor change.
+
 ## 1.32.1.4
 
 - Fixes a Sync-reachable normalization fixed-point defect found by independent state-machine fuzzing: two top-level records sharing one grid position now become canonical in a single normalization pass instead of silently reordering on the next save/reload.

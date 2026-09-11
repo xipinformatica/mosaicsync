@@ -78,7 +78,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(close, /settingsDialog\.hidden = true;/);
     assert.match(close, /settingsButton\?\.setAttribute\("aria-expanded", "false"\)/);
     assert.doesNotMatch(close, /settingsDialog\.close\(/);
-    assert.match(sharedNewtab, /if \(event\.key === "Escape"\)[\s\S]*?if \(isSettingsOpen\(\) && !wallpaperGalleryDialog\?\.open\) closeSettingsPanel\(\);/,
+    assert.match(sharedNewtab, /if \(event\.key === "Escape"\)[\s\S]*?if \(isSettingsOpen\(\) && !isSettingsChildDialogOpen\(\)\) closeSettingsPanel\(\);/,
       "non-native Settings must retain Escape-to-close semantics");
   });
 
