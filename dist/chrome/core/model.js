@@ -35,15 +35,42 @@ export function now() {
   return Date.now();
 }
 
+// Logical mutation clocks are persisted as JSON numbers and participate in
+// deterministic ordering across devices. Values outside JavaScript's safe
+// integer domain cannot provide a strict monotonic +1 clock: for example,
+// 1e20 + 1 === 1e20. Accept only non-negative safe integers at model trust
+// boundaries, and fail closed at the theoretical ceiling rather than silently
+// reusing a timestamp.
+export const MAX_LOGICAL_TIME = Number.MAX_SAFE_INTEGER;
+
+function parseLogicalTime(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+export function normalizeLogicalTime(value, fallback = 0) {
+  const parsed = parseLogicalTime(value);
+  if (parsed !== null) return parsed;
+  return parseLogicalTime(fallback) ?? 0;
+}
+
 // Advance a logical mutation clock beyond both wall time and every observed
 // record/workspace clock involved in the edit. This keeps a device with a
 // temporarily skewed clock (or a profile containing a future timestamp) from
-// making a legitimate later user edit look older forever.
+// making a legitimate later user edit look older forever. Invalid/non-safe
+// external clocks are ignored after normalization; an actually exhausted safe
+// integer clock throws instead of pretending to advance.
 export function nextMutationTime(...values) {
-  let next = now();
+  let next = normalizeLogicalTime(now(), 0);
   for (const value of values.flat(Infinity)) {
-    const numeric = Number(value);
-    if (Number.isFinite(numeric)) next = Math.max(next, Math.trunc(numeric) + 1);
+    const numeric = parseLogicalTime(value);
+    if (numeric === null) continue;
+    if (numeric >= MAX_LOGICAL_TIME) {
+      throw new RangeError("MosaicSync logical mutation clock exhausted");
+    }
+    next = Math.max(next, numeric + 1);
+  }
+  if (!Number.isSafeInteger(next) || next > MAX_LOGICAL_TIME) {
+    throw new RangeError("MosaicSync logical mutation clock exhausted");
   }
   return next;
 }
@@ -67,18 +94,21 @@ function compactSettingsDeviceTieId(value) {
 }
 
 function normalizeSettingsStamp(raw, fallbackTime = 0, fallbackDeviceId = "", fillMissingOwner = false) {
-  let time = Number(fallbackTime);
+  let time = normalizeLogicalTime(fallbackTime, 0);
   let owner = "";
   if (Array.isArray(raw)) {
-    if (Number.isFinite(Number(raw[0]))) time = Number(raw[0]);
+    const rawTime = Number(raw[0]);
+    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
     if (typeof raw[1] === "string" && raw[1]) owner = compactSettingsDeviceTieId(raw[1]);
   } else if (raw && typeof raw === "object") {
-    if (Number.isFinite(Number(raw.t))) time = Number(raw.t);
+    const rawTime = Number(raw.t);
+    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
     if (typeof raw.d === "string" && raw.d) owner = compactSettingsDeviceTieId(raw.d);
-  } else if (raw !== null && raw !== undefined && raw !== "" && Number.isFinite(Number(raw))) {
-    time = Number(raw);
+  } else if (raw !== null && raw !== undefined && raw !== "") {
+    const rawTime = Number(raw);
+    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
   }
-  time = Number.isFinite(time) && time > 0 ? Math.trunc(time) : 0;
+  time = time > 0 ? time : 0;
   if (fillMissingOwner && time > 0 && !owner) owner = compactSettingsDeviceTieId(fallbackDeviceId);
   return [time, owner];
 }
@@ -110,9 +140,7 @@ function settingsGroupValuesEqual(leftSettings, rightSettings, groupKey) {
  * a remote Sync reconstruction). This lets the persistence boundary cover every
  * Settings mutation path without teaching each UI control about clock metadata.
  */
-export function stampSettingsMutationClocks(baseState, intendedState) {
-  const base = normalizeState(baseState || DEFAULT_STATE);
-  const intended = normalizeState(intendedState || DEFAULT_STATE);
+function stampSettingsMutationClocksFromNormalized(base, intended) {
   let result = intended;
   for (const spaceId of SPACE_IDS) {
     const baseWorkspace = base.spaces[spaceId];
@@ -148,6 +176,20 @@ export function stampSettingsMutationClocks(baseState, intendedState) {
     result = replaceWorkspaceTrustedNormalized(result, spaceId, updatedWorkspace);
   }
   return selectActiveSpaceNormalized(result, result.activeSpaceId);
+}
+
+// Trusted internal fast path. Both inputs must already have crossed normalizeState().
+// This exists so persistence/Sync/concurrency code can validate raw boundaries once
+// and carry that proof through adjacent pure transformations instead of traversing
+// and image-hashing the same state tree repeatedly.
+export function stampSettingsMutationClocksTrustedNormalized(baseNormalized, intendedNormalized) {
+  return stampSettingsMutationClocksFromNormalized(baseNormalized, intendedNormalized);
+}
+
+export function stampSettingsMutationClocks(baseState, intendedState) {
+  const base = normalizeState(baseState || DEFAULT_STATE);
+  const intended = normalizeState(intendedState || DEFAULT_STATE);
+  return stampSettingsMutationClocksTrustedNormalized(base, intended);
 }
 
 export function clampInt(value, min, max, fallback) {
@@ -436,13 +478,13 @@ function normalizeShortcut(item, index = 0, memo = null) {
     imageIsFallback,
     imageStyle: item.imageStyle === "cover" ? "cover" : "contain",
     position: Number.isInteger(item.position) && item.position >= 0 ? item.position : index,
-    createdAt: Number.isFinite(item.createdAt) ? item.createdAt : timestamp,
-    modifiedAt: Number.isFinite(item.modifiedAt) ? item.modifiedAt : timestamp,
+    createdAt: normalizeLogicalTime(item.createdAt, timestamp),
+    modifiedAt: normalizeLogicalTime(item.modifiedAt, timestamp),
     // Monotonic marker written only by an intentional cross-Space move. It lets
     // a later deliberate move back into a Space override that Space's older
     // tombstone, while ordinary edits from a stale offline device cannot revive
     // a shortcut that another device deleted.
-    spaceMoveAt: Number.isFinite(item.spaceMoveAt) ? item.spaceMoveAt : 0,
+    spaceMoveAt: normalizeLogicalTime(item.spaceMoveAt, 0),
     source: item.source === "firefox-import" ? "firefox-import" : "manual"
   };
 }
@@ -464,8 +506,8 @@ function normalizeFolder(item, index = 0, memo = null) {
     title: cleanTitle(item.title, 60),
     items: children,
     position: Number.isInteger(item.position) && item.position >= 0 ? item.position : index,
-    createdAt: Number.isFinite(item.createdAt) ? item.createdAt : timestamp,
-    modifiedAt: Number.isFinite(item.modifiedAt) ? item.modifiedAt : timestamp
+    createdAt: normalizeLogicalTime(item.createdAt, timestamp),
+    modifiedAt: normalizeLogicalTime(item.modifiedAt, timestamp)
   };
 }
 
@@ -731,11 +773,11 @@ export function normalizeWorkspace(raw, memo = null) {
     }).shortcuts;
   }
 
-  safe.settingsModifiedAt = Number.isFinite(raw.settingsModifiedAt)
-    ? raw.settingsModifiedAt
-    : (Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0);
+  safe.settingsModifiedAt = parseLogicalTime(raw.settingsModifiedAt) !== null
+    ? normalizeLogicalTime(raw.settingsModifiedAt, 0)
+    : normalizeLogicalTime(raw.updatedAt, 0);
   safe.settingsClock = normalizeSettingsClock(raw.settingsClock, safe.settingsModifiedAt);
-  safe.updatedAt = Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0;
+  safe.updatedAt = normalizeLogicalTime(raw.updatedAt, 0);
   return safe;
 }
 
@@ -1304,12 +1346,13 @@ function shortcutToRecord(shortcut, parentId, deviceId) {
 }
 
 export function makeTombstone(id, deviceId, timestamp = now()) {
+  const safeTimestamp = normalizeLogicalTime(timestamp, now());
   return {
     schemaVersion: SYNC_SCHEMA_VERSION,
     kind: "deleted",
     id,
-    deletedAt: timestamp,
-    modifiedAt: timestamp,
+    deletedAt: safeTimestamp,
+    modifiedAt: safeTimestamp,
     deviceId
   };
 }
@@ -1373,14 +1416,13 @@ export function makeSettingsRecord(state, deviceId = "") {
 
 function recordTimestamp(record) {
   if (!record || typeof record !== "object") return -1;
-  if (record.kind === "deleted" && Number.isFinite(record.deletedAt)) return record.deletedAt;
-  return Number.isFinite(record.modifiedAt) ? record.modifiedAt : 0;
+  if (record.kind === "deleted") return normalizeLogicalTime(record.deletedAt, 0);
+  return normalizeLogicalTime(record.modifiedAt, 0);
 }
 
 function recordMoveTimestamp(record) {
   if (!record || record.kind === "deleted") return 0;
-  const value = Number(record.spaceMoveAt);
-  return Number.isFinite(value) && value > 0 ? value : 0;
+  return normalizeLogicalTime(record.spaceMoveAt, 0);
 }
 
 // Deterministic merge / reconstruction ------------------------------------------
@@ -1394,10 +1436,10 @@ export function chooseNewerRecord(a, b) {
   // different: `spaceMoveAt` is a namespace-generation marker, so a move newer
   // than the tombstone intentionally revives the record in this Space.
   if (a.kind === "deleted" && b.kind !== "deleted") {
-    return recordMoveTimestamp(b) > Number(a.deletedAt) ? b : a;
+    return recordMoveTimestamp(b) > recordTimestamp(a) ? b : a;
   }
   if (b.kind === "deleted" && a.kind !== "deleted") {
-    return recordMoveTimestamp(a) > Number(b.deletedAt) ? a : b;
+    return recordMoveTimestamp(a) > recordTimestamp(b) ? a : b;
   }
 
   // For two live records, compare the namespace-generation marker *before* the
@@ -1538,8 +1580,8 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
       title: cleanTitle(record.title, 60),
       items: [],
       position: Number.isInteger(record.position) && record.position >= 0 ? record.position : 0,
-      createdAt: Number.isFinite(record.createdAt) ? record.createdAt : now(),
-      modifiedAt: Number.isFinite(record.modifiedAt) ? record.modifiedAt : now()
+      createdAt: normalizeLogicalTime(record.createdAt, now()),
+      modifiedAt: normalizeLogicalTime(record.modifiedAt, now())
     });
   }
 
@@ -1643,9 +1685,9 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
       imageIsFallback,
       imageStyle: record.imageStyle === "cover" ? "cover" : "contain",
       position: Number.isInteger(record.position) && record.position >= 0 ? record.position : 0,
-      createdAt: Number.isFinite(record.createdAt) ? record.createdAt : now(),
-      modifiedAt: Number.isFinite(record.modifiedAt) ? record.modifiedAt : now(),
-      spaceMoveAt: Number.isFinite(record.spaceMoveAt) ? record.spaceMoveAt : 0,
+      createdAt: normalizeLogicalTime(record.createdAt, now()),
+      modifiedAt: normalizeLogicalTime(record.modifiedAt, now()),
+      spaceMoveAt: normalizeLogicalTime(record.spaceMoveAt, 0),
       source: record.source === "firefox-import" ? "firefox-import" : "manual"
     };
 
@@ -1670,7 +1712,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
   }
 
   const settings = settingsFromRecord(settingsRecord, local, assets);
-  const settingsModifiedAt = Number.isFinite(settingsRecord?.modifiedAt) ? settingsRecord.modifiedAt : local.settingsModifiedAt;
+  const settingsModifiedAt = normalizeLogicalTime(settingsRecord?.modifiedAt, local.settingsModifiedAt);
   const settingsClock = settingsRecord?.kind === "settings"
     ? normalizeSettingsClock(settingsRecord.settingsClock, settingsModifiedAt, settingsRecord.deviceId || "", true)
     : normalizeSettingsClock(local.settingsClock, local.settingsModifiedAt);
@@ -1680,7 +1722,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     settings,
     settingsClock,
     settingsModifiedAt,
-    updatedAt: Math.max(local.updatedAt, newestRecordTimestamp(records), Number(settingsRecord?.modifiedAt) || 0)
+    updatedAt: Math.max(local.updatedAt, newestRecordTimestamp(records), normalizeLogicalTime(settingsRecord?.modifiedAt, 0))
   });
 }
 
@@ -1932,7 +1974,7 @@ function projectStateForSyncSignature(source) {
       position: item.position,
       createdAt: item.createdAt,
       modifiedAt: item.modifiedAt,
-      spaceMoveAt: Number.isFinite(item.spaceMoveAt) ? item.spaceMoveAt : 0,
+      spaceMoveAt: normalizeLogicalTime(item.spaceMoveAt, 0),
       source: item.source || "manual"
     };
   };

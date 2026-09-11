@@ -76,7 +76,7 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
-import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createPersistedWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -248,6 +248,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   localizeDocument(document.getElementById("page") || document);
   document.querySelector(".frequent-sites-heading.frequent-sites-heading-first-paint-pending")?.classList.remove("frequent-sites-heading-first-paint-pending");
   installViewportTooltips(document, { wrapperSelector: ".sync-help-wrap", tooltipSelector: ".sync-help-tooltip" });
+  startupPhase("shellLocalized");
 
   /*
    * New Tab performance rule:
@@ -476,8 +477,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const settingsDarkWallpaperDimLabel = document.getElementById("settingsDarkWallpaperDimLabel");
   const backgroundPresetGrid = document.getElementById("backgroundPresetGrid");
   const moreWallpapersButton = document.getElementById("moreWallpapersButton");
-  const wallpaperGalleryDialog = document.getElementById("wallpaperGalleryDialog");
-  const wallpaperGalleryGrid = document.getElementById("wallpaperGalleryGrid");
+  let wallpaperGalleryDialog = null;
+  let wallpaperGalleryGrid = null;
   const resetBackground = document.getElementById("resetBackground");
   const settingsImportNative = document.getElementById("settingsImportNative");
   const settingsRunSetup = document.getElementById("settingsRunSetup");
@@ -537,6 +538,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const ungroupFolderButton = document.getElementById("ungroupFolderButton");
   const toast = document.getElementById("toast");
 
+  startupPhase("uiBindingsReady");
+
   let state = normalizeState(DEFAULT_STATE);
   let writeBaseline = null;
   let meta = null;
@@ -580,6 +583,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let deferredSettingsControlRefresh = false;
   const pendingSettingsDraft = new Map();
   let wallpaperGalleryTarget = "main";
+  let wallpaperGalleryModulePromise = null;
   let pendingDrop = null;
   let activeFolderId = null;
   let activeFolderAnchorId = null;
@@ -615,6 +619,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentLiveSites = Array.isArray(frequentRenderSnapshot?.sites) ? frequentRenderSnapshot.sites.slice() : [];
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
+  let crossSpacePreviewGeneration = 0;
   let activeSpacePersistQueue = Promise.resolve();
   let deviceDefaultSpace = "last";
   let shortcutOrderMode = "manual";
@@ -2068,9 +2073,23 @@ ${site.url}`;
   }
 
   async function openCustomBrandingDialog() {
+    // Child-dialog preparation crosses several asynchronous boundaries. Capture the
+    // Settings ownership epoch before doing any of that work so a close (and even a
+    // close+reopen) cannot let an older request attach itself to a later Settings
+    // session. Keep the read result local until ownership is proven one final time.
+    const ownerGeneration = Number(settingsDialog?.__mosaicOwnershipGeneration || 0);
+    const stillOwnedBySettings = () =>
+      ownerGeneration === Number(settingsDialog?.__mosaicOwnershipGeneration || 0) && isSettingsOpen();
+    if (!stillOwnedBySettings()) return;
+
     await ensureSecondaryStyles();
+    if (!stillOwnedBySettings()) return;
     const module = await loadCustomBrandingModule();
-    customBrandingDraft = { ...(await module.readCustomBranding({ failClosed: true })) };
+    if (!stillOwnedBySettings()) return;
+    const brandingDraft = { ...(await module.readCustomBranding({ failClosed: true })) };
+    if (!stillOwnedBySettings()) return;
+
+    customBrandingDraft = brandingDraft;
     customBrandingUploadGeneration += 1;
     refreshCustomBrandingPreview();
     localizeDocument(customBrandingDialog);
@@ -2202,6 +2221,7 @@ ${site.url}`;
     const earlySessionRead = globalThis.__mosaicsyncEarlySessionRead || null;
     try { delete globalThis.__mosaicsyncEarlySessionRead; } catch {}
     const sessionCache = await readSessionRenderCache(earlySessionRead);
+    startupPhase("sessionCacheReady");
     diagnostics.sessionReadMs = performance.now() - sessionStartedAt;
     diagnostics.sessionCacheStatus = getSessionRenderCacheStatus();
     diagnostics.sessionStorageMs = sessionCache?.timings?.storageMs ?? null;
@@ -2256,6 +2276,7 @@ ${site.url}`;
     }
 
     let loaded = await materializeLocalStorage(rawLocal, { withTimings: true, hydrateAssets: "active-no-background", folderChildLimit: 4 });
+    startupPhase("localStateMaterialized");
     loaded = await migrateLegacyFrequentlyVisitedPreferenceIfNeeded(loaded);
     if (deviceDefaultSpace !== "last" && isMultipleSpacesEnabled(loaded.state) && loaded.state.activeSpaceId !== deviceDefaultSpace) {
       loaded.state = await hydrateLocalAssetsForSpaceNormalized(loaded.state, deviceDefaultSpace);
@@ -2506,19 +2527,54 @@ ${site.url}`;
     }
   }
 
+  async function hydrateSpaceForOwnedOperation(spaceId, isCurrent, preloadBackground = false) {
+    // Local-asset hydration is asynchronous but the live New Tab state remains
+    // authoritative while it is in flight. Never let a result derived from an
+    // older state generation replace a newer storage/UI mutation. If authority
+    // changes, retry against the current state; if the owning UI operation has
+    // been superseded, abandon the result entirely.
+    while (isCurrent()) {
+      const sourceState = state;
+      const sourceGeneration = stateMutationGeneration;
+      const hydratedState = await hydrateLocalAssetsForSpaceNormalized(sourceState, spaceId);
+      if (!isCurrent()) return null;
+      if (sourceGeneration !== stateMutationGeneration || sourceState !== state) continue;
+
+      if (preloadBackground) {
+        const targetSettings = hydratedState.spaces?.[spaceId]?.settings;
+        if (targetSettings) await preloadBackgroundForSettings(targetSettings);
+        if (!isCurrent()) return null;
+        if (sourceGeneration !== stateMutationGeneration || sourceState !== state) continue;
+      }
+      return hydratedState;
+    }
+    return null;
+  }
+
   async function previewSpaceDuringDrag(targetSpaceId) {
     const drag = crossSpaceDrag;
     if (!drag || !SPACE_IDS.includes(targetSpaceId) || targetSpaceId === drag.previewSpaceId) return;
+    const previewGeneration = ++crossSpacePreviewGeneration;
     if (!state?.spaces) {
+      const generationAtRead = stateMutationGeneration;
       const loaded = await ensureLocalStorage();
-      state = loaded.state;
-      meta = loaded.meta;
+      if (crossSpaceDrag !== drag || previewGeneration !== crossSpacePreviewGeneration) return;
+      if (stateMutationGeneration === generationAtRead && !state?.spaces) {
+        state = loaded.state;
+        meta = loaded.meta;
+        stateMutationGeneration += 1;
+      }
     }
     preserveCrossSpaceDragElement();
     closeDropChoice();
     closeFolder();
-    state = await hydrateLocalAssetsForSpaceNormalized(state, targetSpaceId);
-    state = selectActiveSpaceNormalized(state, targetSpaceId);
+    const isCurrentPreview = () =>
+      crossSpaceDrag === drag &&
+      !drag.committed &&
+      previewGeneration === crossSpacePreviewGeneration;
+    const hydratedState = await hydrateSpaceForOwnedOperation(targetSpaceId, isCurrentPreview);
+    if (!hydratedState || !isCurrentPreview()) return;
+    state = selectActiveSpaceNormalized(hydratedState, targetSpaceId);
     drag.previewSpaceId = targetSpaceId;
     stateMutationGeneration += 1;
     applySettings();
@@ -2581,6 +2637,7 @@ ${site.url}`;
   async function endCrossSpaceDrag() {
     const drag = crossSpaceDrag;
     if (!drag) return;
+    crossSpacePreviewGeneration += 1;
     clearCrossSpaceHover();
     if (!drag.committed && drag.previewSpaceId !== drag.sourceSpaceId) {
       state = selectActiveSpaceNormalized(state, drag.sourceSpaceId);
@@ -2655,25 +2712,31 @@ ${site.url}`;
     if (!isMultipleSpacesEnabled() || !SPACE_IDS.includes(spaceId) || spaceId === state.activeSpaceId) return;
     devMark("newtab:space-switch:start");
     const generation = ++spaceSwitchGeneration;
-    const previousSpaceId = state.activeSpaceId;
     closeFrequentContextMenu();
     bookmarksController.closeColorMenu();
     closeDropChoice();
     closeFolder();
     if (!state?.spaces) {
+      const generationAtRead = stateMutationGeneration;
       const loaded = await ensureLocalStorage();
-      state = loaded.state;
-      meta = loaded.meta;
+      if (generation !== spaceSwitchGeneration || isSettingsOpen()) return;
+      if (stateMutationGeneration === generationAtRead && !state?.spaces) {
+        state = loaded.state;
+        meta = loaded.meta;
+        stateMutationGeneration += 1;
+      }
     }
-    state = await hydrateLocalAssetsForSpaceNormalized(state, spaceId);
-    const targetSettings = state.spaces?.[spaceId]?.settings;
-    if (targetSettings) await preloadBackgroundForSettings(targetSettings);
-    if (generation !== spaceSwitchGeneration) return;
+    const isCurrentSwitch = () => generation === spaceSwitchGeneration && !isSettingsOpen();
+    const hydratedState = await hydrateSpaceForOwnedOperation(spaceId, isCurrentSwitch, true);
+    if (!hydratedState || !isCurrentSwitch()) return;
 
     // Commit the destination Space visually in one synchronous frame. Persisting
     // the active-Space pointer happens afterwards, so storage latency can never
-    // expose an unpainted/white frame between Personal and Work.
-    state = selectActiveSpaceNormalized(state, spaceId);
+    // expose an unpainted/white frame between Personal and Work. The previous
+    // Space is read only after hydration ownership is proven, so a newer
+    // authoritative state cannot be paired with an older UI snapshot.
+    const previousSpaceId = state.activeSpaceId;
+    state = selectActiveSpaceNormalized(hydratedState, spaceId);
     state = releaseLocalAssetsForSpaceNormalized(state, previousSpaceId);
     stateMutationGeneration += 1;
     applySettings();
@@ -4304,6 +4367,9 @@ ${site.url}`;
     closeBackgroundColorPicker();
     if (!isSettingsOpen()) return;
     settingsDialog.hidden = true;
+    // Invalidate every asynchronous child-dialog open that was launched by this
+    // Settings session before any later session can become visible.
+    settingsDialog.__mosaicOwnershipGeneration = Number(settingsDialog.__mosaicOwnershipGeneration || 0) + 1;
     backgroundUploadGeneration += 1;
     settingsDialog.setAttribute("aria-hidden", "true");
     settingsButton?.setAttribute("aria-expanded", "false");
@@ -5083,12 +5149,30 @@ ${site.url}`;
     }
   }
 
-  function openThemeWallpaperGallery(target) {
-    if (target !== "light" && target !== "dark") return;
+  async function openWallpaperGallery(target = "main") {
+    if (target !== "main" && target !== "light" && target !== "dark") return;
+    const ownerGeneration = Number(settingsDialog?.__mosaicOwnershipGeneration || 0);
+    await ensureSecondaryStyles();
+    if (!wallpaperGalleryModulePromise) {
+      wallpaperGalleryModulePromise = import("./wallpaper-gallery-shell.js")
+        .catch(error => { wallpaperGalleryModulePromise = null; throw error; });
+    }
+    const module = await wallpaperGalleryModulePromise;
+    if (!isSettingsOpen() || Number(settingsDialog?.__mosaicOwnershipGeneration || 0) !== ownerGeneration) return;
+    if (!wallpaperGalleryDialog || !wallpaperGalleryGrid) {
+      const shell = module.mountWallpaperGalleryShell(document, () => closeDialog(wallpaperGalleryDialog));
+      wallpaperGalleryDialog = shell.dialog;
+      wallpaperGalleryGrid = shell.grid;
+    }
     wallpaperGalleryTarget = target;
     localizeDocument(wallpaperGalleryDialog);
     renderWallpaperGallery();
-    wallpaperGalleryDialog?.showModal();
+    wallpaperGalleryDialog.showModal();
+  }
+
+  function openThemeWallpaperGallery(target) {
+    if (target !== "light" && target !== "dark") return;
+    void openWallpaperGallery(target).catch(error => showToast(error?.message || t("operationFailed")));
   }
 
   async function refreshWebAccessUi() {
@@ -5901,13 +5985,7 @@ ${site.url}`;
     });
   });
   moreWallpapersButton?.addEventListener("click", () => {
-    wallpaperGalleryTarget = "main";
-    localizeDocument(wallpaperGalleryDialog);
-    renderWallpaperGallery();
-    wallpaperGalleryDialog?.showModal();
-  });
-  wallpaperGalleryDialog?.addEventListener("click", event => {
-    if (event.target === wallpaperGalleryDialog) closeDialog(wallpaperGalleryDialog);
+    void openWallpaperGallery("main").catch(error => showToast(error?.message || t("operationFailed")));
   });
 
   settingsBackgroundDim.addEventListener("input", () => applyBackgroundControlsLive());
@@ -7546,7 +7624,7 @@ ${t("clearSyncWarning")}`);
               // Advance the optimistic-write baseline only after the in-memory
               // state has actually adopted this storage event. Keeping baseline
               // and state causally paired is what makes a later rebase correct.
-              writeBaseline = createWriteBaseline(stateChange.newValue);
+              writeBaseline = createPersistedWriteBaseline(stateChange.newValue);
               stateMutationGeneration += 1;
               return;
             }
@@ -7561,7 +7639,7 @@ ${t("clearSyncWarning")}`);
             // still-unpersisted Settings draft is then overlaid as explicit local
             // intent, so a storage echo cannot erase a debounced edit or make a
             // stale control manufacture a false local mutation later.
-            writeBaseline = createWriteBaseline(stateChange.newValue);
+            writeBaseline = createPersistedWriteBaseline(stateChange.newValue);
             applyPendingSettingsDraft();
             const previousFrequentEnabled = frequentlyVisitedEnabled;
             const previousFrequentCount = frequentlyVisitedCount;
@@ -7618,6 +7696,7 @@ ${t("clearSyncWarning")}`);
     }
   });
 
+  startupPhase("moduleSetupReady");
   devMark("newtab:load-state:start");
   loadState().then(() => {
     devMark("newtab:load-state:end");

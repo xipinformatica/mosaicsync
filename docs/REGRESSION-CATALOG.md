@@ -161,3 +161,38 @@ This catalogue records high-value historical failures and the permanent tests th
 
 **If it returns:** a workspace whose intended payload is byte-for-value identical to its base is not a mutation. Preserve the normalized latest workspace directly instead of reconstructing it through Sync-record materialization.
 
+
+## R-014 — Delayed Space hydration replaced newer authoritative state
+
+**Historical symptom/risk:** a normal Personal/Work switch or cross-Space drag preview could start local-asset hydration from state S0, receive a newer authoritative S1 update while awaiting, then assign the older hydrated S0 result to live `state`. `writeBaseline` could already represent S1, so the next user save looked baseline-current and could persist the stale workspace over an unrelated concurrent change.
+
+**Closed in:** 1.32.1.6.
+
+**Permanent protection:**
+- `tests/corrective-13216.test.mjs`
+
+**If it returns:** never assign awaited Space hydration directly into global state. Keep the candidate local, revalidate both UI-operation ownership and `stateMutationGeneration` after every relevant await, retry from current state after authority changes, and cancel superseded drag/switch generations. The regression must continue through the next local save and prove the concurrently added shortcut survives.
+
+## R-015 — Non-safe numeric mutation clock stopped advancing
+
+**Historical symptom/risk:** model trust boundaries accepted any finite number as a mutation timestamp. Above JavaScript's safe-integer range, adding one may return the same numeric value (`1e20 + 1 === 1e20`). A malformed/imported/remote clock could therefore pin later mutation ordering; deterministic conflict resolution might then fall through to device-id/stable-record tie breaking instead of recognizing the genuinely later user edit.
+
+**Closed in:** 1.32.1.7.
+
+**Permanent protection:**
+- `tests/corrective-13217.test.mjs`
+
+**If it returns:** keep logical mutation clocks inside the non-negative safe-integer domain at every model trust boundary. `nextMutationTime()` must fail closed at numeric exhaustion rather than return a non-advancing timestamp. Record ordering and reconstruction must apply the same rule to `modifiedAt`, `deletedAt`, `spaceMoveAt`, Settings stamps and workspace clocks.
+
+
+
+## R-016 — Delayed Custom Branding child outlived its Settings owner
+
+**Historical symptom/risk:** `openCustomBrandingDialog()` could begin while Settings was open, await secondary styles/module/device-local branding data, then call `showModal()` after Settings had already closed. A simple final `isSettingsOpen()` check would still be insufficient because Settings could close and reopen while the old request remained in flight, allowing stale work to attach to a later Settings session.
+
+**Closed in:** 1.32.1.8.
+
+**Permanent protection:**
+- `tests/corrective-13218.test.mjs`
+
+**If it returns:** preserve parent-lifetime ownership across every asynchronous child-opening boundary. Closing Settings must advance the Settings ownership generation; child work captures that epoch, keeps async results local, and may publish/show only when both the epoch and current Settings visibility still match.

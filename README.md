@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.32.1.5**
+**Current source release: 1.33.0.4**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -19,7 +19,7 @@ MosaicSync is an open-source start page and shortcut manager for Firefox and Chr
 
 ### Maintainability programs
 
-MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x completed the 3rd Maintainability Journey: Ownership & Auditability.** That structural journey is frozen: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction; later corrective releases hardened the audited concurrency boundaries. **1.32.1 introduced the scoped Custom Branding feature; 1.32.1.1 corrected its visual placement; 1.32.1.2 completed the localization semantic-completeness corrective; 1.32.1.3 closed the first adversarial defect set; 1.32.1.4 closed a Sync-reachable normalization fixed-point defect; 1.32.1.5 is a narrow UI-clarity corrective.** The current release makes Sync status distinguish exact named-device receipts from collaborative remote updates, removes unnecessary folder scrollbars when contents fit, and keeps Settings open behind Settings-owned child dialogs without touching Normal Sync/Recovery architecture. Branding remains device-local, excluded from browser Sync/Recovery, and travels only inside explicit MosaicSync profile export/import. See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md).
+MosaicSync has completed two major maintainability programs: the first refined production ownership and Recovery boundaries, and the second built the permanent maintenance/certification infrastructure around that runtime. **1.32.x completed the 3rd Maintainability Journey: Ownership & Auditability.** That structural journey is frozen: one proven ownership boundary per release, no refactoring for line count, and effectively zero performance-regression budget. 1.32.0.1 extracted remote Sync observation/applied-state policy; 1.32.0.2 extracted the safe background-side durable pending Sync journal owner; 1.32.0.4 completed the Bookmarks-dialog UI extraction; later corrective releases hardened the audited concurrency boundaries. **1.32.1 introduced the scoped Custom Branding feature; 1.32.1.1 corrected its visual placement; 1.32.1.2 completed the localization semantic-completeness corrective; 1.32.1.3 closed the first adversarial defect set; 1.32.1.4 closed a Sync-reachable normalization fixed-point defect; 1.32.1.5 delivered the narrow UI-clarity corrective; 1.32.1.6 closed the post-audit stale Space-hydration race; 1.32.1.7 closes the logical-clock safe-integer defect found by the same unknown-unknowns audit; 1.32.1.8 closes the final delayed Custom Branding child-ownership race before Snow Leopard II.** The current release also constrains persisted and synchronized mutation clocks to JavaScript safe integers and fails closed at the theoretical numeric ceiling, so malformed future clocks cannot pin deterministic conflict ordering. Branding remains device-local, excluded from browser Sync/Recovery, and travels only inside explicit MosaicSync profile export/import. See [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MAINTENANCE-INFRASTRUCTURE.md](docs/MAINTENANCE-INFRASTRUCTURE.md) and [README-DEVELOPMENT.md](README-DEVELOPMENT.md). **Snow Leopard II Step 3 is in progress in 1.33.0.4: the first lazy-UI pilot removes the Wallpaper Gallery shell from initial DOM allocation and eager wiring while preserving Settings ownership across lazy loading. Step 2 remains frozen. No optimization is accepted without a before/after measurement and preserved correctness proof.**
 
 ## Why the source is here
 
@@ -59,6 +59,7 @@ npm run build
 npm test
 npm run bench
 npm run size
+npm run perf:baseline
 ```
 
 For fast local feedback, the same suite is also grouped by subsystem:
@@ -87,11 +88,15 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.32.1.5** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.33.0.4** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.32.1.5 is a narrow UI-correctness and clarity corrective over 1.32.1.4. Exact incoming Sync provenance now shows the friendly device name, while collaborative/non-exact receipts are described honestly as combined changes from other devices instead of pretending there was one unnamed sender. Folder popovers now let the item grid consume the panel’s real available height and scroll only when content genuinely overflows. Recovery safety copies, Custom Branding and Wallpaper Gallery are treated as Settings-owned child dialogs, so closing a child returns to the still-open Settings panel. No permission, persisted-state schema, profile-format, Sync/Recovery wire-format, CSP or browser-floor changes.
+1.33.0.4 begins **Snow Leopard II Step 3 — DOM/CSS/lazy secondary UI** with a deliberately narrow pilot: the Wallpaper Gallery shell leaves the initial live DOM and eager binding pass and is created only on first use. The opener preserves Settings-session ownership across the new asynchronous module boundary. Step 2's trusted-state optimizations remain frozen. See [docs/SNOW-LEOPARD-II.md](docs/SNOW-LEOPARD-II.md).
+
+1.32.1.8 is the frozen correctness baseline immediately preceding Snow Leopard II. It is the narrow Settings child-dialog ownership corrective over 1.32.1.7. Delayed Custom Branding preparation carries the Settings ownership generation that launched it and revalidates that owner after each asynchronous boundary.
+
+1.32.1.5 is the preceding UI-correctness and clarity corrective over 1.32.1.4. Exact incoming Sync provenance shows the friendly device name for exact receipts, collaborative/non-exact receipts are described as combined changes, folder popovers scroll only for genuine overflow, and Settings-owned child dialogs leave Settings open behind them.
 
 1.32.1.2 is the localization-only corrective over 1.32.1.1. It completes the Recovery safety-copy manager and Custom Branding wording in every non-English runtime catalog using each locale's existing MosaicSync terminology and UI context, localizes the remaining `Sync storage` Recovery eyebrow through the source catalog, and adds permanent tests that reject unreviewed exact-English fallbacks in non-English catalogs and visible New Tab literals outside the localization contract. The runtime catalogs contain 473 keys in all 33 supported UI languages. No feature behavior, permissions, persisted data, profile format, Sync/Recovery wire format, CSP or browser floor changes.
 

@@ -1,0 +1,2393 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.2",
+  "step": 1,
+  "purpose": "Snow Leopard II New Tab critical-path census",
+  "census": {
+    "schemaVersion": 1,
+    "version": "1.33.0.2",
+    "purpose": "Snow Leopard II New Tab critical-path census",
+    "initialDom": {
+      "rawBytes": 52905,
+      "elementCount": 642,
+      "idCount": 217,
+      "dialogCount": 6,
+      "primaryElementCount": 108,
+      "secondaryElementCount": 534,
+      "settingsElementCount": 349,
+      "dialogElementCount": 185
+    },
+    "parserCriticalPath": {
+      "criticalCss": {
+        "href": "newtab-critical.css",
+        "rawBytes": 36267
+      },
+      "scripts": [
+        {
+          "src": "local-storage-bootstrap.js",
+          "line": 14,
+          "location": "head",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 1275,
+          "generated": false
+        },
+        {
+          "src": "bootstrap-config.js",
+          "line": 15,
+          "location": "head",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 685,
+          "generated": true
+        },
+        {
+          "src": "session-bootstrap.js",
+          "line": 16,
+          "location": "head",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 1661,
+          "generated": false
+        },
+        {
+          "src": "appearance-bootstrap.js",
+          "line": 17,
+          "location": "head",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 3545,
+          "generated": false
+        },
+        {
+          "src": "newtab.js",
+          "line": 18,
+          "location": "head",
+          "type": "module",
+          "parserBlocking": false,
+          "rawBytes": 352931,
+          "generated": false
+        },
+        {
+          "src": "space-bootstrap.js",
+          "line": 50,
+          "location": "body",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 2238,
+          "generated": false
+        },
+        {
+          "src": "frequent-geometry-bootstrap.js",
+          "line": 104,
+          "location": "body",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 2620,
+          "generated": false
+        },
+        {
+          "src": "builtin-icons.js",
+          "line": 105,
+          "location": "body",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 4122,
+          "generated": false
+        },
+        {
+          "src": "render-bootstrap.js",
+          "line": 106,
+          "location": "body",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 10916,
+          "generated": false
+        },
+        {
+          "src": "secondary-style-bootstrap.js",
+          "line": 107,
+          "location": "body",
+          "type": "classic",
+          "parserBlocking": true,
+          "rawBytes": 1830,
+          "generated": false
+        }
+      ],
+      "parserBlockingClassicBytes": 28892,
+      "parserBlockingClassicCount": 9
+    },
+    "moduleEvaluation": {
+      "staticGraph": {
+        "moduleCount": 24,
+        "rawBytes": 653646,
+        "modules": [
+          {
+            "path": "newtab/newtab.js",
+            "rawBytes": 352931
+          },
+          {
+            "path": "core/model.js",
+            "rawBytes": 93275
+          },
+          {
+            "path": "core/storage.js",
+            "rawBytes": 51454
+          },
+          {
+            "path": "core/i18n-locales/en.js",
+            "rawBytes": 28366
+          },
+          {
+            "path": "core/constants.js",
+            "rawBytes": 19298
+          },
+          {
+            "path": "newtab/bookmarks-controller.js",
+            "rawBytes": 15835
+          },
+          {
+            "path": "newtab/ui-utils.js",
+            "rawBytes": 14297
+          },
+          {
+            "path": "core/local-assets.js",
+            "rawBytes": 13560
+          },
+          {
+            "path": "core/concurrency.js",
+            "rawBytes": 12549
+          },
+          {
+            "path": "core/i18n.js",
+            "rawBytes": 12340
+          },
+          {
+            "path": "core/viewport-tooltip.js",
+            "rawBytes": 7792
+          },
+          {
+            "path": "core/raster-validation.js",
+            "rawBytes": 6923
+          },
+          {
+            "path": "core/first-paint-contract.js",
+            "rawBytes": 4992
+          },
+          {
+            "path": "newtab/builtin-icons.js",
+            "rawBytes": 4122
+          },
+          {
+            "path": "core/permissions.js",
+            "rawBytes": 3427
+          },
+          {
+            "path": "core/image-data.js",
+            "rawBytes": 3309
+          },
+          {
+            "path": "newtab/appearance-color.js",
+            "rawBytes": 1978
+          },
+          {
+            "path": "core/image-limits.js",
+            "rawBytes": 1898
+          },
+          {
+            "path": "core/http-url-safety.js",
+            "rawBytes": 1408
+          },
+          {
+            "path": "core/permission-platform.js",
+            "rawBytes": 1246
+          },
+          {
+            "path": "core/platform.js",
+            "rawBytes": 878
+          },
+          {
+            "path": "core/perf.js",
+            "rawBytes": 803
+          },
+          {
+            "path": "core/errors.js",
+            "rawBytes": 782
+          },
+          {
+            "path": "core/i18n-platform.js",
+            "rawBytes": 183
+          }
+        ]
+      }
+    },
+    "deferredModules": {
+      "rootCount": 40,
+      "moduleCount": 40,
+      "rawBytes": 1096737,
+      "roots": [
+        {
+          "root": "core/bookmarks.js",
+          "moduleCount": 1,
+          "rawBytes": 3563,
+          "modules": [
+            {
+              "path": "core/bookmarks.js",
+              "rawBytes": 3563
+            }
+          ]
+        },
+        {
+          "root": "core/bounded-response.js",
+          "moduleCount": 1,
+          "rawBytes": 1731,
+          "modules": [
+            {
+              "path": "core/bounded-response.js",
+              "rawBytes": 1731
+            }
+          ]
+        },
+        {
+          "root": "core/custom-branding.js",
+          "moduleCount": 1,
+          "rawBytes": 5688,
+          "modules": [
+            {
+              "path": "core/custom-branding.js",
+              "rawBytes": 5688
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/bg.js",
+          "moduleCount": 1,
+          "rawBytes": 47933,
+          "modules": [
+            {
+              "path": "core/i18n-locales/bg.js",
+              "rawBytes": 47933
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/ca.js",
+          "moduleCount": 1,
+          "rawBytes": 32213,
+          "modules": [
+            {
+              "path": "core/i18n-locales/ca.js",
+              "rawBytes": 32213
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/cs.js",
+          "moduleCount": 1,
+          "rawBytes": 31080,
+          "modules": [
+            {
+              "path": "core/i18n-locales/cs.js",
+              "rawBytes": 31080
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/da.js",
+          "moduleCount": 1,
+          "rawBytes": 29404,
+          "modules": [
+            {
+              "path": "core/i18n-locales/da.js",
+              "rawBytes": 29404
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/de.js",
+          "moduleCount": 1,
+          "rawBytes": 32485,
+          "modules": [
+            {
+              "path": "core/i18n-locales/de.js",
+              "rawBytes": 32485
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/el.js",
+          "moduleCount": 1,
+          "rawBytes": 51275,
+          "modules": [
+            {
+              "path": "core/i18n-locales/el.js",
+              "rawBytes": 51275
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/es.js",
+          "moduleCount": 1,
+          "rawBytes": 32156,
+          "modules": [
+            {
+              "path": "core/i18n-locales/es.js",
+              "rawBytes": 32156
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/et.js",
+          "moduleCount": 1,
+          "rawBytes": 29825,
+          "modules": [
+            {
+              "path": "core/i18n-locales/et.js",
+              "rawBytes": 29825
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/eu.js",
+          "moduleCount": 1,
+          "rawBytes": 31842,
+          "modules": [
+            {
+              "path": "core/i18n-locales/eu.js",
+              "rawBytes": 31842
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/fi.js",
+          "moduleCount": 1,
+          "rawBytes": 31018,
+          "modules": [
+            {
+              "path": "core/i18n-locales/fi.js",
+              "rawBytes": 31018
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/fr.js",
+          "moduleCount": 1,
+          "rawBytes": 33022,
+          "modules": [
+            {
+              "path": "core/i18n-locales/fr.js",
+              "rawBytes": 33022
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/ga.js",
+          "moduleCount": 1,
+          "rawBytes": 32654,
+          "modules": [
+            {
+              "path": "core/i18n-locales/ga.js",
+              "rawBytes": 32654
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/gl.js",
+          "moduleCount": 1,
+          "rawBytes": 31371,
+          "modules": [
+            {
+              "path": "core/i18n-locales/gl.js",
+              "rawBytes": 31371
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/hr.js",
+          "moduleCount": 1,
+          "rawBytes": 30595,
+          "modules": [
+            {
+              "path": "core/i18n-locales/hr.js",
+              "rawBytes": 30595
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/hu.js",
+          "moduleCount": 1,
+          "rawBytes": 34005,
+          "modules": [
+            {
+              "path": "core/i18n-locales/hu.js",
+              "rawBytes": 34005
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/it.js",
+          "moduleCount": 1,
+          "rawBytes": 31771,
+          "modules": [
+            {
+              "path": "core/i18n-locales/it.js",
+              "rawBytes": 31771
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/ja.js",
+          "moduleCount": 1,
+          "rawBytes": 37172,
+          "modules": [
+            {
+              "path": "core/i18n-locales/ja.js",
+              "rawBytes": 37172
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/ko.js",
+          "moduleCount": 1,
+          "rawBytes": 33642,
+          "modules": [
+            {
+              "path": "core/i18n-locales/ko.js",
+              "rawBytes": 33642
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/lt.js",
+          "moduleCount": 1,
+          "rawBytes": 31514,
+          "modules": [
+            {
+              "path": "core/i18n-locales/lt.js",
+              "rawBytes": 31514
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/lv.js",
+          "moduleCount": 1,
+          "rawBytes": 31226,
+          "modules": [
+            {
+              "path": "core/i18n-locales/lv.js",
+              "rawBytes": 31226
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/mt.js",
+          "moduleCount": 1,
+          "rawBytes": 31815,
+          "modules": [
+            {
+              "path": "core/i18n-locales/mt.js",
+              "rawBytes": 31815
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/nap.js",
+          "moduleCount": 1,
+          "rawBytes": 32064,
+          "modules": [
+            {
+              "path": "core/i18n-locales/nap.js",
+              "rawBytes": 32064
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/nb.js",
+          "moduleCount": 1,
+          "rawBytes": 29631,
+          "modules": [
+            {
+              "path": "core/i18n-locales/nb.js",
+              "rawBytes": 29631
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/nl.js",
+          "moduleCount": 1,
+          "rawBytes": 31242,
+          "modules": [
+            {
+              "path": "core/i18n-locales/nl.js",
+              "rawBytes": 31242
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/pl.js",
+          "moduleCount": 1,
+          "rawBytes": 31016,
+          "modules": [
+            {
+              "path": "core/i18n-locales/pl.js",
+              "rawBytes": 31016
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/pt.js",
+          "moduleCount": 1,
+          "rawBytes": 31745,
+          "modules": [
+            {
+              "path": "core/i18n-locales/pt.js",
+              "rawBytes": 31745
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/ro.js",
+          "moduleCount": 1,
+          "rawBytes": 32341,
+          "modules": [
+            {
+              "path": "core/i18n-locales/ro.js",
+              "rawBytes": 32341
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/sk.js",
+          "moduleCount": 1,
+          "rawBytes": 32014,
+          "modules": [
+            {
+              "path": "core/i18n-locales/sk.js",
+              "rawBytes": 32014
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/sl.js",
+          "moduleCount": 1,
+          "rawBytes": 30619,
+          "modules": [
+            {
+              "path": "core/i18n-locales/sl.js",
+              "rawBytes": 30619
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/sv.js",
+          "moduleCount": 1,
+          "rawBytes": 30532,
+          "modules": [
+            {
+              "path": "core/i18n-locales/sv.js",
+              "rawBytes": 30532
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/zh-CN.js",
+          "moduleCount": 1,
+          "rawBytes": 27687,
+          "modules": [
+            {
+              "path": "core/i18n-locales/zh-CN.js",
+              "rawBytes": 27687
+            }
+          ]
+        },
+        {
+          "root": "core/i18n-locales/zh-TW.js",
+          "moduleCount": 1,
+          "rawBytes": 27383,
+          "modules": [
+            {
+              "path": "core/i18n-locales/zh-TW.js",
+              "rawBytes": 27383
+            }
+          ]
+        },
+        {
+          "root": "core/image-optimizer.js",
+          "moduleCount": 1,
+          "rawBytes": 12820,
+          "modules": [
+            {
+              "path": "core/image-optimizer.js",
+              "rawBytes": 12820
+            }
+          ]
+        },
+        {
+          "root": "core/importer.js",
+          "moduleCount": 1,
+          "rawBytes": 4494,
+          "modules": [
+            {
+              "path": "core/importer.js",
+              "rawBytes": 4494
+            }
+          ]
+        },
+        {
+          "root": "core/profile.js",
+          "moduleCount": 1,
+          "rawBytes": 12423,
+          "modules": [
+            {
+              "path": "core/profile.js",
+              "rawBytes": 12423
+            }
+          ]
+        },
+        {
+          "root": "core/registrable-domain.js",
+          "moduleCount": 1,
+          "rawBytes": 3957,
+          "modules": [
+            {
+              "path": "core/registrable-domain.js",
+              "rawBytes": 3957
+            }
+          ]
+        },
+        {
+          "root": "newtab/render-manifest.js",
+          "moduleCount": 1,
+          "rawBytes": 7769,
+          "modules": [
+            {
+              "path": "newtab/render-manifest.js",
+              "rawBytes": 7769
+            }
+          ]
+        }
+      ]
+    },
+    "eagerDomBindings": {
+      "total": 200,
+      "primary": 35,
+      "secondary": 165,
+      "settings": 101,
+      "dialog": 64,
+      "genericQueries": 2,
+      "records": [
+        {
+          "id": "page",
+          "line": 279,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "main"
+        },
+        {
+          "id": "appearancePreviewLayer",
+          "line": 280,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "appearancePreviewImage",
+          "line": 281,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "img"
+        },
+        {
+          "id": "shortcutGrid",
+          "line": 282,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "emptyState",
+          "line": 283,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "syncPendingState",
+          "line": 284,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "syncPendingChooseSource",
+          "line": 285,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "syncPendingMessage",
+          "line": 286,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "brandMark",
+          "line": 288,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "img"
+        },
+        {
+          "id": "brandName",
+          "line": 289,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "spaceSwitcher",
+          "line": 290,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "nav"
+        },
+        {
+          "id": "settingsButton",
+          "line": 292,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "bookmarksButton",
+          "line": 293,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "brandHelloButton",
+          "line": 294,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "importNativeButton",
+          "line": 295,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "addFirstButton",
+          "line": 296,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "frequentSitesSection",
+          "line": 297,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "section"
+        },
+        {
+          "id": "frequentSitesList",
+          "line": 298,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "frequentPermissionRecovery",
+          "line": 299,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "frequentPermissionRecoveryText",
+          "line": 300,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "frequentPermissionRecoveryButton",
+          "line": 301,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "frequentSyncPermissionDialog",
+          "line": 302,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "frequentSyncPermissionTitle",
+          "line": 303,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "h2"
+        },
+        {
+          "id": "frequentSyncPermissionText",
+          "line": 304,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "frequentSyncPermissionStatus",
+          "line": 305,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "frequentSyncPermissionGrant",
+          "line": 306,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "frequentSyncPermissionContinue",
+          "line": 307,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "webAccessPrompt",
+          "line": 336,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "aside"
+        },
+        {
+          "id": "webAccessPromptAllow",
+          "line": 337,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "webAccessPromptDismiss",
+          "line": 338,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "bookmarksDialog",
+          "line": 340,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "bookmarksPermissionState",
+          "line": 341,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarksPermissionButton",
+          "line": 342,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "bookmarksBrowser",
+          "line": 343,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarksSearch",
+          "line": 344,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "bookmarksCount",
+          "line": 345,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "span"
+        },
+        {
+          "id": "bookmarkFolderTree",
+          "line": 346,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarkBreadcrumbs",
+          "line": 347,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarkFolderCards",
+          "line": 348,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarkItems",
+          "line": 349,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarksEmpty",
+          "line": 350,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "bookmarksStatus",
+          "line": 351,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "shortcutDialog",
+          "line": 375,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "shortcutForm",
+          "line": 376,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "form"
+        },
+        {
+          "id": "shortcutDialogTitle",
+          "line": 377,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "h2"
+        },
+        {
+          "id": "shortcutId",
+          "line": 378,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "shortcutTitle",
+          "line": 379,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "shortcutUrl",
+          "line": 380,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "shortcutImageFile",
+          "line": 381,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "chooseDetectedFavicon",
+          "line": 382,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "detectedFaviconPicker",
+          "line": 383,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "detectedFaviconChoices",
+          "line": 384,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "detectedFaviconStatus",
+          "line": 385,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "chooseBuiltinShortcutIcon",
+          "line": 386,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "shortcutBuiltinIconPicker",
+          "line": 387,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "shortcutColorPicker",
+          "line": 388,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "shortcutImageUrl",
+          "line": 389,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "useShortcutImageUrl",
+          "line": 390,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "shortcutSyncImage",
+          "line": 391,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "shortcutSyncImageRow",
+          "line": 392,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "shortcutSyncImageHint",
+          "line": 393,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "shortcutImageHint",
+          "line": 394,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "shortcutImageStyle",
+          "line": 395,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "select"
+        },
+        {
+          "id": "shortcutSpaceField",
+          "line": 396,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "shortcutSpaceChoice",
+          "line": 397,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "clearShortcutImage",
+          "line": 399,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "imagePreview",
+          "line": 400,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "deleteShortcutButton",
+          "line": 401,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "settingsDialog",
+          "line": 403,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "aside"
+        },
+        {
+          "id": "settingsForm",
+          "line": 404,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "form"
+        },
+        {
+          "id": "settingsColumns",
+          "line": 405,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "settingsRows",
+          "line": 406,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "themeToggle",
+          "line": 407,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "settingsTileSize",
+          "line": 408,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsTileSizeValue",
+          "line": 409,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "output"
+        },
+        {
+          "id": "settingsLanguage",
+          "line": 410,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "settingsShortcutOrder",
+          "line": 411,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "settingsShortcutOrderHint",
+          "line": 412,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "settingsMultipleSpaces",
+          "line": 413,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsSpaceNames",
+          "line": 414,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "settingsPersonalSpaceName",
+          "line": 415,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsWorkSpaceName",
+          "line": 416,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsWorkSpaceNameRow",
+          "line": 417,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "label"
+        },
+        {
+          "id": "settingsDefaultSpace",
+          "line": 418,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "settingsDefaultSpaceLabel",
+          "line": 419,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "settingsSpaceKeyboardHint",
+          "line": 420,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "settingsFrequentlyVisited",
+          "line": 421,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsFrequentlyVisitedDescription",
+          "line": 422,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "settingsFrequentlyVisitedCount",
+          "line": 423,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "select"
+        },
+        {
+          "id": "settingsFrequentlyVisitedCountLabel",
+          "line": 424,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "frequentOptions",
+          "line": 425,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "frequentCountRow",
+          "line": 426,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "label"
+        },
+        {
+          "id": "frequentlyVisitedStatus",
+          "line": 427,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "frequentlyVisitedPermissionButton",
+          "line": 428,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "exportProfileButton",
+          "line": 429,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "importProfileButton",
+          "line": 430,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "importProfileFile",
+          "line": 431,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "customBrandingButton",
+          "line": 432,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "customBrandingDialog",
+          "line": 433,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "customBrandingEnabled",
+          "line": 434,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "customBrandingTextInput",
+          "line": 435,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "customBrandingLogoFile",
+          "line": 436,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "input"
+        },
+        {
+          "id": "customBrandingLogoPreview",
+          "line": 437,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "customBrandingLogoImage",
+          "line": 438,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "img"
+        },
+        {
+          "id": "customBrandingLogoEmpty",
+          "line": 439,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "span"
+        },
+        {
+          "id": "customBrandingRemoveLogo",
+          "line": 440,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "customBrandingReset",
+          "line": 441,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "customBrandingSave",
+          "line": 442,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "settingsAutoSiteIcons",
+          "line": 443,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsWebAccessStatus",
+          "line": 444,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "small"
+        },
+        {
+          "id": "settingsWebAccessButton",
+          "line": 445,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsBackgroundColorButton",
+          "line": 446,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsBackgroundColorSwatch",
+          "line": 447,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "backgroundColorPopover",
+          "line": 448,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "backgroundColorPlane",
+          "line": 450,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "backgroundColorThumb",
+          "line": 451,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "backgroundColorHue",
+          "line": 452,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "backgroundColorHex",
+          "line": 453,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "backgroundColorApply",
+          "line": 454,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsBackgroundFile",
+          "line": 455,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "clearBackgroundImage",
+          "line": 456,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsBackgroundDim",
+          "line": 457,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsBackgroundDimValue",
+          "line": 458,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "output"
+        },
+        {
+          "id": "backgroundDimControls",
+          "line": 459,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "settingsThemeWallpapers",
+          "line": 460,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsThemeWallpapersLabel",
+          "line": 461,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "settingsThemeWallpapersDescription",
+          "line": 462,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "themeWallpaperChoices",
+          "line": 463,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "settingsLightWallpaper",
+          "line": 464,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsDarkWallpaper",
+          "line": 465,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsLightWallpaperLabel",
+          "line": 466,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "settingsDarkWallpaperLabel",
+          "line": 467,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "settingsLightWallpaperValue",
+          "line": 468,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "small"
+        },
+        {
+          "id": "settingsDarkWallpaperValue",
+          "line": 469,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "small"
+        },
+        {
+          "id": "settingsLightWallpaperPreview",
+          "line": 470,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "settingsDarkWallpaperPreview",
+          "line": 471,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "settingsLightWallpaperDim",
+          "line": 472,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsDarkWallpaperDim",
+          "line": 473,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "settingsLightWallpaperDimValue",
+          "line": 474,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "output"
+        },
+        {
+          "id": "settingsDarkWallpaperDimValue",
+          "line": 475,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "output"
+        },
+        {
+          "id": "settingsLightWallpaperDimLabel",
+          "line": 476,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "settingsDarkWallpaperDimLabel",
+          "line": 477,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "backgroundPresetGrid",
+          "line": 478,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "moreWallpapersButton",
+          "line": 479,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "wallpaperGalleryDialog",
+          "line": 480,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "wallpaperGalleryGrid",
+          "line": 481,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "resetBackground",
+          "line": 482,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsImportNative",
+          "line": 483,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsRunSetup",
+          "line": 484,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsDonateButton",
+          "line": 485,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "settingsTipsLink",
+          "line": 486,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "a"
+        },
+        {
+          "id": "settingsSupportLink",
+          "line": 487,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "a"
+        },
+        {
+          "id": "settingsSyncEnabled",
+          "line": 489,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "syncStatusDot",
+          "line": 490,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "syncStatusText",
+          "line": 491,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncStatusDetail",
+          "line": 492,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "small"
+        },
+        {
+          "id": "syncQuotaText",
+          "line": 493,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncRevisionLabel",
+          "line": 494,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "small"
+        },
+        {
+          "id": "syncRevisionText",
+          "line": 495,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "settingsDeviceNameText",
+          "line": 496,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "editDeviceNameButton",
+          "line": 497,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "deviceNameEditor",
+          "line": 498,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "settingsDeviceNameInput",
+          "line": 499,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "cancelDeviceNameButton",
+          "line": 500,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "saveDeviceNameButton",
+          "line": 501,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "syncSourceText",
+          "line": 502,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncSourceDetail",
+          "line": 503,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "syncUsageCore",
+          "line": 505,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncUsageRecovery",
+          "line": 506,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "recoveryCopiesManageButton",
+          "line": 507,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "recoveryCopiesDialog",
+          "line": 508,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "dialog"
+        },
+        {
+          "id": "recoveryCopiesSummary",
+          "line": 509,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "recoverySafeCleanup",
+          "line": 510,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "recoverySafeCleanupTitle",
+          "line": 511,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "strong"
+        },
+        {
+          "id": "recoverySafeCleanupDetail",
+          "line": 512,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "small"
+        },
+        {
+          "id": "recoverySafeCleanupButton",
+          "line": 513,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "button"
+        },
+        {
+          "id": "recoveryCopiesList",
+          "line": 514,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "div"
+        },
+        {
+          "id": "recoveryCopiesFootnote",
+          "line": 515,
+          "secondary": true,
+          "settings": false,
+          "dialog": true,
+          "tag": "p"
+        },
+        {
+          "id": "syncUsageShortcuts",
+          "line": 516,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncUsageOverhead",
+          "line": 517,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "syncUsageFree",
+          "line": 518,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "strong"
+        },
+        {
+          "id": "sendToSyncButton",
+          "line": 519,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "restoreSyncButton",
+          "line": 520,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "syncActionStatus",
+          "line": 521,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "clearSyncButton",
+          "line": 522,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "syncSetupCard",
+          "line": 523,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "syncSetupDetail",
+          "line": 524,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "p"
+        },
+        {
+          "id": "useThisDeviceButton",
+          "line": 525,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "useSyncedCopyButton",
+          "line": 526,
+          "secondary": true,
+          "settings": true,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "dropChoice",
+          "line": 528,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "dropMoveButton",
+          "line": 529,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "dropFolderButton",
+          "line": 530,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "folderPopover",
+          "line": 532,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "folderTitleInput",
+          "line": 533,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "input"
+        },
+        {
+          "id": "closeFolderButton",
+          "line": 534,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "folderItems",
+          "line": 535,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        },
+        {
+          "id": "folderCount",
+          "line": 536,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "span"
+        },
+        {
+          "id": "openAllFolderButton",
+          "line": 537,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "ungroupFolderButton",
+          "line": 538,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "button"
+        },
+        {
+          "id": "toast",
+          "line": 539,
+          "secondary": false,
+          "settings": false,
+          "dialog": false,
+          "tag": "div"
+        }
+      ]
+    },
+    "startupMarkers": [
+      {
+        "name": "longTaskWindowEnd",
+        "line": 150
+      },
+      {
+        "name": "moduleStart",
+        "line": 154
+      },
+      {
+        "name": "shellLocalized",
+        "line": 251
+      },
+      {
+        "name": "uiBindingsReady",
+        "line": 541
+      },
+      {
+        "name": "bootGridAdopted",
+        "line": 979
+      },
+      {
+        "name": "deferredFolderArtworkReady",
+        "line": 1014
+      },
+      {
+        "name": "loadStateStart",
+        "line": 2181
+      },
+      {
+        "name": "localRawReady",
+        "line": 2214
+      },
+      {
+        "name": "sessionCacheReady",
+        "line": 2223
+      },
+      {
+        "name": "localStateMaterialized",
+        "line": 2278
+      },
+      {
+        "name": "authoritativeStateReady",
+        "line": 2321
+      },
+      {
+        "name": "interactionReady",
+        "line": 2326
+      },
+      {
+        "name": "startupMaintenanceScheduled",
+        "line": 2363
+      },
+      {
+        "name": "authoritativeGridRendered",
+        "line": 3166
+      },
+      {
+        "name": "authoritativeGridRendered",
+        "line": 3200
+      },
+      {
+        "name": "moduleSetupReady",
+        "line": 7686
+      }
+    ],
+    "browserTimingStatus": "unavailable",
+    "rankings": [
+      {
+        "rank": 1,
+        "target": "secondary Settings/dialog DOM and eager wiring",
+        "evidenceType": "deterministic structural census",
+        "evidence": "534/642 initial elements are secondary; 165/200 eager ID bindings target secondary UI",
+        "action": "Step 3 candidate: measure lazy construction/wiring by natural UI boundary; do not remove behavior"
+      },
+      {
+        "rank": 2,
+        "target": "state trust-boundary normalization and baseline computation",
+        "evidenceType": "Step-0 synthetic benchmark",
+        "evidence": "normalizeState(200) median 86.25409874999998 ms; createWriteBaseline(200) median 83.46817675000011 ms; normalized flatten fast path 0.6131771250000384 ms",
+        "action": "Step 2 target: prove where already-trusted internal state re-enters defensive normalization"
+      },
+      {
+        "rank": 3,
+        "target": "static New Tab ES-module evaluation closure",
+        "evidenceType": "deterministic structural census",
+        "evidence": "24 statically evaluated modules / 653646 raw source bytes before newtab.js body runs",
+        "action": "Later loading step: move only interaction-only responsibilities out of the static closure when browser traces prove value"
+      },
+      {
+        "rank": 4,
+        "target": "authoritative/session storage wait and state materialization",
+        "evidenceType": "instrumented but browser measurement unavailable in this environment",
+        "evidence": "startup markers now separate sessionCacheReady, localRawReady and localStateMaterialized; real-browser timing requires a compatible driver pair",
+        "action": "Preserve overlap and authority semantics; measure before considering any I/O reuse"
+      },
+      {
+        "rank": 5,
+        "target": "parser-time bootstrap work",
+        "evidenceType": "deterministic byte census",
+        "evidence": "9 parser-blocking classic scripts / 28892 raw bytes plus critical CSS",
+        "action": "Keep early storage/paint bootstraps unless browser traces show a bootstrap whose cost exceeds its overlap benefit"
+      },
+      {
+        "rank": 6,
+        "target": "already-deferred interaction-only modules",
+        "evidenceType": "deterministic module census",
+        "evidence": "40 modules / 1096737 raw bytes already outside the static startup closure",
+        "action": "Negative optimization control: do not pull these modules back into startup or count them as first-paint cost"
+      }
+    ]
+  }
+}

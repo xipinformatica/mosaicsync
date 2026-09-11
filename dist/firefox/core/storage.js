@@ -39,7 +39,7 @@ import {
   ensureDeviceId,
   normalizeState,
   selectActiveSpaceNormalized,
-  stampSettingsMutationClocks,
+  stampSettingsMutationClocksTrustedNormalized,
   uid
 } from "./model.js";
 import { persistedWorkspacePayloadEqual, rebaseConcurrentState } from "./concurrency.js";
@@ -86,6 +86,15 @@ export function createWriteBaseline(state, assetIdMemo = null) {
   const memo = assetIdMemo || new Map();
   const normalized = normalizeState(state || DEFAULT_STATE, memo);
   return cloneCompactJson(projectStateToLocalAssets(normalized, memo).state);
+}
+
+// Fast path for bytes that just came from the authoritative storage.local state
+// key. They are already the exact compact payload that a later optimistic write
+// must compare against, so normalizing and projecting them again would both waste
+// work and subtly stop the baseline from representing the exact persisted snapshot.
+// Clone only: callers must use this exclusively for trusted persisted compact state.
+export function createPersistedWriteBaseline(compactState) {
+  return cloneCompactJson(compactState);
 }
 
 function perfNow() {
@@ -634,7 +643,10 @@ async function persistNormalizedState(normalized, {
     // callers continue mutating ordinary settings exactly as before; only groups
     // whose values changed and whose clock was not already supplied by an
     // authoritative remote/import state are stamped as local user intent.
-    finalState = stampSettingsMutationClocks(baseState || latestRaw || DEFAULT_STATE, finalState);
+    finalState = stampSettingsMutationClocksTrustedNormalized(
+      normalizeState(baseState || latestRaw || DEFAULT_STATE, assetIdMemo),
+      finalState
+    );
 
     if (baseState) {
       if (latestRaw && !persistedWorkspacePayloadEqual(baseState, latestRaw)) {

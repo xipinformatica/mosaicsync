@@ -279,6 +279,18 @@ return {
   shortcutHref: shortcut?.href || "",
   frequentTogglePresent: !!frequentToggle,
   frequentDisabledConsistent: frequentToggle?.checked === false && frequentSection?.hidden === true,
+  startupPhases: { ...timing },
+  navigationTiming: (() => {
+    const entry = performance.getEntriesByType?.("navigation")?.[0];
+    if (!entry) return null;
+    return {
+      domInteractive: Number(entry.domInteractive) || 0,
+      domContentLoadedEventEnd: Number(entry.domContentLoadedEventEnd) || 0,
+      loadEventEnd: Number(entry.loadEventEnd) || 0,
+      duration: Number(entry.duration) || 0
+    };
+  })(),
+  domElementCount: document.getElementsByTagName("*").length,
   title: document.title,
   text: document.body?.innerText?.slice(0, 500) || ""
 };

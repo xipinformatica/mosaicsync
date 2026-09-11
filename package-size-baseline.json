@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.32.1.5",
-      "rawBytes": 2402722,
-      "deflatedBytes": 701798,
+      "version": "1.33.0.4",
+      "rawBytes": 2411733,
+      "deflatedBytes": 704606,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,8 +13,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 381910,
-          "deflatedBytes": 90471
+          "rawBytes": 381944,
+          "deflatedBytes": 90484
         },
         "localization": {
           "files": 34,
@@ -38,13 +38,13 @@
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 52905,
-          "deflatedBytes": 11211
+          "rawBytes": 52027,
+          "deflatedBytes": 11103
         },
         "newtab-js": {
-          "files": 14,
-          "rawBytes": 418243,
-          "deflatedBytes": 99369
+          "files": 15,
+          "rawBytes": 425583,
+          "deflatedBytes": 101548
         },
         "other": {
           "files": 1,
@@ -58,8 +58,8 @@
         },
         "shared-core": {
           "files": 27,
-          "rawBytes": 293834,
-          "deflatedBytes": 83405
+          "rawBytes": 296349,
+          "deflatedBytes": 84129
         },
         "wallpapers": {
           "files": 29,
@@ -76,8 +76,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 349472,
-          "deflatedBytes": 75757
+          "rawBytes": 353708,
+          "deflatedBytes": 76782
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 302230,
-          "deflatedBytes": 66822
+          "rawBytes": 302264,
+          "deflatedBytes": 66835
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -100,8 +100,8 @@
         {
           "path": "core/model.js",
           "category": "shared-core",
-          "rawBytes": 92055,
-          "deflatedBytes": 22408
+          "rawBytes": 93917,
+          "deflatedBytes": 22953
         },
         {
           "path": "newtab/newtab-secondary.css",
@@ -112,14 +112,14 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 51454,
-          "deflatedBytes": 13018
+          "rawBytes": 52056,
+          "deflatedBytes": 13191
         },
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 52905,
-          "deflatedBytes": 11211
+          "rawBytes": 52027,
+          "deflatedBytes": 11103
         },
         {
           "path": "core/i18n-locales/el.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.32.1.5",
-      "rawBytes": 2424364,
-      "deflatedBytes": 716313,
+      "version": "1.33.0.4",
+      "rawBytes": 2433375,
+      "deflatedBytes": 719121,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,8 +267,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 381239,
-          "deflatedBytes": 90221
+          "rawBytes": 381273,
+          "deflatedBytes": 90234
         },
         "localization": {
           "files": 34,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1366,
-          "deflatedBytes": 554
+          "deflatedBytes": 553
         },
         "manifest-localization": {
           "files": 33,
@@ -292,13 +292,13 @@
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 52955,
-          "deflatedBytes": 11223
+          "rawBytes": 52077,
+          "deflatedBytes": 11116
         },
         "newtab-js": {
-          "files": 14,
-          "rawBytes": 418243,
-          "deflatedBytes": 99369
+          "files": 15,
+          "rawBytes": 425583,
+          "deflatedBytes": 101548
         },
         "other": {
           "files": 1,
@@ -312,8 +312,8 @@
         },
         "shared-core": {
           "files": 28,
-          "rawBytes": 304805,
-          "deflatedBytes": 86822
+          "rawBytes": 307320,
+          "deflatedBytes": 87546
         },
         "wallpapers": {
           "files": 29,
@@ -330,8 +330,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 349472,
-          "deflatedBytes": 75757
+          "rawBytes": 353708,
+          "deflatedBytes": 76782
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 302230,
-          "deflatedBytes": 66822
+          "rawBytes": 302264,
+          "deflatedBytes": 66835
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -354,8 +354,8 @@
         {
           "path": "core/model.js",
           "category": "shared-core",
-          "rawBytes": 92055,
-          "deflatedBytes": 22408
+          "rawBytes": 93917,
+          "deflatedBytes": 22953
         },
         {
           "path": "newtab/newtab-secondary.css",
@@ -366,14 +366,14 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 51454,
-          "deflatedBytes": 13018
+          "rawBytes": 52056,
+          "deflatedBytes": 13191
         },
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 52955,
-          "deflatedBytes": 11223
+          "rawBytes": 52077,
+          "deflatedBytes": 11116
         },
         {
           "path": "core/i18n-locales/el.js",

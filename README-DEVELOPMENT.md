@@ -1,3 +1,41 @@
+Current release: 1.33.0.4
+
+## 1.33.0.4 — Snow Leopard II Step 3A: lazy Wallpaper Gallery pilot
+
+1.33.0.4 begins Step 3 with the smallest Settings-owned dialog boundary. The Wallpaper Gallery shell moves out of initial HTML and eager ID binding into a dynamically imported constructor used only on first open. The lazy opener carries the Settings ownership generation across style/module preparation so a close/reopen cannot resurrect stale child UI. Initial live DOM drops from 642 to 631 elements and eager ID bindings from 200 to 198. This is a pilot pattern, not the completion of Step 3.
+
+## 1.33.0.3 — Snow Leopard II Step 2: state computation and serialization
+
+1.33.0.3 removes two measured duplicate-defensive costs without weakening trust boundaries. Authoritative compact `storage.local` payloads are cloned directly into optimistic-write baselines instead of normalize+projection reconstruction, and already-normalized intended state is carried through Settings-clock stamping in persistence, background Sync and optimistic rebase. Raw/public inputs remain defensively normalized. Step 3 now moves to secondary Settings/dialog DOM and eager wiring.
+
+## 1.33.0.2 — Snow Leopard II Step 1: New Tab critical-path census
+
+1.33.0.2 completes Step 1 without changing launcher semantics. `npm run perf:critical-path` now inventories parser-time bootstraps, the static New Tab module closure, already-deferred dynamic modules, initial DOM ownership and eager ID bindings; `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json` freezes the result. The runtime adds only finer local startup timing markers so future real-browser runs can separate shell localization, eager UI binding, module setup, session-cache readiness and authoritative local materialization. No telemetry, network reporting or extension-storage persistence is introduced.
+
+## 1.33.0.1 — Snow Leopard II Step 0: measurement foundation
+
+1.33.0.1 starts Snow Leopard II from frozen correctness baseline 1.32.1.8. This release intentionally changes no production optimization behavior. It adds `npm run perf:baseline`, machine-readable benchmark distributions, deterministic New Tab DOM/module/storage-call budgets and richer real-browser startup snapshots when compatible browser drivers are available. The immutable baseline is `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json`; the journey tracker is `docs/SNOW-LEOPARD-II.md`. Performance collection is local-only and is not product telemetry.
+
+## 1.32.1.8 — Settings child-dialog ownership corrective
+
+1.32.1.8 closes the final pre-Snow-Leopard-II correctness finding from the 1.32.1.5 unknown-unknowns audit. Custom Branding preparation crosses asynchronous stylesheet/module/device-local read boundaries; the request now carries the Settings ownership generation that launched it and is discarded if Settings closes before completion, even if a later Settings session has already reopened.
+
+The fix is presentation/lifecycle-only. Custom Branding remains device-local, and Normal Sync/Recovery data, algorithms, persisted schemas and wire formats are unchanged. Permanent `corrective-13218` regressions were proven red 3/3 on untouched 1.32.1.7.
+
+## 1.32.1.7 — logical mutation-clock safe-integer corrective
+
+1.32.1.7 closes the MEDIUM logical-clock defect found by the 1.32.1.5 unknown-unknowns audit. JavaScript `Number` values above the safe-integer range cannot provide a strict +1 logical clock (`1e20 + 1 === 1e20`), so an imported/corrupt timestamp could remain unchanged across later user mutations and distort deterministic conflict ordering.
+
+The model now defines one explicit logical-clock domain: non-negative safe integers. State/workspace/item/Settings normalization rejects non-safe clocks; Sync comparison/reconstruction does the same for remote records, including tombstone namespace-move ordering. `nextMutationTime()` ignores invalid observations and throws at the theoretical `Number.MAX_SAFE_INTEGER` exhaustion boundary rather than pretending to advance. No schema or wire-format change is required because valid clocks remain ordinary JSON numbers.
+
+Permanent coverage: `tests/corrective-13217.test.mjs` was red 4/4 on untouched 1.32.1.6 and covers persisted normalization, mutation advancement/exhaustion, Sync conflict ordering, and Sync reconstruction.
+
+## 1.32.1.6 — stale Space-hydration ownership corrective
+
+1.32.1.6 closes the HIGH concurrency defect found by the 1.32.1.5 unknown-unknowns audit. A normal Space switch or cross-Space drag preview could begin device-local asset hydration from state S0, receive a newer authoritative S1 state/storage baseline while awaiting, then resume and replace live state with the stale hydrated S0 result. The next user edit could therefore be persisted with S1 as its baseline even though the intended state was derived from S0, defeating the normal rebase trigger and deleting an unrelated concurrent change.
+
+Space hydration now remains local to the owning UI operation until both ownership and state generation are revalidated after every relevant await. If authoritative state changes, hydration retries from the current state. If the Space switch/drag preview is superseded or torn down, the stale result is abandoned. `tests/corrective-13216.test.mjs` permanently reproduces the scheduler interleaving and verifies that the concurrent shortcut survives the next save. Normal Sync/Recovery algorithms, schemas and wire formats are unchanged.
+
 ## 1.32.1.5 — Settings child-dialog and Sync-status UI corrective
 
 1.32.1.5 is a narrow New Tab UI corrective over 1.32.1.4. It does not change Normal Sync/Recovery state, wire formats, profile format or permissions.
@@ -23,7 +61,7 @@ The fresh post-fix chaos audit also exposed a no-op rebase edge in `concurrency.
 Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
 # MosaicSync development
 
-> **Current release: 1.32.1.5.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.33.0.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 

@@ -347,3 +347,22 @@ No Sync, Recovery, profile persistence, browser Bookmarks capability loading, fi
 
 The final Journey-3 freeze correction tightens authority ownership at the New Tab → persistence boundary. New Tab identifies genuine user mutations as Normal-Sync-eligible without consulting cached Sync initialization state. The shared persistence transaction already serializes the write and re-reads durable Sync metadata; it is therefore the sole authority for deciding whether an eligible mutation receives the cumulative pending journal. Cache-only/device-local writes remain ineligible, and cross-Space moves retain their dedicated transaction-journal path. This prevents an already-open New Tab with stale `meta` from creating a state change that is neither immediately published nor durably pending during the first-Sync authority handoff.
 
+
+## New Tab asynchronous Space-hydration ownership (1.32.1.6)
+
+Space switching and cross-Space drag preview are read-only UI operations until their final synchronous commit, but device-local asset hydration and destination-background preloading can await browser/storage work. Those awaited results are therefore generation-owned. `newtab.js` captures the live `state` identity plus `stateMutationGeneration`, performs hydration into a local candidate, and revalidates both after every relevant await. A newer authoritative/UI mutation causes the candidate to be discarded and hydration to retry from current state; a superseded switch/preview returns without committing. Only a proven-current candidate may replace global `state`. This preserves the causal pairing between live state and `writeBaseline`, so optimistic persistence cannot be tricked into treating stale UI state as if it were derived from a newer durable baseline.
+## Logical mutation-clock domain (1.32.1.7)
+
+Mutation clocks that participate in deterministic local/Sync ordering are JSON numbers, but only **non-negative JavaScript safe integers** are valid clock values. `normalizeLogicalTime()` is the shared model boundary for workspace `updatedAt`/`settingsModifiedAt`, item `createdAt`/`modifiedAt`/`spaceMoveAt`, Settings fine-grained stamps, Sync record reconstruction and deterministic record comparison. Non-safe finite values are not allowed to dominate ordering.
+
+`nextMutationTime()` advances beyond every valid observed clock and current wall time. At the theoretical `Number.MAX_SAFE_INTEGER` ceiling it throws `RangeError` instead of returning a value that is numerically indistinguishable from the prior clock. This is deliberately fail-closed: silently reusing a timestamp would make a later user mutation indistinguishable from an older record and could hand the deterministic device-id tie breaker authority it should never receive.
+
+This correction does not change the persisted schema or Normal Sync/Recovery wire format; valid clocks remain ordinary JSON numbers.
+
+
+
+## Settings child-dialog ownership generation (1.32.1.8)
+
+Settings owns the lifetime of child surfaces launched from it. Custom Branding performs asynchronous preparation before becoming visible, so panel visibility alone is insufficient: Settings can close and reopen while an older request is still awaiting. the Settings ownership generation is the parent-lifetime epoch. Custom Branding captures it before preparation, revalidates the epoch plus `isSettingsOpen()` after every relevant await, and keeps the branding read local until the final check succeeds. Closing Settings increments the epoch, permanently invalidating all child-open work launched by that session.
+
+This is an ownership/lifecycle rule only. It does not move Custom Branding into synchronized profile authority or change Normal Sync/Recovery behavior.

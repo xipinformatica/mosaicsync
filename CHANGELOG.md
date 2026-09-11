@@ -1,3 +1,56 @@
+## 1.33.0.4
+
+- Begins **Snow Leopard II Step 3 — DOM/CSS/lazy secondary UI** with a deliberately narrow Wallpaper Gallery pilot rather than moving the whole Settings surface at once.
+- Removes the 11-element Wallpaper Gallery shell from the initial live New Tab DOM and removes its two eager ID lookups; the shell now lives in a deferred module and is created only on first open.
+- Binds lazy gallery opening to the Settings ownership generation so closing/reopening Settings while the module loads cannot attach stale child UI to a newer session. Dynamic close/backdrop wiring is installed when the shell is mounted.
+- Step-3 structural census moves from 642→631 initial elements, 534→523 secondary elements, 200→198 eager ID bindings and 165→163 secondary eager bindings.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.3
+
+- Completes **Snow Leopard II Step 2 — State computation and serialization** with two measured trusted-state fast paths and no reduction in external/persisted validation.
+- New Tab `storage.local` state events now clone the exact authoritative compact payload for the optimistic-write baseline instead of re-normalizing and re-projecting the same persisted bytes. On the 200-item stress fixture in the build environment, the defensive baseline path remains ~82–84 ms while the exact persisted clone is ~0.4–0.5 ms.
+- Persistence, background Sync mutation handling and optimistic rebase now carry explicit normalized-state proof into Settings-clock stamping, avoiding repeated full-tree validation of state that already crossed `normalizeState()`. The public defensive stamping API remains unchanged for raw callers.
+- Adds permanent `optimization-13303` regressions covering exact compact-baseline cloning, detached snapshot ownership, normalized-stamping equivalence, New Tab adoption, Sync/background and rebase fast-path ownership, plus benchmark controls.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.2
+
+- Completes **Snow Leopard II Step 1 — New Tab critical-path census** without intentional launcher behavior changes.
+- Adds `npm run perf:critical-path` and freezes `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json`, separating parser-time bootstraps, the static ES-module closure, already-deferred modules, initial DOM ownership and eager element bindings.
+- Adds finer local-only startup phases (`shellLocalized`, `uiBindingsReady`, `moduleSetupReady`, `sessionCacheReady`, `localStateMaterialized`) so future real-browser runs can attribute startup delay without telemetry or persistence.
+- The census confirms 534/642 initial elements and 165/200 eager ID bindings belong to secondary Settings/dialog UI; Step 2 remains focused on measured state computation/serialization before Step 3 changes DOM ownership.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.1
+
+- Starts **Snow Leopard II — Performance & Frugality** with measurement infrastructure only; no intentional production optimization or user-facing feature change.
+- Adds `npm run perf:baseline` and machine-readable benchmark medians/p95 distributions, plus deterministic initial New Tab DOM/module/storage-call/package budgets.
+- Extends real-browser smoke snapshots with complete local startup phases, navigation timing and DOM element count for future cold/warm startup comparisons when compatible drivers are available.
+- Freezes the Step-0 baseline in `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json`; performance data remains local and is neither persisted by the extension nor transmitted.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.32.1.8
+
+- Fixes a Settings child-dialog ownership race found by the 1.32.1.5 unknown-unknowns audit: delayed Custom Branding preparation can no longer finish after Settings closes or attach itself to a later close-and-reopen Settings session.
+- Custom Branding opening now captures a Settings ownership generation and revalidates both that generation and panel visibility after each asynchronous preparation boundary. The device-local branding read remains a local candidate until final ownership is proven.
+- Adds permanent `corrective-13218` regressions proven red 3/3 on untouched 1.32.1.7 and green after correction.
+- No Normal Sync/Recovery algorithm or data changes; no new permissions, telemetry, remote code, persisted schemas, profile formats or browser-floor changes.
+
+## 1.32.1.7
+
+- Fixes the MEDIUM logical mutation-clock defect found by the 1.32.1.5 unknown-unknowns audit: finite JavaScript numbers outside the safe-integer domain can no longer survive normalization and pin a later logical `+1` mutation clock (for example `1e20 + 1 === 1e20`).
+- Defines one model-level clock rule for state/workspace/item/Settings mutation clocks: accepted clocks are non-negative safe integers. Non-safe persisted/imported values are normalized out, and non-safe Sync record clocks cannot outrank legitimate safe records or poison reconstruction.
+- Makes `nextMutationTime()` fail closed at the theoretical `Number.MAX_SAFE_INTEGER` ceiling rather than returning a non-advancing clock. Tombstone/namespace-move conflict ordering uses the same safe clock interpretation.
+- Adds a permanent regression proven red 4/4 on untouched 1.32.1.6 and green after correction, covering state normalization, mutation advancement/exhaustion, Sync conflict ordering and Sync reconstruction. No permission, persisted schema, profile format, Sync/Recovery wire format, CSP or browser-floor change.
+
+## 1.32.1.6
+
+- Fixes a HIGH New Tab Space-switch concurrency race found by the 1.32.1.5 unknown-unknowns audit: delayed Personal/Work local-asset hydration can no longer resume after a newer authoritative state update and replace live state with a stale workspace while the write baseline still belongs to the newer authority.
+- Applies the same ownership rule to drag-preview Space hydration. If authoritative state changes while hydration/background preloading is in flight, MosaicSync discards the stale result and retries from current state; superseded Space operations abandon their result entirely.
+- Adds a permanent adversarial regression proven red 3/3 on 1.32.1.5 and green after correction. The regression injects a newer authoritative shortcut during delayed hydration, completes the Space switch/drag preview, and proves the concurrent shortcut survives the subsequent local save.
+- No Normal Sync/Recovery algorithm, persisted schema, profile format, permission, wire format, CSP or browser-floor change.
+
 ## 1.32.1.5
 
 - Clarifies Sync status direction/provenance: exact incoming receipts show the friendly source-device name, while collaborative/non-exact receipts are labelled as combined changes from the user’s other devices instead of implying one unknown sender.

@@ -22,7 +22,7 @@ import {
   normalizeWorkspace,
   replaceWorkspaceNormalized,
   selectActiveSpaceNormalized,
-  stampSettingsMutationClocks,
+  stampSettingsMutationClocksTrustedNormalized,
   stateFromRecords,
   syncRecordEqual
 } from "./model.js";
@@ -283,8 +283,8 @@ function rebaseWorkspace(baseWorkspace, intendedWorkspace, latestWorkspace) {
  */
 export function rebaseConcurrentState(baseState, intendedState, latestState) {
   const base = normalizeState(baseState);
-  const intended = stampSettingsMutationClocks(base, normalizeState(intendedState));
-  const latest = stampSettingsMutationClocks(base, normalizeState(latestState));
+  const intended = stampSettingsMutationClocksTrustedNormalized(base, normalizeState(intendedState));
+  const latest = stampSettingsMutationClocksTrustedNormalized(base, normalizeState(latestState));
 
   let merged = latest;
   for (const spaceId of SPACE_IDS) {

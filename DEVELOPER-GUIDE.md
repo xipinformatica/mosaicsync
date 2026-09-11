@@ -1,4 +1,31 @@
+## 1.33.0.4 Snow Leopard II lazy secondary-UI contract
+
+Step 3 begins with one interaction-only shell at a time. The Wallpaper Gallery is no longer permitted in initial `newtab.html` or eager `getElementById()` wiring; `newtab/wallpaper-gallery-shell.js` must remain dynamically imported on first use. Because lazy construction adds an asynchronous boundary, child UI must capture and revalidate the owning Settings `__mosaicOwnershipGeneration` before `showModal()`. Dynamically created `[data-close-dialog]` controls must install their own close wiring instead of relying on the startup-only document scan. Do not move larger Settings/dialog surfaces behind lazy construction until the previous slice is regression-tested and its structural reduction is frozen.
+
+## 1.33.0.3 Snow Leopard II normalized-state fast-path contract
+
+Step 2 permits a fast path only after the relevant state has already crossed the same defensive normalization boundary in the current operation. `createPersistedWriteBaseline()` is restricted to the exact compact object delivered by authoritative `storage.local` state reads/events and must clone rather than normalize/project it; this preserves exact optimistic-concurrency identity. `stampSettingsMutationClocksTrustedNormalized()` is restricted to state objects already returned by `normalizeState()`. Raw/imported/persisted inputs must continue through `stampSettingsMutationClocks()` or an explicit `normalizeState()` first. Never extend either fast path by shape-checking alone or by trusting session/render caches.
+
+## 1.33.0.2 Snow Leopard II critical-path census contract
+
+Step 1 adds `npm run perf:critical-path` and freezes `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json`. The census is intentionally structural plus local startup timing: parser-blocking bootstraps, static-vs-dynamic module ownership, eager DOM bindings, initial DOM ownership and the existing local `__mosaicsyncStartupTiming` phases. New phases (`shellLocalized`, `uiBindingsReady`, `moduleSetupReady`, `sessionCacheReady`, `localStateMaterialized`) are diagnostics only; never persist or transmit them. The census establishes two high-value follow-ups without optimizing them yet: Step 2 must trace repeated trust-boundary normalization on already-trusted internal state, and Step 3 must measure whether the 534/642 secondary DOM elements and 165/200 secondary eager ID bindings can be moved behind their interaction boundaries. Parser bootstraps and storage re-reads remain presumed safety/performance boundaries until browser evidence proves otherwise.
+
+## 1.33.0.1 Snow Leopard II measurement contract
+
+Snow Leopard II begins with instrumentation, not optimization. Run `npm run perf:baseline` after a deterministic build to capture package size, synthetic benchmark distributions, initial New Tab DOM composition, static New Tab module closure, shared storage API call sites, and real-browser startup phases when compatible drivers are available. The baseline tool is local-only: do not add network reporting or extension-storage persistence for performance data. Compare host-sensitive timings only on comparable hardware/runtime conditions; structural counts and package bytes are deterministic release-to-release signals. Every subsequent Snow Leopard II optimization must identify the measured cost, record before/after values, and preserve the authority/Sync/Recovery/concurrency boundaries documented below. See `docs/SNOW-LEOPARD-II.md` and `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json`.
+
+## 1.32.1.8 Settings child-dialog ownership
+
+Settings is the lifecycle owner of Custom Branding. `openCustomBrandingDialog()` performs asynchronous secondary-style/module/device-local-storage work before the modal can be shown, so it must not infer ownership merely from the final visibility of the Settings panel. It captures the Settings ownership generation at launch and revalidates that generation plus `isSettingsOpen()` after every relevant await. `closeSettingsPanel()` advances the generation before a later Settings session can become visible. Branding data remains local until the final ownership proof succeeds. This prevents both delayed-open-after-close and close+reopen ABA-style ownership mistakes.
+
+Permanent protection: `tests/corrective-13218.test.mjs`.
+
 # MosaicSync Developer Guide
+
+## 1.32.1.7 logical-clock domain
+
+Logical mutation timestamps that participate in local/Sync conflict ordering must remain non-negative JavaScript safe integers. Use `normalizeLogicalTime()` at model trust boundaries instead of accepting arbitrary finite numbers. `nextMutationTime()` must never return the same value as an accepted observed clock; at the theoretical safe-integer ceiling it fails closed with `RangeError` rather than emitting a non-monotonic clock. Sync record comparison/reconstruction must apply the same safe-integer rule, including `modifiedAt`, `deletedAt`, `spaceMoveAt`, Settings clocks and workspace clocks. This is a correctness boundary, not a performance optimization.
+
 
 > **Start here if you are new to the MosaicSync codebase.**
 >
@@ -57,6 +84,8 @@ The current New Tab UI corrective also preserves three presentation-ownership ru
 - **Sync status must not invent provenance.** Dataset authorship (the newest synchronized change) and local receipt timing are separate concepts. Exact incoming provenance may show the synchronized friendly device name; collaborative/non-exact provenance must be described as combined changes rather than attributed to one guessed sender.
 - **Folder scrolling is content-driven.** The folder panel owns the viewport height and the item grid is the flexible scroll region. Do not reintroduce a fixed pixel ceiling that can create a scrollbar even when all rows fit.
 - **Settings owns its child dialogs.** Wallpaper Gallery, Custom Branding and Recovery safety copies are modal children launched from the fixed Settings panel. Global outside-click/Escape handling must never close Settings behind an open Settings-owned child dialog; closing the child returns to Settings.
+- **Awaited Space hydration must prove ownership before touching live state.** A Personal/Work switch or drag preview may hydrate device-local assets asynchronously, but the result must remain local until both the owning Space operation and `stateMutationGeneration` still match. If authority changes during hydration/background preload, retry from the current state; if the UI operation is superseded, discard the result. Never pair a stale hydrated `state` with a newer `writeBaseline`.
+- **Logical clocks must stay inside the safe-integer domain.** Persisted/imported/local/Sync conflict clocks are non-negative safe integers. Normalize malformed/non-safe clocks at model trust boundaries, and keep `nextMutationTime()` fail-closed at numeric exhaustion instead of allowing a timestamp to stop advancing.
 
 ---
 

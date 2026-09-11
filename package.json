@@ -26,6 +26,8 @@
     "smoke:chrome": "node tools/build.mjs && node tools/browser-smoke.mjs --browser=chrome",
     "smoke:browsers": "python tools/package.py --firefox-dev && node tools/browser-smoke.mjs --browser=all",
     "certify": "node tools/certify-release.mjs",
-    "certify:mechanical": "node tools/certify-release.mjs --skip-browser-smoke"
+    "certify:mechanical": "node tools/certify-release.mjs --skip-browser-smoke",
+    "perf:baseline": "node tools/build.mjs && node tools/performance-baseline.mjs",
+    "perf:critical-path": "node tools/build.mjs && node tools/critical-path-census.mjs"
   }
 }

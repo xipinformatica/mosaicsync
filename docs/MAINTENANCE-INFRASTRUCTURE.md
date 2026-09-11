@@ -150,3 +150,10 @@ No adjacent cleanup is authorized. The freeze endpoint becomes 1.30.18.38 once t
 ## Permanent maintenance rule
 
 A future production-architecture change requires a demonstrated bug, browser/platform requirement, security/privacy requirement, measurable maintenance problem, or separately approved product objective. A large file, an aesthetic preference, or a desire to keep refactoring is not sufficient justification.
+
+
+## Snow Leopard II performance baseline
+
+`npm run perf:baseline` rebuilds the runtime and emits a machine-readable local performance snapshot. `tools/performance-baseline.mjs` combines package-size accounting, benchmark distributions, static New Tab HTML/module metrics, storage API call-site inventory, and real-browser startup snapshots when a compatible WebDriver pair is installed. The tool performs no network submission and writes no extension storage. `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json` is the immutable Step-0 reference.
+
+`npm run perf:critical-path` builds the current runtime and emits the Step-1 New Tab census: parser-time script budget, static module closure, already-deferred dynamic modules, initial DOM ownership, eager ID bindings and the local startup-phase inventory. `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json` is the immutable Step-1 reference. Treat its structural counts as ownership/candidate evidence, not as milliseconds; browser timing remains the authority for actual frame latency when a compatible driver pair is available.

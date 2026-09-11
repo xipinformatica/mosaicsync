@@ -31,7 +31,7 @@ test("1.30.18.29 audited runtime graph has no high-confidence dead production mo
   );
   assert.deepEqual(
     audit.retainedReviewSurfaces.unreferencedExports.map(item => item.name).sort(),
-    ["collectLocalAssets", "flattenState", "hostnameMatchesRegistrableDomain", "makeSettingsRecord", "moveShortcutBetweenSpaces"]
+    ["collectLocalAssets", "flattenState", "hostnameMatchesRegistrableDomain", "makeSettingsRecord", "moveShortcutBetweenSpaces", "stampSettingsMutationClocks"]
   );
 });
 

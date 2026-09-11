@@ -92,7 +92,7 @@ import {
   replaceWorkspaceNormalized,
   settingsRecordEqual,
   stableStringify,
-  stampSettingsMutationClocks,
+  stampSettingsMutationClocksTrustedNormalized,
   stateFromRecords,
   syncRecordEqual,
   uid,
@@ -5200,7 +5200,7 @@ export function startBackground(adapter) {
     // Repeat the inference defensively at the background boundary so a legacy/
     // direct storage.local writer with a newer whole settingsModifiedAt cannot
     // publish an unstamped Settings mutation or trigger clock oscillation.
-    const newState = stampSettingsMutationClocks(oldState, normalizeState(newRaw));
+    const newState = stampSettingsMutationClocksTrustedNormalized(oldState, normalizeState(newRaw));
     const personalChanged = workspaceCoreChanged(oldState, newState, PERSONAL_SPACE_ID, meta.deviceId);
     const workChanged = workspaceCoreChanged(oldState, newState, WORK_SPACE_ID, meta.deviceId);
     if (!personalChanged && !workChanged) return;
