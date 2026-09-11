@@ -520,13 +520,25 @@ export function repairTopLevelPositionsWithinCapacity(items, capacity) {
   if (!limit || source.length > limit) return repairTopLevelPositions(source);
   const used = new Set();
   const sorted = [...source].sort(comparePositionThenModified);
-  return sorted.map(item => {
-    let position = Number.isInteger(item.position) && item.position >= 0 && item.position < limit && !used.has(item.position)
+  const repaired = sorted.map(item => {
+    const originalPosition = Number.isInteger(item.position) && item.position >= 0 && item.position < limit
       ? item.position
       : -1;
+    let position = originalPosition >= 0 && !used.has(originalPosition)
+      ? originalPosition
+      : -1;
     if (position < 0) {
-      position = 0;
+      // Preserve spatial intent where possible: a colliding valid position
+      // searches forward first, then wraps. Invalid legacy positions start at 0.
+      // The final sort below is essential when wrapping selects a lower slot:
+      // normalization must reach a canonical fixed point in one pass.
+      const start = originalPosition >= 0 ? originalPosition : 0;
+      position = start;
       while (position < limit && used.has(position)) position += 1;
+      if (position >= limit) {
+        position = 0;
+        while (position < start && used.has(position)) position += 1;
+      }
     }
     used.add(position);
     if (item.type === "folder") {
@@ -541,6 +553,7 @@ export function repairTopLevelPositionsWithinCapacity(items, capacity) {
     }
     return { ...item, position };
   });
+  return repaired.sort(comparePositionThenModified);
 }
 
 export function expandGridSettingsToFit(settings, itemCount) {

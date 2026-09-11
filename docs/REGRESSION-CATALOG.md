@@ -140,3 +140,24 @@ This catalogue records high-value historical failures and the permanent tests th
 - `tests/test-architecture-1301830.test.mjs`
 
 **If it returns:** shared New Tab must call `getNativeTopSites()`; browser-specific Top Sites argument shapes belong only in `core/platform.js`. The generated Chromium smoke must keep rejecting `topSites.get(options)`.
+## R-012 — Position-collision repair required a second normalization pass
+
+**Historical symptom/risk:** two valid top-level records with the same `position` could be assigned distinct slots by `repairTopLevelPositionsWithinCapacity()` while the returned array remained in pre-repair order. The next normalization/restart then reordered the grid with no user action, and profile export→import→export was not canonical after the first repair. Ordinary two-device Sync can produce the collision when different devices concurrently move different shortcuts into the same slot.
+
+**Closed in:** 1.32.1.4.
+
+**Permanent protection:**
+- `tests/corrective-13214.test.mjs`
+
+**If it returns:** preserve the fixed-point invariant `normalizeState(normalizeState(x)) === normalizeState(x)`. Capacity-bounded collision repair must return records ordered by their final unique positions, not by the pre-repair collision ordering.
+## R-013 — No-op stale rebase manufactured bookkeeping changes
+
+**Historical symptom/risk:** `rebaseConcurrentState(base, base, latest)` could reconstruct an untouched Space through Sync records and materialize workspace bookkeeping clocks already implied by Settings group clocks. User data stayed intact, but the returned local/Sync signature no longer matched `latest`, so a semantic no-op could look like a new change.
+
+**Closed in:** 1.32.1.4 during the post-normalization chaos audit.
+
+**Permanent protection:**
+- `tests/corrective-13214.test.mjs`
+
+**If it returns:** a workspace whose intended payload is byte-for-value identical to its base is not a mutation. Preserve the normalized latest workspace directly instead of reconstructing it through Sync-record materialization.
+

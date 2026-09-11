@@ -1,3 +1,10 @@
+## 1.32.1.4
+
+- Fixes a Sync-reachable normalization fixed-point defect found by independent state-machine fuzzing: two top-level records sharing one grid position now become canonical in a single normalization pass instead of silently reordering on the next save/reload.
+- Makes bounded collision repair preserve forward spatial intent, wrap only when necessary, and return final-position order. Ordinary two-device merges that concurrently target the same slot are permanently regression-tested.
+- Prevents an exact no-op stale workspace rebase from manufacturing bookkeeping-clock changes in an untouched Space; a no-op intent now preserves the latest workspace byte-for-byte.
+- Adds collision-heavy seeded idempotence coverage, real two-device merge coverage, profile export→import→export canonicalization coverage, and a no-op rebase regression. No feature, permission, persisted-schema, profile-format, Sync/Recovery wire-format, CSP or browser-floor change.
+
 ## 1.32.1.3
 
 - Closes all five confirmed defects from the 1.32.1.2 adversarial forensic audit: top-level mutations can no longer create invisible out-of-grid items; hostile profile imports get bounded structural preflight and real raster validation; Custom Branding import rollback is serialized against newer branding saves; and failed Settings imports no longer install rejected state in memory before durable commit succeeds.

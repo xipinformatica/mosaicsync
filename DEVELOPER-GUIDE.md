@@ -45,6 +45,8 @@ If you only have 30 minutes before touching code, read this guide, then `docs/AR
 The current post-audit corrective adds three maintenance rules that future changes must preserve:
 
 - **Visible top-level capacity is authoritative.** A successful add, Frequently Visited insertion, cross-Space move, folder ungroup or grid-layout change must never create a top-level position outside `rows × columns`; full-grid operations must reject before destructive mutation.
+- **Normalization must be a one-pass fixed point.** `normalizeState(normalizeState(x))` must be semantically identical to `normalizeState(x)`. In particular, repairing colliding top-level positions must return the array in the final assigned-position order; Sync merges can legitimately deliver two independently edited records targeting the same slot.
+- **A no-op stale rebase must preserve latest authority exactly.** If a caller's workspace is unchanged from its baseline, rebasing it onto a newer persisted workspace must return that latest workspace without manufacturing timestamp/signature changes through record reconstruction.
 - **Profile import is an untrusted boundary.** Raw structure is bounded before recursive/hash-heavy work, and imported raster assets receive strict container/geometry validation before becoming durable local artwork. Runtime compatibility validation for already-stored legacy artwork is intentionally separate.
 - **Import rollback must not overwrite newer local authority.** Custom Branding rollback is conditional on still owning the value it wrote, and an imported profile candidate must not replace live New Tab state before the durable state commit succeeds.
 

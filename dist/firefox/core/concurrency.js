@@ -173,6 +173,12 @@ function settingsFieldsMatch(leftRecord, rightRecord, fields) {
 }
 
 function rebaseWorkspace(baseWorkspace, intendedWorkspace, latestWorkspace) {
+  // A stale caller with no workspace mutation must be a true no-op. Rebuilding
+  // an unchanged workspace through Sync-record materialization can otherwise
+  // advance local bookkeeping clocks that are already semantically represented
+  // by settings-group clocks, creating a false local/Sync signature change.
+  if (jsonValueEqual(baseWorkspace, intendedWorkspace)) return normalizeWorkspace(latestWorkspace);
+
   const baseState = workspaceAsState(baseWorkspace);
   const intendedState = workspaceAsState(intendedWorkspace);
   const latestState = workspaceAsState(latestWorkspace);

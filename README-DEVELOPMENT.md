@@ -1,3 +1,11 @@
+## 1.32.1.4 — normalization fixed-point corrective
+
+1.32.1.4 closes a Sync-reachable normalization defect found by the independent unknown-unknowns/state-machine audit. When two valid top-level records arrived with the same position, `repairTopLevelPositionsWithinCapacity()` could assign the loser a lower free slot while returning the array in pre-repair order. A second normalization then reordered the array even though no user data changed. Ordinary two-device Sync can create this shape when different devices concurrently move different shortcuts into the same slot.
+
+The capacity-bounded repair now searches forward from a colliding valid position, wraps only when required, and sorts once by final assigned positions before returning. The repaired workspace is therefore canonical after the first pass, profile export/import is stable after collision repair, and the permanent suite includes a seeded collision-heavy fixed-point property plus a real record-level two-device merge reproduction.
+
+The fresh post-fix chaos audit also exposed a no-op rebase edge in `concurrency.js`: when a stale caller carried no workspace mutation, rebuilding that untouched workspace through Sync-record materialization could advance bookkeeping timestamps already implied by Settings group clocks. `rebaseWorkspace()` now returns the normalized latest workspace directly when base and intended workspace payloads are identical, so no-op intent cannot create a false local/Sync signature change. No Sync/Recovery wire-format, profile-format, schema, permission or browser-floor change is introduced.
+
 
 ## 1.32.1.3 — adversarial correctness corrective
 
@@ -6,7 +14,7 @@
 Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
 # MosaicSync development
 
-> **Current release: 1.32.1.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+> **Current release: 1.32.1.4.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 

@@ -39,7 +39,7 @@ async function recomputeIntegrity(pkg) {
 }
 
 test("1.32.1.1 Custom Branding is a separate versioned storage.local domain", () => {
-  assert.equal(constants.VERSION, "1.32.1.3");
+  assert.equal(constants.VERSION, "1.32.1.4");
   assert.equal(constants.LOCAL_CUSTOM_BRANDING_KEY, "mosaicsync.custom-branding.v1");
   assert.equal(branding.CUSTOM_BRANDING_SCHEMA_VERSION, 1);
   assert.deepEqual(branding.DEFAULT_CUSTOM_BRANDING, { schemaVersion: 1, enabled: false, text: "", logo: "" });
