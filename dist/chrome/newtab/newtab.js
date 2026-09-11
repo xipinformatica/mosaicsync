@@ -624,6 +624,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentlyVisitedStatusKey = "frequentHidden";
   let frequentRefreshTimer = null;
   let frequentRefreshGeneration = 0;
+  let frequentLiveRefreshVerified = false;
   let frequentCandidateCacheAt = 0;
   let frequentCandidateCache = [];
   let hiddenFrequentDomains = new Set();
@@ -1879,6 +1880,9 @@ ${site.url}`;
 
   async function refreshFrequentlyVisited() {
     const generation = ++frequentRefreshGeneration;
+    // Any full refresh supersedes the previous proof until the current browser
+    // permission, live render and session projection all commit successfully.
+    frequentLiveRefreshVerified = false;
     if (!frequentlyVisitedEnabled) {
       renderFrequentlyVisited([]);
       updateFrequentRenderSnapshot([]);
@@ -1930,6 +1934,7 @@ ${site.url}`;
       if (generation !== frequentRefreshGeneration) return;
       updateFrequentRenderSnapshot(prepared);
       setFrequentlyVisitedStatus("frequentDeviceLocalStatus");
+      frequentLiveRefreshVerified = true;
     } catch {
       const cached = frequentRenderSnapshot?.enabled === true ? (frequentRenderSnapshot.sites || []) : [];
       renderFrequentlyVisited(cached, { authoritative: false });
@@ -1942,10 +1947,25 @@ ${site.url}`;
     frequentRefreshTimer = setTimeout(() => { void refreshFrequentlyVisited(); }, delay);
   }
 
+  async function reconcileFrequentlyVisitedPermission() {
+    if (!frequentlyVisitedEnabled) return;
+    let permitted = false;
+    try { permitted = await hasTopSitesPermission(); } catch {}
+    if (!frequentlyVisitedEnabled) return;
+    // The delayed startup pass exists to recover browser permission state that
+    // may briefly rehydrate after an extension update. If the first live pass
+    // already completed under a currently granted permission, repeating the
+    // same cached candidate filtering, favicon preparation and DOM decode work
+    // provides no additional authority. Failed/unverified starts and permission
+    // loss still fall through to the full historical reconciliation path.
+    if (permitted && frequentLiveRefreshVerified) return;
+    await refreshFrequentlyVisited();
+  }
+
   function scheduleFrequentlyVisitedPermissionReconciliation(delay = 1400) {
     setTimeout(() => {
       if (!frequentlyVisitedEnabled) return;
-      void refreshFrequentlyVisited();
+      void reconcileFrequentlyVisitedPermission();
     }, delay);
   }
 
@@ -1969,23 +1989,32 @@ ${site.url}`;
     return promise;
   }
 
+  // Destination Space readiness only needs the one background that can be
+  // painted under the currently resolved appearance. Keep this primitive narrow
+  // so Space intent/switch work never waits on the inactive Light/Dark variant.
+  function preloadEffectiveBackgroundForSettings(settings) {
+    return preloadResolvedBackground(effectiveBackgroundPresetId(settings), effectiveBackgroundImageValue(settings));
+  }
+
+  // The active Space keeps a broader post-paint warm for appearance continuity:
+  // current effective background plus only the alternate theme preset. This is
+  // deliberately separate from destination-Space correctness/intent warming.
   function preloadBackgroundForSettings(settings) {
-    const jobs = [preloadResolvedBackground(effectiveBackgroundPresetId(settings), effectiveBackgroundImageValue(settings))];
+    const jobs = [preloadEffectiveBackgroundForSettings(settings)];
     if (settings?.themeWallpapersEnabled === true) {
-      for (const presetId of [settings.lightBackgroundPreset, settings.darkBackgroundPreset]) {
-        if (presetId && BACKGROUND_PRESETS[presetId]) jobs.push(preloadResolvedBackground(presetId));
-      }
+      const currentTheme = effectiveThemeFor(settings);
+      const alternatePresetId = currentTheme === "light"
+        ? settings.darkBackgroundPreset
+        : settings.lightBackgroundPreset;
+      if (alternatePresetId && BACKGROUND_PRESETS[alternatePresetId]) jobs.push(preloadResolvedBackground(alternatePresetId));
     }
     return Promise.all(jobs).then(() => undefined);
   }
 
-  function preloadOtherSpaceBackgrounds() {
-    if (!isMultipleSpacesEnabled()) return;
-    for (const spaceId of SPACE_IDS) {
-      if (spaceId === state.activeSpaceId) continue;
-      const settings = state?.spaces?.[spaceId]?.settings;
-      if (settings) void preloadBackgroundForSettings(settings);
-    }
+  function preloadSpaceBackgroundOnIntent(spaceId) {
+    if (!isMultipleSpacesEnabled() || !SPACE_IDS.includes(spaceId) || spaceId === state.activeSpaceId) return Promise.resolve();
+    const settings = state?.spaces?.[spaceId]?.settings;
+    return settings ? preloadEffectiveBackgroundForSettings(settings) : Promise.resolve();
   }
 
   function stampImportedProfileState(importedState) {
@@ -2140,7 +2169,6 @@ ${site.url}`;
     scheduleIdleWork(() => maybeShowWebAccessPrompt().catch(() => {}), 900);
     scheduleIdleWork(() => refreshBrandIdentity().catch(() => {}), 80);
     void preloadBackgroundForSettings(state.settings);
-    preloadOtherSpaceBackgrounds();
     if (meta.syncEnabled && !meta.syncInitialized && meta.syncBootstrapMode === "await-remote") {
       scheduleIdleWork(() => sendSyncMessage("mosaicsync:wait-for-remote").catch(() => {}), 500);
     }
@@ -2555,7 +2583,7 @@ ${site.url}`;
 
       if (preloadBackground) {
         const targetSettings = hydratedState.spaces?.[spaceId]?.settings;
-        if (targetSettings) await preloadBackgroundForSettings(targetSettings);
+        if (targetSettings) await preloadEffectiveBackgroundForSettings(targetSettings);
         if (!isCurrent()) return null;
         if (sourceGeneration !== stateMutationGeneration || sourceState !== state) continue;
       }
@@ -2713,7 +2741,6 @@ ${site.url}`;
     refreshSpacesSettings();
     scheduleAppearanceHintRefresh(state.settings);
     refreshFirstPaintCaches(state, meta);
-    if (enabled) preloadOtherSpaceBackgrounds();
   }
 
   async function switchActiveSpace(spaceId) {
@@ -2766,7 +2793,6 @@ ${site.url}`;
     }
     refreshFirstPaintCaches(state, meta);
     requestMissingSiteIcons();
-    preloadOtherSpaceBackgrounds();
     devMark("newtab:space-switch:end");
     devMeasure("newtab:space-switch", "newtab:space-switch:start", "newtab:space-switch:end");
 
@@ -7046,9 +7072,14 @@ ${t("clearSyncWarning")}`);
   if (settingsTipsLink) settingsTipsLink.href = TIPS_URL;
   if (settingsSupportLink) settingsSupportLink.href = SUPPORT_URL;
   for (const button of spaceButtons) {
+    const warmDestinationBackground = () => { void preloadSpaceBackgroundOnIntent(button.dataset.spaceId); };
+    button.addEventListener("pointerenter", warmDestinationBackground);
+    button.addEventListener("pointerdown", warmDestinationBackground);
+    button.addEventListener("focus", warmDestinationBackground);
     button.addEventListener("click", () => { void switchActiveSpace(button.dataset.spaceId); });
     button.addEventListener("dragenter", event => {
       if (!crossSpaceDrag) return;
+      void preloadSpaceBackgroundOnIntent(button.dataset.spaceId);
       event.preventDefault();
       clearTimeout(crossSpaceHoverTimer);
       for (const candidate of spaceButtons) candidate.classList.remove("drag-space-target");
@@ -7363,7 +7394,6 @@ ${t("clearSyncWarning")}`);
       reconcileLauncherAfterExternalState();
       updateSpaceSwitcher();
       scheduleFrequentlyVisitedRefresh();
-      preloadOtherSpaceBackgrounds();
       scheduleAppearanceHintRefresh(state.settings);
       refreshFirstPaintCaches(state, meta);
       if (meta?.syncEnabled && meta?.syncInitialized) {
@@ -7445,6 +7475,7 @@ ${t("clearSyncWarning")}`);
     const spaceId = event.code === "Digit1" ? "personal" : event.code === "Digit2" ? "work" : "";
     if (!spaceId) return;
     event.preventDefault();
+    void preloadSpaceBackgroundOnIntent(spaceId);
     void switchActiveSpace(spaceId);
   });
 

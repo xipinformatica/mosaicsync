@@ -7,9 +7,9 @@ Snow Leopard II begins from frozen correctness baseline **1.32.1.8**. Its rule i
 - **Step 0 — Instrumentation and immutable baseline: DONE in 1.33.0.1.** Adds local-only performance tooling, machine-readable benchmark distributions, deterministic New Tab structural budgets, package-size capture, storage API call-site inventory, and richer real-browser startup snapshots when drivers are available. No product telemetry or persistence is added.
 - **Step 1 — New Tab critical-path census: DONE in 1.33.0.2.** Freezes parser/bootstrap, static-module, eager DOM-binding and startup-phase ownership into `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json`. The census confirms that 534/642 initial elements and 165/200 eager ID bindings belong to secondary Settings/dialog UI, while 24 static modules / ~654 KB are evaluated before the main module body runs.
 - **Step 2 — State computation and serialization: DONE in 1.33.0.3.** Exact persisted compact state now becomes the optimistic-write baseline by detached clone instead of normalize+projection, and persistence/Sync/rebase carry normalized-state proof into Settings-clock stamping rather than revalidating the same intended tree. External/persisted trust boundaries remain defensive.
-- **Step 3 — DOM/CSS/lazy secondary UI: IN PROGRESS through 1.33.0.6.** Step 3A (1.33.0.4) moved Wallpaper Gallery behind first use; 1.33.0.5 hardened focused coverage/census accounting; Step 3B (1.33.0.6) moves the Bookmarks dialog shell and dedicated controller out of ordinary startup while preserving the same controller ownership and lazy browser-Bookmarks API boundary. Continue one natural UI boundary at a time; do not move the full Settings surface in one release.
-- **Step 4 — Asset/image/network frugality.** Reduce unnecessary decode/allocation/preload work without first-frame regressions.
-- **Step 5 — Storage/background frugality.** Remove only I/O proven redundant without weakening freshness or concurrency revalidation.
+- **Step 3 — DOM/CSS/lazy secondary UI: DONE in 1.33.0.6.** Step 3A (1.33.0.4) moved Wallpaper Gallery behind first use; 1.33.0.5 hardened focused coverage/census accounting; Step 3B (1.33.0.6) moved the Bookmarks dialog shell and dedicated controller out of ordinary startup. The remaining untouched surfaces are either too small to justify another ownership boundary or materially more lifecycle-sensitive, so Step 3 stops rather than forcing risk for diminishing returns.
+- **Step 4 — Asset/image/network frugality: DONE in 1.33.0.9.** Step 4A removes unconditional inactive-Space background warming from ordinary New Tab/post-mutation maintenance. Step 4B narrows destination-Space intent/switch warming to the single currently effective background. Step 4C keeps the historical delayed Top Sites permission recheck but skips a duplicate full Frequently Visited render/favicon-preparation pass after a healthy verified startup. Failed/unverified starts and permission loss still use the full recovery path.
+- **Step 5 — Storage/background frugality: IN PROGRESS in 1.33.0.10.** Step 5A is measurement-only: it freezes direct storage call sites, background wake/listener topology and representative cold-worker startup/alarm storage counts before any I/O is removed. Full Sync namespace reads remain protected until a later slice proves that two reads observe the same semantic authority.
 - **Step 6 — Lifetime and memory.** Stress repeated New Tab/UI cycles and fix demonstrated retention.
 - **Step 7 — Runtime loading/dead work.** Remove or defer code only when reachability and runtime traces prove it does not earn startup cost.
 - **Step 8 — Freeze and adversarial performance audit.** Re-run correctness, browser, memory, startup and concurrency certification and look specifically for safety shortcuts introduced by optimization.
@@ -126,3 +126,62 @@ Canonical Step-3B snapshot: `docs/SNOW-LEOPARD-II-STEP3B-1.33.0.6.json`.
 - Package payload grows modestly because the deferred programmatic shell still ships: roughly **+5.6 KB raw / +1.7 KB deflated** per browser versus 1.33.0.5. Step 3 optimizes startup work, not archive size.
 
 No wall-clock startup claim is made until compatible real-browser driver pairs are available.
+
+
+## Step 4A intent-driven inactive-Space background warming
+
+1.33.0.7 closes Step 3 after two measured low-risk extractions and begins asset/decode frugality with a narrow background-preload change.
+
+- 1.33.0.6 automatically called `preloadOtherSpaceBackgrounds()` from four broad lifecycle paths: ordinary post-paint maintenance, enabling Spaces, successful Space switching and profile import. Those calls could allocate/decode the inactive Space background even if the user never switched Spaces.
+- 1.33.0.7 removes that broad helper. `preloadSpaceBackgroundOnIntent(spaceId)` targets only one valid inactive destination Space.
+- Pointer hover, pointer down, keyboard focus, cross-Space drag intent and the Alt+Shift keyboard shortcut issue a best-effort destination warm hint. The bounded preload cache deduplicates overlapping hints.
+- `switchActiveSpace()` still calls `hydrateSpaceForOwnedOperation(spaceId, isCurrentSwitch, true)`, so the authoritative switch path itself continues to await destination background readiness and preserves the no-white-frame ownership rule even when no earlier hint ran.
+- The active Space's existing post-paint `preloadBackgroundForSettings(state.settings)` call remains as a negative control; Step 4A does not change current-background continuity or Settings preview behavior.
+
+Canonical evidence: `docs/SNOW-LEOPARD-II-STEP4A-1.33.0.7.json`.
+
+
+Canonical Step-4B snapshot: `docs/SNOW-LEOPARD-II-STEP4B-1.33.0.8.json`.
+
+## Step 4B effective-only destination background readiness
+
+1.33.0.8 removes another piece of speculative image work from Space switching without weakening the switch correctness owner.
+
+- `preloadEffectiveBackgroundForSettings(settings)` warms exactly the background that `effectiveBackgroundPresetId()` / `effectiveBackgroundImageValue()` can paint under the current resolved appearance.
+- Space hover/focus/drag/keyboard intent now calls that effective-only primitive instead of the broader active-Space theme warmer.
+- `hydrateSpaceForOwnedOperation(..., true)` likewise waits only for the effective destination background before committing the Space. A destination workspace with Separate Light/Dark Wallpapers no longer makes the switch wait for the inactive appearance variant.
+- The broader `preloadBackgroundForSettings(state.settings)` remains on the active Space after paint. It warms the current background plus only the alternate theme preset, preserving smooth later Light/Dark appearance changes as an explicit negative control.
+- The bounded preload cache remains the deduplication owner; no new image cache, persistence, network path or authority is introduced.
+
+Step 4 remained in progress after this slice.
+
+
+Canonical Step-5A snapshot: `docs/SNOW-LEOPARD-II-STEP5A-1.33.0.10.json`.
+
+## Step 5A storage/background census
+
+1.33.0.10 begins Step 5 without changing production storage behavior. The new local-only `npm run perf:storage-background` census records both static storage ownership and representative cold MV3-worker paths.
+
+- Shared runtime contains **117 direct extension-storage API call sites**: 24 `local.get`, 21 `local.set`, 7 `local.remove`, 30 `sync.get`, 10 `sync.getBytesInUse`, 1 `sync.set`, 1 `sync.remove`, 13 `session.get`, 9 `session.set` and 1 `session.remove`.
+- There are **27 direct full `storage.sync.get(null)` sites** and one full `storage.local.get(null)` site. These are inventory counts, not deletion targets.
+- The shared background core installs **10 event-listener wake surfaces**.
+- In the deterministic cold-worker harness, an established Sync-off startup performs **7 local reads / 0 Sync reads**. An established Sync-on startup performs **13 local reads / 2 full Sync reads**. The periodic Sync-watch alarm performs **8 local reads / 3 full Sync reads**. Firefox and Chromium generated runtimes produce the same counts.
+- The apparently adjacent full Sync reads are not yet proven redundant. Catastrophic-loss detection intentionally establishes fresh namespace evidence before normal reconciliation; pending durable journals and delivered-core repair may mutate authority between that guard and the later merge read; device-snapshot garbage collection performs a separate fresh pre-delete revalidation.
+
+Therefore Step 5A is intentionally **measurement-only**. No production storage read has been removed. The next Step-5 slice must target one concrete call path and prove, with a red-before-green regression, that the reused/elided read observes the exact same semantic snapshot and cannot weaken loss detection, pending-journal authority, Web-Lock revalidation, crash safety or destructive cleanup freshness.
+
+
+Canonical Step-4C snapshot: `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`.
+
+## Step 4C Frequently Visited delayed-reconciliation fast path
+
+1.33.0.9 closes Step 4 with one final measured image/DOM frugality correction in the device-local Frequently Visited startup path.
+
+- The historical ~1.4 s startup reconciliation remains. It still rechecks the installation-local Top Sites permission so browser permission rehydration after an update can self-heal the feature.
+- A successful full live refresh now records only an ephemeral New-Tab-local verification bit, and only after the live cards and session projection both commit.
+- When the delayed permission check confirms permission is still granted and that verified live refresh already completed, MosaicSync stops there instead of rebuilding the same cached candidate cards, waiting for the same favicon decodes and preparing the same session-only derivatives again.
+- If the initial live refresh did not complete, or if permission is missing at reconciliation time, the existing full `refreshFrequentlyVisited()` path still runs. Permission `onAdded`/`onRemoved` handlers remain unchanged.
+- Deterministic five-card healthy-startup accounting is **2 → 1** full FV passes, **10 → 5** candidate/image-preparation items and **2 → 1** session projections, while the two permission observations remain **2 → 2**.
+- No persistent cache, new permission, network path, browser-history storage, Sync/Recovery behavior or authority boundary is introduced.
+
+Step 4 is closed here. The remote favicon resolver and active-background continuity paths were reassessed and deliberately left unchanged because their remaining work is correctness/quality-owned or already bounded/deduplicated. The next Snow Leopard II phase is Step 5 — storage/background frugality.

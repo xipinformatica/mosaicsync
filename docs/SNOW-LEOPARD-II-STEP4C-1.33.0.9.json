@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.9",
+  "step": "4C",
+  "purpose": "Frequently Visited delayed-permission reconciliation frugality",
+  "before": {
+    "healthyStartupPermissionChecks": 2,
+    "healthyStartupFullFrequentlyVisitedPasses": 2,
+    "candidatePassesForFiveVisibleSites": 10,
+    "sessionProjectionPasses": 2
+  },
+  "after": {
+    "healthyStartupPermissionChecks": 2,
+    "healthyStartupFullFrequentlyVisitedPasses": 1,
+    "candidatePassesForFiveVisibleSites": 5,
+    "sessionProjectionPasses": 1,
+    "delayedPermissionChecks": 1
+  },
+  "avoidedWork": [
+    "duplicate filtering of the same short-lived Top Sites candidate cache on a healthy startup",
+    "duplicate Frequently Visited DOM construction and favicon decode wait",
+    "duplicate session-only favicon derivative preparation and snapshot projection"
+  ],
+  "correctness": {
+    "delayedPermissionRecheckPreserved": true,
+    "initialFailureStillRetriesFullRefresh": true,
+    "permissionLossStillUsesFullRefresh": true,
+    "permissionGrantRecoveryStillUsesExistingFullRefreshPath": true,
+    "verifiedMarkerIsNewTabLocalOnly": true,
+    "noNewPersistenceOrCache": true,
+    "sessionPrivacyBoundaryUnchanged": true
+  },
+  "negativeControls": {
+    "candidateCacheLifetimeUnchanged": true,
+    "permissionEventHandlersUnchanged": true,
+    "slowDecodeGenerationProtectionUnchanged": true,
+    "remoteFaviconResolverUnchanged": true,
+    "backgroundPreloadBehaviorUnchangedFrom13308": true
+  },
+  "journey": {
+    "step4Status": "done",
+    "nextStep": "Step 5 — Storage/background frugality"
+  }
+}

@@ -70,7 +70,7 @@ test("1.33.0.6 focused Startup and New Tab groups include Step-3B coverage", () 
   }
 });
 
-test("1.33.0.6 freezes Step-3B evidence while keeping the larger Step 3 journey in progress", () => {
+test("1.33.0.6 freezes Step-3B evidence and remains the Step 3 completion endpoint", () => {
   const snapshot = JSON.parse(fs.readFileSync("docs/SNOW-LEOPARD-II-STEP3B-1.33.0.6.json", "utf8"));
   assert.equal(snapshot.version, "1.33.0.6");
   assert.equal(snapshot.after.initialElements, 598);
@@ -79,5 +79,5 @@ test("1.33.0.6 freezes Step-3B evidence while keeping the larger Step 3 journey 
   assert.equal(snapshot.after.secondaryEagerBindings, 151);
   assert.equal(snapshot.after.staticModuleCount, 23);
   const tracker = fs.readFileSync("docs/SNOW-LEOPARD-II.md", "utf8");
-  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: IN PROGRESS through 1\.33\.0\.6/);
+  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: DONE in 1\.33\.0\.6/);
 });

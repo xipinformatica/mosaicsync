@@ -1,3 +1,29 @@
+## 1.33.0.10 Snow Leopard II Step-5A storage/background measurement contract
+
+Step 5 begins with evidence, not storage-read deletion. `tools/storage-background-census.mjs` and `npm run perf:storage-background` are local-only developer tooling: they inventory direct `storage.local` / `storage.sync` / `storage.session` calls, freeze background listener/wake topology, and run deterministic cold-worker startup/alarm storage-count scenarios in both generated browsers. They must not send telemetry or persist performance measurements into extension storage.
+
+The frozen 1.33.0.10 census records 117 direct call sites, including 27 full `storage.sync.get(null)` sites. Similar-looking full reads are **not interchangeable authority by default**. In particular, catastrophic-loss detection, durable pending-journal replay, delivered-core repair and destructive Recovery/device-snapshot cleanup own separate freshness boundaries. A future Step-5 optimization may reuse or remove a read only after a dedicated regression proves that no authority-changing operation can occur between the candidate snapshots.
+
+Permanent protection: `tests/optimization-133010.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5A-1.33.0.10.json`. No production storage read is removed in this release.
+
+## 1.33.0.9 Snow Leopard II Step-4C Frequently Visited reconciliation contract
+
+The delayed startup Top Sites permission reconciliation is a recovery check, not a license to rebuild device-local Frequently Visited cards after a healthy refresh. `refreshFrequentlyVisited()` invalidates the ephemeral `frequentLiveRefreshVerified` proof before any awaited browser state and sets it only after the live render and session projection both commit. `reconcileFrequentlyVisitedPermission()` must still perform the delayed installation-local permission observation; it may skip the full refresh only when permission is currently granted and that New Tab has a verified live refresh. Missing permission or an unverified/failed initial refresh must continue through the full historical `refreshFrequentlyVisited()` path. Do not persist or Sync the proof, and do not weaken permission events, browser-history privacy, favicon generation checks or session-only projection rules.
+
+Permanent protection: `tests/optimization-13309.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`. Step 4 is closed at this release; continue with Step 5 storage/background measurement rather than extending favicon/image work without new evidence.
+
+## 1.33.0.8 Snow Leopard II Step-4B destination-background contract
+
+Space intent and `hydrateSpaceForOwnedOperation(..., true)` must warm only the currently effective destination background. They must not wait for the inactive Light/Dark wallpaper variant. The active Space may keep broader post-paint theme warming for appearance-transition continuity. The bounded preload cache remains the only preload deduplication owner.
+
+Permanent protection: `tests/optimization-13308.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4B-1.33.0.8.json`.
+
+## 1.33.0.7 Snow Leopard II Step-4A background-warming contract
+
+Inactive Space artwork is speculative, not startup authority. Ordinary New Tab/post-mutation maintenance must not broadly preload every inactive Space background. `preloadSpaceBackgroundOnIntent(spaceId)` may warm only one valid inactive destination in response to real switch intent (pointer hover/down, focus, drag intent or the keyboard Space shortcut). The actual `switchActiveSpace()` path remains the correctness owner and must continue to call `hydrateSpaceForOwnedOperation(..., true)` so destination background readiness is awaited before visual commit even when no hint ran. Keep active-Space post-paint warming intact unless separate evidence proves it redundant.
+
+Permanent protection: `tests/optimization-13307.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4A-1.33.0.7.json`.
+
 ## 1.33.0.6 Snow Leopard II Step-3B lazy Bookmarks contract
 
 Bookmarks is an interaction-only surface. The persistent `#bookmarksButton` remains in the primary launcher, but `#bookmarksDialog`, its descendant controls, `newtab/bookmarks-controller.js`, and `newtab/bookmarks-shell.js` must remain absent from the initial live DOM/static module closure. The first-use loader may dynamically acquire the shell/controller and secondary CSS, but after activation the existing Bookmarks controller remains the dedicated owner of button toggling, permission/search handling, close/reset lifecycle and folder-color menu. `core/bookmarks.js` must remain lazy. The shell must use safe DOM construction APIs only; do not introduce `innerHTML`, `outerHTML`, `insertAdjacentHTML`, remote markup or new authority/storage ownership.

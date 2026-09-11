@@ -126,6 +126,7 @@ function baseContext(state, hydrator) {
     isMultipleSpacesEnabled: () => true,
     hydrateLocalAssetsForSpaceNormalized: hydrator.hydrate,
     preloadBackgroundForSettings: async () => {},
+    preloadEffectiveBackgroundForSettings: async () => {},
     selectActiveSpaceNormalized: (input, id) => ({ ...clone(input), activeSpaceId: id }),
     releaseLocalAssetsForSpaceNormalized: input => clone(input),
     closeFrequentContextMenu() {},

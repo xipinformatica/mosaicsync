@@ -1,0 +1,60 @@
+{
+  "version": "1.33.0.7",
+  "journey": "Snow Leopard II",
+  "step": "4A",
+  "title": "Intent-driven inactive-Space background warming",
+  "before": {
+    "automaticInactiveSpaceWarmTriggers": 4,
+    "triggerSites": [
+      "ordinary post-paint maintenance",
+      "enable multiple Spaces",
+      "after successful Space switch",
+      "profile import reconciliation"
+    ]
+  },
+  "after": {
+    "automaticInactiveSpaceWarmTriggers": 0,
+    "intentDrivenWarmTriggers": 5,
+    "triggerSites": [
+      "Space pointerenter",
+      "Space pointerdown",
+      "Space focus",
+      "cross-Space dragenter",
+      "Alt+Shift Space keyboard shortcut"
+    ]
+  },
+  "correctness": {
+    "actualSwitchStillAwaitsDestinationBackground": true,
+    "switchOwner": "hydrateSpaceForOwnedOperation(spaceId, isCurrentSwitch, true)",
+    "boundedPreloadCachePreserved": true
+  },
+  "negativeControls": {
+    "activeSpacePostPaintWarmPreserved": true,
+    "firstPaintPathChanged": false,
+    "syncRecoveryChanged": false,
+    "storageSchemaChanged": false
+  },
+  "structuralBaselinePreserved": {
+    "initialLiveDomElements": 598,
+    "secondaryLiveElements": 490,
+    "eagerIdBindings": 186,
+    "secondaryEagerBindings": 151,
+    "staticModuleCount": 23,
+    "staticModuleRawBytes": 640749,
+    "note": "Step 4A changes preload scheduling, not DOM ownership; the 287-byte static-source increase is the destination-intent helper/listeners."
+  },
+  "package": {
+    "firefox": {
+      "rawBytes": 2417666,
+      "deflatedBytes": 706331,
+      "deltaRawVs13306": 287,
+      "deltaDeflatedVs13306": 23
+    },
+    "chrome": {
+      "rawBytes": 2439308,
+      "deflatedBytes": 720846,
+      "deltaRawVs13306": 287,
+      "deltaDeflatedVs13306": 22
+    }
+  }
+}

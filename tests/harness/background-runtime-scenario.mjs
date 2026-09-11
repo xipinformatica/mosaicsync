@@ -25,7 +25,7 @@ function makeEvent() {
 
 function makeStorageArea(initial = {}) {
   const data = new Map(Object.entries(clone(initial)));
-  const stats = { getCalls: 0, getAllCalls: 0, setCalls: 0, removeCalls: 0, clearCalls: 0 };
+  const stats = { getCalls: 0, getAllCalls: 0, getBytesInUseCalls: 0, setCalls: 0, removeCalls: 0, clearCalls: 0 };
   return {
     data, stats,
     failNextGetAll: false,
@@ -67,6 +67,7 @@ function makeStorageArea(initial = {}) {
     },
     async clear() { stats.clearCalls += 1; data.clear(); },
     async getBytesInUse(keys = null) {
+      stats.getBytesInUseCalls += 1;
       const obj = await this.get(keys);
       return Buffer.byteLength(JSON.stringify(obj));
     }
@@ -541,7 +542,86 @@ async function latestDeviceSnapshotRoot(syncArea, deviceId) {
   return entries.length ? { key: entries[0][0], root: entries[0][1] } : { key: '', root: null };
 }
 
-if (scenario === 'firefox-open-tab-cache-1301816') {
+function resetStorageStats() {
+  for (const area of [local, sync, session]) {
+    for (const key of Object.keys(area.stats)) area.stats[key] = 0;
+  }
+}
+
+function storageStatsSnapshot() {
+  const pick = area => ({ ...area.stats, itemCount: area.data.size });
+  return { local: pick(local), sync: pick(sync), session: pick(session) };
+}
+
+async function waitForStorageStatsToSettle({ stablePasses = 6, delayMs = 4, maxPasses = 80 } = {}) {
+  let previous = "";
+  let stable = 0;
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const current = JSON.stringify(storageStatsSnapshot());
+    if (current === previous) stable += 1;
+    else stable = 0;
+    if (stable >= stablePasses) return;
+    previous = current;
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  throw new Error("storage stats did not settle");
+}
+
+async function restartBackgroundForStep5Measurement(label) {
+  for (const event of Object.values(events)) event.listeners.splice(0);
+  const nonce = `${encodeURIComponent(label)}-${Date.now()}-${Math.random()}`;
+  const core = await import(`${pathToFileURL(resolve(root, `dist/${browserName}/background/background-core.js`)).href}?step5=${nonce}`);
+  const adapter = await import(`${pathToFileURL(resolve(root, `dist/${browserName}/background/background-adapter.js`)).href}?step5=${nonce}`);
+  assert.equal(core.startBackground(adapter.backgroundAdapter), true, 'cold measurement worker should start exactly once');
+  assert.equal(events.onMessage.listeners.length, 1, 'cold measurement worker should install one runtime message listener');
+}
+
+
+if (scenario === 'snow-step5a-startup-sync-off') {
+  const base = stateWith({ personal: [], work: [], autoPersonal: false, autoWork: false });
+  await seedLocalState(base, { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off' });
+  await storageCore.ensureLocalStorage();
+  await local.set({ [constants.LOCAL_MAINTENANCE_MIGRATIONS_KEY]: 2 });
+  await restartBackgroundForStep5Measurement('startup-sync-off');
+  resetStorageStats();
+  events.onStartup.listeners[0]();
+  await waitForStorageStatsToSettle();
+  console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
+}
+
+else if (scenario === 'snow-step5a-startup-sync-on') {
+  const base = stateWith({ personal: [], work: [], autoPersonal: false, autoWork: false });
+  await seedLocalState(base, { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off', deviceId: 'step5-device' });
+  await storageCore.ensureLocalStorage();
+  await local.set({ [constants.LOCAL_MAINTENANCE_MIGRATIONS_KEY]: 2 });
+  const enabled = await send({ type: 'mosaicsync:set-sync-enabled', enabled: true });
+  assert.equal(enabled?.ok, true);
+  const bootstrapped = await send({ type: 'mosaicsync:bootstrap-local' });
+  assert.equal(bootstrapped?.ok, true);
+  await restartBackgroundForStep5Measurement('startup-sync-on');
+  resetStorageStats();
+  events.onStartup.listeners[0]();
+  await waitForStorageStatsToSettle();
+  console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
+}
+
+else if (scenario === 'snow-step5a-sync-watch-alarm') {
+  const base = stateWith({ personal: [], work: [], autoPersonal: false, autoWork: false });
+  await seedLocalState(base, { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off', deviceId: 'step5-device' });
+  await storageCore.ensureLocalStorage();
+  await local.set({ [constants.LOCAL_MAINTENANCE_MIGRATIONS_KEY]: 2 });
+  const enabled = await send({ type: 'mosaicsync:set-sync-enabled', enabled: true });
+  assert.equal(enabled?.ok, true);
+  const bootstrapped = await send({ type: 'mosaicsync:bootstrap-local' });
+  assert.equal(bootstrapped?.ok, true);
+  await restartBackgroundForStep5Measurement('sync-watch-alarm');
+  resetStorageStats();
+  events.onAlarm.listeners[0]({ name: constants.SYNC_WATCH_ALARM });
+  await waitForStorageStatsToSettle();
+  console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
+}
+
+else if (scenario === 'firefox-open-tab-cache-1301816') {
   assert.equal(browserName, 'firefox');
   websiteAccess = true;
   const pageUrl = 'https://cached.test/path';

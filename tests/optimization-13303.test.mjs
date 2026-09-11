@@ -94,5 +94,5 @@ test("1.33.0.3 freezes the Step-2 optimization evidence and advances the journey
   assert.ok(snapshot.benchmarks.settingsStampMedianSpeedup > 10);
   const tracker = await text("docs/SNOW-LEOPARD-II.md");
   assert.match(tracker, /Step 2 — State computation and serialization: DONE in 1\.33\.0\.3/);
-  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: (?:NEXT|IN PROGRESS)/);
+  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: (?:NEXT|IN PROGRESS|DONE in 1\.33\.0\.6)/);
 });

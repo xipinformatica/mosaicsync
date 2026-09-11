@@ -1,4 +1,21 @@
-Current release: 1.33.0.6
+Current release: 1.33.0.10
+
+## 1.33.0.10 — Snow Leopard II Step 5A: storage/background census
+
+1.33.0.10 begins Step 5 as a measurement-only release. It adds a local developer census for direct extension-storage calls, background worker wake/listener topology and deterministic cold-worker startup/Sync-watch storage counts in both generated browsers. The snapshot records 117 direct storage API call sites and shows 0 full Sync reads on an established Sync-off startup, 2 on an established Sync-on startup and 3 on a Sync-watch alarm. No production storage read is removed because the adjacent reads currently cross distinct freshness, durable-journal, catastrophic-loss or destructive-cleanup boundaries.
+
+## 1.33.0.9 — Snow Leopard II Step 4C: Frequently Visited reconciliation frugality
+
+1.33.0.9 closes Step 4. The delayed startup permission reconciliation remains, but after a fully verified live Frequently Visited refresh it performs only the required Top Sites permission recheck instead of rebuilding the same cached cards, favicon decode work and session projection. Failed/unverified starts and missing permission still take the full recovery path. No Sync/Recovery/storage-authority, permission, privacy or format changes.
+
+## 1.33.0.8 — Snow Leopard II Step 4B: effective-only destination background readiness
+
+1.33.0.8 narrows destination-Space image warming again: hover/focus/drag/keyboard intent and the correctness-owned Space-switch preload now resolve only the background that can actually be painted under the current effective Light/Dark appearance. The active Space keeps its broader post-paint alternate-theme warm for later appearance continuity. No Sync/Recovery/storage-authority behavior changes.
+
+
+## 1.33.0.7 — Snow Leopard II Step 4A: intent-driven inactive-Space background warming
+
+1.33.0.7 closes Step 3 after the Wallpaper Gallery and Bookmarks extractions and begins Step 4. Inactive-Space backgrounds are no longer decoded automatically from broad New Tab lifecycle paths. A destination background is warmed only when pointer/focus/drag/keyboard intent indicates a likely Space switch; the actual switch path still awaits destination readiness before visual commit. Active-Space post-paint warming and every Sync/Recovery/storage authority boundary remain unchanged.
 
 ## 1.33.0.6 — Snow Leopard II Step 3B: lazy Bookmarks UI
 

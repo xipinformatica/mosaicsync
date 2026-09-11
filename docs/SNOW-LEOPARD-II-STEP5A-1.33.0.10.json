@@ -1,0 +1,1612 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.10",
+  "purpose": "Snow Leopard II Step 5A local-only storage/background census; no product telemetry",
+  "directStorageCallSites": {
+    "total": 117,
+    "byOperation": {
+      "local.get": 24,
+      "local.remove": 7,
+      "local.set": 21,
+      "session.get": 13,
+      "session.remove": 1,
+      "session.set": 9,
+      "sync.get": 30,
+      "sync.getBytesInUse": 10,
+      "sync.remove": 1,
+      "sync.set": 1
+    },
+    "byFile": {
+      "src/shared/background/background-core.js": 76,
+      "src/shared/background/sync-pending-journal.js": 7,
+      "src/shared/core/custom-branding.js": 6,
+      "src/shared/core/storage.js": 28
+    },
+    "bySemanticClass": {
+      "asset-favicon-lifecycle": 4,
+      "device-local-branding": 6,
+      "diagnostics-maintenance": 5,
+      "durable-concurrency-authority": 9,
+      "ephemeral-session-coordination": 23,
+      "local-storage-orchestration": 14,
+      "recovery-reset-quota": 17,
+      "startup-local-authority": 9,
+      "sync-freshness-reconciliation": 10,
+      "sync-storage-orchestration": 20
+    },
+    "fullAreaReads": [
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 230,
+        "area": "sync",
+        "operation": "get",
+        "owner": "startBackground",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 772,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 794,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 803,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 853,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3712,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3749,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3763,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3781,
+        "area": "sync",
+        "operation": "get",
+        "owner": "readCoreSources",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3811,
+        "area": "sync",
+        "operation": "get",
+        "owner": "pruneSupersededDeviceSnapshotGenerations",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3831,
+        "area": "sync",
+        "operation": "get",
+        "owner": "maybeGarbageCollectStaleDeviceSnapshots",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3839,
+        "area": "sync",
+        "operation": "get",
+        "owner": "maybeGarbageCollectStaleDeviceSnapshots",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4010,
+        "area": "sync",
+        "operation": "get",
+        "owner": "reconcileIfNewCommit",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4087,
+        "area": "sync",
+        "operation": "get",
+        "owner": "recoveryStorageModel",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4153,
+        "area": "sync",
+        "operation": "get",
+        "owner": "getRecoveryStorageManagement",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4164,
+        "area": "sync",
+        "operation": "get",
+        "owner": "cleanupRecoveryCopies",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4178,
+        "area": "sync",
+        "operation": "get",
+        "owner": "cleanupRecoveryCopies",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4200,
+        "area": "sync",
+        "operation": "get",
+        "owner": "getSyncStatus",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4431,
+        "area": "sync",
+        "operation": "get",
+        "owner": "bootstrapLocal",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5410,
+        "area": "sync",
+        "operation": "get",
+        "owner": "reconcileWork",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5652,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5710,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5740,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5756,
+        "area": "sync",
+        "operation": "get",
+        "owner": "readSyncSnapshot",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6162,
+        "area": "sync",
+        "operation": "get",
+        "owner": "createSyncBudget",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6204,
+        "area": "sync",
+        "operation": "get",
+        "owner": "canFitSyncItems",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6274,
+        "area": "sync",
+        "operation": "get",
+        "owner": "refreshQuota",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 43,
+        "area": "local",
+        "operation": "get",
+        "owner": "readPendingCrossSpaceSyncState",
+        "fullAreaRead": true,
+        "semanticClass": "durable-concurrency-authority"
+      }
+    ],
+    "sites": [
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 230,
+        "area": "sync",
+        "operation": "get",
+        "owner": "startBackground",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 267,
+        "area": "session",
+        "operation": "get",
+        "owner": "rememberDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 270,
+        "area": "session",
+        "operation": "set",
+        "owner": "rememberDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 280,
+        "area": "session",
+        "operation": "get",
+        "owner": "consumeDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 284,
+        "area": "session",
+        "operation": "set",
+        "owner": "consumeDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 296,
+        "area": "session",
+        "operation": "get",
+        "owner": "forgetDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 300,
+        "area": "session",
+        "operation": "set",
+        "owner": "forgetDurableLocalSignature",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 377,
+        "area": "sync",
+        "operation": "get",
+        "owner": "repairDeliveredCoreEvidence",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 411,
+        "area": "session",
+        "operation": "get",
+        "owner": "rememberDurableSyncChanges",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 417,
+        "area": "session",
+        "operation": "set",
+        "owner": "rememberDurableSyncChanges",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 426,
+        "area": "session",
+        "operation": "get",
+        "owner": "consumeDurableSyncChanges",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 433,
+        "area": "session",
+        "operation": "set",
+        "owner": "consumeDurableSyncChanges",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 470,
+        "area": "session",
+        "operation": "get",
+        "owner": "rememberPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 473,
+        "area": "session",
+        "operation": "set",
+        "owner": "rememberPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 489,
+        "area": "session",
+        "operation": "get",
+        "owner": "readPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 494,
+        "area": "session",
+        "operation": "set",
+        "owner": "readPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 510,
+        "area": "session",
+        "operation": "get",
+        "owner": "clearPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 514,
+        "area": "session",
+        "operation": "set",
+        "owner": "clearPendingShortcutNavigation",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 595,
+        "area": "local",
+        "operation": "get",
+        "owner": "mutateSyncDiagnostics",
+        "fullAreaRead": false,
+        "semanticClass": "diagnostics-maintenance"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 599,
+        "area": "local",
+        "operation": "set",
+        "owner": "mutateSyncDiagnostics",
+        "fullAreaRead": false,
+        "semanticClass": "diagnostics-maintenance"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 625,
+        "area": "local",
+        "operation": "get",
+        "owner": "readSyncContinuity",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 631,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeSyncContinuity",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 638,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeSyncRecoveryStatus",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 772,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 794,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 803,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 853,
+        "area": "sync",
+        "operation": "get",
+        "owner": "beginOrContinueCatastrophicSyncRecovery",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2745,
+        "area": "local",
+        "operation": "get",
+        "owner": "readFaviconQualityAuditLedger",
+        "fullAreaRead": false,
+        "semanticClass": "asset-favicon-lifecycle"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2774,
+        "area": "local",
+        "operation": "set",
+        "owner": "markFaviconQualityAuditsComplete",
+        "fullAreaRead": false,
+        "semanticClass": "asset-favicon-lifecycle"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2823,
+        "area": "local",
+        "operation": "get",
+        "owner": "readIconRecoveryQueue",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2833,
+        "area": "local",
+        "operation": "remove",
+        "owner": "writeIconRecoveryQueue",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2836,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeIconRecoveryQueue",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 2857,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeIconRecoveryStatus",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3211,
+        "area": "local",
+        "operation": "get",
+        "owner": "runOneTimeLegacyMaintenance",
+        "fullAreaRead": false,
+        "semanticClass": "diagnostics-maintenance"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3227,
+        "area": "local",
+        "operation": "remove",
+        "owner": "runOneTimeLegacyMaintenance",
+        "fullAreaRead": false,
+        "semanticClass": "diagnostics-maintenance"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3228,
+        "area": "local",
+        "operation": "set",
+        "owner": "runOneTimeLegacyMaintenance",
+        "fullAreaRead": false,
+        "semanticClass": "diagnostics-maintenance"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3712,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3749,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3763,
+        "area": "sync",
+        "operation": "get",
+        "owner": "profileRevisionFor",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3781,
+        "area": "sync",
+        "operation": "get",
+        "owner": "readCoreSources",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3811,
+        "area": "sync",
+        "operation": "get",
+        "owner": "pruneSupersededDeviceSnapshotGenerations",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3831,
+        "area": "sync",
+        "operation": "get",
+        "owner": "maybeGarbageCollectStaleDeviceSnapshots",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3839,
+        "area": "sync",
+        "operation": "get",
+        "owner": "maybeGarbageCollectStaleDeviceSnapshots",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 3958,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "bytesFor",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4010,
+        "area": "sync",
+        "operation": "get",
+        "owner": "reconcileIfNewCommit",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4087,
+        "area": "sync",
+        "operation": "get",
+        "owner": "recoveryStorageModel",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4095,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "recoveryStorageModel",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4100,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "recoveryStorageModel",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4153,
+        "area": "sync",
+        "operation": "get",
+        "owner": "getRecoveryStorageManagement",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4164,
+        "area": "sync",
+        "operation": "get",
+        "owner": "cleanupRecoveryCopies",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4178,
+        "area": "sync",
+        "operation": "get",
+        "owner": "cleanupRecoveryCopies",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4183,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "cleanupRecoveryCopies",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4200,
+        "area": "sync",
+        "operation": "get",
+        "owner": "getSyncStatus",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4201,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "getSyncStatus",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4424,
+        "area": "sync",
+        "operation": "get",
+        "owner": "bootstrapLocal",
+        "fullAreaRead": false,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4431,
+        "area": "sync",
+        "operation": "get",
+        "owner": "bootstrapLocal",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 4656,
+        "area": "local",
+        "operation": "get",
+        "owner": "module",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5410,
+        "area": "sync",
+        "operation": "get",
+        "owner": "reconcileWork",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5652,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5691,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5704,
+        "area": "session",
+        "operation": "remove",
+        "owner": "clearSyncData",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5710,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5739,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "clearSyncData",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5740,
+        "area": "sync",
+        "operation": "get",
+        "owner": "clearSyncData",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5756,
+        "area": "sync",
+        "operation": "get",
+        "owner": "readSyncSnapshot",
+        "fullAreaRead": true,
+        "semanticClass": "sync-freshness-reconciliation"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5866,
+        "area": "local",
+        "operation": "get",
+        "owner": "readAssetGcLedger",
+        "fullAreaRead": false,
+        "semanticClass": "asset-favicon-lifecycle"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 5880,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeAssetGcLedger",
+        "fullAreaRead": false,
+        "semanticClass": "asset-favicon-lifecycle"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6151,
+        "area": "sync",
+        "operation": "set",
+        "owner": "writeSyncItems",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6161,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "createSyncBudget",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6162,
+        "area": "sync",
+        "operation": "get",
+        "owner": "createSyncBudget",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6202,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "canFitSyncItems",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6203,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "canFitSyncItems",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6204,
+        "area": "sync",
+        "operation": "get",
+        "owner": "canFitSyncItems",
+        "fullAreaRead": true,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6231,
+        "area": "sync",
+        "operation": "remove",
+        "owner": "removeSyncItems",
+        "fullAreaRead": false,
+        "semanticClass": "sync-storage-orchestration"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6273,
+        "area": "sync",
+        "operation": "getBytesInUse",
+        "owner": "refreshQuota",
+        "fullAreaRead": false,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/background-core.js",
+        "line": 6274,
+        "area": "sync",
+        "operation": "get",
+        "owner": "refreshQuota",
+        "fullAreaRead": true,
+        "semanticClass": "recovery-reset-quota"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 43,
+        "area": "local",
+        "operation": "get",
+        "owner": "readPendingCrossSpaceSyncState",
+        "fullAreaRead": true,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 79,
+        "area": "local",
+        "operation": "set",
+        "owner": "writePendingCrossSpaceSync",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 86,
+        "area": "local",
+        "operation": "remove",
+        "owner": "clearPendingCrossSpaceSync",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 91,
+        "area": "local",
+        "operation": "get",
+        "owner": "readPendingLocalSyncMutation",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 112,
+        "area": "local",
+        "operation": "remove",
+        "owner": "clearPendingLocalSyncMutation",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 143,
+        "area": "local",
+        "operation": "remove",
+        "owner": "clearAllPendingSyncRecoveryState",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/background/sync-pending-journal.js",
+        "line": 153,
+        "area": "local",
+        "operation": "set",
+        "owner": "clearAllPendingSyncRecoveryState",
+        "fullAreaRead": false,
+        "semanticClass": "durable-concurrency-authority"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 110,
+        "area": "local",
+        "operation": "get",
+        "owner": "readCustomBranding",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 121,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeCustomBranding",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 129,
+        "area": "local",
+        "operation": "get",
+        "owner": "beginCustomBrandingImport",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 131,
+        "area": "local",
+        "operation": "set",
+        "owner": "beginCustomBrandingImport",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 140,
+        "area": "local",
+        "operation": "get",
+        "owner": "rollbackCustomBrandingImport",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/custom-branding.js",
+        "line": 143,
+        "area": "local",
+        "operation": "set",
+        "owner": "rollbackCustomBrandingImport",
+        "fullAreaRead": false,
+        "semanticClass": "device-local-branding"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 111,
+        "area": "session",
+        "operation": "set",
+        "owner": "setSessionBestEffort",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 127,
+        "area": "session",
+        "operation": "get",
+        "owner": "sessionStoredValueMatches",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 171,
+        "area": "local",
+        "operation": "get",
+        "owner": "retryPendingLocalAssetCleanup",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 179,
+        "area": "local",
+        "operation": "remove",
+        "owner": "retryPendingLocalAssetCleanup",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 185,
+        "area": "local",
+        "operation": "set",
+        "owner": "retryPendingLocalAssetCleanup",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 205,
+        "area": "local",
+        "operation": "get",
+        "owner": "readAssetMapForState",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 423,
+        "area": "session",
+        "operation": "get",
+        "owner": "readSessionRenderCache",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 473,
+        "area": "session",
+        "operation": "get",
+        "owner": "readSessionFrequentContext",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 566,
+        "area": "session",
+        "operation": "get",
+        "owner": "clearSessionFrequentlyVisitedSnapshot",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 588,
+        "area": "session",
+        "operation": "get",
+        "owner": "clearSessionFrequentlyVisitedSuppression",
+        "fullAreaRead": false,
+        "semanticClass": "ephemeral-session-coordination"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 628,
+        "area": "local",
+        "operation": "get",
+        "owner": "persistNormalizedState",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 688,
+        "area": "local",
+        "operation": "get",
+        "owner": "inferDeviceId",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 721,
+        "area": "local",
+        "operation": "get",
+        "owner": "inferDeviceId",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 762,
+        "area": "local",
+        "operation": "set",
+        "owner": "inferDeviceId",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 792,
+        "area": "local",
+        "operation": "remove",
+        "owner": "inferDeviceId",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 797,
+        "area": "local",
+        "operation": "set",
+        "owner": "inferDeviceId",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 860,
+        "area": "local",
+        "operation": "get",
+        "owner": "readLocalMeta",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 870,
+        "area": "local",
+        "operation": "get",
+        "owner": "commit",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 892,
+        "area": "local",
+        "operation": "set",
+        "owner": "commit",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 914,
+        "area": "local",
+        "operation": "get",
+        "owner": "updateLocalMeta",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 927,
+        "area": "local",
+        "operation": "set",
+        "owner": "updateLocalMeta",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 935,
+        "area": "local",
+        "operation": "get",
+        "owner": "repairStartupAuthoritiesIfNeeded",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 954,
+        "area": "local",
+        "operation": "set",
+        "owner": "repairStartupAuthoritiesIfNeeded",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 974,
+        "area": "local",
+        "operation": "get",
+        "owner": "readLocalStorageRaw",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 1044,
+        "area": "local",
+        "operation": "get",
+        "owner": "materializeLocalStorage",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 1046,
+        "area": "local",
+        "operation": "set",
+        "owner": "materializeLocalStorage",
+        "fullAreaRead": false,
+        "semanticClass": "startup-local-authority"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 1093,
+        "area": "local",
+        "operation": "set",
+        "owner": "writeActiveSpace",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      },
+      {
+        "file": "src/shared/core/storage.js",
+        "line": 1100,
+        "area": "local",
+        "operation": "get",
+        "owner": "writeActiveSpace",
+        "fullAreaRead": false,
+        "semanticClass": "local-storage-orchestration"
+      }
+    ]
+  },
+  "backgroundWakeTopology": {
+    "totalListeners": 10,
+    "listeners": [
+      {
+        "event": "browser.runtime.onInstalled",
+        "line": 906
+      },
+      {
+        "event": "browser.action?.onClicked?",
+        "line": 958
+      },
+      {
+        "event": "browser.runtime.onStartup",
+        "line": 962
+      },
+      {
+        "event": "browser.storage.onChanged",
+        "line": 1048
+      },
+      {
+        "event": "browser.alarms?.onAlarm?",
+        "line": 1123
+      },
+      {
+        "event": "browser.permissions?.onAdded?",
+        "line": 1173
+      },
+      {
+        "event": "browser.permissions?.onRemoved?",
+        "line": 1189
+      },
+      {
+        "event": "browser.tabs?.onUpdated?",
+        "line": 3417
+      },
+      {
+        "event": "browser.permissions?.onRemoved?",
+        "line": 3433
+      },
+      {
+        "event": "browser.runtime.onMessage",
+        "line": 3438
+      }
+    ]
+  },
+  "runtimeCensus": {
+    "firefox": {
+      "snow-step5a-startup-sync-off": {
+        "ok": true,
+        "scenario": "snow-step5a-startup-sync-off",
+        "storage": {
+          "local": {
+            "getCalls": 7,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 1,
+            "clearCalls": 0,
+            "itemCount": 5
+          },
+          "sync": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 0
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 1
+          }
+        },
+        "alarmCount": 0
+      },
+      "snow-step5a-startup-sync-on": {
+        "ok": true,
+        "scenario": "snow-step5a-startup-sync-on",
+        "storage": {
+          "local": {
+            "getCalls": 13,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 3,
+            "removeCalls": 1,
+            "clearCalls": 0,
+            "itemCount": 8
+          },
+          "sync": {
+            "getCalls": 2,
+            "getAllCalls": 2,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 6
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 3
+          }
+        },
+        "alarmCount": 1
+      },
+      "snow-step5a-sync-watch-alarm": {
+        "ok": true,
+        "scenario": "snow-step5a-sync-watch-alarm",
+        "storage": {
+          "local": {
+            "getCalls": 8,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 3,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 8
+          },
+          "sync": {
+            "getCalls": 3,
+            "getAllCalls": 3,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 6
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 1,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 3
+          }
+        },
+        "alarmCount": 1
+      }
+    },
+    "chrome": {
+      "snow-step5a-startup-sync-off": {
+        "ok": true,
+        "scenario": "snow-step5a-startup-sync-off",
+        "storage": {
+          "local": {
+            "getCalls": 7,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 1,
+            "clearCalls": 0,
+            "itemCount": 5
+          },
+          "sync": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 0
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 1
+          }
+        },
+        "alarmCount": 0
+      },
+      "snow-step5a-startup-sync-on": {
+        "ok": true,
+        "scenario": "snow-step5a-startup-sync-on",
+        "storage": {
+          "local": {
+            "getCalls": 13,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 3,
+            "removeCalls": 1,
+            "clearCalls": 0,
+            "itemCount": 8
+          },
+          "sync": {
+            "getCalls": 2,
+            "getAllCalls": 2,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 6
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 3
+          }
+        },
+        "alarmCount": 1
+      },
+      "snow-step5a-sync-watch-alarm": {
+        "ok": true,
+        "scenario": "snow-step5a-sync-watch-alarm",
+        "storage": {
+          "local": {
+            "getCalls": 8,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 3,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 8
+          },
+          "sync": {
+            "getCalls": 3,
+            "getAllCalls": 3,
+            "getBytesInUseCalls": 0,
+            "setCalls": 0,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 6
+          },
+          "session": {
+            "getCalls": 0,
+            "getAllCalls": 0,
+            "getBytesInUseCalls": 0,
+            "setCalls": 1,
+            "removeCalls": 0,
+            "clearCalls": 0,
+            "itemCount": 3
+          }
+        },
+        "alarmCount": 1
+      }
+    }
+  },
+  "interpretationBoundaries": {
+    "fullSyncReadsAreNotAssumedRedundant": true,
+    "reasons": [
+      "catastrophic-loss detection intentionally performs freshness reads before normal reconciliation",
+      "pending durable Sync journals and delivered-core repair can mutate authority between reads",
+      "device-snapshot garbage collection performs its own fresh pre-delete revalidation",
+      "session storage is disposable coordination/cache state and is not durable profile authority"
+    ],
+    "nextAction": "Use this census to choose a separately proven optimization; do not eliminate storage reads from count similarity alone."
+  }
+}

@@ -77,5 +77,5 @@ test("1.33.0.4 freezes the Step-3A evidence while leaving the larger DOM journey
   assert.equal(snapshot.after.eagerBindings, 198);
   assert.equal(snapshot.after.secondaryEagerBindings, 163);
   const tracker = fs.readFileSync("docs/SNOW-LEOPARD-II.md", "utf8");
-  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: IN PROGRESS (?:in 1\.33\.0\.4|through 1\.33\.0\.6)/);
+  assert.match(tracker, /Step 3 — DOM\/CSS\/lazy secondary UI: (?:IN PROGRESS (?:in 1\.33\.0\.4|through 1\.33\.0\.6)|DONE in 1\.33\.0\.6)/);
 });

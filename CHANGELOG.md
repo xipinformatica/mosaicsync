@@ -1,3 +1,36 @@
+## 1.33.0.10
+
+- Begins **Snow Leopard II Step 5 — storage/background frugality** with a measurement-only Step 5A census; no production storage read/write behavior changes.
+- Adds local-only `npm run perf:storage-background` tooling that inventories direct extension-storage call sites, freezes background listener/wake topology, and measures representative cold-worker startup and Sync-watch storage operations in both generated browsers.
+- Freezes **117** direct storage API call sites, including **27** full `storage.sync.get(null)` sites. Deterministic runtime counts are: established Sync-off startup **7 local reads / 0 Sync reads**; established Sync-on startup **13 local reads / 2 full Sync reads**; Sync-watch alarm **8 local reads / 3 full Sync reads**. Firefox and Chromium match.
+- Explicitly protects freshness boundaries: catastrophic-loss detection, durable pending-journal replay/repair, reconciliation and destructive device-snapshot cleanup are not allowed to share/elide reads merely because their counts look repetitive.
+- Adds permanent `optimization-133010` coverage and freezes Step-5A evidence in `docs/SNOW-LEOPARD-II-STEP5A-1.33.0.10.json`.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.9
+
+- Completes **Snow Leopard II Step 4 — asset/image/network frugality** with Step 4C: the delayed Frequently Visited startup permission reconciliation still rechecks installation-local Top Sites permission, but no longer repeats the full card/favicon preparation pipeline after a verified successful live refresh.
+- Healthy startup full Frequently Visited passes fall **2→1**; for five visible cards the deterministic candidate/image-preparation work falls **10→5** and session projection **2→1**, while permission observations remain **2→2**.
+- Failed or superseded first refreshes and missing permission still fall through to the historical full reconciliation path; permission `onAdded`/`onRemoved`, browser-history privacy boundaries, candidate-cache lifetime, favicon quality resolution and background continuity are unchanged.
+- Adds permanent `optimization-13309` coverage and freezes Step-4C evidence in `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`. Step 4 is closed; Step 5 storage/background frugality is next.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.8
+
+- Snow Leopard II Step 4B: Space destination intent and correctness-owned switching now preload only the background that can actually be painted under the current resolved Light/Dark appearance.
+- Separate Light/Dark Wallpapers no longer make a Space hover/switch decode or wait for the inactive appearance variant.
+- The active Space keeps broader post-paint theme warming as an explicit continuity safeguard; first paint, Sync, Recovery, storage authority, permissions and schemas are unchanged.
+- Adds permanent `optimization-13308` coverage and freezes Step-4B evidence in `docs/SNOW-LEOPARD-II-STEP4B-1.33.0.8.json`.
+
+## 1.33.0.7
+
+- Completes Snow Leopard II Step 3 at the 1.33.0.6 Bookmarks endpoint; remaining secondary surfaces are deliberately left eager because their risk/payoff no longer justifies another ownership boundary.
+- Begins Snow Leopard II Step 4A: removes four unconditional inactive-Space background warming triggers from ordinary post-paint, Space-enable, post-switch and profile-import paths.
+- Adds intent-driven destination warming on pointer hover/down, focus, cross-Space drag intent and the Alt+Shift Space shortcut.
+- Preserves the authoritative Space-switch guarantee: `hydrateSpaceForOwnedOperation(..., true)` still awaits destination background readiness before visual commit. Active-Space post-paint warming remains unchanged.
+- Adds permanent `optimization-13307` coverage and freezes Step-4A evidence in `docs/SNOW-LEOPARD-II-STEP4A-1.33.0.7.json`.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
 ## 1.33.0.6
 
 - Continues **Snow Leopard II Step 3** with Step 3B: the Bookmarks dialog shell and dedicated controller leave ordinary New Tab startup and are loaded on first Bookmarks use.

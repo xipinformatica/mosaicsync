@@ -1,0 +1,55 @@
+{
+  "version": "1.33.0.8",
+  "journey": "Snow Leopard II",
+  "step": "4B",
+  "title": "Effective-only destination background readiness",
+  "before": {
+    "destinationThemeVariantsWarmablePerIntentOrSwitch": 2,
+    "behavior": "Destination warming used preloadBackgroundForSettings(), which could decode the currently effective Light/Dark wallpaper plus the inactive appearance variant."
+  },
+  "after": {
+    "destinationThemeVariantsWarmablePerIntentOrSwitch": 1,
+    "behavior": "Space intent and correctness-owned Space hydration use preloadEffectiveBackgroundForSettings(), which warms only the background that can be painted under the current resolved appearance."
+  },
+  "correctness": {
+    "actualSwitchStillAwaitsEffectiveDestinationBackground": true,
+    "switchOwner": "hydrateSpaceForOwnedOperation(spaceId, isCurrentSwitch, true)",
+    "boundedPreloadCachePreserved": true
+  },
+  "negativeControls": {
+    "activeSpaceBroaderThemeWarmPreserved": true,
+    "firstPaintPathChanged": false,
+    "syncRecoveryChanged": false,
+    "storageSchemaChanged": false
+  },
+  "structuralBaselinePreserved": {
+    "initialLiveDomElements": 598,
+    "secondaryLiveElements": 490,
+    "eagerIdBindings": 186,
+    "secondaryEagerBindings": 151,
+    "staticModuleCount": 23,
+    "staticModuleRawBytes": 641485,
+    "deltaStaticModuleRawVs13307": 736,
+    "note": "Step 4B changes destination background preload scope, not DOM ownership; the small static-source increase is the effective-only helper and branch separation."
+  },
+  "package": {
+    "firefox": {
+      "rawBytes": 2418402,
+      "deflatedBytes": 706594,
+      "deltaRawVs13307": 736,
+      "deltaDeflatedVs13307": 263
+    },
+    "chrome": {
+      "rawBytes": 2440044,
+      "deflatedBytes": 721110,
+      "deltaRawVs13307": 736,
+      "deltaDeflatedVs13307": 264
+    }
+  },
+  "quickBenchmarkReference": {
+    "normalizeState200MedianMs": 84.3265875,
+    "createWriteBaseline200MedianMs": 83.0215175,
+    "flattenStateNormalizedFastPathMedianMs": 0.62806585,
+    "note": "Host-sensitive control only; Step 4B does not target state computation."
+  }
+}

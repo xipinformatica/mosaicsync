@@ -101,10 +101,12 @@ test("1.30.18 New Tab external-render optimization remains deliberately fail-clo
   assert.match(source, /reconcileLauncherAfterExternalState\(\{ renderGrid: !canSkipExternalGridRender \}\)/);
 });
 
-test("1.30.18 inactive-Space background preload is gated and resumes when Spaces are enabled", () => {
+test("1.30.18 inactive-Space background preload remains gated and resumes from explicit Space intent", () => {
   const source = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
-  assert.match(source, /function preloadOtherSpaceBackgrounds\(\) \{\s*if \(!isMultipleSpacesEnabled\(\)\) return;/s);
-  assert.match(source, /async function setMultipleSpacesEnabled\(enabled\)[\s\S]*?if \(enabled\) preloadOtherSpaceBackgrounds\(\);/);
+  assert.match(source, /function preloadSpaceBackgroundOnIntent\(spaceId\) \{\s*if \(!isMultipleSpacesEnabled\(\) \|\| !SPACE_IDS\.includes\(spaceId\) \|\| spaceId === state\.activeSpaceId\) return Promise\.resolve\(\);/s);
+  assert.match(source, /button\.addEventListener\("pointerenter", warmDestinationBackground\)/);
+  assert.match(source, /button\.addEventListener\("focus", warmDestinationBackground\)/);
+  assert.match(source, /hydrateSpaceForOwnedOperation\(spaceId, isCurrentSwitch, true\)/);
 });
 
 test("1.30.18 profile import remains disclosed whole-profile authority", () => {

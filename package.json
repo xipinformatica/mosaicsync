@@ -28,6 +28,7 @@
     "certify": "node tools/certify-release.mjs",
     "certify:mechanical": "node tools/certify-release.mjs --skip-browser-smoke",
     "perf:baseline": "node tools/build.mjs && node tools/performance-baseline.mjs",
-    "perf:critical-path": "node tools/build.mjs && node tools/critical-path-census.mjs"
+    "perf:critical-path": "node tools/build.mjs && node tools/critical-path-census.mjs",
+    "perf:storage-background": "node tools/build.mjs && node tools/storage-background-census.mjs"
   }
 }
