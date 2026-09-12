@@ -4362,6 +4362,7 @@ ${site.url}`;
 
   async function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
     await ensureSecondaryStyles();
+    if (shortcutDialog.open) return;
     localizeDocument(shortcutDialog);
     closeDropChoice();
     shortcutSyncPrepareGeneration += 1;

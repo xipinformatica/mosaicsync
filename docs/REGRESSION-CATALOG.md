@@ -241,3 +241,37 @@ This catalogue records high-value historical failures and the permanent tests th
 - `tests/optimization-133018.test.mjs`
 
 **If it returns:** preserve the Settings ownership-generation checks and add/retain the final `wallpaperGalleryDialog.open` re-check after shell acquisition but before changing target/rendering/showing. Do not replace parent-session ownership with a simple visibility check; both protections are required for different races.
+
+
+## R-021 — Opposite whole-device Recovery cleanup could compose to zero safety generations
+
+**Historical symptom/risk:** two different devices could each take a fresh local Sync view, verify that their own complete Recovery fallback existed, and independently authorize deleting the other device's entire Recovery set. Because browser Sync provides no cross-device transaction/lock, both locally correct delete sets could compose to an empty Recovery namespace. Normal Sync/live layout data was not deleted, but the safety-copy layer could temporarily disappear and an unchanged reconcile did not republish it.
+
+**Closed in:** 1.33.0.19.
+
+**Permanent protection:**
+- `tests/corrective-133019.test.mjs`
+
+**If it returns:** preserve the distributed survivor protocol. Device-mode cleanup must capture the target roots before creating a new verified current-device generation, final deletion must remain the intersection with that frozen target set, and healthy initialized reconciliation must self-heal a missing current-device Recovery generation. A local Web Lock or an extra fresh read alone is not a distributed guarantee.
+
+## R-022 — Rapid Add/Edit Shortcut open attempts could race into a second native modal open
+
+**Historical symptom/risk:** two `openShortcutEditor()` calls could both await secondary-style readiness, then both reset/populate the editor and call `showModal()`. The second call could throw `InvalidStateError`; with different items it could also overwrite the already-visible form before throwing.
+
+**Closed in:** 1.33.0.19.
+
+**Permanent protection:**
+- `tests/corrective-133019.test.mjs`
+
+**If it returns:** re-check `shortcutDialog.open` immediately after `ensureSecondaryStyles()` and return before any editor-state/form mutation. A guard immediately before `showModal()` is too late for this surface.
+
+## R-023 — Successful Sync freshness checks could leave an old exception banner stuck
+
+**Historical symptom/risk:** a transient background exception persisted `syncStatus: "error"` and raw `lastSyncError`. Later `reconcileIfNewCommit()` calls could successfully prove that live state was already applied yet return the old metadata unchanged, leaving Settings showing `Sync needs attention` indefinitely. A live 1.33.0.18 installation exhibited `null has no properties`; an explicit foreground reconcile returned `ok: true`, `reason: "already-applied"`, proving the displayed exception was stale at that time.
+
+**Closed in:** 1.33.0.19.
+
+**Permanent protection:**
+- `tests/corrective-133019.test.mjs`
+
+**If it returns:** a successful authoritative `already-applied` result may clear stale non-quota error state, but must not erase the explicit Sync-quota error. Do not infer or mask the root cause of an old raw exception unless its production throw site is reproduced independently.

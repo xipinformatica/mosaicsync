@@ -1,3 +1,12 @@
+## 1.33.0.19
+
+- Post-release correctness corrective over the frozen Snow Leopard II endpoint; no new performance optimization is introduced.
+- Fixes a confirmed MEDIUM distributed Recovery cleanup race: whole-device cleanup now freezes the target generation set, publishes and verifies a fresh current-device Recovery generation, then revalidates and deletes only the originally planned target roots. Opposite cleanups from two devices can no longer compose to zero Recovery generations.
+- Adds Recovery self-healing on a healthy unchanged reconcile: if the initialized current device has lost every complete Recovery generation, MosaicSync republishes one without treating Recovery copies as live merge authority.
+- Fixes the remaining LOW Add/Edit Shortcut native-dialog reentrancy race by re-checking `shortcutDialog.open` immediately after secondary-style readiness and before any editor-form mutation.
+- Clears stale non-quota `syncStatus:error` / `lastSyncError` after a successful authoritative `already-applied` reconciliation, while preserving the explicit Sync-quota error. This closes the live-observed stale `null has no properties` warning without guessing at or masking an unreproduced historical exception source.
+- No Normal Sync wire-format, Recovery format, persisted schema, permission, CSP, browser-floor or privacy-boundary change. Snow Leopard II remains complete and frozen at 1.33.0.18; 1.33.0.19 is a narrow post-freeze corrective.
+
 ## 1.33.0.18
 
 - Completes **Snow Leopard II Step 8 — final freeze/adversarial certification**. No additional performance optimization is introduced.

@@ -4080,6 +4080,36 @@ export function startBackground(adapter) {
       }
     }
     if (!liveRevisionChanged && contentUnchanged) {
+      const hasCurrentRecovery = Boolean(meta.deviceId && sources.deviceSnapshots.some(snapshot =>
+        snapshot?.deviceId === meta.deviceId && snapshot?.profileComplete === true
+      ));
+      if (completeDescriptor && meta.deviceId && !hasCurrentRecovery) {
+        // Recovery generations are not live merge inputs, but after a complete
+        // verified remote descriptor an initialized device must still repair its
+        // own missing safety copy. Never publish from a torn/partial delivery.
+        // This also closes the mixed-version window where an older peer can retire
+        // the last copy before the distributed survivor protocol reaches every
+        // device.
+        const { state: recoveryState } = await ensureLocalStorage();
+        const recoveryRepair = await publishProfileDeviceSnapshot(recoveryState, meta, { force: true });
+        meta = await writeLocalMeta({
+          ...meta,
+          lastAppliedDeviceSnapshotRevision: recoveryRepair.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+          lastAppliedProfileSnapshotRevision: recoveryRepair.setRevision || meta.lastAppliedProfileSnapshotRevision || "",
+          lastProfileSnapshotPublishedAt: recoveryRepair.publishedAt || meta.lastProfileSnapshotPublishedAt || 0,
+          ...profileProtectionState(recoveryRepair, meta)
+        });
+      }
+
+      // A successful authoritative freshness check proves a previous transient
+      // background exception is no longer active. Clear stale non-quota error
+      // state so Settings cannot keep showing an old raw exception forever.
+      // Preserve the explicit quota error until a quota-aware path supersedes it.
+      if (meta.lastSyncError !== "Firefox Sync storage quota was exceeded." &&
+          (meta.syncStatus !== "ready" || meta.lastSyncError)) {
+        meta = await writeLocalMeta({ ...meta, syncStatus: "ready", lastSyncError: "" });
+      }
+
       await noteSyncDiagnostic({
         ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
         ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
@@ -4183,8 +4213,11 @@ export function startBackground(adapter) {
     const mode = ["superseded", "generation", "device"].includes(message?.mode) ? message.mode : "";
     if (!mode) return { ok: false, error: "Unknown Recovery cleanup action." };
 
-    const meta = await readLocalMeta();
+    let meta = await readLocalMeta();
     if (!meta.syncEnabled) return { ok: false, error: "Sync must be enabled to manage Recovery safety copies." };
+    if (mode === "device" && !meta.syncInitialized) {
+      return { ok: false, error: "Finish Sync setup before removing another device's Recovery copies." };
+    }
     const initial = await browser.storage.sync.get(null);
     const initialSnapshots = await readDeviceSnapshots(initial);
     const plan = planManualRecoveryCleanup(initial, initialSnapshots, {
@@ -4194,6 +4227,35 @@ export function startBackground(adapter) {
       currentDeviceId: meta.deviceId
     });
     if (!plan.rootKeys.length) return { ok: false, error: "That Recovery copy is protected or no longer available." };
+
+    if (mode === "device") {
+      // Distributed survivor invariant: freeze the target roots first, then
+      // publish a brand-new verified generation for the acting device before
+      // any delete is revalidated. confirmedManualRecoveryCleanupKeys() can only
+      // delete roots from the frozen plan, so two devices doing opposite cleanup
+      // cannot both include the other's post-plan survivor. A cycle would require
+      // each post-plan publication to happen before the other device's earlier
+      // plan, which is temporally impossible.
+      const { state: survivorState } = await ensureLocalStorage();
+      const survivor = await publishProfileDeviceSnapshot(survivorState, meta, { force: true });
+      if (!survivor?.written) {
+        meta = await writeLocalMeta({
+          ...meta,
+          ...profileProtectionState(survivor, meta)
+        });
+        return {
+          ok: false,
+          error: "MosaicSync couldn't establish a fresh Recovery safety copy on this device. Nothing was removed."
+        };
+      }
+      meta = await writeLocalMeta({
+        ...meta,
+        lastAppliedDeviceSnapshotRevision: survivor.setRevision || meta.lastAppliedDeviceSnapshotRevision || "",
+        lastAppliedProfileSnapshotRevision: survivor.setRevision || meta.lastAppliedProfileSnapshotRevision || "",
+        lastProfileSnapshotPublishedAt: survivor.publishedAt || meta.lastProfileSnapshotPublishedAt || 0,
+        ...profileProtectionState(survivor, meta)
+      });
+    }
 
     // Manual cleanup is deliberately two-phase: build a conservative plan from
     // one complete view, then take a fresh Sync view immediately before deletion.

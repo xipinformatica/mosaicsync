@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.19",
+  "kind": "post-freeze-corrective",
+  "snowLeopardII": {
+    "status": "COMPLETE",
+    "freezeEndpoint": "1.33.0.18",
+    "performanceScopeReopened": false
+  },
+  "baseline": {
+    "version": "1.33.0.18",
+    "correctiveRegression": {
+      "pass": 2,
+      "fail": 8,
+      "total": 10
+    }
+  },
+  "corrective": {
+    "distributedRecoverySurvivor": true,
+    "recoverySelfHeal": true,
+    "shortcutEditorRapidOpen": true,
+    "staleNonQuotaSyncErrorHeal": true,
+    "quotaErrorPreserved": true,
+    "historicalNullExceptionRootCauseGuessed": false,
+    "recoverySelfHealRequiresCompleteRemoteDescriptor": true,
+    "distributedRecoveryFrozenTargetPostPlanSurvivor": true,
+    "staleSyncErrorLiveDiagnostic": "1.33.0.18 foreground reconcile returned ok:true, skipped:true, reason:already-applied"
+  },
+  "authorityChanges": {
+    "normalSyncWireFormat": false,
+    "recoveryWireFormat": false,
+    "persistedSchema": false,
+    "permissions": false,
+    "privacyBoundary": false
+  },
+  "certification": {
+    "status": "PASS",
+    "mode": "MECHANICAL_ONLY",
+    "tests": {
+      "ordinary": 1248,
+      "instrumentation": 8,
+      "total": 1256,
+      "passed": 1256,
+      "failed": 0
+    },
+    "focusedGroups": {
+      "startup": "255/255",
+      "newTab": "471/471",
+      "sync": "287/287",
+      "recovery": "162/162",
+      "browserParityPermissions": "188/188",
+      "core": "164/164",
+      "security": "146/146",
+      "release": "359/359"
+    },
+    "reachability": {
+      "highConfidenceUnreachableSharedModules": 0,
+      "unusedNamedImports": 0,
+      "unreferencedPrivateFunctions": 0
+    },
+    "generatedReleaseContracts": "PASS",
+    "packagedFirefoxContract": "PASS",
+    "packagedChromeContract": "PASS",
+    "candidateCleanRoomReproducible": true,
+    "candidateCleanRoomTests": "1256/1256",
+    "finalHandoffCleanRoomRequired": true
+  }
+}

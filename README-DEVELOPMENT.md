@@ -1,5 +1,9 @@
-Current release: 1.33.0.18
+Current release: 1.33.0.19
 
+
+## 1.33.0.19 — post-Snow-Leopard-II correctness corrective
+
+1.33.0.19 does not reopen Snow Leopard II performance work. It closes three post-release forensic findings over the frozen 1.33.0.18 endpoint: distributed whole-device Recovery cleanup establishes a fresh post-plan current-device survivor before destructive revalidation; an unchanged healthy reconcile self-heals a missing current-device Recovery generation; and Add/Edit Shortcut now serializes same-session rapid opens before editor-form mutation. A successful authoritative `already-applied` reconcile also clears stale non-quota Sync exception state while preserving explicit quota errors. The historical live `null has no properties` message was not reproducible when manually reconciled (`ok:true`, `reason:"already-applied"`), so this release fixes the proven stale-error lifecycle rather than inventing a null-root-cause patch. Permanent protection: `tests/corrective-133019.test.mjs`. Snow Leopard II remains complete/frozen at 1.33.0.18.
 
 ## 1.33.0.18 — Snow Leopard II Step 8: final freeze
 

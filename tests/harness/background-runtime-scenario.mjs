@@ -3198,21 +3198,28 @@ else if (scenario === 'recovery-manager-132010-device-revalidation') {
   const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote',publishedAt:400});
   await sync.set({...current.entries,...remote.entries});
   const originalGet=sync.get.bind(sync);
-  let nullReads=0;
+  let sawFreshSurvivor=false;
+  let removedCurrentFallbacks=false;
   sync.get=async keys=>{
     if (keys===null || keys===undefined) {
-      nullReads+=1;
-      if (nullReads===2) {
-        for (const key of [...sync.data.keys()]) if (key===current.rootKey || key.startsWith(`${current.rootKey}.chunk.`)) sync.data.delete(key);
+      const visible=Object.fromEntries([...sync.data].map(([key,value])=>[key,clone(value)]));
+      const currentRoots=deviceSnapshotRootEntries(visible,'device-b').map(([key])=>key);
+      if (!sawFreshSurvivor && currentRoots.some(key=>key!==current.rootKey)) {
+        sawFreshSurvivor=true;
+      } else if (sawFreshSurvivor && !removedCurrentFallbacks) {
+        removedCurrentFallbacks=true;
+        for (const key of [...sync.data.keys()]) {
+          if (key.startsWith(`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-b')}`)) sync.data.delete(key);
+        }
       }
     }
     return originalGet(keys);
   };
   const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'old-device'});
-  assert.equal(result?.ok,false,'cleanup must fail closed after losing current-device fallback during revalidation');
+  assert.equal(result?.ok,false,'cleanup must fail closed if every current-device fallback disappears before final revalidation');
   const after=await sync.get(null);
   assert.equal(Object.hasOwn(after,remote.rootKey),true,'old-device Recovery must survive cancelled revalidation');
-  console.log(JSON.stringify({ok:true,revalidationCancelled:true,remotePreserved:true}));
+  console.log(JSON.stringify({ok:true,revalidationCancelled:true,remotePreserved:true,freshSurvivorWasTested:sawFreshSurvivor}));
 }
 
 else if (scenario === 'recovery-manager-132010-remove-failure') {
@@ -3228,6 +3235,86 @@ else if (scenario === 'recovery-manager-132010-remove-failure') {
   assert.equal(Object.hasOwn(after,old.rootKey),true);
   assert.equal(Object.hasOwn(after,newest.rootKey),true);
   console.log(JSON.stringify({ok:true,failedClosed:failedResponse?.ok===false,oldPreserved:true,newestPreserved:true}));
+}
+
+
+else if (scenario === 'corrective-133019-device-cleanup-survivor') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A',lastAppliedWorkSyncRevision:'work-seed',lastAppliedProfileSnapshotRevision:'profile-seed'});
+  const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current',publishedAt:500});
+  const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'remote',publishedAt:400});
+  await sync.set({...current.entries,...remote.entries});
+  const before=await sync.get(null);
+  const beforeOwn=deviceSnapshotRootEntries(before,'device-a').map(([key])=>key);
+  const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'device-b'});
+  assert.equal(result?.ok,true,'whole-device cleanup should succeed after establishing a fresh local survivor');
+  const after=await sync.get(null);
+  const afterOwn=deviceSnapshotRootEntries(after,'device-a').map(([key])=>key);
+  assert.ok(afterOwn.length>=1,'acting device must retain a complete Recovery generation');
+  assert.ok(afterOwn.some(key=>!beforeOwn.includes(key)),'whole-device cleanup must publish a fresh post-plan survivor generation');
+  assert.equal(Object.hasOwn(after,remote.rootKey),false,'target device generations should still be removed');
+  console.log(JSON.stringify({ok:true,freshSurvivor:true,targetRemoved:true,beforeOwn,afterOwn}));
+}
+
+else if (scenario === 'corrective-133019-recovery-self-heal') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'device-a'});
+  const enabled=await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  assert.equal(enabled?.ok,true);
+  const bootstrapped=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(bootstrapped?.ok,true);
+  let all=await sync.get(null);
+  const existing=deviceSnapshotRootEntries(all,'device-a').map(([key])=>key);
+  assert.ok(existing.length>=1,'fixture must begin with a complete current-device Recovery generation');
+  const recoveryKeys=Object.keys(all).filter(key=>key.startsWith(constants.SYNC_DEVICE_SNAPSHOT_PREFIX));
+  await sync.remove(recoveryKeys);
+  assert.equal(deviceSnapshotRootEntries(await sync.get(null),'device-a').length,0,'fixture must remove every current-device Recovery generation');
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(result?.ok,true);
+  all=await sync.get(null);
+  const repaired=deviceSnapshotRootEntries(all,'device-a').map(([key])=>key);
+  assert.ok(repaired.length>=1,'healthy unchanged reconcile must repair a missing current-device Recovery generation');
+  console.log(JSON.stringify({ok:true,repaired:true,reason:result?.reason||'',repairedRoots:repaired}));
+}
+
+else if (scenario === 'corrective-133019-stale-sync-error-heal') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'device-a'});
+  const enabled=await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  assert.equal(enabled?.ok,true);
+  const bootstrapped=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(bootstrapped?.ok,true);
+  const healthy=await storageCore.readLocalMeta();
+  await storageCore.writeLocalMeta({...healthy,syncStatus:'error',lastSyncError:'null has no properties'});
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(result?.ok,true);
+  assert.equal(result?.reason,'already-applied');
+  const healed=await storageCore.readLocalMeta();
+  assert.equal(healed.syncStatus,'ready','a successful authoritative no-op reconcile must clear stale non-quota error status');
+  assert.equal(healed.lastSyncError,'','a successful authoritative no-op reconcile must clear stale exception text');
+  assert.equal(result?.meta?.syncStatus,'ready','returned meta must match healed persisted status');
+  assert.equal(result?.meta?.lastSyncError,'');
+  console.log(JSON.stringify({ok:true,healed:true,reason:result.reason}));
+}
+
+
+else if (scenario === 'corrective-133019-quota-error-preserved') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'device-a'});
+  const enabled=await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  assert.equal(enabled?.ok,true);
+  const bootstrapped=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(bootstrapped?.ok,true);
+  const healthy=await storageCore.readLocalMeta();
+  const quotaMessage='Firefox Sync storage quota was exceeded.';
+  await storageCore.writeLocalMeta({...healthy,syncStatus:'error',lastSyncError:quotaMessage});
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(result?.ok,true);
+  assert.equal(result?.reason,'already-applied');
+  const preserved=await storageCore.readLocalMeta();
+  assert.equal(preserved.syncStatus,'error','generic healthy reconciliation must not erase the explicit quota error');
+  assert.equal(preserved.lastSyncError,quotaMessage);
+  console.log(JSON.stringify({ok:true,preserved:true,reason:result.reason}));
 }
 
 else {
