@@ -675,8 +675,13 @@ export function startBackground(adapter) {
     return next;
   }
 
-  async function markSyncContinuityHealthy(meta, descriptor = {}) {
-    const current = await readSyncContinuity(meta);
+  async function markSyncContinuityHealthy(meta, descriptor = {}, currentContinuity = null) {
+    // Callers inside the serialized background queue may pass the continuity
+    // snapshot they already read in the same queue turn. LOCAL_SYNC_CONTINUITY_KEY
+    // has no production writer outside this orchestrator, so re-reading it again
+    // before this same queued transition cannot observe a legitimate newer owner.
+    // Raw/startup callers that do not carry that proof remain defensive.
+    const current = currentContinuity || await readSyncContinuity(meta);
     const planned = recoveryContinuity.planHealthyContinuity(current, descriptor, Date.now());
     const next = await writeSyncContinuity(planned, meta);
     await scheduleSyncRecoveryAlarm(0);
@@ -760,8 +765,9 @@ export function startBackground(adapter) {
     return { ok: true, skipped: true, reason: "intentional-remote-reset", meta: next };
   }
 
-  async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "message") {
-    let continuity = await readSyncContinuity(meta);
+  async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "message", continuityContext = null) {
+    let continuity = continuityContext?.current || await readSyncContinuity(meta);
+    if (continuityContext) continuityContext.current = continuity;
     if (!continuity.established) return null;
 
     // Once a loss has been observed, partial recovery fragments remain quarantined
@@ -781,7 +787,8 @@ export function startBackground(adapter) {
       const complete = completeLiveRemoteDescriptor(sources, workSnapshot);
       if (complete) {
         const hadConfirmedRecovery = continuity.lossState === "recovering" || continuity.recoveryAttempts > 0;
-        await markSyncContinuityHealthy(meta, complete);
+        const healthy = await markSyncContinuityHealthy(meta, complete, continuity);
+        if (continuityContext) continuityContext.current = healthy;
         if (hadConfirmedRecovery) await writeSyncRecoveryStatus("restored");
         return null;
       }
@@ -964,12 +971,12 @@ export function startBackground(adapter) {
       let { meta } = await ensureLocalStorage();
       await ensureSyncWatchAlarm(meta);
       await runOneTimeLegacyMaintenance();
-      await deferPersistedSyncRecoveryAfterBrowserStartup(meta);
+      const startupContinuity = await deferPersistedSyncRecoveryAfterBrowserStartup(meta);
       if (meta.syncEnabled && meta.syncInitialized) {
         // Startup must run the catastrophic-loss guard before replaying a pending
         // local mutation. A crash-surviving journal must never become the first
         // write that recreates a browser-wiped Sync namespace.
-        const result = await reconcileIfNewCommit("startup", meta, false);
+        const result = await reconcileIfNewCommit("startup", meta, false, startupContinuity);
         await noteSyncDiagnostic({
           lastReconcileAt: Date.now(),
           lastReconcileReason: "startup",
@@ -1164,8 +1171,14 @@ export function startBackground(adapter) {
         // local mutation; otherwise an ordinary edit could accidentally become the
         // first write that recreates an externally wiped cloud namespace.
         await reconcileIfNewCommit("alarm", meta, false);
-        meta = await readLocalMeta();
-        await maybeGarbageCollectStaleDeviceSnapshots(meta);
+        // Device-snapshot GC runs at most once per day while this alarm wakes every
+        // five minutes. The alarm-entry meta is sufficient only to prove the
+        // negative case. When GC can be due, re-read immediately before the
+        // maintenance path so destructive cleanup still owns fresh metadata.
+        if (isDeviceSnapshotGcDue(meta)) {
+          meta = await readLocalMeta();
+          await maybeGarbageCollectStaleDeviceSnapshots(meta);
+        }
       }
     });
   });
@@ -3822,10 +3835,14 @@ export function startBackground(adapter) {
     return keys.length;
   }
 
+  function isDeviceSnapshotGcDue(meta, now = Date.now()) {
+    return Number(now) - (Number(meta?.lastDeviceSnapshotGcAt) || 0) >= DEVICE_SNAPSHOT_GC_INTERVAL_MS;
+  }
+
   async function maybeGarbageCollectStaleDeviceSnapshots(meta, { force = false } = {}) {
     if (!meta?.syncEnabled || !meta?.deviceId) return meta;
     const now = Date.now();
-    if (!force && now - (Number(meta.lastDeviceSnapshotGcAt) || 0) < DEVICE_SNAPSHOT_GC_INTERVAL_MS) return meta;
+    if (!force && !isDeviceSnapshotGcDue(meta, now)) return meta;
 
     try {
       const all = await browser.storage.sync.get(null);
@@ -3970,7 +3987,7 @@ export function startBackground(adapter) {
     };
   }
 
-  async function reconcileIfNewCommit(reason = "message", providedMeta = null, pendingLocalAlreadyRetried = false) {
+  async function reconcileIfNewCommit(reason = "message", providedMeta = null, pendingLocalAlreadyRetried = false, providedContinuity = null) {
     const checkReason = syncCheckReason(reason);
     const checkedAt = Date.now();
     let meta = providedMeta || await readLocalMeta();
@@ -4001,7 +4018,12 @@ export function startBackground(adapter) {
       return result;
     }
 
-    const lossGuard = await beginOrContinueCatastrophicSyncRecovery(meta, checkReason);
+    // Continuity is owned only by this serialized background orchestrator. Carry
+    // the exact snapshot read by the catastrophic-loss guard through this queue
+    // turn so the later healthy transition does not re-read the same local key.
+    // Startup can also provide the snapshot read immediately before reconciliation.
+    const continuityContext = { current: providedContinuity };
+    const lossGuard = await beginOrContinueCatastrophicSyncRecovery(meta, checkReason, continuityContext);
     if (lossGuard) return lossGuard;
 
     if (!pendingLocalAlreadyRetried) meta = await retryPendingLocalSyncMutation(meta);
@@ -4017,7 +4039,9 @@ export function startBackground(adapter) {
     const workRevision = datasetRevision(workSnapshot.dataset);
     const profileRevision = sources.profile?.revision || "";
     const completeDescriptor = completeRemoteDescriptor(sources, workSnapshot);
-    if (completeDescriptor) await markSyncContinuityHealthy(meta, completeDescriptor);
+    if (completeDescriptor) {
+      continuityContext.current = await markSyncContinuityHealthy(meta, completeDescriptor, continuityContext.current);
+    }
     const diagnosticObservation = {
       lastObservedSharedRevision: sharedRevision,
       lastObservedDeviceRevision: deviceRevision,

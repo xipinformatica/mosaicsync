@@ -1,3 +1,38 @@
+## 1.33.0.14
+
+- Continues **Snow Leopard II Step 6 — lifetime and memory** with Step 6B: the Recovery Copies manager now releases its generated device/generation list whenever the dialog closes instead of retaining closure-backed action nodes for the rest of the New Tab lifetime.
+- In-flight Recovery model/cleanup responses no longer rebuild hidden Recovery controls after the dialog has closed; successful cleanup still completes in the background and refreshes Sync status.
+- A deterministic 120-node fixture drops **120 retained dynamic nodes after close → 0**, and 50 repeated close cycles converge to an empty dynamic list. Permanent protection: `tests/optimization-133014.test.mjs`.
+- Recovery eligibility, destructive cleanup planning/revalidation, Sync reads, journals, schemas, permissions and Recovery wire format are unchanged.
+- Step 6 remains in progress; this release does not claim real-browser heap certification because compatible browser/driver pairs remain unavailable.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP, network or browser-floor change.
+
+## 1.33.0.13
+
+- Begins **Snow Leopard II Step 6 — lifetime and memory** with Step 6A: the lazy Wallpaper Gallery keeps its one reusable shell after first use but releases the generated wallpaper-choice grid whenever the dialog closes.
+- A deterministic 30-choice fixture drops from **90 retained dynamic elements after close → 0**, and a 50-cycle open/close stress returns to the same shell-only state every time instead of retaining the last choice payload.
+- Reopening still rebuilds the gallery synchronously before `showModal()`, so Step-3A lazy loading, Settings ownership-generation protection, background selection/persistence and visual state remain unchanged.
+- Bookmarks close/reset, shortcut detected-favicon cleanup, Custom Branding draft release, bounded runtime caches and image-worker shutdown were audited as negative controls and left unchanged.
+- Step 6 remains in progress; this release does not claim real-browser heap certification because compatible browser/driver pairs remain unavailable.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP, network or browser-floor change.
+
+## 1.33.0.12
+
+- Completes **Snow Leopard II Step 5 — storage/background frugality** with Step 5C: healthy reconciliations reuse the exact Sync-continuity snapshot already read by the same serialized background queue turn instead of re-reading the same `storage.local` key before the healthy transition.
+- Routine five-minute Sync-watch alarms fall **6→5 local reads** while full Sync reads remain **2→2** and local writes remain **2→2**. GC-due alarms fall **8→7 local reads** while retaining the fresh pre-GC metadata read and **3→3** full Sync reads.
+- Established Sync-on browser startup falls **13→11 local reads** by carrying the continuity snapshot read immediately after startup deferral into the same queued reconciliation; full Sync reads remain **2→2** and local writes **3→3**.
+- `LOCAL_SYNC_CONTINUITY_KEY` remains single-writer background-owned; continuity heartbeat persistence, catastrophic-loss timing, pending journals, reset intent, Recovery and destructive cleanup freshness are unchanged. Permanent protection: `tests/optimization-133012.test.mjs`.
+- Step 5 is closed after reassessment: the remaining routine reads are authority/journal/state/diagnostic work and the remaining full Sync reads cross distinct freshness boundaries. Step 6 lifetime/memory analysis is next.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
+## 1.33.0.11
+
+- Continues **Snow Leopard II Step 5 — storage/background frugality** with Step 5B: routine five-minute Sync-watch alarms no longer perform a second `storage.local` metadata read solely to discover that 24-hour device-snapshot garbage collection is not due.
+- The alarm-entry metadata is used only as a negative maintenance gate. When cleanup can be due, MosaicSync still re-reads current metadata immediately before the existing GC path, preserving destructive-cleanup freshness and all Sync/Recovery reads.
+- Deterministic routine-alarm measurement falls **7→6 local reads** while full Sync reads remain **2→2**. The GC-due control remains **8 local reads / 3 full Sync reads**, proving the cleanup freshness path was not elided.
+- Adds permanent `optimization-133011` red-before-green coverage and freezes Step-5B evidence in `docs/SNOW-LEOPARD-II-STEP5B-1.33.0.11.json`.
+- No permission, persisted-schema, profile-format, Normal Sync/Recovery wire-format, CSP or browser-floor change.
+
 ## 1.33.0.10
 
 - Begins **Snow Leopard II Step 5 — storage/background frugality** with a measurement-only Step 5A census; no production storage read/write behavior changes.

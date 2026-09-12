@@ -58,6 +58,34 @@ Permanent protection: `tests/corrective-13218.test.mjs`.
 
 # MosaicSync Developer Guide
 
+## 1.33.0.14 Snow Leopard II Step-6B Recovery-manager lifetime release
+
+The Recovery Copies dialog owns interaction-only device/generation rows whose delete-button listeners close over the current Recovery model. Those generated rows must not survive a closed dialog. `clearRecoveryCopiesView()` owns the list teardown, and asynchronous model/cleanup completions must render only while `recoveryCopiesDialog.open` is still true. The background remains the sole owner of Recovery cleanup eligibility and destructive revalidation; UI lifecycle cleanup must never bypass or duplicate that authority.
+
+Permanent protection: `tests/optimization-133014.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`. Do not generalize this into cancelling a cleanup request when the dialog closes: cleanup may finish safely in the background; only hidden UI reconstruction is suppressed.
+
+## 1.33.0.13 Snow Leopard II Step-6A closed-gallery lifetime release
+
+Step 6 begins with a concrete retained-DOM lifetime target. `wallpaper-gallery-shell.js` keeps the single lazy shell created on first use, but the dialog's generated choice grid is interaction-only and is cleared on native `close`. `openWallpaperGallery()` still rebuilds that grid synchronously before every `showModal()`, so lazy loading and Settings ownership-generation protection remain unchanged. The deterministic 30-choice fixture drops 90 retained dynamic elements after close to 0 across 50 repeated cycles.
+
+Permanent protection: `tests/optimization-133013.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6A-1.33.0.13.json`. Do not broaden this into generic DOM teardown: Bookmarks, detected-favicon UI and Custom Branding already have explicit close/reset release paths, and Step 6 accepts only demonstrated retention.
+
+## 1.33.0.12 Snow Leopard II Step-5C queue-owned continuity reuse
+
+`LOCAL_SYNC_CONTINUITY_KEY` is durable catastrophic-Recovery continuity state and remains owned only by `background-core.js`. Background state mutations are serialized through the module-level `enqueue()` queue. Step 5C may therefore carry a continuity snapshot already read in the same queue turn into `markSyncContinuityHealthy()` instead of reading that same key again. Startup may likewise carry the snapshot returned by `deferPersistedSyncRecoveryAfterBrowserStartup()` directly into the immediately following queued reconciliation.
+
+This reuse is valid **only** while continuity remains single-writer background-owned and the caller stays inside the same serialized queue turn. `markSyncContinuityHealthy()` retains its defensive read when no proven current snapshot is supplied, and it still durably writes every planned healthy transition. Do not extend this pattern to Sync namespace snapshots, pending journals, local state, or destructive cleanup metadata: those have independent writers/freshness boundaries.
+
+Permanent protection: `tests/optimization-133012.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5C-1.33.0.12.json`. Step 5 closes here; Step 6 lifetime/memory analysis follows.
+
+## 1.33.0.11 Snow Leopard II Step-5B routine-alarm maintenance gate
+
+The five-minute `SYNC_WATCH_ALARM` still owns catastrophic-loss detection, pending-journal retry, normal reconciliation and the device-snapshot maintenance trigger. Step 5B optimizes only the final maintenance gate: `lastDeviceSnapshotGcAt` is single-writer state advanced only by successful device-snapshot GC, so the metadata read at alarm entry can prove the negative case when the 24-hour GC interval has not elapsed.
+
+Do **not** reuse that entry snapshot for destructive cleanup. If `isDeviceSnapshotGcDue(meta)` is true after reconciliation, the alarm must still call `readLocalMeta()` immediately before `maybeGarbageCollectStaleDeviceSnapshots(meta)`. The GC routine retains its fresh full Sync read and its second pre-delete Sync revalidation whenever stale/orphan candidates exist. This distinction is the Step-5B correctness boundary.
+
+Permanent protection: `tests/optimization-133011.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5B-1.33.0.11.json`.
+
 ## 1.32.1.7 logical-clock domain
 
 Logical mutation timestamps that participate in local/Sync conflict ordering must remain non-negative JavaScript safe integers. Use `normalizeLogicalTime()` at model trust boundaries instead of accepting arbitrary finite numbers. `nextMutationTime()` must never return the same value as an accepted observed clock; at the theoretical safe-integer ceiling it fails closed with `RangeError` rather than emitting a non-monotonic clock. Sync record comparison/reconstruction must apply the same safe-integer rule, including `modifiedAt`, `deletedAt`, `spaceMoveAt`, Settings clocks and workspace clocks. This is a correctness boundary, not a performance optimization.

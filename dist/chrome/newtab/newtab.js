@@ -6276,6 +6276,10 @@ ${site.url}`;
 
   let recoveryCopiesBusy = false;
 
+  function clearRecoveryCopiesView() {
+    recoveryCopiesList?.replaceChildren();
+  }
+
   function recoveryDeviceDisplayName(device) {
     const id = shortSyncId(device?.deviceId) || "—";
     const base = String(device?.deviceName || "").trim() || t("recoveryDeviceLabel", { id });
@@ -6411,9 +6415,9 @@ ${site.url}`;
     setRecoveryCopiesBusy(true);
     try {
       const response = await sendSyncMessage("mosaicsync:get-recovery-copies");
-      renderRecoveryCopies(response);
+      if (recoveryCopiesDialog?.open) renderRecoveryCopies(response);
     } catch (error) {
-      if (recoveryCopiesSummary) recoveryCopiesSummary.textContent = error.message || t("operationFailed");
+      if (recoveryCopiesDialog?.open && recoveryCopiesSummary) recoveryCopiesSummary.textContent = error.message || t("operationFailed");
     } finally {
       setRecoveryCopiesBusy(false);
     }
@@ -6424,7 +6428,7 @@ ${site.url}`;
     setRecoveryCopiesBusy(true);
     try {
       const response = await sendSyncMessage("mosaicsync:cleanup-recovery-copies", payload);
-      renderRecoveryCopies(response);
+      if (recoveryCopiesDialog?.open) renderRecoveryCopies(response);
       showSyncFeedback(t("recoveryCleanupComplete", {
         size: formatBytes(response.removedBytes || 0),
         count: Number(response.removedGenerations) || 0
@@ -6436,7 +6440,7 @@ ${site.url}`;
       // the background revalidated it. Drop the busy guard before refreshing so
       // the dialog never leaves stale destructive controls visible.
       setRecoveryCopiesBusy(false);
-      await loadRecoveryCopies().catch(() => {});
+      if (recoveryCopiesDialog?.open) await loadRecoveryCopies().catch(() => {});
       return;
     } finally {
       setRecoveryCopiesBusy(false);
@@ -6869,6 +6873,8 @@ ${site.url}`;
     if (event.key === "Enter") { event.preventDefault(); void saveCurrentDeviceName(); }
     else if (event.key === "Escape") { event.preventDefault(); closeDeviceNameEditor(); }
   });
+
+  recoveryCopiesDialog?.addEventListener("close", clearRecoveryCopiesView);
 
   recoveryCopiesManageButton?.addEventListener("click", () => {
     if (!recoveryCopiesDialog) return;

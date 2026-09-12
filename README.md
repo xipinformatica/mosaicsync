@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.33.0.10**
+**Current source release: 1.33.0.14**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -89,11 +89,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.33.0.10** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.33.0.14** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.33.0.10 begins Snow Leopard II Step 5 with a measurement-only storage/background census. Step 4 remains frozen at 1.33.0.9. The new local developer tooling inventories 117 direct extension-storage call sites, freezes background wake/listener topology and measures representative cold-worker startup/Sync-watch storage counts for both generated browsers. No production storage read is removed in this release: full Sync reads that appear adjacent still cross distinct catastrophic-loss, pending-journal, reconciliation or destructive-cleanup freshness boundaries. See [docs/SNOW-LEOPARD-II.md](docs/SNOW-LEOPARD-II.md).
+1.33.0.14 continues Snow Leopard II Step 6 lifetime/memory work. The Recovery Copies manager now releases its generated device/generation list when closed and ignores late UI rendering from in-flight model/cleanup responses after close; a deterministic 120-node fixture falls from 120 retained dynamic nodes after close to 0 across 50 repeated cycles. Recovery cleanup/revalidation remains background-owned and unchanged. Step 6 remains in progress. See [docs/SNOW-LEOPARD-II.md](docs/SNOW-LEOPARD-II.md).
 
 1.32.1.8 is the frozen correctness baseline immediately preceding Snow Leopard II. It is the narrow Settings child-dialog ownership corrective over 1.32.1.7. Delayed Custom Branding preparation carries the Settings ownership generation that launched it and revalidates that owner after each asynchronous boundary.
 

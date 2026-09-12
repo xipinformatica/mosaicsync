@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
-const CURRENT_VERSION = "1.33.0.10";
+const CURRENT_VERSION = "1.33.0.14";
 const STEP1_VERSION = "1.33.0.2";
 async function read(path) { return readFile(path, "utf8"); }
 

@@ -1,0 +1,26 @@
+{
+  "version": "1.33.0.14",
+  "journey": "Snow Leopard II",
+  "step": "6B",
+  "scope": "Recovery Copies dialog closed-lifetime retention",
+  "recoveryCopies": {
+    "fixtureDynamicNodes": 120,
+    "before": {
+      "retainedDynamicNodesAfterClose": 120,
+      "closedAsyncRenderCalls": 1
+    },
+    "after": {
+      "retainedDynamicNodesAfterClose": 0,
+      "closedAsyncRenderCalls": 0,
+      "repeatedCycles": 50
+    },
+    "invariants": [
+      "Recovery cleanup/revalidation remains background-owned and unchanged",
+      "Reopening always requests a fresh Recovery model",
+      "Closed dialogs cannot be repopulated by an in-flight model response",
+      "Only generated device/generation list nodes are released on close"
+    ]
+  },
+  "certification": "MECHANICAL_ONLY",
+  "browserHeapClaim": false
+}

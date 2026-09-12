@@ -63,12 +63,23 @@ test("1.33.0.10 does not treat similar full Sync reads as interchangeable author
   assert.match(reasons, /garbage collection.*fresh pre-delete revalidation/i);
 });
 
-test("1.33.0.10 live census reproduces the frozen Step-5A measurements", () => {
+test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Leopard II releases", () => {
   const live = runCensus();
   const frozen = JSON.parse(fs.readFileSync(SNAPSHOT, "utf8"));
-  assert.equal(live.version, VERSION);
+  const runtimeVersion = fs.readFileSync("src/shared/core/constants.js", "utf8").match(/export const VERSION\s*=\s*"([^"]+)"/)?.[1];
+  assert.equal(frozen.version, VERSION, "the canonical Step-5A snapshot stays pinned to its originating release");
+  assert.equal(live.version, runtimeVersion, "live census must identify the current runtime rather than impersonating 1.33.0.10");
   assert.deepEqual(live.directStorageCallSites.byOperation, frozen.directStorageCallSites.byOperation);
-  assert.deepEqual(live.runtimeCensus, frozen.runtimeCensus);
+  for (const browser of ["firefox", "chrome"]) {
+    for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
+      const liveResult = live.runtimeCensus[browser][scenario];
+      assert.ok(liveResult, `${browser}/${scenario} must remain measurable`);
+      assert.equal(liveResult.storage.sync.getAllCalls, frozenResult.storage.sync.getAllCalls,
+        `${browser}/${scenario} must not collapse Step-5A Sync freshness reads without a separately proven optimization`);
+      assert.ok(liveResult.storage.local.getCalls <= frozenResult.storage.local.getCalls,
+        `${browser}/${scenario} may reduce local reads after Step 5A but must never regress above the frozen baseline`);
+    }
+  }
 });
 
 test("1.33.0.10 keeps Step 5 measurement-first and focused-group protected", () => {
@@ -77,7 +88,10 @@ test("1.33.0.10 keeps Step 5 measurement-first and focused-group protected", () 
     assert.ok(files.includes("tests/optimization-133010.test.mjs"), `${group} must include optimization-133010.test.mjs`);
   }
   const tracker = fs.readFileSync("docs/SNOW-LEOPARD-II.md", "utf8");
-  assert.match(tracker, /Step 5 — Storage\/background frugality: IN PROGRESS in 1\.33\.0\.10/);
-  assert.match(tracker, /Step 5A.*measurement-only/i);
-  assert.match(tracker, /no production storage read has been removed/i);
+  assert.match(tracker, /Step 5 — Storage\/background frugality: (?:IN PROGRESS|DONE in 1\.33\.0\.12)/,
+    "the Step-5 phase must remain explicitly tracked; 1.33.0.12 may close it after the measured Step-5C audit");
+  assert.match(tracker, /## Step 5A storage\/background census[\s\S]*?measurement-only/i,
+    "the historical Step-5A section must remain explicitly measurement-only");
+  assert.match(tracker, /## Step 5A storage\/background census[\s\S]*?No production storage read has been removed/i,
+    "the Step-5A historical record must continue to state that .10 removed no production read");
 });

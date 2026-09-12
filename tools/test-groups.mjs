@@ -27,7 +27,11 @@ const GROUPS = Object.freeze({
       /optimization-13307\.test\.mjs$/i,
       /optimization-13308\.test\.mjs$/i,
       /optimization-13309\.test\.mjs$/i,
-      /optimization-133010\.test\.mjs$/i
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i,
+      /optimization-133013\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i
     ]
   },
   newtab: {
@@ -74,7 +78,9 @@ const GROUPS = Object.freeze({
       /optimization-13306\.test\.mjs$/i,
       /optimization-13307\.test\.mjs$/i,
       /optimization-13308\.test\.mjs$/i,
-      /optimization-13309\.test\.mjs$/i
+      /optimization-13309\.test\.mjs$/i,
+      /optimization-133013\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i
     ]
   },
   sync: {
@@ -104,7 +110,9 @@ const GROUPS = Object.freeze({
       /corrective-13216\.test\.mjs$/i,
       /corrective-13217\.test\.mjs$/i,
       /optimization-13303\.test\.mjs$/i,
-      /optimization-133010\.test\.mjs$/i
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -117,7 +125,9 @@ const GROUPS = Object.freeze({
       /corrective-1301843\.test\.mjs$/i,
       /corrective-1310\.test\.mjs$/i,
       /corrective-1311\.test\.mjs$/i,
-      /corrective-132010\.test\.mjs$/i
+      /corrective-132010\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i
     ]
   },
   security: {
@@ -210,7 +220,8 @@ const GROUPS = Object.freeze({
       /corrective-13216\.test\.mjs$/i,
       /corrective-13218\.test\.mjs$/i,
       /process-13305\.test\.mjs$/i,
-      /optimization-133010\.test\.mjs$/i
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i
     ]
   }
 });

@@ -9,8 +9,8 @@ Snow Leopard II begins from frozen correctness baseline **1.32.1.8**. Its rule i
 - **Step 2 — State computation and serialization: DONE in 1.33.0.3.** Exact persisted compact state now becomes the optimistic-write baseline by detached clone instead of normalize+projection, and persistence/Sync/rebase carry normalized-state proof into Settings-clock stamping rather than revalidating the same intended tree. External/persisted trust boundaries remain defensive.
 - **Step 3 — DOM/CSS/lazy secondary UI: DONE in 1.33.0.6.** Step 3A (1.33.0.4) moved Wallpaper Gallery behind first use; 1.33.0.5 hardened focused coverage/census accounting; Step 3B (1.33.0.6) moved the Bookmarks dialog shell and dedicated controller out of ordinary startup. The remaining untouched surfaces are either too small to justify another ownership boundary or materially more lifecycle-sensitive, so Step 3 stops rather than forcing risk for diminishing returns.
 - **Step 4 — Asset/image/network frugality: DONE in 1.33.0.9.** Step 4A removes unconditional inactive-Space background warming from ordinary New Tab/post-mutation maintenance. Step 4B narrows destination-Space intent/switch warming to the single currently effective background. Step 4C keeps the historical delayed Top Sites permission recheck but skips a duplicate full Frequently Visited render/favicon-preparation pass after a healthy verified startup. Failed/unverified starts and permission loss still use the full recovery path.
-- **Step 5 — Storage/background frugality: IN PROGRESS in 1.33.0.10.** Step 5A is measurement-only: it freezes direct storage call sites, background wake/listener topology and representative cold-worker startup/alarm storage counts before any I/O is removed. Full Sync namespace reads remain protected until a later slice proves that two reads observe the same semantic authority.
-- **Step 6 — Lifetime and memory.** Stress repeated New Tab/UI cycles and fix demonstrated retention.
+- **Step 5 — Storage/background frugality: DONE in 1.33.0.12.** Step 5A froze storage/wake measurements; Step 5B removed the routine pre-GC metadata reread; Step 5C reuses queue-owned Sync continuity within the same serialized reconciliation turn. Routine alarms are now 5 local reads / 2 full Sync reads, GC-due alarms 7 / 3, and established Sync-on startup 11 / 2. The remaining reads cross authority, journal, semantic-state, diagnostics or Sync freshness boundaries, so Step 5 closes rather than forcing risk.
+- **Step 6 — Lifetime and memory: IN PROGRESS in 1.33.0.14.** Step 6A releases the Wallpaper Gallery choice payload on close; Step 6B releases generated Recovery-manager device/generation controls and suppresses late hidden renders after close while preserving background cleanup authority. Deterministic repeated-cycle tests converge to shell/list-only bounds. Broader lifetime stress continues before Step 6 can close.
 - **Step 7 — Runtime loading/dead work.** Remove or defer code only when reachability and runtime traces prove it does not earn startup cost.
 - **Step 8 — Freeze and adversarial performance audit.** Re-run correctness, browser, memory, startup and concurrency certification and look specifically for safety shortcuts introduced by optimization.
 
@@ -171,6 +171,37 @@ Canonical Step-5A snapshot: `docs/SNOW-LEOPARD-II-STEP5A-1.33.0.10.json`.
 Therefore Step 5A is intentionally **measurement-only**. No production storage read has been removed. The next Step-5 slice must target one concrete call path and prove, with a red-before-green regression, that the reused/elided read observes the exact same semantic snapshot and cannot weaken loss detection, pending-journal authority, Web-Lock revalidation, crash safety or destructive cleanup freshness.
 
 
+Canonical Step-5B snapshot: `docs/SNOW-LEOPARD-II-STEP5B-1.33.0.11.json`.
+
+## Step 5B routine Sync-watch maintenance gate
+
+1.33.0.11 makes the first production optimization in Step 5 and deliberately avoids all full Sync-namespace reads. The five-minute `SYNC_WATCH_ALARM` already reads local metadata before catastrophic-loss/reconciliation work. Device-snapshot garbage collection is scheduled at most once every 24 hours, so that alarm-entry snapshot can safely prove only the negative maintenance case.
+
+- On routine alarms where `lastDeviceSnapshotGcAt` proves GC is not due, MosaicSync skips the second `readLocalMeta()` that existed solely before the GC helper. Deterministic cost moves **7 → 6 local reads** while full Sync reads remain **2 → 2** in Firefox and Chromium.
+- When GC can be due, MosaicSync still performs the historical fresh `readLocalMeta()` immediately before `maybeGarbageCollectStaleDeviceSnapshots()`. The control remains **8 local reads / 3 full Sync reads**.
+- The GC helper still performs its own fresh full Sync read and, when stale/orphan candidates exist, a second pre-delete Sync revalidation. No destructive-cleanup freshness boundary is reused or removed.
+- Catastrophic-loss detection, pending-journal retry, normal reconciliation, Recovery authority, Sync wire formats and persisted schemas are unchanged.
+- Permanent regression: `tests/optimization-133011.test.mjs`, proven **2/4 red on untouched 1.33.0.10 → 4/4 green** after the implementation. The test consumes the caller-built runtime and never rebuilds `dist/` inside parallel test execution.
+
+Step 5B remains the GC maintenance-boundary correction; later Step-5 releases may reduce other local reads only if the fresh pre-GC metadata and full Sync revalidation counts remain protected.
+
+
+Canonical Step-5C snapshot: `docs/SNOW-LEOPARD-II-STEP5C-1.33.0.12.json`.
+
+## Step 5C queue-owned Sync-continuity reuse
+
+1.33.0.12 closes Step 5 with one final storage-local optimization that does not weaken any freshness boundary. `LOCAL_SYNC_CONTINUITY_KEY` is written only by the shared background orchestrator, whose stateful operations are serialized through the module-level promise queue. A reconciliation that has already read and normalized continuity in that queue turn can therefore carry that exact snapshot into the later healthy transition instead of immediately reading the same local key again.
+
+- Routine five-minute Sync-watch alarm: **6 → 5 local reads**, while local writes stay **2 → 2** and full Sync reads stay **2 → 2**.
+- Device-snapshot-GC-due alarm: **8 → 7 local reads**, while the fresh pre-GC metadata read remains and full Sync reads stay **3 → 3**.
+- Established Sync-on browser startup: **13 → 11 local reads** by carrying the continuity value returned by startup recovery deferral into the immediately following queued reconciliation; local writes remain **3 → 3** and full Sync reads **2 → 2**.
+- `markSyncContinuityHealthy()` remains defensive for callers without queue-owned proof and still persists every healthy transition. No heartbeat throttling was introduced.
+- Durable pending journals, reset intent, catastrophic-loss quarantine/recovery timing, Normal Sync reconciliation, Recovery generations and destructive cleanup pre-delete revalidation are unchanged.
+- Permanent optimization regression was **0/4 on untouched 1.33.0.11 → 4/4** after implementation; the final Step-5C file adds a fifth single-writer ownership guard and is **5/5 green**.
+
+After reassessment, the remaining periodic local reads are current metadata authority, catastrophic-loss continuity, durable pending-journal authority, local semantic state comparison and device-local diagnostics. The remaining full Sync reads intentionally separate catastrophic-loss detection from normal reconciliation and destructive cleanup. There is no clear Step 5D that meets Snow Leopard II's risk/reward rule, so Step 5 is **DONE** and Step 6 lifetime/memory analysis is next.
+
+
 Canonical Step-4C snapshot: `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`.
 
 ## Step 4C Frequently Visited delayed-reconciliation fast path
@@ -185,3 +216,31 @@ Canonical Step-4C snapshot: `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`.
 - No persistent cache, new permission, network path, browser-history storage, Sync/Recovery behavior or authority boundary is introduced.
 
 Step 4 is closed here. The remote favicon resolver and active-background continuity paths were reassessed and deliberately left unchanged because their remaining work is correctness/quality-owned or already bounded/deduplicated. The next Snow Leopard II phase is Step 5 — storage/background frugality.
+
+
+Canonical Step-6A snapshot: `docs/SNOW-LEOPARD-II-STEP6A-1.33.0.13.json`.
+
+## Step 6A closed Wallpaper Gallery payload release
+
+1.33.0.13 begins lifetime/memory work with a demonstrated closed-UI retention case rather than a synthetic heap target. The lazy Wallpaper Gallery shell introduced in Step 3A is intentionally retained after first use, but 1.33.0.12 also retained its last generated wallpaper-choice grid after the dialog closed. Those buttons carry click listeners and thumbnail URL/style strings even though the closed gallery cannot use them.
+
+- A deterministic 30-choice fixture retains **90 dynamic elements after close** in untouched 1.33.0.12.
+- 1.33.0.13 keeps exactly one reusable lazy shell but clears the interaction-only grid on the native `close` event, reducing that retained dynamic payload to **0 elements after close**.
+- A 50-cycle stress returns to the same shell-only state on every close; shells do not multiply.
+- Reopen still rebuilds the gallery synchronously before `showModal()`, so first-use laziness, Settings ownership protection and visual selection state remain owned by the existing orchestrator.
+- Bookmarks, shortcut detected-favicon UI, Custom Branding drafts, bounded caches and the image-worker request lifetime were audited as negative controls and already have explicit release/bounds behavior.
+
+Step 6 remains **IN PROGRESS**. This slice does not claim browser-heap convergence because compatible real-browser driver pairs are still unavailable in the current environment.
+
+## Step 6B Recovery-manager closed payload release
+
+1.33.0.14 extends lifetime work to the Recovery Copies manager. Its generated device cards, generation rows and cleanup-button listeners are interaction-only and do not earn lifetime retention after the dialog closes. A pending asynchronous model or cleanup response can also finish after close, so close-time teardown alone would be insufficient if the completion could immediately rebuild the hidden list.
+
+- `clearRecoveryCopiesView()` clears only the generated Recovery list on the native `close` event.
+- `loadRecoveryCopies()` and `performRecoveryCleanup()` render returned models only while `recoveryCopiesDialog.open` remains true. Successful cleanup still completes in the background and refreshes Sync status.
+- A deterministic 120-node fixture falls **120 → 0 retained dynamic nodes after close** across 50 repeated cycles. Late closed model/cleanup responses render **0** hidden models.
+- Background Recovery planning, eligibility, destructive revalidation, Sync/journal authority and wire formats are unchanged.
+
+Canonical Step-6B snapshot: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`.
+
+Step 6 remains **IN PROGRESS**. No browser-heap convergence claim is made without compatible real-browser driver pairs.

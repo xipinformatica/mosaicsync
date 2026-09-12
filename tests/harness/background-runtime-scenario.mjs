@@ -621,6 +621,29 @@ else if (scenario === 'snow-step5a-sync-watch-alarm') {
   console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
 }
 
+else if (scenario === 'snow-step5b-sync-watch-routine' || scenario === 'snow-step5b-sync-watch-gc-due') {
+  const base = stateWith({ personal: [], work: [], autoPersonal: false, autoWork: false });
+  await seedLocalState(base, { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off', deviceId: 'step5-device' });
+  await storageCore.ensureLocalStorage();
+  await local.set({ [constants.LOCAL_MAINTENANCE_MIGRATIONS_KEY]: 2 });
+  const enabled = await send({ type: 'mosaicsync:set-sync-enabled', enabled: true });
+  assert.equal(enabled?.ok, true);
+  const bootstrapped = await send({ type: 'mosaicsync:bootstrap-local' });
+  assert.equal(bootstrapped?.ok, true);
+
+  const currentMeta = await storageCore.readLocalMeta();
+  await storageCore.writeLocalMeta({
+    ...currentMeta,
+    lastDeviceSnapshotGcAt: scenario.endsWith('routine') ? Date.now() : 0
+  });
+
+  await restartBackgroundForStep5Measurement(scenario.endsWith('routine') ? 'step5b-routine' : 'step5b-gc-due');
+  resetStorageStats();
+  events.onAlarm.listeners[0]({ name: constants.SYNC_WATCH_ALARM });
+  await waitForStorageStatsToSettle();
+  console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
+}
+
 else if (scenario === 'firefox-open-tab-cache-1301816') {
   assert.equal(browserName, 'firefox');
   websiteAccess = true;

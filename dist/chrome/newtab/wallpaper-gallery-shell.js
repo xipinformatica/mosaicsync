@@ -77,6 +77,12 @@ export function mountWallpaperGalleryShell(documentRef = document, onClose = () 
     attrs: { "aria-label": "Wallpaper gallery" }
   }));
 
+  // Snow Leopard II Step 6A: the lazy shell is cheap to retain, but the
+  // generated wallpaper choices are interaction-only payload. Release those
+  // button/listener/thumbnail nodes whenever the native dialog closes; the
+  // orchestrator rebuilds the grid synchronously before every later showModal().
+  dialog.addEventListener("close", () => grid.replaceChildren());
+
   documentRef.body.appendChild(dialog);
   return { dialog, grid };
 }

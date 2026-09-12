@@ -110,7 +110,7 @@ test("1.30.13 startup and watchdog never replay pending local state before the l
     const storageAt = source.indexOf("browser.storage.onChanged.addListener", startupAt);
     const startup = source.slice(startupAt, storageAt);
     assert.doesNotMatch(startup, /retryPendingLocalSyncMutation\(/, `${browser}: startup must not pre-publish pending local state`);
-    assert.match(startup, /reconcileIfNewCommit\("startup", meta, false\)/);
+    assert.match(startup, /reconcileIfNewCommit\("startup", meta, false(?:,\s*startupContinuity)?\)/);
 
     const alarmAt = source.indexOf("browser.alarms?.onAlarm?.addListener");
     const permissionsAt = source.indexOf("browser.permissions?.onAdded", alarmAt);

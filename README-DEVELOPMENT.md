@@ -1,4 +1,20 @@
-Current release: 1.33.0.10
+Current release: 1.33.0.14
+
+## 1.33.0.14 — Snow Leopard II Step 6B: Recovery-manager closed-payload release
+
+1.33.0.14 continues Step 6 with a second demonstrated closed-UI retention case. The Recovery Copies manager now clears its generated device/generation list on dialog close, and late model/cleanup responses cannot rebuild hidden controls after close. A deterministic 120-node fixture moves 120 retained dynamic nodes after close to 0 across 50 cycles. Background Recovery cleanup eligibility/revalidation is unchanged. Permanent protection: `tests/optimization-133014.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`. Step 6 remains in progress.
+
+## 1.33.0.13 — Snow Leopard II Step 6A: closed Wallpaper Gallery payload release
+
+1.33.0.13 begins Step 6 lifetime/memory work with one demonstrated closed-UI retention case. The lazy Wallpaper Gallery shell remains mounted after first use, but its generated choice grid is now cleared on the native dialog `close` event. A 30-choice fixture moves 90 retained dynamic elements after close to 0, and 50 repeated cycles return to the same shell-only state. Reopen still renders the grid synchronously before `showModal()`. Permanent protection: `tests/optimization-133013.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6A-1.33.0.13.json`. Step 6 remains in progress.
+
+## 1.33.0.12 — Snow Leopard II Step 5C: queue-owned continuity snapshot reuse
+
+1.33.0.12 closes Step 5. The serialized background queue now carries the exact durable Sync-continuity snapshot it already read through the same reconciliation turn, avoiding a second `storage.local` read before the healthy continuity transition. Routine alarms move 6→5 local reads, GC-due alarms 8→7 while keeping their fresh pre-cleanup metadata read, and established Sync-on startup 13→11. Full Sync reads and continuity writes are unchanged. `LOCAL_SYNC_CONTINUITY_KEY` remains background-only single-writer state. Permanent protection: `tests/optimization-133012.test.mjs`. Step 6 lifetime/memory analysis is next.
+
+## 1.33.0.11 — Snow Leopard II Step 5B: routine alarm metadata gate
+
+1.33.0.11 makes the first Step-5 production optimization. The five-minute Sync-watch alarm no longer re-reads `storage.local` merely to discover that 24-hour device-snapshot GC is not due. The metadata captured at alarm entry is used only for this negative maintenance gate; when GC can be due, the historical fresh `readLocalMeta()` remains immediately before `maybeGarbageCollectStaleDeviceSnapshots()`. Routine deterministic alarm cost falls from 7 to 6 local reads with Sync reads unchanged at 2; the GC-due control remains 8 local reads / 3 full Sync reads. Permanent protection: `tests/optimization-133011.test.mjs`.
 
 ## 1.33.0.10 — Snow Leopard II Step 5A: storage/background census
 
