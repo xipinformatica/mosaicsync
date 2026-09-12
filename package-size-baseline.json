@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.14",
-      "rawBytes": 2421889,
-      "deflatedBytes": 707702,
+      "version": "1.33.0.18",
+      "rawBytes": 2424360,
+      "deflatedBytes": 708042,
       "categories": {
         "assets": {
           "files": 2,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 436485,
-          "deflatedBytes": 104562
+          "rawBytes": 438956,
+          "deflatedBytes": 104902
         },
         "other": {
           "files": 1,
@@ -76,8 +76,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 356705,
-          "deflatedBytes": 77744
+          "rawBytes": 358089,
+          "deflatedBytes": 77955
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.14",
-      "rawBytes": 2443532,
-      "deflatedBytes": 722218,
+      "version": "1.33.0.18",
+      "rawBytes": 2446003,
+      "deflatedBytes": 722559,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1368,
-          "deflatedBytes": 554
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 436485,
-          "deflatedBytes": 104562
+          "rawBytes": 438956,
+          "deflatedBytes": 104902
         },
         "other": {
           "files": 1,
@@ -330,8 +330,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 356705,
-          "deflatedBytes": 77744
+          "rawBytes": 358089,
+          "deflatedBytes": 77955
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",

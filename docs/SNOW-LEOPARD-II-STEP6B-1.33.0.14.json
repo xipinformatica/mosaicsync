@@ -16,11 +16,11 @@
     },
     "invariants": [
       "Recovery cleanup/revalidation remains background-owned and unchanged",
-      "Reopening always requests a fresh Recovery model",
-      "Closed dialogs cannot be repopulated by an in-flight model response",
+      "A dialog that remains closed cannot be repopulated by an in-flight model response; close→reopen session ownership is completed in 1.33.0.15",
       "Only generated device/generation list nodes are released on close"
     ]
   },
   "certification": "MECHANICAL_ONLY",
-  "browserHeapClaim": false
+  "browserHeapClaim": false,
+  "knownLimitationResolvedIn": "1.33.0.15 closes the Recovery close→reopen ABA/session-ownership gap found after this snapshot was frozen."
 }

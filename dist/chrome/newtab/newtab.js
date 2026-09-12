@@ -99,7 +99,6 @@ import {
 } from "../core/i18n.js";
 import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
-import "./builtin-icons.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
@@ -4096,6 +4095,10 @@ ${site.url}`;
   }
 
   function closeFolder() {
+    // Folder contents are interaction-only UI. Release generated cards and their
+    // per-item listener closures as soon as the popover no longer owns them;
+    // openFolder() always rebuilds from current state before showing again.
+    folderItems.replaceChildren();
     if (folderPopover.hidden) {
       activeFolderId = null;
       activeFolderAnchorId = null;
@@ -5203,6 +5206,7 @@ ${site.url}`;
       wallpaperGalleryDialog = shell.dialog;
       wallpaperGalleryGrid = shell.grid;
     }
+    if (wallpaperGalleryDialog.open) return;
     wallpaperGalleryTarget = target;
     localizeDocument(wallpaperGalleryDialog);
     renderWallpaperGallery();
@@ -6275,6 +6279,9 @@ ${site.url}`;
   }
 
   let recoveryCopiesBusy = false;
+  let recoveryCopiesSessionGeneration = 0;
+  let recoveryCopiesLoadInFlightGeneration = 0;
+  let recoveryCopiesCleanupBusy = false;
 
   function clearRecoveryCopiesView() {
     recoveryCopiesList?.replaceChildren();
@@ -6410,25 +6417,39 @@ ${site.url}`;
     setRecoveryCopiesBusy(recoveryCopiesBusy);
   }
 
-  async function loadRecoveryCopies() {
-    if (recoveryCopiesBusy) return;
+  async function loadRecoveryCopies(sessionGeneration = recoveryCopiesSessionGeneration) {
+    if (recoveryCopiesCleanupBusy) return;
+    if (recoveryCopiesLoadInFlightGeneration === sessionGeneration) return;
+    recoveryCopiesLoadInFlightGeneration = sessionGeneration;
     setRecoveryCopiesBusy(true);
     try {
       const response = await sendSyncMessage("mosaicsync:get-recovery-copies");
-      if (recoveryCopiesDialog?.open) renderRecoveryCopies(response);
+      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) renderRecoveryCopies(response);
     } catch (error) {
-      if (recoveryCopiesDialog?.open && recoveryCopiesSummary) recoveryCopiesSummary.textContent = error.message || t("operationFailed");
+      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open && recoveryCopiesSummary) {
+        recoveryCopiesSummary.textContent = error.message || t("operationFailed");
+      }
     } finally {
-      setRecoveryCopiesBusy(false);
+      if (recoveryCopiesLoadInFlightGeneration === sessionGeneration) {
+        recoveryCopiesLoadInFlightGeneration = 0;
+        setRecoveryCopiesBusy(recoveryCopiesCleanupBusy);
+      }
     }
   }
 
   async function performRecoveryCleanup(payload) {
-    if (recoveryCopiesBusy) return;
+    const sessionGeneration = recoveryCopiesSessionGeneration;
+    if (recoveryCopiesCleanupBusy || recoveryCopiesLoadInFlightGeneration === sessionGeneration) return;
+    recoveryCopiesCleanupBusy = true;
     setRecoveryCopiesBusy(true);
+    let refreshCurrentSession = false;
     try {
       const response = await sendSyncMessage("mosaicsync:cleanup-recovery-copies", payload);
-      if (recoveryCopiesDialog?.open) renderRecoveryCopies(response);
+      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) {
+        renderRecoveryCopies(response);
+      } else if (recoveryCopiesDialog?.open) {
+        refreshCurrentSession = true;
+      }
       showSyncFeedback(t("recoveryCleanupComplete", {
         size: formatBytes(response.removedBytes || 0),
         count: Number(response.removedGenerations) || 0
@@ -6436,14 +6457,13 @@ ${site.url}`;
       await refreshSyncStatus().catch(() => {});
     } catch (error) {
       showSyncFeedback(error.message || t("operationFailed"));
-      // The cleanup request may have failed because eligibility changed while
-      // the background revalidated it. Drop the busy guard before refreshing so
-      // the dialog never leaves stale destructive controls visible.
-      setRecoveryCopiesBusy(false);
-      if (recoveryCopiesDialog?.open) await loadRecoveryCopies().catch(() => {});
-      return;
+      if (recoveryCopiesDialog?.open) refreshCurrentSession = true;
     } finally {
-      setRecoveryCopiesBusy(false);
+      recoveryCopiesCleanupBusy = false;
+      setRecoveryCopiesBusy(recoveryCopiesLoadInFlightGeneration === recoveryCopiesSessionGeneration);
+    }
+    if (refreshCurrentSession && recoveryCopiesDialog?.open) {
+      await loadRecoveryCopies(recoveryCopiesSessionGeneration).catch(() => {});
     }
   }
 
@@ -6874,12 +6894,18 @@ ${site.url}`;
     else if (event.key === "Escape") { event.preventDefault(); closeDeviceNameEditor(); }
   });
 
-  recoveryCopiesDialog?.addEventListener("close", clearRecoveryCopiesView);
+  recoveryCopiesDialog?.addEventListener("close", () => {
+    recoveryCopiesSessionGeneration += 1;
+    clearRecoveryCopiesView();
+  });
 
   recoveryCopiesManageButton?.addEventListener("click", () => {
     if (!recoveryCopiesDialog) return;
-    if (!recoveryCopiesDialog.open) recoveryCopiesDialog.showModal();
-    void loadRecoveryCopies();
+    if (!recoveryCopiesDialog.open) {
+      recoveryCopiesSessionGeneration += 1;
+      recoveryCopiesDialog.showModal();
+    }
+    void loadRecoveryCopies(recoveryCopiesSessionGeneration);
   });
 
   recoverySafeCleanupButton?.addEventListener("click", () => {

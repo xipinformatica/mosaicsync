@@ -246,6 +246,8 @@ test("1.32.0.10 failed cleanup releases the busy guard before refreshing Recover
   const start = newtab.indexOf("async function performRecoveryCleanup(");
   const end = newtab.indexOf("\n  function shortSyncId", start);
   const body = newtab.slice(start, end);
-  assert.match(body, /catch \(error\)[\s\S]*setRecoveryCopiesBusy\(false\);[\s\S]*await loadRecoveryCopies\(\)/,
-    "a failed/revalidated cleanup must refresh from a newly enabled manager instead of being blocked by its own busy guard");
+  assert.match(body, /finally \{[\s\S]*recoveryCopiesCleanupBusy = false;[\s\S]*\}/,
+    "failed/revalidated cleanup must release its destructive-operation guard before any refresh");
+  assert.match(body, /if \(refreshCurrentSession && recoveryCopiesDialog\?\.open\)[\s\S]*await loadRecoveryCopies\(recoveryCopiesSessionGeneration\)/,
+    "failed/revalidated cleanup must refresh eligibility after the cleanup guard has been released");
 });

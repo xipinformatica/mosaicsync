@@ -144,7 +144,7 @@ test("1.33.0.13 lifetime evidence records the closed-gallery retention reduction
 
 test("1.33.0.13 Step 6 remains lifecycle-focused and does not claim full memory completion", () => {
   const tracker = fs.readFileSync("docs/SNOW-LEOPARD-II.md", "utf8");
-  assert.match(tracker, /Step 6 — Lifetime and memory: IN PROGRESS/);
+  assert.match(tracker, /Step 6 — Lifetime and memory: (?:IN PROGRESS|DONE)/);
   assert.match(tracker, /Step 6A/);
   assert.match(tracker, /Wallpaper Gallery/);
   assert.match(tracker, /Step 7 — Runtime loading\/dead work/);

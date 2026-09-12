@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.17",
+  "journey": "Snow Leopard II",
+  "step": "7",
+  "title": "Runtime loading/dead work",
+  "certification": "MECHANICAL_ONLY",
+  "change": {
+    "removedStaticImport": "./builtin-icons.js from newtab.js",
+    "retainedClassicOwner": "newtab.html parser-time builtin-icons.js before render-bootstrap.js",
+    "reason": "The classic first-paint owner already defines the idempotent global helper before deferred newtab.js evaluates; the static ES-module import therefore re-evaluated the same file only to hit its existing-global early return."
+  },
+  "before": {
+    "staticModuleCount": 23,
+    "staticModuleBytes": 644249,
+    "parserBlockingClassicScripts": 9,
+    "parserBlockingClassicBytes": 28892
+  },
+  "after": {
+    "staticModuleCount": 22,
+    "staticModuleBytes": 640098,
+    "parserBlockingClassicScripts": 9,
+    "parserBlockingClassicBytes": 28892
+  },
+  "delta": {
+    "staticModuleCount": -1,
+    "staticModuleBytes": -4151,
+    "parserBlockingClassicScripts": 0,
+    "parserBlockingClassicBytes": 0
+  },
+  "redBeforeGreen": {
+    "baselineVersion": "1.33.0.16",
+    "tests": 4,
+    "baselinePass": 3,
+    "baselineFail": 1,
+    "candidatePass": 4,
+    "candidateFail": 0
+  },
+  "reachabilityAfter": {
+    "highConfidenceUnreachableSharedModules": 0,
+    "unusedNamedImports": 0,
+    "unreferencedPrivateFunctions": 0
+  },
+  "retainedReviewSurfaces": {
+    "defensiveReferenceExports": [
+      "stampSettingsMutationClocks",
+      "moveShortcutBetweenSpaces",
+      "collectLocalAssets",
+      "flattenState",
+      "makeSettingsRecord",
+      "hostnameMatchesRegistrableDomain"
+    ],
+    "testHooks": [
+      "clearCanonicalHostCacheForTests",
+      "getCanonicalHostCacheSizeForTests"
+    ],
+    "notes": "Retained intentionally: defensive/reference APIs, benchmark/test equivalence surfaces or explicit test hooks. No high-confidence production deletion candidate remains."
+  },
+  "nonTargets": [
+    "Sync/Recovery/background authority",
+    "pending journals and concurrency",
+    "first-paint bootstrap ordering",
+    "interaction-only helpers whose tiny size does not justify a new async ownership boundary",
+    "browser permissions/privacy boundaries"
+  ],
+  "stepClosed": true,
+  "nextStep": "Step 8 \u2014 Freeze and adversarial performance audit"
+}

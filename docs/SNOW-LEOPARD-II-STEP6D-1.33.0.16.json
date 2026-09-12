@@ -1,0 +1,43 @@
+{
+  "version": "1.33.0.16",
+  "journey": "Snow Leopard II",
+  "step": "6D",
+  "scope": "folder popover closed-payload lifetime",
+  "folderPopover": {
+    "fixtureItems": 40,
+    "before": {
+      "retainedGeneratedItemsAfterClose": 40
+    },
+    "after": {
+      "retainedGeneratedItemsAfterClose": 0,
+      "repeatedCycles": 50,
+      "shellInstances": 1
+    },
+    "correctnessBoundaries": [
+      "folder data remains in authoritative New Tab state",
+      "openFolder rebuilds folder contents synchronously before display",
+      "deferred folder artwork hydration already checks active folder ownership and hidden state",
+      "cross-Space drag preserves the active source element before closeFolder"
+    ]
+  },
+  "step6Decision": {
+    "status": "DONE",
+    "reason": "The remaining audited dialog and cache owners are either explicitly cleared, bounded, or intentionally New-Tab-lifetime. Real-browser heap/GC timing remains an environment-limited certification goal rather than a reason to invent another production lifetime change."
+  },
+  "certification": "MECHANICAL_ONLY",
+  "browserHeapClaim": false,
+  "remainingOwnerAudit": {
+    "wallpaperGallery": "generated grid cleared on close; lazy shell/module intentionally retained",
+    "recoveryManager": "generated list cleared on close; session generations reject superseded async UI results",
+    "bookmarks": "dynamic arrays/DOM reset on close; session generations reject superseded tree/permission results",
+    "shortcutEditorFavicons": "detected choices cleared/cancelled; request generation rejects stale completions",
+    "customBranding": "draft cleared and upload generation advanced on close",
+    "localeCatalogs": "small bounded LRU",
+    "backgroundPreload": "bounded preload cache",
+    "faviconCaches": "bounded/TTL-owned caches with explicit limits",
+    "recoveryDecodeCache": "bounded recent-device cache",
+    "imageWorker": "pending requests cleared on settle/failure and worker idles out",
+    "objectUrls": "explicitly revoked after export",
+    "folderPopover": "generated folder-item controls cleared on close in Step 6D"
+  }
+}

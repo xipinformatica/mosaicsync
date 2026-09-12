@@ -16,7 +16,7 @@ test("1.32.0.5 removes the redundant startup bookmark-folder-color preference re
   assert.doesNotMatch(owner, /\bhydratePostPaintPreferences\s*,/);
   const reads = [...owner.matchAll(/bookmarkFolderColors\s*=\s*readBookmarkFolderColors\(\)/g)];
   assert.equal(reads.length, 1, "folder colors should be read only when the Bookmarks dialog loads its tree");
-  assert.match(owner, /bookmarkTree\s*=\s*await api\.readBookmarkTree\(\)[\s\S]*?bookmarkFolderColors\s*=\s*readBookmarkFolderColors\(\)[\s\S]*?renderBookmarkBrowser\(\)/);
+  assert.match(owner, /const nextBookmarkTree\s*=\s*await api\.readBookmarkTree\(\)[\s\S]*?bookmarkTree\s*=\s*nextBookmarkTree[\s\S]*?bookmarkFolderColors\s*=\s*readBookmarkFolderColors\(\)[\s\S]*?renderBookmarkBrowser\(\)/);
 });
 
 test("1.32.0.5 keeps Bookmarks opening private to controller-owned event wiring", () => {

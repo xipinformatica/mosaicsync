@@ -196,3 +196,48 @@ This catalogue records high-value historical failures and the permanent tests th
 - `tests/corrective-13218.test.mjs`
 
 **If it returns:** preserve parent-lifetime ownership across every asynchronous child-opening boundary. Closing Settings must advance the Settings ownership generation; child work captures that epoch, keeps async results local, and may publish/show only when both the epoch and current Settings visibility still match.
+
+## R-017 — Recovery close→reopen reused an old async model response
+
+**Historical symptom/risk:** Recovery Copies used one shared busy flag plus `dialog.open` to decide whether an async model/cleanup response could render. If the user opened Recovery, closed it while a model request was still pending, and reopened quickly, the new session's fetch was suppressed by the old busy flag. When the old request returned, `dialog.open` was true again and the stale session-A model could populate session B. Background Recovery deletion authority still revalidated safely, so this was a stale-UI/lifetime race rather than a data-loss path.
+
+**Closed in:** 1.33.0.15.
+
+**Permanent protection:**
+- `tests/optimization-133015.test.mjs`
+
+**If it returns:** `dialog.open` is not session identity. Preserve `recoveryCopiesSessionGeneration`; close/reopen must invalidate old ownership, a reopened session must be able to start its own fresh model request while an old load finishes, and cleanup may continue in the background without letting its superseded UI response render into the new session.
+
+## R-018 — Late Bookmarks tree/permission result repopulated a superseded dialog session
+
+**Historical symptom/risk:** Bookmarks correctly cleared arrays and generated DOM on close, but an already awaited `readBookmarkTree()` or permission request could finish afterward and repopulate arrays/status/hidden DOM. A quick close→reopen could therefore let async work from the old dialog session mutate the new one.
+
+**Closed in:** 1.33.0.15.
+
+**Permanent protection:**
+- `tests/optimization-133015.test.mjs`
+
+**If it returns:** keep Bookmarks async presentation work generation-owned. Revalidate `bookmarksDialogGeneration` after lazy-module, permission and tree-read awaits before adopting state, rendering, focusing or writing status. Closing the dialog must invalidate the generation before clearing interaction-only state.
+
+
+## R-019 — Rapid Bookmarks open attempts could call showModal twice
+
+**Historical symptom/risk:** two same-session Bookmarks open attempts could both pass the initial closed-dialog check, await secondary styles/module readiness, and then both call `showModal()`. The first opened normally; the second could throw `InvalidStateError`. This was a presentation-only reentrancy bug, not a bookmark-data or permission-authority problem.
+
+**Closed in:** 1.33.0.18 during Snow Leopard II Step 8 final freeze.
+
+**Permanent protection:**
+- `tests/optimization-133018.test.mjs`
+
+**If it returns:** keep the existing close→reopen generation ownership, and also re-check `bookmarksDialog.open` after asynchronous setup immediately before localizing/showing the modal. Same-session reentrancy and cross-session generation ownership solve different races.
+
+## R-020 — Rapid Wallpaper Gallery open attempts could call showModal twice
+
+**Historical symptom/risk:** two same-Settings-session Wallpaper Gallery open attempts could both survive the Settings ownership-generation check, await styles/lazy shell readiness, and then both call `showModal()` on the same native dialog. The second could throw `InvalidStateError`. Settings generation correctly protected different parent sessions but did not serialize two open attempts inside one still-valid session.
+
+**Closed in:** 1.33.0.18 during Snow Leopard II Step 8 final freeze.
+
+**Permanent protection:**
+- `tests/optimization-133018.test.mjs`
+
+**If it returns:** preserve the Settings ownership-generation checks and add/retain the final `wallpaperGalleryDialog.open` re-check after shell acquisition but before changing target/rendering/showing. Do not replace parent-session ownership with a simple visibility check; both protections are required for different races.

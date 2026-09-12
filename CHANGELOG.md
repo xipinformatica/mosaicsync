@@ -1,3 +1,35 @@
+## 1.33.0.18
+
+- Completes **Snow Leopard II Step 8 — final freeze/adversarial certification**. No additional performance optimization is introduced.
+- Fixes two independently reproduced LOW same-session reentrancy races: rapid concurrent Bookmarks opens and Wallpaper Gallery opens now re-check whether their native dialog is already open immediately before `showModal()`, preventing a second open from throwing `InvalidStateError`.
+- Adds runtime execution coverage for the Step-7 built-in icon ownership contract: executing `builtin-icons.js` twice preserves the exact same working global API, whose property is non-writable and non-configurable.
+- Final deterministic journey census: initial New Tab DOM **642→598 elements**, static New Tab module closure **24→22 modules**, and eager static-module source **653,457→640,143 bytes** versus the Step-0 baseline. Step-5 storage freshness counts and Step-6 lifetime ownership protections remain intact.
+- No Sync, Recovery, pending-journal, storage-authority, persisted-schema, profile-format, permission, network, CSP, privacy-boundary or browser-floor change. **Snow Leopard II is COMPLETE at this release.**
+
+## 1.33.0.17
+
+- Completes **Snow Leopard II Step 7 — runtime loading/dead work** with one proven duplicate startup-edge retirement.
+- Keeps `builtin-icons.js` on its required parser-time classic first-paint path, but removes the redundant static `newtab.js` import that re-evaluated the already-installed idempotent helper.
+- Static New Tab module closure falls **23→22 modules / 644,249→640,098 raw bytes**; parser-time classic work remains **9 scripts / 28,892 bytes**.
+- Post-change reachability remains **0 unreachable shared modules / 0 unused named imports / 0 unreferenced private functions**. Defensive/reference exports and explicit test hooks remain intentionally retained.
+- Permanent Step-7 regression: `tests/optimization-133017.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP7-1.33.0.17.json`. Step 7 closes; Step 8 final freeze/adversarial audit is next.
+- No Sync, Recovery, permission, persisted-schema, profile-format, network, CSP, privacy-boundary or browser-floor change.
+
+## 1.33.0.16
+
+- Completes **Snow Leopard II Step 6 — lifetime and memory** with Step 6D: the folder popover now releases its generated folder-item controls and their per-item listener closures whenever it closes, while keeping the reusable shell and authoritative folder data.
+- A deterministic 40-item fixture moves **40 → 0** retained generated item roots after close across 50 repeated cycles. `closeFolder()` is idempotent for already-hidden popovers; `openFolder()` still rebuilds from current state before display.
+- Deferred folder artwork hydration already revalidates active-folder ownership and hidden state, and cross-Space drag preserves its source element before the popover closes. No Sync, Recovery, storage, permission, schema or network authority changes.
+- After reassessing the remaining lifetime owners as explicitly cleared, bounded or intentionally New-Tab-lifetime, Step 6 is **DONE**. Real-browser heap/GC timing remains unclaimed because compatible browser/driver pairs are unavailable. Step 7 runtime loading/dead work is next.
+- Permanent Step-6D regression: `tests/optimization-133016.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6D-1.33.0.16.json`.
+
+## 1.33.0.15
+
+- Corrects two Step-6 asynchronous dialog-session ownership gaps found by independent adversarial audits. Recovery Copies now gives each open session a generation identity: close/reopen can start a fresh model request even while an older request is still physically running, and superseded model/cleanup responses cannot render into the new session.
+- Bookmarks now applies the same ownership-generation rule across lazy-module, permission and bookmark-tree awaits. A tree or permission result from a closed/superseded Bookmarks session cannot repopulate arrays, status or hidden DOM after close/reopen.
+- Recovery destructive authority is unchanged: submitted cleanup still completes in the background and remains subject to the existing background eligibility and fresh pre-delete revalidation. The UI generation only governs presentation ownership.
+- Permanent Step-6C regression: `tests/optimization-133015.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6C-1.33.0.15.json`. Step 6 remains in progress.
+
 ## 1.33.0.14
 
 - Continues **Snow Leopard II Step 6 — lifetime and memory** with Step 6B: the Recovery Copies manager now releases its generated device/generation list whenever the dialog closes instead of retaining closure-backed action nodes for the rest of the New Tab lifetime.

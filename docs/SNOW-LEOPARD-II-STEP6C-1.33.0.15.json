@@ -1,0 +1,59 @@
+{
+  "version": "1.33.0.15",
+  "journey": "Snow Leopard II",
+  "step": "6C",
+  "scope": "Recovery + Bookmarks async dialog-session ownership",
+  "redBeforeGreen": {
+    "baseline": "1.33.0.14",
+    "reproducedFindings": 2,
+    "baselinePassing": 0,
+    "candidatePassing": 2,
+    "findings": [
+      "Recovery close\u2192reopen suppresses fresh fetch and old response populates new session",
+      "Bookmarks old tree response repopulates state after close\u2192reopen"
+    ]
+  },
+  "recovery": {
+    "sessionGeneration": true,
+    "reopenCanStartFreshLoadWhileOldLoadRuns": true,
+    "supersededModelRenderCalls": 0,
+    "supersededCleanupRenderCalls": 0,
+    "backgroundCleanupCancelledOnClose": false,
+    "currentSessionReloadAfterSupersededCleanup": true
+  },
+  "bookmarks": {
+    "sessionGeneration": true,
+    "supersededTreeAdoptions": 0,
+    "supersededPermissionStatusWrites": 0,
+    "freshReopenReadRequired": true
+  },
+  "authorityBoundaries": {
+    "syncChanged": false,
+    "recoveryBackgroundAuthorityChanged": false,
+    "permissionsChanged": false,
+    "schemasChanged": false,
+    "networkChanged": false
+  },
+  "certification": "MECHANICAL_ONLY",
+  "browserHeapClaim": false,
+  "verification": {
+    "focused": {
+      "startup": "236/236",
+      "newtab": "452/452",
+      "sync": "277/277",
+      "recovery": "152/152",
+      "browser": "178/178",
+      "core": "164/164",
+      "security": "146/146",
+      "release": "336/336"
+    },
+    "authoritative": "1233/1233",
+    "ordinary": "1229/1229",
+    "step0Isolated": "4/4",
+    "reachability": {
+      "unreachableSharedModules": 0,
+      "unusedNamedImports": 0,
+      "unreferencedPrivateFunctions": 0
+    }
+  }
+}

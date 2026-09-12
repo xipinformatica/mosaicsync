@@ -10,9 +10,9 @@ Snow Leopard II begins from frozen correctness baseline **1.32.1.8**. Its rule i
 - **Step 3 — DOM/CSS/lazy secondary UI: DONE in 1.33.0.6.** Step 3A (1.33.0.4) moved Wallpaper Gallery behind first use; 1.33.0.5 hardened focused coverage/census accounting; Step 3B (1.33.0.6) moved the Bookmarks dialog shell and dedicated controller out of ordinary startup. The remaining untouched surfaces are either too small to justify another ownership boundary or materially more lifecycle-sensitive, so Step 3 stops rather than forcing risk for diminishing returns.
 - **Step 4 — Asset/image/network frugality: DONE in 1.33.0.9.** Step 4A removes unconditional inactive-Space background warming from ordinary New Tab/post-mutation maintenance. Step 4B narrows destination-Space intent/switch warming to the single currently effective background. Step 4C keeps the historical delayed Top Sites permission recheck but skips a duplicate full Frequently Visited render/favicon-preparation pass after a healthy verified startup. Failed/unverified starts and permission loss still use the full recovery path.
 - **Step 5 — Storage/background frugality: DONE in 1.33.0.12.** Step 5A froze storage/wake measurements; Step 5B removed the routine pre-GC metadata reread; Step 5C reuses queue-owned Sync continuity within the same serialized reconciliation turn. Routine alarms are now 5 local reads / 2 full Sync reads, GC-due alarms 7 / 3, and established Sync-on startup 11 / 2. The remaining reads cross authority, journal, semantic-state, diagnostics or Sync freshness boundaries, so Step 5 closes rather than forcing risk.
-- **Step 6 — Lifetime and memory: IN PROGRESS in 1.33.0.14.** Step 6A releases the Wallpaper Gallery choice payload on close; Step 6B releases generated Recovery-manager device/generation controls and suppresses late hidden renders after close while preserving background cleanup authority. Deterministic repeated-cycle tests converge to shell/list-only bounds. Broader lifetime stress continues before Step 6 can close.
-- **Step 7 — Runtime loading/dead work.** Remove or defer code only when reachability and runtime traces prove it does not earn startup cost.
-- **Step 8 — Freeze and adversarial performance audit.** Re-run correctness, browser, memory, startup and concurrency certification and look specifically for safety shortcuts introduced by optimization.
+- **Step 6 — Lifetime and memory: DONE in 1.33.0.16.** Step 6A releases the Wallpaper Gallery choice payload on close; Step 6B releases generated Recovery-manager controls; Step 6C adds open-session generation ownership for Recovery and Bookmarks so close→reopen cannot adopt superseded asynchronous results; Step 6D releases generated folder-popover item controls on close. The remaining audited lifetime owners are explicitly cleared, bounded, or intentionally New-Tab-lifetime. Real-browser heap/GC timing remains unavailable without compatible browser/driver pairs, so Step 6 closes on mechanically proven ownership/convergence rather than inventing another production change.
+- **Step 7 — Runtime loading/dead work: DONE in 1.33.0.17.** Reachability still reports zero high-confidence unreachable shared modules, unused named imports or unreferenced private functions. One duplicated startup edge was proven: `builtin-icons.js` must remain a parser-time classic first-paint helper, but `newtab.js` also imported it into the static ES-module graph only to hit its already-defined-global early return. Removing that duplicate import reduces the static closure **23→22 modules / 644,249→640,098 raw bytes** while preserving the classic first-paint owner. No further deletion/defer boundary earned its complexity, so Step 7 stops here.
+- **Step 8 — Freeze and adversarial performance audit: DONE in 1.33.0.18.** No further performance optimization was accepted. The final red-team reproduced and closed two inherited LOW same-session native-dialog reentrancy races in Bookmarks and Wallpaper Gallery, added runtime execution coverage for the Step-7 built-in-icon ownership contract, re-ran the complete correctness/startup/browser/storage/lifetime/reachability certification, and froze the deterministic journey deltas. **Snow Leopard II is COMPLETE at 1.33.0.18.**
 
 ## Step 0 immutable baseline
 
@@ -244,3 +244,58 @@ Step 6 remains **IN PROGRESS**. This slice does not claim browser-heap convergen
 Canonical Step-6B snapshot: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`.
 
 Step 6 remains **IN PROGRESS**. No browser-heap convergence claim is made without compatible real-browser driver pairs.
+## Step 6C async dialog-session ownership corrective
+
+1.33.0.15 closes a harder lifetime race exposed by adversarial audit: `dialog.open` alone cannot distinguish the session that launched an asynchronous request from a later session opened after close. Recovery Copies and Bookmarks now bind async presentation work to an explicit dialog-open generation.
+
+- Recovery close→reopen may start a fresh model request even while a superseded load is still physically running. Only the current generation may render model/error state.
+- A Recovery cleanup submitted by an older session still completes through the unchanged background authority. If the UI was closed/reopened meanwhile, its old response is not rendered; the current open session reloads a fresh model after cleanup completion.
+- Bookmarks revalidates its dialog generation after lazy-module, permission and bookmark-tree awaits. Superseded tree/permission completions cannot repopulate arrays, status or hidden DOM.
+- No Sync, Recovery planning/revalidation, storage schema, permission or network authority changes.
+
+Canonical Step-6C snapshot: `docs/SNOW-LEOPARD-II-STEP6C-1.33.0.15.json`.
+
+Step 6 remains **IN PROGRESS**. Real-browser heap convergence is still not claimed without compatible browser/driver pairs.
+
+## Step 6D folder-popover closed payload release
+
+1.33.0.16 closes the mechanically-audited lifetime phase with the remaining demonstrated closed-UI payload in the folder popover.
+
+- `renderFolderContents()` creates per-child item cards, edit controls and drag/click/context-menu listeners from authoritative folder state.
+- `closeFolder()` now releases those generated controls with `folderItems.replaceChildren()` even when the popover is already hidden, then clears active folder ownership as before.
+- `openFolder()` still rebuilds the contents synchronously before exposing the popover, so no cached DOM becomes authority.
+- Deferred local-artwork hydration already renders only when the same folder is still active and the popover is visible. Cross-Space drag preserves the active source element before closing the folder, so drag continuity is not weakened.
+- A deterministic 40-item fixture falls **40 → 0 retained generated item roots after close** across 50 cycles.
+
+Canonical Step-6D snapshot: `docs/SNOW-LEOPARD-II-STEP6D-1.33.0.16.json`.
+
+After the Step-6A/6B/6C/6D audit, the remaining long-lived UI/cache owners are explicitly cleared, bounded, or intentionally New-Tab-lifetime. Step 6 is **DONE**. Actual browser heap/RSS/GC convergence is still not claimed without compatible browser/driver pairs and remains a final certification opportunity rather than a reason to invent another lifetime optimization. Step 7 runtime loading/dead work is next.
+
+
+
+## Step 7 runtime loading/dead-work closure
+
+1.33.0.17 audits the complete New Tab runtime graph after the Step-6 lifetime freeze and makes one deliberately tiny production change.
+
+- `builtin-icons.js` remains a parser-blocking classic script before `render-bootstrap.js` because first paint needs its packaged glyph helper.
+- The main `newtab.js` module no longer also imports the same file. Module scripts are deferred by default, so the parser-time classic helper is already installed before the authoritative module body executes; its former module evaluation could only hit the file's existing-global early return.
+- Static New Tab module closure falls **23→22 modules** and **644,249→640,098 raw source bytes**, a **4,151-byte** reduction, with parser-time classic work unchanged at **9 scripts / 28,892 bytes**.
+- Post-change reachability remains **0** high-confidence unreachable shared modules, **0** unused named imports and **0** unreferenced private functions.
+- Defensive/reference exports and test hooks remain intentionally retained; no additional runtime deletion candidate was proven. Small interaction-only helpers were not split merely to save a few kilobytes because the extra async ownership boundary would cost more complexity than it earns.
+
+Canonical Step-7 snapshot: `docs/SNOW-LEOPARD-II-STEP7-1.33.0.17.json`.
+
+Step 7 is **DONE**. Step 8 is the Snow Leopard II final freeze and adversarial performance/correctness audit.
+
+
+## Step 8 final freeze — 1.33.0.18
+
+Step 8 deliberately adds **no new performance optimization**. It treats 1.33.0.17 as the final optimization baseline and asks whether Snow Leopard II created a safety shortcut. Two carried LOW presentation races were independently reproduced against untouched 1.33.0.17 and corrected: Bookmarks and Wallpaper Gallery now re-check their native dialog immediately before `showModal()` after asynchronous setup, preventing two same-session rapid open attempts from producing a second invalid modal open. The Step-7 built-in icon contract now has runtime execution coverage proving a second evaluation is a no-op and the installed global is immutable.
+
+Deterministic Step-0→Step-8 comparison: initial New Tab DOM **642→598 elements / 52,905→49,565 raw HTML bytes**, eager static module closure **24→22 modules / 653,457→640,143 raw bytes**. Step-5 routine/GC/startup storage counts remain frozen at their independently freshness-safe boundaries, Step-6 lifetime owners remain cleared/bounded, and post-Step-8 reachability remains 0/0/0. Package size is not used as a journey-success claim because the runtime retained/added product and safety code while startup work was reduced. Real-browser timing/heap magnitude remains unclaimed because compatible browser/driver pairs are unavailable.
+
+Canonical Step-8 snapshot: `docs/SNOW-LEOPARD-II-STEP8-1.33.0.18.json`.
+
+# Snow Leopard II — COMPLETE
+
+The journey is frozen at **1.33.0.18**. Future performance work requires new measured evidence and must begin as a new journey rather than silently extending Snow Leopard II.

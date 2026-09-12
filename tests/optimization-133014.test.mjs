@@ -52,6 +52,9 @@ test("1.33.0.14 an async Recovery model cannot repopulate a closed dialog", asyn
   let busy = false;
   const context = vm.createContext({
     recoveryCopiesBusy: false,
+    recoveryCopiesSessionGeneration: 1,
+    recoveryCopiesLoadInFlightGeneration: 0,
+    recoveryCopiesCleanupBusy: false,
     recoveryCopiesDialog: { open: false },
     recoveryCopiesSummary: { textContent: "" },
     setRecoveryCopiesBusy(value) { busy = Boolean(value); context.recoveryCopiesBusy = busy; },
@@ -72,6 +75,9 @@ test("1.33.0.14 closed Recovery cleanup completion does not rebuild hidden contr
   let busy = false;
   const context = vm.createContext({
     recoveryCopiesBusy: false,
+    recoveryCopiesSessionGeneration: 1,
+    recoveryCopiesLoadInFlightGeneration: 0,
+    recoveryCopiesCleanupBusy: false,
     recoveryCopiesDialog: { open: false },
     setRecoveryCopiesBusy(value) { busy = Boolean(value); context.recoveryCopiesBusy = busy; },
     async sendSyncMessage() { return { ok: true, removedBytes: 2048, removedGenerations: 1, devices: [] }; },

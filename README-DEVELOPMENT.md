@@ -1,4 +1,22 @@
-Current release: 1.33.0.14
+Current release: 1.33.0.18
+
+
+## 1.33.0.18 — Snow Leopard II Step 8: final freeze
+
+1.33.0.18 is the Snow Leopard II freeze endpoint. It makes no further performance optimization. The final adversarial audit closes two pre-existing low-severity same-session dialog reentrancy races: rapid concurrent Bookmarks opens and rapid concurrent Wallpaper Gallery opens now re-check native dialog ownership immediately before `showModal()`, so a superseded same-session open attempt returns instead of throwing `InvalidStateError`. Step 8 also adds a runtime execution regression for the Step-7 `builtin-icons.js` ownership contract, proving the second evaluation is a true no-op and the installed global API is immutable. Sync, Recovery, journals, storage authority, schemas, permissions and privacy boundaries are unchanged. Permanent protection: `tests/optimization-133018.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP8-1.33.0.18.json`. **Snow Leopard II is COMPLETE at 1.33.0.18.**
+
+## 1.33.0.17 — Snow Leopard II Step 7: runtime-loading/dead-work closure
+
+1.33.0.17 removes one proven duplicate startup edge and then stops. `builtin-icons.js` remains the classic parser-time glyph owner required by `render-bootstrap.js`, but `newtab.js` no longer also imports the same idempotent file into the static ES-module graph. Critical-path census moves **23→22 modules / 644,249→640,098 raw bytes** while classic bootstrap work stays **9 scripts / 28,892 bytes**. Reachability remains 0/0/0 for high-confidence unreachable shared modules, unused named imports and unreferenced private functions. Defensive/reference exports and explicit test hooks remain intentionally retained. Permanent protection: `tests/optimization-133017.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP7-1.33.0.17.json`. Step 7 is DONE; Step 8 final freeze/adversarial audit is next.
+
+## 1.33.0.16 — Snow Leopard II Step 6D: folder-popover closed-payload release
+
+1.33.0.16 closes Step 6 with one final demonstrated closed-UI retention case. `closeFolder()` now releases the generated folder-item controls and their per-item click/drag/context-menu listener closures while preserving the reusable popover shell and authoritative folder data. A 40-item fixture moves 40 retained generated item roots after close to 0 across 50 repeated cycles, including already-hidden idempotent close. `openFolder()` still rebuilds synchronously before display, deferred folder artwork hydration already revalidates active-folder/hidden ownership, and cross-Space drag preserves its source element before closing the popover. Permanent protection: `tests/optimization-133016.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6D-1.33.0.16.json`. Step 6 is DONE; Step 7 runtime loading/dead work is next.
+
+## 1.33.0.15 — Snow Leopard II Step 6C: async dialog-session ownership corrective
+
+1.33.0.15 closes the close→reopen ABA gap found independently in Recovery Copies and reproduced in Bookmarks. Recovery and Bookmarks async work now belongs to a specific dialog-open generation; superseded responses cannot populate a later session. Recovery cleanup itself is not cancelled and remains background-owned/freshly revalidated. Permanent protection: `tests/optimization-133015.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6C-1.33.0.15.json`. Step 6 remains in progress.
+
 
 ## 1.33.0.14 — Snow Leopard II Step 6B: Recovery-manager closed-payload release
 

@@ -36,7 +36,7 @@ test("1.32.0.3 preserves secondary-style-before-Bookmarks-visibility ordering", 
 
 test("1.32.0.3 keeps bookmark-folder colors device-local and outside first-paint authority", () => {
   assert.match(owner, /function readBookmarkFolderColors\(\)[\s\S]*?localStorage\.getItem\(BOOKMARK_FOLDER_COLORS_PREF_KEY\)/);
-  assert.match(owner, /async function loadBookmarksIntoDialog\(\)[\s\S]*?bookmarkFolderColors = readBookmarkFolderColors\(\)[\s\S]*?renderBookmarkBrowser\(\)/);
+  assert.match(owner, /async function loadBookmarksIntoDialog\([^)]*\)[\s\S]*?bookmarkFolderColors = readBookmarkFolderColors\(\)[\s\S]*?renderBookmarkBrowser\(\)/);
   assert.doesNotMatch(newtab, /BOOKMARK_FOLDER_COLORS_PREF_KEY|readBookmarkFolderColors/);
 });
 

@@ -49,6 +49,11 @@ export function createBookmarksController({
   let activeBookmarkFolderId = "all";
   let bookmarkFolderColors = {};
   let bookmarkColorMenu = null;
+  let bookmarksDialogGeneration = 0;
+
+  function ownsBookmarksDialogGeneration(generation) {
+    return Boolean(bookmarksDialog?.open && generation === bookmarksDialogGeneration);
+  }
 
   function readBookmarkFolderColors() {
     try {
@@ -316,21 +321,28 @@ export function createBookmarksController({
     }
   }
 
-  async function loadBookmarksIntoDialog() {
+  async function loadBookmarksIntoDialog(generation = bookmarksDialogGeneration) {
     if (!bookmarksPermissionState || !bookmarksBrowser) return;
+    if (!ownsBookmarksDialogGeneration(generation)) return;
     bookmarksStatus.textContent = "";
     const api = await loadBookmarksModule();
+    if (!ownsBookmarksDialogGeneration(generation)) return;
     bookmarksApi = api;
     const allowed = await api.hasBookmarksPermission();
+    if (!ownsBookmarksDialogGeneration(generation)) return;
     bookmarksPermissionState.hidden = allowed;
     bookmarksBrowser.hidden = !allowed;
     if (!allowed) {
-      queueMicrotask(() => bookmarksPermissionButton?.focus());
+      queueMicrotask(() => {
+        if (ownsBookmarksDialogGeneration(generation)) bookmarksPermissionButton?.focus();
+      });
       return;
     }
 
     try {
-      bookmarkTree = await api.readBookmarkTree();
+      const nextBookmarkTree = await api.readBookmarkTree();
+      if (!ownsBookmarksDialogGeneration(generation)) return;
+      bookmarkTree = nextBookmarkTree;
       bookmarkFolders = api.flattenBookmarkFolders(bookmarkTree);
       bookmarkAllItems = api.flattenBookmarks(bookmarkTree);
       bookmarkFolderColors = readBookmarkFolderColors();
@@ -344,8 +356,11 @@ export function createBookmarksController({
       if (prunedFolderColors) writeBookmarkFolderColors();
       activeBookmarkFolderId = "all";
       renderBookmarkBrowser();
-      queueMicrotask(() => bookmarksSearch?.focus());
+      queueMicrotask(() => {
+        if (ownsBookmarksDialogGeneration(generation)) bookmarksSearch?.focus();
+      });
     } catch (error) {
+      if (!ownsBookmarksDialogGeneration(generation)) return;
       console.warn(`${PRODUCT_NAME}: bookmark read failed`, error);
       bookmarksBrowser.hidden = true;
       bookmarksPermissionState.hidden = false;
@@ -361,30 +376,37 @@ export function createBookmarksController({
     }
     await ensureSecondaryStyles();
     bookmarksApi = await loadBookmarksModule();
+    if (bookmarksDialog.open) return;
     localizeDocument(bookmarksDialog);
     bookmarksDialog.showModal();
-    await loadBookmarksIntoDialog();
+    const generation = ++bookmarksDialogGeneration;
+    await loadBookmarksIntoDialog(generation);
   }
 
   async function requestPermissionFromGesture() {
+    const generation = bookmarksDialogGeneration;
+    if (!ownsBookmarksDialogGeneration(generation)) return;
     bookmarksStatus.textContent = "";
     try {
       const permissionPromise = bookmarksApi?.requestBookmarksPermissionFromGesture?.();
       if (!permissionPromise) throw new Error("BOOKMARK_MODULE_NOT_READY");
       const granted = await permissionPromise;
+      if (!ownsBookmarksDialogGeneration(generation)) return;
       if (!granted) {
         bookmarksStatus.textContent = t("bookmarksPermissionDenied");
         return;
       }
       bookmarksStatus.textContent = t("permissionGranted");
-      await loadBookmarksIntoDialog();
+      await loadBookmarksIntoDialog(generation);
     } catch (error) {
+      if (!ownsBookmarksDialogGeneration(generation)) return;
       console.warn(`${PRODUCT_NAME}: bookmark permission request failed`, error);
       bookmarksStatus.textContent = t("permissionRequestFailed");
     }
   }
 
   function reset() {
+    bookmarksDialogGeneration += 1;
     closeColorMenu();
     bookmarkTree = [];
     bookmarkFolders = [];
