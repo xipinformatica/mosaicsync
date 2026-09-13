@@ -72,6 +72,7 @@ for (const browser of ["firefox", "chrome"]) {
       beginOrContinueCatastrophicSyncRecovery: async () => null,
       markSyncContinuityHealthy: async () => null,
       completeRemoteDescriptor: () => null,
+      completeLiveRemoteDescriptor: () => null,
       observeRemoteResetIntent: async () => null,
       validResetIntent: () => false,
       SYNC_RESET_INTENT_KEY: "mosaicsync:reset-intent",

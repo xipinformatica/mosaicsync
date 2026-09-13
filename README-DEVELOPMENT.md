@@ -1,9 +1,13 @@
-Current release: 1.33.0.19
+Current release: 1.33.0.20
 
+
+## 1.33.0.20 — live-completeness Recovery/error-lifecycle corrective
+
+1.33.0.20 is a narrow post-audit corrective over 1.33.0.19 and does not reopen Snow Leopard II. The 1.33.0.19 unchanged-reconcile side effects now distinguish fallback-assisted profile completeness from authoritative live completeness: missing-own-Recovery self-heal and stale non-quota Sync-error clearing require both live Personal and Work ledgers to validate. Torn Personal or Work delivery therefore keeps the generic error and does not manufacture a new Recovery generation; when the missing live ledger arrives, the same no-op reconcile converges by repairing Recovery and clearing the stale error. Regression coverage also proves frozen Recovery cleanup targets cannot expand to post-plan generations, survivor-publication failure aborts destructive cleanup, network-learned artwork remains device-local, and different-intent Shortcut Editor rapid opens have one owner. Permanent protection: `tests/corrective-133020.test.mjs`.
 
 ## 1.33.0.19 — post-Snow-Leopard-II correctness corrective
 
-1.33.0.19 does not reopen Snow Leopard II performance work. It closes three post-release forensic findings over the frozen 1.33.0.18 endpoint: distributed whole-device Recovery cleanup establishes a fresh post-plan current-device survivor before destructive revalidation; an unchanged healthy reconcile self-heals a missing current-device Recovery generation; and Add/Edit Shortcut now serializes same-session rapid opens before editor-form mutation. A successful authoritative `already-applied` reconcile also clears stale non-quota Sync exception state while preserving explicit quota errors. The historical live `null has no properties` message was not reproducible when manually reconciled (`ok:true`, `reason:"already-applied"`), so this release fixes the proven stale-error lifecycle rather than inventing a null-root-cause patch. Permanent protection: `tests/corrective-133019.test.mjs`. Snow Leopard II remains complete/frozen at 1.33.0.18.
+1.33.0.19 introduced the distributed post-plan Recovery survivor protocol, unchanged-state Recovery self-heal, Shortcut Editor rapid-open serialization and stale non-quota error clearing. Its later unknown-unknowns audit found that the last two unchanged-reconcile side effects used fallback-assisted completeness where authoritative live completeness was required; 1.33.0.20 narrows those predicates without changing the underlying Sync or Recovery formats. Permanent historical protection remains in `tests/corrective-133019.test.mjs`. Snow Leopard II remains complete/frozen at 1.33.0.18.
 
 ## 1.33.0.18 — Snow Leopard II Step 8: final freeze
 

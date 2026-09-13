@@ -1,3 +1,12 @@
+## 1.33.0.20
+
+- Narrow post-audit corrective over 1.33.0.19; Snow Leopard II remains complete/frozen at 1.33.0.18.
+- Fixes the confirmed torn-live completeness defect in unchanged reconciliation: missing-own-Recovery self-heal now requires complete live Personal + Work ledgers, rather than a fallback-assisted descriptor reconstructed from Recovery.
+- Fixes the related stale-error lifecycle defect: a generic Sync error is cleared by `already-applied` only after the same complete live Personal + Work proof; torn delivery keeps the error until authoritative live delivery converges. Explicit quota errors remain sticky.
+- Adds permanent Firefox/Chromium regressions for torn Personal/Work delivery, partial→complete convergence, catastrophic-loss negative control, frozen Recovery target sets, fail-closed survivor publication, network-learned artwork privacy, and different-intent Shortcut Editor rapid-open ownership.
+- Documents the mixed-version Recovery boundary precisely: the post-plan survivor guarantee protects concurrently destructive peers that implement the 1.33.0.19+ protocol; older peers cannot provide the same hard guarantee.
+- No Normal Sync wire-format, Recovery format, persisted schema, permission, CSP, browser-floor or privacy-policy change.
+
 ## 1.33.0.19
 
 - Post-release correctness corrective over the frozen Snow Leopard II endpoint; no new performance optimization is introduced.

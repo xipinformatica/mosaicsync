@@ -251,8 +251,9 @@ This catalogue records high-value historical failures and the permanent tests th
 
 **Permanent protection:**
 - `tests/corrective-133019.test.mjs`
+- `tests/corrective-133020.test.mjs`
 
-**If it returns:** preserve the distributed survivor protocol. Device-mode cleanup must capture the target roots before creating a new verified current-device generation, final deletion must remain the intersection with that frozen target set, and healthy initialized reconciliation must self-heal a missing current-device Recovery generation. A local Web Lock or an extra fresh read alone is not a distributed guarantee.
+**If it returns:** preserve the distributed survivor protocol. Device-mode cleanup must capture the target roots before creating a new verified current-device generation, final deletion must remain the intersection with that frozen target set, and healthy initialized reconciliation may self-heal a missing current-device Recovery generation only after complete live Personal+Work delivery. A local Web Lock or an extra fresh read alone is not a distributed guarantee.
 
 ## R-022 — Rapid Add/Edit Shortcut open attempts could race into a second native modal open
 
@@ -273,5 +274,18 @@ This catalogue records high-value historical failures and the permanent tests th
 
 **Permanent protection:**
 - `tests/corrective-133019.test.mjs`
+- `tests/corrective-133020.test.mjs`
 
-**If it returns:** a successful authoritative `already-applied` result may clear stale non-quota error state, but must not erase the explicit Sync-quota error. Do not infer or mask the root cause of an old raw exception unless its production throw site is reproduced independently.
+**If it returns:** a successful authoritative `already-applied` result may clear stale non-quota error state only when both live Personal and Work ledgers validate; fallback-assisted Recovery completeness is not enough. Do not erase the explicit Sync-quota error or infer/mask the root cause of an old raw exception unless its production throw site is reproduced independently.
+
+
+## R-024 — Fallback-assisted completeness could masquerade as healthy live Sync during unchanged reconciliation
+
+**Historical symptom/risk:** 1.33.0.19 correctly separated Recovery from live merge authority, but its two new unchanged-reconcile side effects used `completeRemoteDescriptor()`, which can reconstruct a complete profile from immutable Recovery fallback when one or both live ledgers are torn. Because `contentUnchanged` also remains true when no usable live ledger is available to compare, a partial non-zero delivery could return `already-applied`, publish a new current-device Recovery generation, and clear a generic Sync error even though live Personal+Work delivery was not complete. Normal Sync data was not overwritten by the reproduced sequence, but the safety/error state machine claimed more authority than the live namespace actually proved.
+
+**Closed in:** 1.33.0.20.
+
+**Permanent protection:**
+- `tests/corrective-133020.test.mjs`
+
+**If it returns:** keep continuity/recoverability completeness (`completeRemoteDescriptor`) distinct from authoritative live completeness (`completeLiveRemoteDescriptor`). Missing-own-Recovery self-heal and stale generic-error clearing require the latter. Test torn Personal, torn Work and partial→complete convergence in both Firefox- and Chromium-shaped production runtimes.

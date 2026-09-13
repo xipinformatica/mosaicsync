@@ -4039,6 +4039,7 @@ export function startBackground(adapter) {
     const workRevision = datasetRevision(workSnapshot.dataset);
     const profileRevision = sources.profile?.revision || "";
     const completeDescriptor = completeRemoteDescriptor(sources, workSnapshot);
+    const completeLiveDescriptor = completeLiveRemoteDescriptor(sources, workSnapshot);
     if (completeDescriptor) {
       continuityContext.current = await markSyncContinuityHealthy(meta, completeDescriptor, continuityContext.current);
     }
@@ -4083,13 +4084,13 @@ export function startBackground(adapter) {
       const hasCurrentRecovery = Boolean(meta.deviceId && sources.deviceSnapshots.some(snapshot =>
         snapshot?.deviceId === meta.deviceId && snapshot?.profileComplete === true
       ));
-      if (completeDescriptor && meta.deviceId && !hasCurrentRecovery) {
-        // Recovery generations are not live merge inputs, but after a complete
-        // verified remote descriptor an initialized device must still repair its
-        // own missing safety copy. Never publish from a torn/partial delivery.
-        // This also closes the mixed-version window where an older peer can retire
-        // the last copy before the distributed survivor protocol reaches every
-        // device.
+      if (completeLiveDescriptor && meta.deviceId && !hasCurrentRecovery) {
+        // Recovery generations are not live merge inputs. Repair a missing own
+        // safety copy only after both live Personal and Work ledgers validate; a
+        // fallback-assisted complete descriptor is sufficient for continuity but
+        // must never manufacture Recovery state during torn/partial live delivery.
+        // This also closes the mixed-version window once complete live delivery
+        // reaches the device.
         const { state: recoveryState } = await ensureLocalStorage();
         const recoveryRepair = await publishProfileDeviceSnapshot(recoveryState, meta, { force: true });
         meta = await writeLocalMeta({
@@ -4101,11 +4102,13 @@ export function startBackground(adapter) {
         });
       }
 
-      // A successful authoritative freshness check proves a previous transient
-      // background exception is no longer active. Clear stale non-quota error
-      // state so Settings cannot keep showing an old raw exception forever.
-      // Preserve the explicit quota error until a quota-aware path supersedes it.
-      if (meta.lastSyncError !== "Firefox Sync storage quota was exceeded." &&
+      // Only a complete live Personal+Work freshness check can disprove a
+      // previous transient background exception. A fallback-assisted/torn live
+      // view may still be recoverable, but it is not authoritative enough to erase
+      // the error. Preserve the explicit quota error until a quota-aware path
+      // supersedes it.
+      if (completeLiveDescriptor &&
+          meta.lastSyncError !== "Firefox Sync storage quota was exceeded." &&
           (meta.syncStatus !== "ready" || meta.lastSyncError)) {
         meta = await writeLocalMeta({ ...meta, syncStatus: "ready", lastSyncError: "" });
       }

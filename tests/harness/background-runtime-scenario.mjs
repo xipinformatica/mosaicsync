@@ -3317,6 +3317,141 @@ else if (scenario === 'corrective-133019-quota-error-preserved') {
   console.log(JSON.stringify({ok:true,preserved:true,reason:result.reason}));
 }
 
+
+else if (scenario === 'corrective-133020-torn-personal-live-guard' || scenario === 'corrective-133020-torn-work-live-guard') {
+  const tornPersonal = scenario.endsWith('torn-personal-live-guard');
+  const base=stateWith({
+    personal:[shortcut('safe-personal','https://safe-personal.test/',100)],
+    work:[shortcut('safe-work','https://safe-work.test/',100)]
+  });
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'device-a'});
+  assert.equal((await send({type:'mosaicsync:set-sync-enabled',enabled:true}))?.ok,true);
+  assert.equal((await send({type:'mosaicsync:bootstrap-local'}))?.ok,true);
+
+  const healthyAll=await sync.get(null);
+  const liveEntries=Object.fromEntries(Object.entries(healthyAll).filter(([key]) =>
+    key === constants.SYNC_SETTINGS_KEY || key === constants.SYNC_DATASET_KEY || key.startsWith(constants.SYNC_ITEM_PREFIX) ||
+    key === `${constants.SYNC_SPACE_PREFIX}work.settings` || key === `${constants.SYNC_SPACE_PREFIX}work.dataset` ||
+    key.startsWith(`${constants.SYNC_SPACE_PREFIX}work.item.`)
+  ));
+  const fallback=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'fallback',publishedAt:700});
+
+  // Remove every current-device Recovery generation, then leave only one live
+  // ledger complete. The other side is intentionally torn but can be reconstructed
+  // from another device's complete Recovery snapshot. This is the exact boundary
+  // where .19 confused fallback-complete with live-complete.
+  const ownRecoveryKeys=Object.keys(healthyAll).filter(key=>key.startsWith(`${constants.SYNC_DEVICE_SNAPSHOT_PREFIX}${encodeURIComponent('device-a')}`));
+  await sync.clear();
+  await sync.set({...fallback.entries});
+  if (tornPersonal) {
+    for (const [key,value] of Object.entries(liveEntries)) {
+      if (key.startsWith(`${constants.SYNC_SPACE_PREFIX}work.`)) await sync.set({[key]:value});
+    }
+    // Keep one Personal live signal so catastrophic-loss quarantine does not own
+    // this partial-delivery case.
+    await sync.set({[constants.SYNC_SETTINGS_KEY]:liveEntries[constants.SYNC_SETTINGS_KEY]});
+  } else {
+    for (const [key,value] of Object.entries(liveEntries)) {
+      if (!key.startsWith(`${constants.SYNC_SPACE_PREFIX}work.`)) await sync.set({[key]:value});
+    }
+  }
+  assert.equal(deviceSnapshotRootEntries(await sync.get(null),'device-a').length,0);
+  const healthyMeta=await storageCore.readLocalMeta();
+  await storageCore.writeLocalMeta({...healthyMeta,syncStatus:'error',lastSyncError:'simulated transient failure'});
+
+  const partial=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const afterPartial=await storageCore.readLocalMeta();
+  const partialOwn=deviceSnapshotRootEntries(await sync.get(null),'device-a').map(([key])=>key);
+  assert.equal(partial?.reason,'already-applied','partial non-zero live delivery remains existing torn-delivery handling');
+  assert.equal(partialOwn.length,0,'torn live delivery must not manufacture a current-device Recovery generation');
+  assert.equal(afterPartial.syncStatus,'error','torn live delivery must not clear a generic Sync error');
+  assert.equal(afterPartial.lastSyncError,'simulated transient failure');
+
+  // Once the missing live ledger arrives, the same no-op reconcile becomes an
+  // authoritative complete-live proof. It must then perform both intended .19
+  // side effects: repair the missing own Recovery copy and clear the stale error.
+  await sync.set(liveEntries);
+  const complete=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const afterComplete=await storageCore.readLocalMeta();
+  const completeOwn=deviceSnapshotRootEntries(await sync.get(null),'device-a').map(([key])=>key);
+  assert.equal(complete?.reason,'already-applied');
+  assert.ok(completeOwn.length>=1,'complete live delivery must converge by repairing the missing own Recovery generation');
+  assert.equal(afterComplete.syncStatus,'ready');
+  assert.equal(afterComplete.lastSyncError,'','complete live delivery must clear the stale generic Sync error');
+  console.log(JSON.stringify({ok:true,tornPersonal,partialGuarded:true,completeConverged:true,partialOwn,completeOwn}));
+}
+
+else if (scenario === 'corrective-133020-total-live-wipe-negative-control') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)],work:[shortcut('work','https://work.test/',100)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'device-a'});
+  assert.equal((await send({type:'mosaicsync:set-sync-enabled',enabled:true}))?.ok,true);
+  assert.equal((await send({type:'mosaicsync:bootstrap-local'}))?.ok,true);
+  const fallback=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'fallback-wipe',publishedAt:700});
+  await sync.clear();
+  await sync.set(fallback.entries);
+  const meta=await storageCore.readLocalMeta();
+  await storageCore.writeLocalMeta({...meta,syncStatus:'error',lastSyncError:'simulated transient failure'});
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const after=await storageCore.readLocalMeta();
+  assert.equal(result?.reason,'remote-loss-quarantine','a total live wipe must remain owned by catastrophic-loss quarantine');
+  assert.equal(deviceSnapshotRootEntries(await sync.get(null),'device-a').length,0,'quarantine must not run unchanged-state Recovery self-heal');
+  assert.equal(after.syncStatus,'error','quarantine must not erase an unrelated current generic Sync error');
+  assert.equal(after.lastSyncError,'simulated transient failure');
+  console.log(JSON.stringify({ok:true,quarantined:true,noRepair:true,errorPreserved:true}));
+}
+
+else if (scenario === 'corrective-133020-frozen-target-survives-post-plan-generation') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)],work:[shortcut('work','https://work.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A'});
+  const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current-a',publishedAt:500});
+  const oldTarget=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'old-b',publishedAt:400});
+  const newTarget=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'new-b',publishedAt:900});
+  await sync.set({...current.entries,...oldTarget.entries});
+
+  const originalGet=sync.get.bind(sync);
+  let sawFreshSurvivor=false;
+  let injectedPostPlan=false;
+  sync.get=async keys=>{
+    if (keys===null || keys===undefined) {
+      const visible=Object.fromEntries([...sync.data].map(([key,value])=>[key,clone(value)]));
+      const currentRoots=deviceSnapshotRootEntries(visible,'device-a').map(([key])=>key);
+      if (!sawFreshSurvivor && currentRoots.some(key=>key!==current.rootKey)) {
+        sawFreshSurvivor=true;
+      } else if (sawFreshSurvivor && !injectedPostPlan) {
+        injectedPostPlan=true;
+        for (const [key,value] of Object.entries(newTarget.entries)) sync.data.set(key,clone(value));
+      }
+    }
+    return originalGet(keys);
+  };
+
+  const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'device-b'});
+  assert.equal(result?.ok,true);
+  assert.equal(sawFreshSurvivor,true,'fixture must observe the post-plan acting-device survivor');
+  assert.equal(injectedPostPlan,true,'fixture must publish a target generation after the original delete plan');
+  const after=await originalGet(null);
+  assert.equal(Object.hasOwn(after,oldTarget.rootKey),false,'the originally frozen target generation should be removed');
+  assert.equal(Object.hasOwn(after,newTarget.rootKey),true,'a target generation published after plan capture must never be added to the delete set');
+  console.log(JSON.stringify({ok:true,oldRemoved:true,newSurvived:true}));
+}
+
+else if (scenario === 'corrective-133020-survivor-publication-failure-aborts-cleanup') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)],work:[shortcut('work','https://work.test/',100)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A'});
+  const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current-a',publishedAt:500});
+  const target=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'target-b',publishedAt:400});
+  await sync.set({...current.entries,...target.entries});
+  const originalSet=sync.set.bind(sync);
+  sync.set=async()=>{ throw new Error('simulated survivor publication failure'); };
+  const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'device-b'});
+  sync.set=originalSet;
+  assert.equal(result?.ok,false,'failed post-plan survivor publication must fail whole-device cleanup closed');
+  const after=await sync.get(null);
+  assert.equal(Object.hasOwn(after,target.rootKey),true,'target Recovery must remain untouched when the fresh survivor cannot be published');
+  assert.ok(typeof result?.error === 'string' && result.error.length>0,'failed publication must return an explicit error');
+  console.log(JSON.stringify({ok:true,failedClosed:true,targetPreserved:true}));
+}
+
 else {
   throw new Error(`unknown scenario ${scenario}`);
 }

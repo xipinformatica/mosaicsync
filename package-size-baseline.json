@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.19",
-      "rawBytes": 2427853,
-      "deflatedBytes": 708868,
+      "version": "1.33.0.20",
+      "rawBytes": 2428147,
+      "deflatedBytes": 708930,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,8 +13,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 387114,
-          "deflatedBytes": 91872
+          "rawBytes": 387408,
+          "deflatedBytes": 91935
         },
         "localization": {
           "files": 34,
@@ -39,7 +39,7 @@
         "newtab-html": {
           "files": 1,
           "rawBytes": 49565,
-          "deflatedBytes": 10617
+          "deflatedBytes": 10616
         },
         "newtab-js": {
           "files": 16,
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 307434,
-          "deflatedBytes": 68223
+          "rawBytes": 307728,
+          "deflatedBytes": 68286
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -119,7 +119,7 @@
           "path": "newtab/newtab.html",
           "category": "newtab-html",
           "rawBytes": 49565,
-          "deflatedBytes": 10617
+          "deflatedBytes": 10616
         },
         {
           "path": "core/i18n-locales/el.js",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.19",
-      "rawBytes": 2449496,
-      "deflatedBytes": 723385,
+      "version": "1.33.0.20",
+      "rawBytes": 2449790,
+      "deflatedBytes": 723447,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,8 +267,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 386443,
-          "deflatedBytes": 91622
+          "rawBytes": 386737,
+          "deflatedBytes": 91685
         },
         "localization": {
           "files": 34,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1368,
-          "deflatedBytes": 556
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 307434,
-          "deflatedBytes": 68223
+          "rawBytes": 307728,
+          "deflatedBytes": 68286
         },
         {
           "path": "core/public_suffix_list.dat",
