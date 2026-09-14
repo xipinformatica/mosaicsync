@@ -644,6 +644,72 @@ else if (scenario === 'snow-step5b-sync-watch-routine' || scenario === 'snow-ste
   console.log(JSON.stringify({ ok: true, scenario, storage: storageStatsSnapshot(), alarmCount: alarms.size }));
 }
 
+else if (scenario === 'corrective-133023-probe-dynamic-item-only') {
+  const base = stateWith({
+    personal: [shortcut('personal-live-only','https://personal-live-only.test/',500)],
+    work: [shortcut('work-live-only','https://work-live-only.test/',500)],
+    autoPersonal: false, autoWork: false
+  });
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'probe-device'});
+  await storageCore.ensureLocalStorage();
+  const enabled=await send({type:'mosaicsync:set-sync-enabled',enabled:true});
+  assert.equal(enabled?.ok,true);
+  const boot=await send({type:'mosaicsync:bootstrap-local'});
+  assert.equal(boot?.ok,true);
+  const workPrefix=`${constants.SYNC_SPACE_PREFIX}work.`;
+  await sync.remove([constants.SYNC_SETTINGS_KEY,constants.SYNC_DATASET_KEY,`${workPrefix}settings`,`${workPrefix}dataset`]);
+  const before=await sync.get(null);
+  assert.ok(Object.keys(before).some(key=>key.startsWith(constants.SYNC_ITEM_PREFIX)),'fixture must retain a dynamic Personal item signal');
+  resetStorageStats();
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(continuity?.lossState,'none','dynamic item-only live signal must not enter catastrophic-loss quarantine');
+  assert.notEqual(result?.reason,'remote-loss-quarantine');
+  assert.ok(sync.stats.getAllCalls>=1,'negative fixed-key probe must fall back to a full namespace read');
+  console.log(JSON.stringify({ok:true,scenario,reason:result?.reason||'',storage:storageStatsSnapshot(),lossState:continuity?.lossState}));
+}
+
+else if (scenario === 'corrective-133023-probe-empty-namespace') {
+  const base=stateWith({personal:[shortcut('personal','https://personal.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'probe-device'});
+  await storageCore.ensureLocalStorage();
+  assert.equal((await send({type:'mosaicsync:set-sync-enabled',enabled:true}))?.ok,true);
+  assert.equal((await send({type:'mosaicsync:bootstrap-local'}))?.ok,true);
+  await sync.clear();
+  resetStorageStats();
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(result?.reason,'remote-loss-quarantine');
+  assert.equal(result?.pending,true);
+  assert.equal(sync.stats.getAllCalls,2,'empty probe must preserve the two independent full negative confirmations');
+  console.log(JSON.stringify({ok:true,scenario,storage:storageStatsSnapshot(),reason:result.reason}));
+}
+
+else if (scenario === 'corrective-133023-probe-read-failure') {
+  const base=stateWith({personal:[shortcut('personal','https://personal.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'probe-device'});
+  await storageCore.ensureLocalStorage();
+  assert.equal((await send({type:'mosaicsync:set-sync-enabled',enabled:true}))?.ok,true);
+  assert.equal((await send({type:'mosaicsync:bootstrap-local'}))?.ok,true);
+  const originalGet=sync.get.bind(sync);
+  let failedProbe=false;
+  sync.get=async keys=>{
+    if (!failedProbe && Array.isArray(keys)) {
+      failedProbe=true;
+      throw new Error('simulated targeted liveness probe failure');
+    }
+    return originalGet(keys);
+  };
+  resetStorageStats();
+  const result=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  sync.get=originalGet;
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(failedProbe,true,'fixture must fail the optimization-only targeted read');
+  assert.equal(continuity?.lossState,'none','probe failure must not be interpreted as remote loss');
+  assert.ok(sync.stats.getAllCalls>=2,'probe failure must preserve established full-read authority plus normal reconciliation');
+  assert.notEqual(result?.ok,false,'a failed optimization-only probe must not break a healthy reconciliation when full reads work');
+  console.log(JSON.stringify({ok:true,scenario,storage:storageStatsSnapshot(),reason:result?.reason||'',lossState:continuity?.lossState}));
+}
+
 else if (scenario === 'firefox-open-tab-cache-1301816') {
   assert.equal(browserName, 'firefox');
   websiteAccess = true;

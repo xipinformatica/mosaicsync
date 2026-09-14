@@ -28,7 +28,7 @@ test("1.33.0.11 routine Sync-watch alarm avoids the maintenance-only second loca
     const historical = frozen.runtimeCensus[browser].routine133011;
     assert.deepEqual(historical, { localReads: 6, fullSyncReads: 2 }, `${browser} frozen .11 routine evidence`);
     const current = storageCounts(runScenario(browser, "snow-step5b-sync-watch-routine"));
-    assert.equal(current.fullSyncReads, historical.fullSyncReads, `${browser} routine Sync freshness reads remain protected`);
+    assert.equal(current.fullSyncReads, historical.fullSyncReads - 1, `${browser} .23 must replace exactly the positive catastrophic-loss full read while retaining authoritative reconciliation`);
     assert.ok(current.localReads <= historical.localReads, `${browser} later Step-5 releases may reduce local reads but must not regress .11`);
   }
 });
@@ -39,7 +39,7 @@ test("1.33.0.11 keeps the historical fresh metadata and full Sync reads when dev
     const historical = frozen.runtimeCensus[browser].gcDue133011;
     assert.deepEqual(historical, { localReads: 8, fullSyncReads: 3 }, `${browser} frozen .11 GC-due evidence`);
     const current = storageCounts(runScenario(browser, "snow-step5b-sync-watch-gc-due"));
-    assert.equal(current.fullSyncReads, historical.fullSyncReads, `${browser} GC-due Sync freshness reads remain protected`);
+    assert.equal(current.fullSyncReads, historical.fullSyncReads - 1, `${browser} .23 must keep GC's fresh full read while replacing only the positive catastrophic-loss read`);
     assert.ok(current.localReads <= historical.localReads, `${browser} later Step-5 releases may reduce unrelated local reads but must preserve GC freshness`);
   }
 });

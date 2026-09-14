@@ -24,24 +24,24 @@ function counts(result) {
   };
 }
 
-test("1.33.0.12 reuses the queue-owned continuity snapshot on routine Sync-watch reconciliation", () => {
+test("1.33.0.12 continuity reuse remains intact after the proven 1.33.0.23 positive-only liveness probe", () => {
   for (const browser of ["firefox", "chrome"]) {
     const result = runScenario(browser, "snow-step5b-sync-watch-routine");
-    assert.deepEqual(counts(result), { localReads: 5, localWrites: 2, fullSyncReads: 2 }, `${browser} routine alarm`);
+    assert.deepEqual(counts(result), { localReads: 5, localWrites: 2, fullSyncReads: 1 }, `${browser} routine alarm`);
   }
 });
 
-test("1.33.0.12 keeps GC-due freshness while removing only the redundant continuity read", () => {
+test("1.33.0.12 GC freshness remains intact after 1.33.0.23 replaces only the positive catastrophic full read", () => {
   for (const browser of ["firefox", "chrome"]) {
     const result = runScenario(browser, "snow-step5b-sync-watch-gc-due");
-    assert.deepEqual(counts(result), { localReads: 7, localWrites: 3, fullSyncReads: 3 }, `${browser} GC-due alarm`);
+    assert.deepEqual(counts(result), { localReads: 7, localWrites: 3, fullSyncReads: 2 }, `${browser} GC-due alarm`);
   }
 });
 
-test("1.33.0.12 reuses startup continuity across deferral and the same queued reconciliation", () => {
+test("1.33.0.12 startup continuity remains intact after the 1.33.0.23 positive-only liveness probe", () => {
   for (const browser of ["firefox", "chrome"]) {
     const result = runScenario(browser, "snow-step5a-startup-sync-on");
-    assert.deepEqual(counts(result), { localReads: 11, localWrites: 3, fullSyncReads: 2 }, `${browser} Sync-on startup`);
+    assert.deepEqual(counts(result), { localReads: 11, localWrites: 3, fullSyncReads: 1 }, `${browser} Sync-on startup`);
   }
 });
 

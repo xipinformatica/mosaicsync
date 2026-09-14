@@ -1,4 +1,19 @@
-Current release: 1.33.0.22
+Current release: 1.33.0.25
+
+## 1.33.0.25 — first-paint parity contract unification
+
+1.33.0.25 intentionally changes no MosaicSync runtime behavior. It closes the final test-contract drift gap found after the 1.33.0.24 review: first-paint ownership completeness and first-paint value equality now consume one shared test-only geometry ownership declaration. A property classified as `PARITY_REQUIRED` is therefore automatically enrolled in the real bootstrap-versus-authoritative value comparison; there is no second independently maintained geometry list that can forget it. Reserved test-only mutation probe names avoid collisions with future production CSS variables, and a permanent regression proves that a fully classified property with divergent formulas is rejected. Production New Tab, Sync, Recovery, storage, permissions, schemas and privacy behavior remain unchanged. Permanent protection: `tests/helpers/first-paint-geometry-contract.mjs` and `tests/corrective-133025.test.mjs`.
+
+## 1.33.0.24 — first-paint ownership-completeness hardening
+
+1.33.0.24 intentionally changes no MosaicSync runtime behavior. It closes the remaining test-contract gap identified after the 1.33.0.23 review: the parity regression no longer protects only a hardcoded list of known geometry variables. A new completeness meta-contract executes the real authoritative `applySettings()` geometry owner and the real synchronous bootstrap across the established tile-size/column matrix, requires every observed authoritative geometry property to belong to exactly one ownership class, requires every bootstrap-written geometry property to be parity-owned, and mutation-tests both directions so a future authoritative-only or bootstrap-only property fails until explicitly classified. Production New Tab, Sync, Recovery, storage, permissions, schemas and privacy behavior remain unchanged. Permanent protection: `tests/corrective-133024.test.mjs`.
+
+
+## 1.33.0.23 — positive-only Sync liveness probe and first-paint parity hardening
+
+1.33.0.23 keeps the 1.33.0.22 product behavior and narrows one recurring background read. When catastrophic-loss continuity is healthy, the first liveness check now asks only for reset intent plus the fixed Personal/Work settings/dataset keys. A positive fixed-key live-core result proves the namespace is alive and skips that one full `storage.sync.get(null)` materialization. A negative/empty probe is deliberately inconclusive because dynamic item keys may be the only delivered live signal; targeted-read failure is likewise optimization-only. Both cases fall through to the existing two independent full negative confirmations before quarantine. Normal authoritative reconciliation still performs its complete Sync read and Recovery validation/self-heal exactly as before.
+
+The release also closes the structural first-paint test blind spot exposed by the .21 artwork and .22 folder-geometry corrections. `tests/corrective-133023.test.mjs` executes the real synchronous bootstrap and the real authoritative `applySettings()` geometry owner at multiple tile sizes/column counts, and separately asserts the semantic artwork states shared across bootstrap/authoritative handoff. The historical Snow Leopard II storage snapshots remain frozen; their live-reproduction tests now explicitly recognize this separately-proven positive-only optimization instead of treating the old full-read count as immutable forever.
 
 ## 1.33.0.22 — folder first-frame geometry and child-editor context corrective
 

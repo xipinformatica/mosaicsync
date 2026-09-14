@@ -711,6 +711,17 @@ export function startBackground(adapter) {
     return Object.keys(all).some(isLiveSyncCoreKey);
   }
 
+  function liveSyncCoreProbeKeys() {
+    const workNamespace = syncNamespace(WORK_SPACE_ID);
+    return [
+      SYNC_RESET_INTENT_KEY,
+      SYNC_SETTINGS_KEY,
+      SYNC_DATASET_KEY,
+      workNamespace.settingsKey,
+      workNamespace.datasetKey
+    ];
+  }
+
   function completeRemoteDescriptor(sources, workSnapshot) {
     const personal = combinedRemoteCore(sources.shared, sources.device);
     const work = combinedWorkRemoteCore(workSnapshot, sources.profile);
@@ -797,7 +808,22 @@ export function startBackground(adapter) {
       // that the live shared Personal+Work ledgers still exist. Firefox can retain
       // stale local recovery keys after the server-side Extension Storage namespace
       // was wiped. If those keys count as "non-empty", no survivor would ever enter
-      // catastrophic-loss recovery. Double-confirm the *live core* instead.
+      // catastrophic-loss recovery. The common healthy case first performs a
+      // positive-only fixed-key probe: a visible live settings/dataset record proves
+      // that catastrophic live-core loss has not occurred without materializing the
+      // Recovery namespace. Absence is never proof of loss because dynamic item keys
+      // may be the only delivered live signal; probe failure is likewise inconclusive.
+      // Both cases fall through to the original independent full reads unchanged.
+      let coreProbe = null;
+      try {
+        coreProbe = await browser.storage.sync.get(liveSyncCoreProbeKeys());
+      } catch {
+        // Optimization-only probe. Preserve the established full-read authority path.
+      }
+      const probeReset = coreProbe?.[SYNC_RESET_INTENT_KEY];
+      if (validResetIntent(probeReset)) return observeRemoteResetIntent(probeReset, meta);
+      if (hasLiveSyncCoreSignal(coreProbe)) return null;
+
       const firstCoreCheck = await browser.storage.sync.get(null);
       const firstReset = firstCoreCheck?.[SYNC_RESET_INTENT_KEY];
       if (validResetIntent(firstReset)) return observeRemoteResetIntent(firstReset, meta);

@@ -69,13 +69,18 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
   const runtimeVersion = fs.readFileSync("src/shared/core/constants.js", "utf8").match(/export const VERSION\s*=\s*"([^"]+)"/)?.[1];
   assert.equal(frozen.version, VERSION, "the canonical Step-5A snapshot stays pinned to its originating release");
   assert.equal(live.version, runtimeVersion, "live census must identify the current runtime rather than impersonating 1.33.0.10");
-  assert.deepEqual(live.directStorageCallSites.byOperation, frozen.directStorageCallSites.byOperation);
+  const expectedOperations = { ...frozen.directStorageCallSites.byOperation, "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 1 };
+  assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
+    "1.33.0.23 adds exactly one targeted Sync-read call site while preserving every other frozen storage operation count");
   for (const browser of ["firefox", "chrome"]) {
     for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
       const liveResult = live.runtimeCensus[browser][scenario];
       assert.ok(liveResult, `${browser}/${scenario} must remain measurable`);
-      assert.equal(liveResult.storage.sync.getAllCalls, frozenResult.storage.sync.getAllCalls,
-        `${browser}/${scenario} must not collapse Step-5A Sync freshness reads without a separately proven optimization`);
+      const expectedFullReads = scenario === "snow-step5a-startup-sync-off"
+        ? frozenResult.storage.sync.getAllCalls
+        : frozenResult.storage.sync.getAllCalls - 1;
+      assert.equal(liveResult.storage.sync.getAllCalls, expectedFullReads,
+        `${browser}/${scenario} must preserve the frozen Step-5A boundaries except for the separately proven 1.33.0.23 positive-only catastrophic-loss probe`);
       assert.ok(liveResult.storage.local.getCalls <= frozenResult.storage.local.getCalls,
         `${browser}/${scenario} may reduce local reads after Step 5A but must never regress above the frozen baseline`);
     }

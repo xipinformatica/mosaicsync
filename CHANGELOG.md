@@ -1,3 +1,25 @@
+## 1.33.0.25
+
+- Test-contract hardening only over 1.33.0.24; no intended runtime behavior, Sync/Recovery/storage, persisted-schema, permission, browser-floor or privacy-boundary change.
+- Unifies first-paint geometry ownership completeness and value parity behind one shared test-only ownership declaration, eliminating the independent-list drift that could otherwise let a newly classified property escape value comparison.
+- Adds a permanent mutation guard proving that a property present on both production owners, correctly classified as parity-required, but computed to different values is rejected.
+- Moves mutation probe names into an explicitly reserved test-only CSS-property namespace so future real properties cannot collide with the contract self-tests.
+
+## 1.33.0.24
+
+- Test-contract hardening only over 1.33.0.23; no intended runtime behavior, Sync/Recovery/storage, persisted-schema, permission, browser-floor or privacy-boundary change.
+- Closes the first-paint ownership-completeness gap: the permanent regression now discovers the geometry properties actually written by the real authoritative `applySettings()` owner and the real synchronous bootstrap, then requires complete/exclusive ownership classification instead of trusting only the previously known hardcoded list.
+- Adds mutation guards proving that a newly introduced authoritative-only property and a newly introduced bootstrap-only property both fail until explicitly brought into the parity contract.
+- Keeps the existing 1.33.0.23 value-parity matrix and artwork semantics unchanged.
+
+## 1.33.0.23
+
+- Narrow background-Sync frugality and first-paint hardening release over 1.33.0.22; no Sync/Recovery wire-format, persisted-schema, permission, browser-floor or privacy-boundary change.
+- Replaces only the healthy common-case catastrophic-loss full namespace read with a positive-only targeted probe of the fixed Personal/Work live-core keys plus reset intent. Positive live-core evidence may short-circuit; absence, dynamic-item-only delivery, read failure or any other uncertainty falls back to the established two independent full negative confirmations unchanged.
+- Keeps the authoritative reconciliation full namespace read, Recovery decoding/self-heal, pending journals, torn-delivery handling, `storage.onChanged`, five-minute watchdog cadence and destructive Recovery revalidation unchanged.
+- Updates the frozen Snow Leopard II storage-count regressions deliberately: routine healthy watchdog/startup paths now use one targeted probe + one authoritative full read; GC-due keeps its separate fresh maintenance read.
+- Adds a permanent bootstrap ↔ authoritative first-paint parity contract that executes both real geometry owners across non-default tile sizes/column counts and protects the four artwork states: immediate artwork, builtin artwork, known-deferred artwork and genuine fallback.
+
 ## 1.33.0.22
 
 - Narrow New Tab UI-context corrective over 1.33.0.21; Sync/Recovery/storage authority remains unchanged.
