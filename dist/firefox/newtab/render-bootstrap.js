@@ -170,6 +170,15 @@
     root.style.setProperty("--columns", String(columns));
     root.style.setProperty("--tile-size", `${tileSize}px`);
     root.style.setProperty("--shortcut-icon-size", `${Math.round(tileSize * 53 / 76)}px`);
+    // Keep every folder dimension on the same first-frame geometry as the
+    // authoritative applySettings() pass. Otherwise non-76px layouts briefly
+    // render folder mosaics at the CSS reference size before shrinking/growing.
+    root.style.setProperty("--folder-mosaic-cell-size", `${Math.max(20, Math.round(25 * scale))}px`);
+    root.style.setProperty("--folder-mosaic-icon-size", `${Math.max(15, Math.round(19 * scale))}px`);
+    root.style.setProperty("--folder-mosaic-gap", `${Math.max(3, Math.round(4 * scale))}px`);
+    root.style.setProperty("--folder-mosaic-padding", `${Math.max(5, Math.round(7 * scale))}px`);
+    root.style.setProperty("--folder-item-tile-size", `${Math.max(44, Math.round(54 * scale))}px`);
+    root.style.setProperty("--folder-item-icon-size", `${Math.max(30, Math.round(36 * scale))}px`);
     root.style.setProperty("--col-gap", `${Math.round(27 * scale)}px`);
     root.style.setProperty("--row-gap", `${Math.round(26 * scale)}px`);
     if (brand) brand.hidden = layout.brandVisible === false;

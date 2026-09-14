@@ -1,3 +1,11 @@
+## 1.33.0.22
+
+- Narrow New Tab UI-context corrective over 1.33.0.21; Sync/Recovery/storage authority remains unchanged.
+- Applies authoritative folder-mosaic and folder-item geometry in the synchronous bootstrap from the saved tile size, eliminating the brief larger→smaller mini-favicon correction on non-76px layouts without changing hover behavior or adding startup I/O/modules.
+- Preserves an open folder when editing one of its child shortcuts instead of closing it before the native Shortcut Editor opens.
+- Prevents Shortcut Editor pointer interactions (Save, Cancel, X, backdrop and field interactions) from being misclassified by the document-level outside-folder handler. The existing render path still rerenders/repositions a surviving folder after Save and closes it naturally if delete/move dissolves it.
+- Adds permanent first-frame geometry and folder-edit ownership regressions. No persisted schema, Sync/Recovery format, permission, browser-floor, network or privacy-boundary change.
+
 ## 1.33.0.21
 
 - Prevents the brief fallback-letter flash for known deferred shortcut artwork during lightweight session → authoritative New Tab handoff; existing previews remain preferred and genuine iconless shortcuts still show their fallback letter.

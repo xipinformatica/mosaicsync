@@ -1,4 +1,8 @@
-Current release: 1.33.0.21
+Current release: 1.33.0.22
+
+## 1.33.0.22 — folder first-frame geometry and child-editor context corrective
+
+1.33.0.22 keeps the 1.33.0.21 rendering/defaults/documentation baseline and makes two narrow New Tab corrections. The classic synchronous bootstrap now computes the folder mosaic and folder-item CSS geometry from the saved tile size with the same formulas as authoritative `applySettings()`, so non-default tile sizes do not first paint folder mini-icons at the 76px reference geometry and then resize them. Editing a child shortcut no longer destroys the open folder context; the native Shortcut Editor overlays the folder, the document outside-click handler ignores pointer activity while that dialog is open, and the existing `render()` preservation logic refreshes/repositions a surviving folder after Save while naturally closing it if delete/move dissolves the folder. Permanent protection: `tests/corrective-133022.test.mjs`.
 
 ## 1.33.0.21 — New Tab first-frame polish, fresh-install defaults and Developer Guide normalization
 

@@ -4019,7 +4019,9 @@ ${site.url}`;
       edit.draggable = false;
       edit.addEventListener("click", event => {
         event.stopPropagation();
-        closeFolder();
+        // Preserve the open folder as the editor's return context. render()
+        // already refreshes/repositions it after Save and closes it naturally
+        // if a delete/move dissolves the folder.
         openShortcutEditor(item, folder.id);
       });
 
@@ -7487,7 +7489,7 @@ ${t("clearSyncWarning")}`);
     }
     if (!dropChoice.hidden && !dropChoice.contains(event.target)) closeDropChoice();
 
-    if (!folderPopover.hidden && !folderPopover.contains(event.target)) {
+    if (!folderPopover.hidden && !shortcutDialog?.open && !folderPopover.contains(event.target)) {
       const anchor = activeFolderAnchorId ? document.querySelector(`.shortcut-slot[data-id="${CSS.escape(activeFolderAnchorId)}"]`) : null;
       if (!anchor?.contains(event.target)) {
         commitFolderTitle().catch(console.error);
