@@ -2801,7 +2801,7 @@ ${site.url}`;
     void activeSpacePersistQueue.catch(error => console.warn(`${PRODUCT_NAME}: could not persist active Space`, error));
   }
 
-  async function saveState({ localCacheOnly = false, crossSpaceSyncIntent = null } = {}) {
+  async function saveState({ localCacheOnly = false, crossSpaceSyncIntent = null, artworkChanged = false } = {}) {
     const baseState = writeBaseline;
     state.schemaVersion = DEFAULT_STATE.schemaVersion;
     // User-visible/core mutations advance the synchronized revision. Device-local
@@ -2822,7 +2822,8 @@ ${site.url}`;
     writeBaseline = persisted.compactBaseline;
     settlePersistedSettingsDraft();
     scheduleAppearanceHintRefresh(state.settings);
-    refreshFirstPaintCaches(state, meta);
+    if (artworkChanged) refreshRenderManifestAfterArtworkChange(state, meta);
+    else refreshFirstPaintCaches(state, meta);
   }
 
   function markSettingsChanged() {
@@ -3666,7 +3667,15 @@ ${site.url}`;
       container.append(img);
     } else if (preview) {
       container.append(createArtworkImage(preview));
-    } else if (!globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) {
+    } else if (globalThis.__mosaicsyncBuiltinIcons?.append?.(container, builtinIcon)) {
+      return;
+    } else if (item?.imageDeferred === true) {
+      // Session-render projections deliberately omit larger known artwork.
+      // Preserve that truth as an empty/preview handoff until authoritative
+      // local-asset hydration supplies the pixels; a fallback letter here would
+      // be a loading-state flash rather than a genuine absence of artwork.
+      return;
+    } else {
       container.append(createFallback(title));
     }
   }
@@ -5058,7 +5067,7 @@ ${site.url}`;
     }
 
     if (changed) {
-      await saveState({ localCacheOnly: true });
+      await saveState({ localCacheOnly: true, artworkChanged: true });
       patchVisibleShortcutArtwork(changedShortcutIds, changedFolderIds);
       // The browser cache may only be 16/32px. Keep it visible as a fallback but
       // immediately ask the background resolver for a higher-resolution upgrade.
@@ -6775,7 +6784,7 @@ ${site.url}`;
     if (changed) {
       // This is a local cache hydration only. Source metadata and record clocks do
       // not change, so the Sync controller sees no new core-record mutation.
-      await saveState({ localCacheOnly: true });
+      await saveState({ localCacheOnly: true, artworkChanged: true });
       patchVisibleShortcutArtwork(changedShortcutIds, changedFolderIds);
     }
   }

@@ -289,3 +289,15 @@ This catalogue records high-value historical failures and the permanent tests th
 - `tests/corrective-133020.test.mjs`
 
 **If it returns:** keep continuity/recoverability completeness (`completeRemoteDescriptor`) distinct from authoritative live completeness (`completeLiveRemoteDescriptor`). Missing-own-Recovery self-heal and stale generic-error clearing require the latter. Test torn Personal, torn Work and partial→complete convergence in both Firefox- and Chromium-shaped production runtimes.
+
+## R-025 — Known deferred shortcut artwork could flash a fallback letter before authoritative favicon pixels arrived
+
+**Historical symptom/risk:** lightweight New Tab/session projections intentionally omit larger known device-local artwork and mark the shortcut `imageDeferred`, but the authoritative `appendImageOrFallback()` helper treated a missing image/preview as if artwork did not exist and briefly inserted the fallback letter. Device-local favicon/site-artwork hydration also saved state through the ordinary first-paint manifest writer, so the persistent boot manifest could know an artwork identity without promptly carrying its tiny preview. Existing shortcuts and the first four folder children could therefore show a very short letter → favicon transition on New Tab open.
+
+**Closed in:** 1.33.0.21.
+
+**Permanent protection:**
+- `tests/corrective-133021.test.mjs`
+
+**If it returns:** `imageDeferred` means known artwork pixels were deliberately omitted from a lightweight render snapshot, not that the shortcut is iconless. Prefer a valid cached preview; otherwise leave that transient artwork area empty until authoritative hydration. Genuine authoritative iconless/missing-asset states must still reach the fallback letter. Device-local artwork-changing saves use the preview-aware manifest refresh instead of racing the ordinary manifest writer.
+

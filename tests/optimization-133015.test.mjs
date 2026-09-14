@@ -255,10 +255,11 @@ test("1.33.0.15 Bookmarks permission completion cannot mutate a superseded dialo
   assert.notEqual(status.textContent, "permissionGranted", "old permission completion must not write status into the reopened session");
 });
 
-test("1.33.0.15 lifecycle corrective is documented as session ownership, not Recovery authority", () => {
+test("1.33.0.15 lifecycle corrective remains documented as evergreen session ownership, not Recovery authority", () => {
   const guide = fs.readFileSync("DEVELOPER-GUIDE.md", "utf8");
   const roadmap = fs.readFileSync("docs/SNOW-LEOPARD-II.md", "utf8");
-  assert.match(guide, /1\.33\.0\.15[\s\S]*Recovery[\s\S]*Bookmarks[\s\S]*(generation|session)/i);
+  assert.match(guide, /Recovery Copies and Bookmarks asynchronous results[\s\S]*recoveryCopiesSessionGeneration[\s\S]*bookmarksDialogGeneration/i);
+  assert.match(guide, /Closing\/reopening invalidates old presentation work[\s\S]*background Recovery cleanup may continue safely/i);
   assert.match(roadmap, /1\.33\.0\.15[\s\S]*(Recovery|Bookmarks)[\s\S]*(generation|session)/i);
   assert.match(roadmap, /Step 6[\s\S]*(?:IN PROGRESS|DONE)/i);
 });

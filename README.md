@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.33.0.20**
+**Current source release: 1.33.0.21**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/
@@ -89,11 +89,11 @@ python tools/package.py
 
 ## Current release identity
 
-The active source release is **1.33.0.20** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
+The active source release is **1.33.0.21** across both browser manifests, Chrome `version_name`, the shared runtime `VERSION`, the Settings version label, package filenames and current release tests. `build-manifest.json` records the same technical version for both generated browser trees.
 
 Older version numbers appearing in `CHANGELOG.md`, `docs/QA-*.md`, tests named after earlier regressions, or historical sections of `README-DEVELOPMENT.md` are intentional historical references. They are not the current runtime version.
 
-1.33.0.20 is a narrow post-audit correctness corrective over 1.33.0.19. Recovery self-heal and stale non-quota Sync-error clearing now require a complete **live** Personal+Work descriptor, so fallback-assisted Recovery completeness cannot make a torn Sync delivery look authoritatively healthy. Complete live delivery still converges by repairing a missing own Recovery generation and clearing a genuinely stale generic error; quota errors remain sticky. Permanent regressions also protect the frozen Recovery target set, fail-closed survivor publication, device-local learned artwork and different-intent Shortcut Editor rapid-open ownership. It does **not** reopen Snow Leopard II or change Normal Sync/Recovery wire formats, schemas, permissions or privacy boundaries.
+1.33.0.21 is a focused New Tab polish/defaults/documentation release over the frozen 1.33.0.20 correctness baseline. Known deferred shortcut artwork no longer flashes a fallback letter before its favicon appears; device-local favicon/site-artwork changes refresh the preview-aware boot manifest without racing the ordinary writer. Fresh installations enable per-appearance built-in wallpapers by default (**Solar Drift** on Light, **Blueglow** on Dark), and the Add/Edit Shortcut “no color” swatch uses a CSS-drawn optically centered cross. `DEVELOPER-GUIDE.md` is normalized into an evergreen current-architecture manual while chronological engineering history stays in `README-DEVELOPMENT.md` and `CHANGELOG.md`. No Sync/Recovery wire-format, persisted schema, permission, browser-floor or privacy-boundary change.
 
 1.33.0.18 completes **Snow Leopard II**. Step 8 adds no new performance optimization: it closes two inherited LOW rapid-open dialog reentrancy races (Bookmarks and Wallpaper Gallery), adds runtime execution coverage for the Step-7 built-in-icon ownership contract, and freezes the final correctness/performance evidence. Versus the Step-0 baseline, the initial New Tab DOM is **642→598 elements** and the eager static module graph is **24→22 modules / 653,457→640,143 raw bytes**. Sync/Recovery/storage authority and privacy boundaries remain unchanged. See [docs/SNOW-LEOPARD-II.md](docs/SNOW-LEOPARD-II.md).
 

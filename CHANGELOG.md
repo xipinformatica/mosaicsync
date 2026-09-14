@@ -1,3 +1,12 @@
+## 1.33.0.21
+
+- Prevents the brief fallback-letter flash for known deferred shortcut artwork during lightweight session → authoritative New Tab handoff; existing previews remain preferred and genuine iconless shortcuts still show their fallback letter.
+- Device-local native/site artwork hydration now chooses the preview-aware render-manifest refresh instead of scheduling both preview-aware and ordinary manifest writers.
+- Fresh installations use appearance-specific built-in wallpaper defaults: **Solar Drift** for Light and **Blueglow** for Dark. Existing saved installations keep their persisted wallpaper settings.
+- Centers the Add/Edit Shortcut “no color” X with CSS-drawn strokes instead of a font glyph and preserves the normal selected-border treatment.
+- Normalizes `DEVELOPER-GUIDE.md` into an evergreen architecture/workflow manual; chronological version history remains in `README-DEVELOPMENT.md`, this changelog, ADRs and the regression catalogue.
+- No Sync/Recovery format, persisted schema, permission, browser-floor, network or privacy-boundary change. Snow Leopard II remains closed.
+
 ## 1.33.0.20
 
 - Narrow post-audit corrective over 1.33.0.19; Snow Leopard II remains complete/frozen at 1.33.0.18.

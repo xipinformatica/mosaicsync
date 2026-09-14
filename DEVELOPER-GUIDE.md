@@ -1,127 +1,4 @@
-## 1.33.0.20 live-completeness corrective contract
-
-Snow Leopard II remains frozen at **1.33.0.18**; 1.33.0.20 is correctness-only. `reconcileIfNewCommit()` owns two distinct completeness concepts and they must not be conflated: `completeRemoteDescriptor()` may use verified Recovery fallback material for continuity/recoverability, while `completeLiveRemoteDescriptor()` requires coherent live Personal **and** Work ledgers. The unchanged-reconcile side effects introduced in 1.33.0.19 — missing-own-Recovery self-heal and stale non-quota error clearing — require `completeLiveRemoteDescriptor()`. A torn/partial live namespace may remain recoverable through immutable Recovery generations, but it is not authoritative enough to manufacture a new Recovery generation or erase an error. Once both live ledgers validate, the same no-op reconcile must converge by repairing the missing own Recovery generation and clearing a genuinely stale generic error. Explicit quota errors remain sticky.
-
-The distributed Recovery cleanup invariant from 1.33.0.19 remains unchanged: freeze target roots first, publish/verify a fresh acting-device survivor, then re-read and delete only the intersection with the original frozen target set. Never expand deletion to a newly observed target generation. The hard mutual-cleanup survivor guarantee applies when concurrently destructive peers implement this protocol (1.33.0.19+); older peers cannot retroactively honor a frozen-target rule they do not know. Learned `remote`/`favicon`/`firefox` artwork must normalize to device-only pixels with zero synchronized image bytes. Permanent protection: `tests/corrective-133020.test.mjs`; regression catalogue R-024.
-
-## 1.33.0.19 post-freeze Recovery/error-lifecycle corrective contract
-
-Snow Leopard II remains frozen at **1.33.0.18**; 1.33.0.19 is correctness-only. Whole-device Recovery cleanup has a distributed survivor invariant: freeze the target root set first, then create and verify a new current-device complete Recovery generation, then take the fresh pre-delete view and delete only roots that were already in the frozen plan and remain eligible. Do not move survivor publication before plan capture or expand deletion to newly observed target roots; either change can recreate the two-device mutual-deletion race. A healthy initialized reconcile must also republish the current device's Recovery generation if none remains, which provides mixed-version/self-healing protection without making Recovery a live merge input.
-
-`openShortcutEditor()` crosses an asynchronous secondary-style boundary. It must re-check `shortcutDialog.open` immediately after that await and **before** resetting/populating editor state; a guard only at `showModal()` is too late because a losing rapid-open attempt could already overwrite the visible form.
-
-A successful authoritative `reconcileIfNewCommit()` no-op may clear stale **non-quota** `syncStatus:error` / `lastSyncError` state, because the same check has just proved live Personal/Work state is current. Preserve the explicit Firefox Sync quota error until a quota-aware path supersedes it. Do not add a speculative null guard for the historical `null has no properties` text unless its throwing production path is independently reproduced. Permanent protection: `tests/corrective-133019.test.mjs`; regression catalogue R-021 through R-023.
-
-## 1.33.0.18 Snow Leopard II final-freeze contract
-
-Snow Leopard II is frozen at **1.33.0.18**. Do not reopen performance optimization without new measured evidence. Step 8 makes only two final UI-correctness corrections: Bookmarks and Wallpaper Gallery must re-check native dialog `.open` immediately after their asynchronous setup and immediately before `showModal()`, preventing two same-session rapid open attempts from racing into a second `showModal()` call. This final guard is separate from the existing generation ownership that protects close→reopen across different dialog sessions. The Step-7 built-in-icon ownership is also runtime-tested: `builtin-icons.js` remains the parser-time classic owner, a second evaluation is a no-op, and `globalThis.__mosaicsyncBuiltinIcons` is non-writable/non-configurable. Permanent protection: `tests/optimization-133018.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP8-1.33.0.18.json`.
-
-## 1.33.0.17 Snow Leopard II Step-7 runtime-loading/dead-work closure
-
-`builtin-icons.js` has two consumers with one intentional runtime owner: the parser-time classic script in `newtab.html` must execute before `render-bootstrap.js` for first-paint glyphs, and the authoritative New Tab later consumes the same `globalThis.__mosaicsyncBuiltinIcons` API. Do **not** re-add a static `import "./builtin-icons.js"` to `newtab.js`; module scripts are deferred, so that import only re-evaluates the idempotent helper after the classic owner already installed it. Step 7 measured the removal as **23→22 static modules / 644,249→640,098 raw bytes** with no parser-bootstrap change. Reachability is otherwise clean; exported defensive/reference helpers and explicit test hooks are not deletion candidates merely because production importers are absent. Permanent protection: `tests/optimization-133017.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP7-1.33.0.17.json`. Step 7 is DONE; Step 8 is the final Snow Leopard II freeze/adversarial audit.
-
-## 1.33.0.16 Snow Leopard II Step-6D folder-popover lifetime closure
-
-`closeFolder()` owns the lifetime boundary for dynamically generated `.folder-item` controls. It now calls `folderItems.replaceChildren()` on every close, including idempotent already-hidden close, so item-card/edit/drag/context-menu listener closures do not remain attached after the popover no longer owns them. Folder data remains authoritative in normalized New Tab state; `openFolder()` synchronously calls `renderFolderContents()` before displaying the popover. Deferred folder local-artwork hydration already requires matching active folder ownership and `!folderPopover.hidden`, and cross-Space drag calls `preserveCrossSpaceDragElement()` before `closeFolder()`. Permanent protection: `tests/optimization-133016.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6D-1.33.0.16.json`. Step 6 is DONE; Step 7 runtime loading/dead-work analysis is next.
-
-## 1.33.0.15 Snow Leopard II Step-6C async dialog-session ownership corrective
-
-Recovery Copies and Bookmarks have asynchronous operations whose results are presentation-owned by the dialog session that launched them. `recoveryCopiesSessionGeneration` and `bookmarksDialogGeneration` invalidate that ownership on close and advance it again on reopen. A superseded Recovery model/cleanup response or bookmark tree/permission completion must never populate a later session merely because the dialog is open again. Recovery cleanup itself remains background-owned and may finish safely after close; if its original UI session was superseded, the current open Recovery session obtains a fresh model after completion.
-
-Permanent protection: `tests/optimization-133015.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6C-1.33.0.15.json`. This is presentation/lifetime ownership only: do not move Recovery eligibility or destructive authority into New Tab UI. Step 6 remains in progress.
-
-## 1.33.0.10 Snow Leopard II Step-5A storage/background measurement contract
-
-Step 5 begins with evidence, not storage-read deletion. `tools/storage-background-census.mjs` and `npm run perf:storage-background` are local-only developer tooling: they inventory direct `storage.local` / `storage.sync` / `storage.session` calls, freeze background listener/wake topology, and run deterministic cold-worker startup/alarm storage-count scenarios in both generated browsers. They must not send telemetry or persist performance measurements into extension storage.
-
-The frozen 1.33.0.10 census records 117 direct call sites, including 27 full `storage.sync.get(null)` sites. Similar-looking full reads are **not interchangeable authority by default**. In particular, catastrophic-loss detection, durable pending-journal replay, delivered-core repair and destructive Recovery/device-snapshot cleanup own separate freshness boundaries. A future Step-5 optimization may reuse or remove a read only after a dedicated regression proves that no authority-changing operation can occur between the candidate snapshots.
-
-Permanent protection: `tests/optimization-133010.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5A-1.33.0.10.json`. No production storage read is removed in this release.
-
-## 1.33.0.9 Snow Leopard II Step-4C Frequently Visited reconciliation contract
-
-The delayed startup Top Sites permission reconciliation is a recovery check, not a license to rebuild device-local Frequently Visited cards after a healthy refresh. `refreshFrequentlyVisited()` invalidates the ephemeral `frequentLiveRefreshVerified` proof before any awaited browser state and sets it only after the live render and session projection both commit. `reconcileFrequentlyVisitedPermission()` must still perform the delayed installation-local permission observation; it may skip the full refresh only when permission is currently granted and that New Tab has a verified live refresh. Missing permission or an unverified/failed initial refresh must continue through the full historical `refreshFrequentlyVisited()` path. Do not persist or Sync the proof, and do not weaken permission events, browser-history privacy, favicon generation checks or session-only projection rules.
-
-Permanent protection: `tests/optimization-13309.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4C-1.33.0.9.json`. Step 4 is closed at this release; continue with Step 5 storage/background measurement rather than extending favicon/image work without new evidence.
-
-## 1.33.0.8 Snow Leopard II Step-4B destination-background contract
-
-Space intent and `hydrateSpaceForOwnedOperation(..., true)` must warm only the currently effective destination background. They must not wait for the inactive Light/Dark wallpaper variant. The active Space may keep broader post-paint theme warming for appearance-transition continuity. The bounded preload cache remains the only preload deduplication owner.
-
-Permanent protection: `tests/optimization-13308.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4B-1.33.0.8.json`.
-
-## 1.33.0.7 Snow Leopard II Step-4A background-warming contract
-
-Inactive Space artwork is speculative, not startup authority. Ordinary New Tab/post-mutation maintenance must not broadly preload every inactive Space background. `preloadSpaceBackgroundOnIntent(spaceId)` may warm only one valid inactive destination in response to real switch intent (pointer hover/down, focus, drag intent or the keyboard Space shortcut). The actual `switchActiveSpace()` path remains the correctness owner and must continue to call `hydrateSpaceForOwnedOperation(..., true)` so destination background readiness is awaited before visual commit even when no hint ran. Keep active-Space post-paint warming intact unless separate evidence proves it redundant.
-
-Permanent protection: `tests/optimization-13307.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP4A-1.33.0.7.json`.
-
-## 1.33.0.6 Snow Leopard II Step-3B lazy Bookmarks contract
-
-Bookmarks is an interaction-only surface. The persistent `#bookmarksButton` remains in the primary launcher, but `#bookmarksDialog`, its descendant controls, `newtab/bookmarks-controller.js`, and `newtab/bookmarks-shell.js` must remain absent from the initial live DOM/static module closure. The first-use loader may dynamically acquire the shell/controller and secondary CSS, but after activation the existing Bookmarks controller remains the dedicated owner of button toggling, permission/search handling, close/reset lifecycle and folder-color menu. `core/bookmarks.js` must remain lazy. The shell must use safe DOM construction APIs only; do not introduce `innerHTML`, `outerHTML`, `insertAdjacentHTML`, remote markup or new authority/storage ownership.
-
-Permanent protection: `tests/optimization-13306.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP3B-1.33.0.6.json`.
-
-## 1.33.0.5 Snow Leopard II Step-3A process-hardening contract
-
-Canonical Step-3A production behavior remains the 1.33.0.4 dynamically imported Wallpaper Gallery shell. Focused `startup` and `newtab` certification must include `tests/optimization-13304.test.mjs`. Structural HTML census tooling must mask raw `<script>` and `<style>` contents before tag counting so HTML-looking strings do not masquerade as live DOM; masking must preserve source length/line positions. These are tooling/test obligations only and do not justify changing the canonical lazy-gallery runtime.
-
-## 1.33.0.4 Snow Leopard II lazy secondary-UI contract
-
-Step 3 begins with one interaction-only shell at a time. The Wallpaper Gallery is no longer permitted in initial `newtab.html` or eager `getElementById()` wiring; `newtab/wallpaper-gallery-shell.js` must remain dynamically imported on first use. Because lazy construction adds an asynchronous boundary, child UI must capture and revalidate the owning Settings `__mosaicOwnershipGeneration` before `showModal()`. Dynamically created `[data-close-dialog]` controls must install their own close wiring instead of relying on the startup-only document scan. Do not move larger Settings/dialog surfaces behind lazy construction until the previous slice is regression-tested and its structural reduction is frozen.
-
-## 1.33.0.3 Snow Leopard II normalized-state fast-path contract
-
-Step 2 permits a fast path only after the relevant state has already crossed the same defensive normalization boundary in the current operation. `createPersistedWriteBaseline()` is restricted to the exact compact object delivered by authoritative `storage.local` state reads/events and must clone rather than normalize/project it; this preserves exact optimistic-concurrency identity. `stampSettingsMutationClocksTrustedNormalized()` is restricted to state objects already returned by `normalizeState()`. Raw/imported/persisted inputs must continue through `stampSettingsMutationClocks()` or an explicit `normalizeState()` first. Never extend either fast path by shape-checking alone or by trusting session/render caches.
-
-## 1.33.0.2 Snow Leopard II critical-path census contract
-
-Step 1 adds `npm run perf:critical-path` and freezes `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json`. The census is intentionally structural plus local startup timing: parser-blocking bootstraps, static-vs-dynamic module ownership, eager DOM bindings, initial DOM ownership and the existing local `__mosaicsyncStartupTiming` phases. New phases (`shellLocalized`, `uiBindingsReady`, `moduleSetupReady`, `sessionCacheReady`, `localStateMaterialized`) are diagnostics only; never persist or transmit them. The census establishes two high-value follow-ups without optimizing them yet: Step 2 must trace repeated trust-boundary normalization on already-trusted internal state, and Step 3 must measure whether the 534/642 secondary DOM elements and 165/200 secondary eager ID bindings can be moved behind their interaction boundaries. Parser bootstraps and storage re-reads remain presumed safety/performance boundaries until browser evidence proves otherwise.
-
-## 1.33.0.1 Snow Leopard II measurement contract
-
-Snow Leopard II begins with instrumentation, not optimization. Run `npm run perf:baseline` after a deterministic build to capture package size, synthetic benchmark distributions, initial New Tab DOM composition, static New Tab module closure, shared storage API call sites, and real-browser startup phases when compatible drivers are available. The baseline tool is local-only: do not add network reporting or extension-storage persistence for performance data. Compare host-sensitive timings only on comparable hardware/runtime conditions; structural counts and package bytes are deterministic release-to-release signals. Every subsequent Snow Leopard II optimization must identify the measured cost, record before/after values, and preserve the authority/Sync/Recovery/concurrency boundaries documented below. See `docs/SNOW-LEOPARD-II.md` and `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json`.
-
-## 1.32.1.8 Settings child-dialog ownership
-
-Settings is the lifecycle owner of Custom Branding. `openCustomBrandingDialog()` performs asynchronous secondary-style/module/device-local-storage work before the modal can be shown, so it must not infer ownership merely from the final visibility of the Settings panel. It captures the Settings ownership generation at launch and revalidates that generation plus `isSettingsOpen()` after every relevant await. `closeSettingsPanel()` advances the generation before a later Settings session can become visible. Branding data remains local until the final ownership proof succeeds. This prevents both delayed-open-after-close and close+reopen ABA-style ownership mistakes.
-
-Permanent protection: `tests/corrective-13218.test.mjs`.
-
 # MosaicSync Developer Guide
-
-## 1.33.0.14 Snow Leopard II Step-6B Recovery-manager lifetime release
-
-The Recovery Copies dialog owns interaction-only device/generation rows whose delete-button listeners close over the current Recovery model. Those generated rows must not survive a closed dialog. `clearRecoveryCopiesView()` owns the list teardown, and asynchronous model/cleanup completions must render only while `recoveryCopiesDialog.open` is still true. The background remains the sole owner of Recovery cleanup eligibility and destructive revalidation; UI lifecycle cleanup must never bypass or duplicate that authority.
-
-Permanent protection: `tests/optimization-133014.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`. Do not generalize this into cancelling a cleanup request when the dialog closes: cleanup may finish safely in the background; only hidden UI reconstruction is suppressed.
-
-## 1.33.0.13 Snow Leopard II Step-6A closed-gallery lifetime release
-
-Step 6 begins with a concrete retained-DOM lifetime target. `wallpaper-gallery-shell.js` keeps the single lazy shell created on first use, but the dialog's generated choice grid is interaction-only and is cleared on native `close`. `openWallpaperGallery()` still rebuilds that grid synchronously before every `showModal()`, so lazy loading and Settings ownership-generation protection remain unchanged. The deterministic 30-choice fixture drops 90 retained dynamic elements after close to 0 across 50 repeated cycles.
-
-Permanent protection: `tests/optimization-133013.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP6A-1.33.0.13.json`. Do not broaden this into generic DOM teardown: Bookmarks, detected-favicon UI and Custom Branding already have explicit close/reset release paths, and Step 6 accepts only demonstrated retention.
-
-## 1.33.0.12 Snow Leopard II Step-5C queue-owned continuity reuse
-
-`LOCAL_SYNC_CONTINUITY_KEY` is durable catastrophic-Recovery continuity state and remains owned only by `background-core.js`. Background state mutations are serialized through the module-level `enqueue()` queue. Step 5C may therefore carry a continuity snapshot already read in the same queue turn into `markSyncContinuityHealthy()` instead of reading that same key again. Startup may likewise carry the snapshot returned by `deferPersistedSyncRecoveryAfterBrowserStartup()` directly into the immediately following queued reconciliation.
-
-This reuse is valid **only** while continuity remains single-writer background-owned and the caller stays inside the same serialized queue turn. `markSyncContinuityHealthy()` retains its defensive read when no proven current snapshot is supplied, and it still durably writes every planned healthy transition. Do not extend this pattern to Sync namespace snapshots, pending journals, local state, or destructive cleanup metadata: those have independent writers/freshness boundaries.
-
-Permanent protection: `tests/optimization-133012.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5C-1.33.0.12.json`. Step 5 closes here; Step 6 lifetime/memory analysis follows.
-
-## 1.33.0.11 Snow Leopard II Step-5B routine-alarm maintenance gate
-
-The five-minute `SYNC_WATCH_ALARM` still owns catastrophic-loss detection, pending-journal retry, normal reconciliation and the device-snapshot maintenance trigger. Step 5B optimizes only the final maintenance gate: `lastDeviceSnapshotGcAt` is single-writer state advanced only by successful device-snapshot GC, so the metadata read at alarm entry can prove the negative case when the 24-hour GC interval has not elapsed.
-
-Do **not** reuse that entry snapshot for destructive cleanup. If `isDeviceSnapshotGcDue(meta)` is true after reconciliation, the alarm must still call `readLocalMeta()` immediately before `maybeGarbageCollectStaleDeviceSnapshots(meta)`. The GC routine retains its fresh full Sync read and its second pre-delete Sync revalidation whenever stale/orphan candidates exist. This distinction is the Step-5B correctness boundary.
-
-Permanent protection: `tests/optimization-133011.test.mjs`. Frozen evidence: `docs/SNOW-LEOPARD-II-STEP5B-1.33.0.11.json`.
-
-## 1.32.1.7 logical-clock domain
-
-Logical mutation timestamps that participate in local/Sync conflict ordering must remain non-negative JavaScript safe integers. Use `normalizeLogicalTime()` at model trust boundaries instead of accepting arbitrary finite numbers. `nextMutationTime()` must never return the same value as an accepted observed clock; at the theoretical safe-integer ceiling it fails closed with `RangeError` rather than emitting a non-monotonic clock. Sync record comparison/reconstruction must apply the same safe-integer rule, including `modifiedAt`, `deletedAt`, `spaceMoveAt`, Settings clocks and workspace clocks. This is a correctness boundary, not a performance optimization.
-
 
 > **Start here if you are new to the MosaicSync codebase.**
 >
@@ -163,7 +40,7 @@ Useful companion documents:
 
 If you only have 30 minutes before touching code, read this guide, then `docs/ARCHITECTURE.md`, then the ADR that covers the subsystem you intend to change.
 
-### Current corrective invariants
+### Core correctness invariants
 
 The current post-audit corrective adds three maintenance rules that future changes must preserve:
 
@@ -433,6 +310,12 @@ Do not create second independent copies of version/schema/storage literals in do
 
 ---
 
+### Trusted-state fast paths and logical clocks
+
+Performance fast paths are valid only after the same operation has crossed the normal trust boundary. `createPersistedWriteBaseline()` is restricted to the exact compact object delivered by an authoritative `storage.local` read/event and clones it without re-normalizing so optimistic-concurrency identity is preserved. `stampSettingsMutationClocksTrustedNormalized()` is only for state already returned by `normalizeState()`; raw/imported/persisted input must use the defensive path instead. Never promote a session/render cache to trusted authority merely because its shape looks normalized.
+
+Logical clocks used for local/Sync ordering are non-negative JavaScript safe integers. Apply `normalizeLogicalTime()` at model trust boundaries. `nextMutationTime()` must always advance past accepted observed clocks and fails closed at the safe-integer ceiling rather than emitting a non-monotonic value. The same domain applies to record `modifiedAt`, tombstone `deletedAt`, `spaceMoveAt`, Settings clocks and workspace clocks.
+
 ## 6. How New Tab startup works
 
 The New Tab runtime is shared by both browsers.
@@ -498,6 +381,12 @@ Treat missing optional cache information as:
 —not as permission to replace a truthful already-painted value with a placeholder.
 
 For example, a shortcut already known to have artwork should not briefly become a fallback letter simply because a tiny startup preview is absent.
+
+Session render snapshots explicitly mark omitted known shortcut artwork with `imageDeferred`. `appendImageOrFallback()` must treat that as "artwork exists but pixels are intentionally deferred": keep a valid preview if available, otherwise leave the artwork area empty until authoritative local-asset hydration arrives. Do not convert `imageDeferred` into a fallback letter. Genuine iconless authoritative items still use the letter fallback. Device-local favicon/site-artwork changes use the preview-aware render-manifest refresh so the persistent boot frame can reuse tiny artwork derivatives without delaying first paint.
+
+`builtin-icons.js` has one intentional runtime owner: it executes as a parser-time classic script before `render-bootstrap.js`, and the authoritative New Tab consumes the installed `globalThis.__mosaicsyncBuiltinIcons` API. Do not add a static `import "./builtin-icons.js"` to `newtab.js`; a second evaluation is intentionally a no-op and the installed global API is immutable.
+
+Inactive-Space background warming is speculative, not startup authority. Intent warming may preload only the one currently effective destination background; `switchActiveSpace()` remains the correctness owner and still awaits destination readiness. Active-Space post-paint warming may additionally warm the alternate Light/Dark preset for appearance continuity. Do not broadly preload all inactive Space backgrounds during ordinary startup/maintenance.
 
 ---
 
@@ -569,6 +458,19 @@ docs/adr/ADR-007-settings-appearance-isolation.md
 
 ---
 
+### Async UI ownership and lifetime rules
+
+Several dialogs cross lazy-style/module/storage awaits. Ownership must be revalidated after the final await and immediately before mutating/adopting/opening the surface:
+
+- `openShortcutEditor()` must re-check `shortcutDialog.open` after secondary-style setup and before resetting/populating editor state; a guard only at `showModal()` is too late.
+- Bookmarks and Wallpaper Gallery must re-check native `.open` immediately before `showModal()` so two same-session rapid opens cannot both survive setup.
+- Custom Branding is owned by the Settings `__mosaicOwnershipGeneration`; every relevant await must still belong to the same Settings session and `isSettingsOpen()` must remain true.
+- Recovery Copies and Bookmarks asynchronous results are presentation-owned by `recoveryCopiesSessionGeneration` and `bookmarksDialogGeneration`. Closing/reopening invalidates old presentation work even though a background Recovery cleanup may continue safely.
+
+Interaction-only DOM must die with its owner. `clearRecoveryCopiesView()` tears down generated Recovery rows; the Wallpaper Gallery retains its lazy shell but clears the generated choice grid on close; `closeFolder()` always calls `folderItems.replaceChildren()` so folder-item listener closures cannot survive a closed popover. `openFolder()` synchronously rebuilds its contents before display, deferred folder-artwork hydration requires the same active/open folder ownership, and cross-Space drag preserves the dragged element before closing the folder.
+
+Lazy UI remains an interaction boundary: Wallpaper Gallery and Bookmarks dialog shells/controllers stay out of the initial live DOM/static module closure and are dynamically acquired on first use. Dynamically created close controls own their wiring; do not depend on the startup-only document scan.
+
 ## 8. Normal Sync: what it is and where to start
 
 The central background implementation is:
@@ -615,6 +517,14 @@ src/shared/background/sync-remote-observation.js
 src/shared/background/sync-pending-journal.js
 src/shared/background/runtime-utils.js
 ```
+
+### Live completeness, recoverability and background freshness
+
+Normal Sync intentionally distinguishes two notions of completeness. `completeRemoteDescriptor()` may use verified Recovery fallback material to establish continuity/recoverability. `completeLiveRemoteDescriptor()` requires coherent live Personal **and** Work ledgers. Do not conflate them. A torn/partial live namespace may be recoverable, but it is not authoritative enough to self-heal a missing current-device Recovery generation or clear a stale generic Sync error. Those unchanged-reconcile side effects require `completeLiveRemoteDescriptor()`; once both live ledgers validate they must converge normally. Explicit quota errors remain sticky until a quota-aware path supersedes them.
+
+`LOCAL_SYNC_CONTINUITY_KEY` is durable catastrophic-Recovery continuity state owned only by `background-core.js`. A continuity snapshot may be reused only inside the same serialized `enqueue()` queue turn while that ownership remains single-writer. `markSyncContinuityHealthy()` retains its defensive read when no proven-current snapshot is supplied. Do not generalize this reuse to Sync namespace snapshots, pending journals, local state or destructive-cleanup metadata, which have independent writers/freshness boundaries.
+
+The five-minute Sync watch may use the entry `lastDeviceSnapshotGcAt` metadata snapshot only to prove that routine device-snapshot GC is **not** due. If GC is due after reconciliation, re-read local metadata immediately before destructive maintenance. Device-snapshot cleanup still takes a fresh full Sync view and a second pre-delete revalidation for stale/orphan candidates. Similar-looking full storage reads are not interchangeable authority merely because they return the same namespace shape.
 
 ### Remote observation / applied-state ownership
 
@@ -791,6 +701,11 @@ src/shared/background/background-core.js
 
 ### Recovery invariants
 
+Whole-device Recovery cleanup has a distributed survivor protocol. Freeze the intended target roots **before** publishing the acting-device survivor; then publish and verify a fresh complete current-device generation; take the fresh destructive view; and delete only the intersection of still-eligible roots with the original **frozen target** set. Never expand an in-flight deletion plan to a newly observed target generation. The hard mutual-cleanup survivor guarantee requires concurrently destructive peers that implement this protocol; older peers cannot retroactively honor it.
+
+A healthy initialized reconcile may republish the current device's Recovery generation when none remains, but only after complete live Personal+Work delivery is authoritative. Recovery fallback completeness alone is not permission to manufacture a new generation. Recovery remains a safety layer, not a live merge input.
+
+
 - Recovery is a **consumer** of valid profile state, not a competing merge engine.
 - Recovery failure may reduce safety coverage; it must not corrupt valid normal Sync state.
 - Publication is immutable/chunks-first/root-last according to the established design.
@@ -947,6 +862,8 @@ Important rules:
 - favicon-bearing FV cards should not become visible in an intermediate missing-artwork state.
 
 Several tests exist specifically because these details caused visible startup regressions in the past.
+
+The delayed Top Sites permission reconciliation uses an ephemeral `frequentLiveRefreshVerified` proof. `refreshFrequentlyVisited()` invalidates it before awaited browser state and sets it only after both the live render and session projection commit. The delayed permission check may skip rebuilding only when permission is currently granted **and** that New Tab has a verified live refresh; missing permission, failed/unverified refresh or changed authority must continue through the full refresh path. Never persist or Sync this proof.
 
 ---
 
@@ -1299,6 +1216,10 @@ npm run size
 Do not "simplify" first-paint/startup code by moving work onto the critical path without measuring the result.
 
 Likewise, do not chase tiny line-count or package-size reductions if they remove a correctness boundary or make future maintenance harder. Use the size/performance gates as evidence, not as aesthetic targets.
+
+Snow Leopard II performance tooling is local-only evidence. `npm run perf:baseline`, `npm run perf:critical-path` and `npm run perf:storage-background` may record deterministic structural counts and host-local measurements, but performance data must never be transmitted or persisted into extension storage. Storage-call census results do not authorize collapsing freshness boundaries: catastrophic-loss detection, pending-journal replay, delivered-core repair and destructive Recovery/device-snapshot cleanup may each require their own read/revalidation.
+
+Runtime reachability is also evidence rather than an automatic deletion list. Exported defensive/reference APIs and explicit test hooks are not dead merely because no named production import is visible. Remove code only when its responsibility and runtime/browser-event reachability have been positively retired.
 
 ---
 

@@ -1,5 +1,8 @@
-Current release: 1.33.0.20
+Current release: 1.33.0.21
 
+## 1.33.0.21 — New Tab first-frame polish, fresh-install defaults and Developer Guide normalization
+
+1.33.0.21 keeps the 1.33.0.20 Sync/Recovery correctness baseline unchanged and makes four scoped maintenance/UI changes. Session render snapshots that explicitly mark known artwork as `imageDeferred` no longer render a transient fallback letter; successful device-local favicon/site-artwork hydration uses the existing preview-aware render-manifest refresh instead of racing the ordinary writer, improving repeat New Tab handoff without blocking first paint. Fresh installations now enable per-appearance built-in wallpaper defaults (`solarDrift` for Light, `blueglow` for Dark) while existing stored settings continue to normalize from their own persisted values. The Add/Edit Shortcut no-color swatch replaces its font `×` with a CSS-drawn centered cross. Finally, `DEVELOPER-GUIDE.md` is converted from an accumulated release ledger into an evergreen current-state developer manual: still-valid release-era invariants are integrated by subsystem and chronological history remains in this file, `CHANGELOG.md`, ADRs and the regression catalogue. Permanent protection: `tests/corrective-133021.test.mjs`.
 
 ## 1.33.0.20 — live-completeness Recovery/error-lifecycle corrective
 
