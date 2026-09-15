@@ -46,6 +46,7 @@ MosaicSync does not send the browsing-derived list to a MosaicSync server becaus
 Bookmark access is optional and requested from a user gesture.
 
 MosaicSync can display browser bookmark folders and can create a normal HTTP(S) bookmark when the user explicitly asks it to. Displayed bookmarks are not copied into MosaicSync's synchronized shortcut dataset merely by viewing them.
+Dragging a displayed HTTP(S) bookmark onto the MosaicSync launcher is an explicit conversion action: only that bookmark's title and URL become a normal MosaicSync shortcut at the requested destination. Any learned site artwork follows the normal device-local favicon policy unless the user later chooses otherwise through existing shortcut controls.
 
 Device-local bookmark-folder color preferences are local presentation metadata.
 

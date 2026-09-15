@@ -99,7 +99,8 @@ const GROUPS = Object.freeze({
       /corrective-133022\.test\.mjs$/i,
       /corrective-133023\.test\.mjs$/i,
       /corrective-133024\.test\.mjs$/i,
-      /corrective-133025\.test\.mjs$/i
+      /corrective-133025\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i
     ]
   },
   sync: {
@@ -178,7 +179,8 @@ const GROUPS = Object.freeze({
       /corrective-133020\.test\.mjs$/i,
       /corrective-133021\.test\.mjs$/i,
       /corrective-133022\.test\.mjs$/i,
-      /corrective-133023\.test\.mjs$/i
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i
     ]
   },
   browser: {
@@ -201,7 +203,8 @@ const GROUPS = Object.freeze({
       /corrective-133020\.test\.mjs$/i,
       /corrective-133021\.test\.mjs$/i,
       /corrective-133022\.test\.mjs$/i,
-      /corrective-133023\.test\.mjs$/i
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i
     ]
   },
   core: {
@@ -271,7 +274,8 @@ const GROUPS = Object.freeze({
       /corrective-133022\.test\.mjs$/i,
       /corrective-133023\.test\.mjs$/i,
       /corrective-133024\.test\.mjs$/i,
-      /corrective-133025\.test\.mjs$/i
+      /corrective-133025\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i
     ]
   }
 });

@@ -4,7 +4,9 @@
 
 MosaicSync is an open-source start page and shortcut manager for Firefox and Chromium-based browsers. It provides Spaces, folders, flexible layouts, wallpapers, automatic favicon handling, bookmark integration, Frequently Visited suggestions, profile backup/transfer, and browser-native synchronization.
 
-**Current source release: 1.33.0.25**
+In 1.33.0.26, an explicitly dragged browser bookmark can be dropped onto the MosaicSync launcher to become a normal shortcut: empty tiles preserve the chosen position, dropping onto a folder adds it there, and dropping onto an occupied shortcut creates a folder without deleting the existing shortcut. Merely viewing Bookmarks still does not copy browser bookmark data into MosaicSync.
+
+**Current source release: 1.33.0.26**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/

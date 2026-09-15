@@ -434,7 +434,7 @@ It owns:
 - the Bookmarks permission/read dialog lifecycle;
 - Bookmarks-local button/search/dialog listeners and color-popover lifecycle.
 
-It may read/write only the existing device-local bookmark-folder color preference in `localStorage`, and it may use the DOM elements/dependencies passed by `newtab.js`. Browser bookmark data remains browser-owned and is read through the existing lazily loaded `core/bookmarks.js` API; it is not copied into MosaicSync authoritative state or Sync.
+It may read/write only the existing device-local bookmark-folder color preference in `localStorage`, and it may use the DOM elements/dependencies passed by `newtab.js`. Browser bookmark data remains browser-owned and is read through the existing lazily loaded `core/bookmarks.js` API. Merely opening, searching or navigating Bookmarks must never copy bookmark data into MosaicSync authoritative state or Sync. The one intentional bridge is an explicit bookmark drag/drop conversion: `bookmarks-controller.js` may hand a bounded HTTP(S) title/URL payload to `newtab.js`, which owns modal release, grid drop routing and creation of an ordinary MosaicSync shortcut. Empty-slot drops use the exact Manual position, folder drops append inside that folder, and occupied-shortcut drops create a folder rather than overwrite existing user data. Automatic favicon discovery remains device-local under the normal artwork policy.
 
 The module must **not** own or depend on:
 
@@ -446,6 +446,8 @@ The module must **not** own or depend on:
 - platform-specific browser branching.
 
 `newtab.js` remains the orchestrator for first-paint/startup, global pointer/Escape coordination, the lazy browser-Bookmarks module loader and cross-feature actions such as Frequently Visited's explicit “Add to bookmarks” command. The browser Bookmarks module remains dynamically imported only when needed.
+
+Bookmark-to-shortcut drag uses native same-document drag/drop but must release the modal dialog before the launcher can accept the drop. Preserve the live drag source outside the closing `<dialog>` until `dragend`; otherwise browsers may cancel the drag when the Bookmarks reset removes its rendered rows. The bridge is copy semantics, never a move of the browser bookmark. A failed/cancelled/unhandled drag must not mutate MosaicSync state, and document-level drop handling must prevent an unhandled dragged bookmark URL from navigating the extension page. Recent ordering remains presentation-only: exact empty-grid placement is never persisted from a Recent visual slot.
 
 Beginning with **1.32.0.5** (Journey-3 Step 6), the controller's external contract is intentionally smaller: `open()` is private to controller-owned `bind()` wiring, while the orchestrator receives only the methods it actually coordinates (`bind`, global color-menu close/outside handling, and localized refresh). Bookmark-folder colors have one canonical preference read inside `loadBookmarksIntoDialog()`, immediately before an allowed/readable bookmark tree is rendered. The temporary Step-5 post-paint hydration seam was proven redundant and removed, so a New Tab that never opens Bookmarks performs no bookmark-folder-color `localStorage` read. Localized refresh also calls `renderBookmarkBrowser()` only once; that function already owns sidebar rebuilding.
 

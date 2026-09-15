@@ -359,6 +359,8 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
           positionFloatingMenu,
           graphemeSegmenter,
           openOnBind: true,
+          onBookmarkDragStart: beginBookmarkShortcutDrag,
+          onBookmarkDragEnd: endBookmarkShortcutDrag,
           elements: { ...elements, bookmarksButton }
         });
         controller.bind();
@@ -628,6 +630,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let frequentCandidateCache = [];
   let hiddenFrequentDomains = new Set();
   let frequentDragSite = null;
+  let bookmarkDrag = null;
+  let bookmarkDragSourceKeeper = null;
+  let bookmarkDragReleaseTimer = 0;
   let frequentRenderSnapshot = bootRenderManifest?.firstPaint?.frequent || null;
   let frequentLiveSites = Array.isArray(frequentRenderSnapshot?.sites) ? frequentRenderSnapshot.sites.slice() : [];
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
@@ -1497,6 +1502,71 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       menu.style.left = `${Math.max(margin, Math.min(clientX, window.innerWidth - rect.width - margin))}px`;
       menu.style.top = `${Math.max(margin, Math.min(clientY, window.innerHeight - rect.height - margin))}px`;
     });
+  }
+
+  function bookmarkDragPayloadFor(item) {
+    let url = "";
+    try { url = normalizeShortcutUrl(item?.url); } catch { return null; }
+    if (!/^https?:\/\//i.test(url)) return null;
+    const title = String(item?.title || hostLabel(url) || url).trim().slice(0, 80) || hostLabel(url);
+    return { title, url };
+  }
+
+  function beginBookmarkShortcutDrag(item, sourceElement, event) {
+    const payload = bookmarkDragPayloadFor(item);
+    const transfer = event?.dataTransfer;
+    if (!payload || !transfer || !sourceElement) return false;
+
+    if (bookmarkDragReleaseTimer) clearTimeout(bookmarkDragReleaseTimer);
+    bookmarkDragSourceKeeper?.remove();
+    bookmarkDragSourceKeeper = null;
+
+    const drag = { ...payload, sourceElement, committing: false, committed: false };
+    bookmarkDrag = drag;
+    sourceElement.classList.add("dragging");
+    transfer.effectAllowed = "copy";
+    transfer.setData("text/uri-list", payload.url);
+    transfer.setData("text/plain", payload.url);
+
+    // Let the native drag start before releasing the modal. Moving the live drag
+    // source into a tiny connected keeper first prevents the Bookmarks close/reset
+    // lifecycle from deleting the source node and cancelling the browser drag.
+    bookmarkDragReleaseTimer = setTimeout(() => {
+      bookmarkDragReleaseTimer = 0;
+      if (bookmarkDrag !== drag || !sourceElement.isConnected) return;
+      const keeper = document.createElement("div");
+      keeper.className = "bookmark-drag-source-keeper";
+      keeper.setAttribute("aria-hidden", "true");
+      keeper.style.position = "fixed";
+      keeper.style.left = "-10000px";
+      keeper.style.top = "-10000px";
+      keeper.style.width = "1px";
+      keeper.style.height = "1px";
+      keeper.style.overflow = "hidden";
+      keeper.style.opacity = "0";
+      keeper.style.pointerEvents = "none";
+      document.body.append(keeper);
+      keeper.append(sourceElement);
+      bookmarkDragSourceKeeper = keeper;
+      if (bookmarksDialog?.open) closeDialog(bookmarksDialog);
+    }, 0);
+    return true;
+  }
+
+  function endBookmarkShortcutDrag(sourceElement) {
+    if (bookmarkDragReleaseTimer) {
+      clearTimeout(bookmarkDragReleaseTimer);
+      bookmarkDragReleaseTimer = 0;
+    }
+    sourceElement?.classList?.remove("dragging");
+    if (bookmarkDragSourceKeeper) {
+      try { sourceElement?.remove?.(); } catch {}
+      bookmarkDragSourceKeeper.remove();
+      bookmarkDragSourceKeeper = null;
+    }
+    bookmarkDrag = null;
+    document.querySelectorAll(".shortcut-slot").forEach(el => el.classList.remove("drag-over", "drag-over-empty"));
+    addFirstButton?.classList.remove("drag-cross-space-target");
   }
 
   async function addFrequentSiteToMosaicSync(site, { position = null } = {}) {
@@ -3498,6 +3568,12 @@ ${site.url}`;
     });
 
     slot.addEventListener("dragover", event => {
+      if (bookmarkDrag) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        slot.classList.add("drag-over");
+        return;
+      }
       if (!dragId || dragId === item.id) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
@@ -3507,6 +3583,13 @@ ${site.url}`;
     slot.addEventListener("dragleave", () => slot.classList.remove("drag-over"));
 
     slot.addEventListener("drop", event => {
+      if (bookmarkDrag) {
+        event.preventDefault();
+        event.stopPropagation();
+        slot.classList.remove("drag-over");
+        void commitBookmarkShortcutDrop({ targetId: item.id }).catch(error => showToast(error?.message || t("operationFailed")));
+        return;
+      }
       event.preventDefault();
       slot.classList.remove("drag-over");
       const sourceId = dragId || event.dataTransfer.getData("text/plain");
@@ -3544,9 +3627,10 @@ ${site.url}`;
         if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
         return;
       }
-      if (!dragId && !frequentDragSite) return;
+      const bookmarkDrop = typeof bookmarkDrag !== "undefined" ? bookmarkDrag : null;
+      if (!dragId && !frequentDragSite && !bookmarkDrop) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = frequentDragSite ? "copy" : "move";
+      event.dataTransfer.dropEffect = (frequentDragSite || bookmarkDrop) ? "copy" : "move";
       slot.classList.add("drag-over-empty");
     });
     slot.addEventListener("dragleave", () => slot.classList.remove("drag-over-empty"));
@@ -3556,6 +3640,11 @@ ${site.url}`;
       slot.classList.remove("drag-over-empty");
       if (shortcutOrderMode === "recent") {
         frequentDragSite = null;
+        return;
+      }
+      if (typeof bookmarkDrag !== "undefined" && bookmarkDrag) {
+        try { await commitBookmarkShortcutDrop({ position }); }
+        catch (error) { showToast(error?.message || t("operationFailed")); }
         return;
       }
       if (frequentDragSite) {
@@ -3882,6 +3971,109 @@ ${site.url}`;
       setTimeout(() => openFolder(folder, slot, false), 90);
     }
     showToast(t("shortcutAddedFolder"));
+  }
+
+  function bookmarkShortcutRecord(payload, position, timestamp) {
+    return {
+      type: "shortcut",
+      id: uid(),
+      title: payload.title,
+      url: payload.url,
+      builtinIcon: "",
+      colorTag: "",
+      faviconPreference: "",
+      image: "",
+      localImageAssetId: "",
+      imageSyncData: "",
+      imageAssetId: "",
+      imageSyncKind: "none",
+      imageSourceKind: "none",
+      imageSourceUrl: "",
+      imageIsFallback: false,
+      imageStyle: "contain",
+      position,
+      createdAt: timestamp,
+      modifiedAt: timestamp,
+      source: "manual"
+    };
+  }
+
+  async function commitBookmarkShortcutDrop({ position = null, targetId = "" } = {}) {
+    const drag = bookmarkDrag;
+    if (!drag || drag.committing || drag.committed) return false;
+    drag.committing = true;
+    try {
+      // Re-validate at the mutation boundary even though dragstart already did so.
+      // Browser Bookmarks remain untrusted external input until an explicit drop.
+      const payload = bookmarkDragPayloadFor(drag);
+      if (!payload) return false;
+
+      let shortcut = null;
+      if (targetId) {
+        const target = getTopLevelItem(targetId);
+        if (!target) return false;
+
+        if (target.type === "folder") {
+          const timestamp = nextMutationTime(state.updatedAt, target.modifiedAt, target.items.map(item => item.modifiedAt));
+          shortcut = bookmarkShortcutRecord(payload, target.items.length, timestamp);
+          target.items.push(shortcut);
+          target.modifiedAt = timestamp;
+          await saveState();
+          render();
+          const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(target.id)}"]`);
+          if (slot) {
+            slot.classList.add("folder-created");
+            setTimeout(() => slot.classList.remove("folder-created"), 520);
+            if (folderPopover.hidden) setTimeout(() => openFolder(target, slot, false), 90);
+          }
+          showToast(t("shortcutAddedFolder"));
+        } else if (target.type === "shortcut") {
+          const timestamp = nextMutationTime(state.updatedAt, target.modifiedAt);
+          shortcut = bookmarkShortcutRecord(payload, 1, timestamp);
+          const folder = {
+            type: "folder",
+            id: uid(),
+            title: "",
+            items: [
+              { ...target, position: 0, modifiedAt: timestamp },
+              shortcut
+            ],
+            position: target.position,
+            createdAt: timestamp,
+            modifiedAt: timestamp
+          };
+          state.shortcuts = state.shortcuts.filter(item => item.id !== target.id);
+          state.shortcuts.push(folder);
+          await saveState();
+          render();
+          const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(folder.id)}"]`);
+          if (slot) {
+            slot.classList.add("folder-created");
+            setTimeout(() => slot.classList.remove("folder-created"), 520);
+            setTimeout(() => openFolder(folder, slot, false), 90);
+          }
+        } else {
+          return false;
+        }
+      } else {
+        if (!Number.isInteger(position) || position < 0) return false;
+        if (shortcutOrderMode === "recent" && state.shortcuts.length !== 0) return false;
+        if (position >= visibleTopLevelCapacity(state.settings)) return false;
+        if (state.shortcuts.some(item => item.position === position)) return false;
+        const timestamp = nextMutationTime(state.updatedAt, state.shortcuts.map(item => item.modifiedAt));
+        shortcut = bookmarkShortcutRecord(payload, position, timestamp);
+        state.shortcuts.push(shortcut);
+        await saveState();
+        render();
+        showToast(t("shortcutAdded"));
+      }
+
+      drag.committed = true;
+      if (shortcut?.id) requestMissingSiteIcons([shortcut.id]);
+      return true;
+    } finally {
+      drag.committing = false;
+    }
   }
 
   function resolveLiveFolderAnchor(folderId, fallback = null) {
@@ -7205,6 +7397,12 @@ ${t("clearSyncWarning")}`);
   settingsImportNative.addEventListener("click", () => importFirefoxShortcutsFromGesture({ confirmReplace: true }));
   addFirstButton.addEventListener("click", () => openShortcutEditor());
   addFirstButton.addEventListener("dragover", event => {
+    if (bookmarkDrag && state.shortcuts.length === 0) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      addFirstButton.classList.add("drag-cross-space-target");
+      return;
+    }
     if (!crossSpaceDrag || crossSpaceDrag.sourceSpaceId === state.activeSpaceId) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
@@ -7214,6 +7412,14 @@ ${t("clearSyncWarning")}`);
     addFirstButton.classList.remove("drag-cross-space-target");
   });
   addFirstButton.addEventListener("drop", async event => {
+    if (bookmarkDrag && state.shortcuts.length === 0) {
+      event.preventDefault();
+      event.stopPropagation();
+      addFirstButton.classList.remove("drag-cross-space-target");
+      try { await commitBookmarkShortcutDrop({ position: 0 }); }
+      catch (error) { showToast(error?.message || t("operationFailed")); }
+      return;
+    }
     if (!crossSpaceDrag || crossSpaceDrag.sourceSpaceId === state.activeSpaceId) return;
     event.preventDefault();
     event.stopPropagation();
@@ -7480,6 +7686,20 @@ ${t("clearSyncWarning")}`);
   function isSettingsChildDialogOpen() {
     return Boolean(wallpaperGalleryDialog?.open || customBrandingDialog?.open || recoveryCopiesDialog?.open);
   }
+
+  document.addEventListener("dragover", event => {
+    if (!bookmarkDrag || event.defaultPrevented) return;
+    // A dragged browser bookmark carries a normal URL in DataTransfer. Prevent
+    // an unhandled drop from navigating the extension page while still allowing
+    // explicit launcher targets to opt in with their own copy dropEffect.
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "none";
+  });
+
+  document.addEventListener("drop", event => {
+    if (!bookmarkDrag || event.defaultPrevented) return;
+    event.preventDefault();
+  });
 
   document.addEventListener("pointerdown", event => {
     if (frequentContextMenu?.isConnected && !frequentContextMenu.contains(event.target)) closeFrequentContextMenu();

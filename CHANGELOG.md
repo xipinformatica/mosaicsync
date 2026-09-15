@@ -1,3 +1,10 @@
+## 1.33.0.26
+
+- Adds explicit browser-bookmark drag-to-shortcut conversion from MosaicSync's Bookmarks window. Starting a drag releases the modal without losing the native drag source, then valid launcher targets accept copy semantics.
+- Dropping on an empty Manual tile creates a normal shortcut at that exact position; dropping on an existing folder adds it inside; dropping on an occupied shortcut creates a folder rather than overwriting the existing item. Empty-layout drop onto the Add control is also supported.
+- Browser bookmarks remain browser-owned until an explicit drop commits. Only HTTP(S) title/URL data enters the ordinary MosaicSync shortcut model; automatic favicon discovery continues through the existing device-local artwork path. Cancelled/unhandled drops do not mutate state and cannot navigate the extension page.
+- Adds seven permanent adversarial regressions covering drag source lifetime/modal release, exact placement, occupied/folder behavior, copy-vs-move routing, URL/privacy boundaries and group coverage. No new permission, persisted schema, Sync/Recovery format or browser-floor change.
+
 ## 1.33.0.25
 
 - Test-contract hardening only over 1.33.0.24; no intended runtime behavior, Sync/Recovery/storage, persisted-schema, permission, browser-floor or privacy-boundary change.

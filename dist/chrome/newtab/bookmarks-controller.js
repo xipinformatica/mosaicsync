@@ -24,6 +24,8 @@ export function createBookmarksController({
   positionFloatingMenu,
   graphemeSegmenter,
   openOnBind = false,
+  onBookmarkDragStart = null,
+  onBookmarkDragEnd = null,
   elements = {}
 } = {}) {
   const {
@@ -121,6 +123,14 @@ export function createBookmarksController({
     link.href = item.url;
     link.title = `${item.title}\n${item.url}`;
     link.setAttribute("aria-label", `${t("openBookmark")}: ${item.title}`);
+    link.draggable = true;
+    link.addEventListener("dragstart", event => {
+      const started = onBookmarkDragStart?.(item, link, event);
+      if (started === false) event.preventDefault();
+    });
+    link.addEventListener("dragend", event => {
+      onBookmarkDragEnd?.(link, event);
+    });
 
     const icon = document.createElement("span");
     icon.className = "bookmark-item-icon";

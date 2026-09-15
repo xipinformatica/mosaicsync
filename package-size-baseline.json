@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.25",
-      "rawBytes": 2431302,
-      "deflatedBytes": 709793,
+      "version": "1.33.0.26",
+      "rawBytes": 2440393,
+      "deflatedBytes": 711685,
       "categories": {
         "assets": {
           "files": 2,
@@ -24,7 +24,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1689,
-          "deflatedBytes": 658
+          "deflatedBytes": 657
         },
         "manifest-localization": {
           "files": 33,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 440579,
-          "deflatedBytes": 105409
+          "rawBytes": 449670,
+          "deflatedBytes": 107302
         },
         "other": {
           "files": 1,
@@ -76,8 +76,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 358882,
-          "deflatedBytes": 78244
+          "rawBytes": 367617,
+          "deflatedBytes": 80050
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.25",
-      "rawBytes": 2452945,
-      "deflatedBytes": 724309,
+      "version": "1.33.0.26",
+      "rawBytes": 2462036,
+      "deflatedBytes": 726201,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1368,
-          "deflatedBytes": 556
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 440579,
-          "deflatedBytes": 105409
+          "rawBytes": 449670,
+          "deflatedBytes": 107302
         },
         "other": {
           "files": 1,
@@ -330,8 +330,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 358882,
-          "deflatedBytes": 78244
+          "rawBytes": 367617,
+          "deflatedBytes": 80050
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",

@@ -1,4 +1,8 @@
-Current release: 1.33.0.25
+Current release: 1.33.0.26
+
+## 1.33.0.26 — Browser bookmark drag-to-shortcut
+
+1.33.0.26 adds one explicit bridge from the browser-owned Bookmarks reader into MosaicSync: dragging an HTTP(S) bookmark closes the modal after native drag start and lets the user drop it onto the launcher. Empty slots preserve the chosen Manual position; dropping onto an existing folder appends a normal shortcut there; dropping onto an occupied shortcut creates a folder so no existing shortcut is overwritten. Cancelling or dropping outside a valid target performs no state mutation. The browser bookmark itself remains unchanged, and learned favicon pixels continue to use MosaicSync's device-local artwork path. No permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced. Permanent protection: `tests/corrective-133026.test.mjs`.
 
 ## 1.33.0.25 — first-paint parity contract unification
 
