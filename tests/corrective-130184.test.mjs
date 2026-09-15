@@ -200,6 +200,11 @@ for (const browser of ["firefox", "chrome"]) {
     const owner = createTestRecoveryLifecycle({
       compareDeviceSnapshotGenerationRecency: (left, right) =>
         (Number(right?.updatedAt) || 0) - (Number(left?.updatedAt) || 0),
+      deviceRootDescriptor: key => key === "root-b"
+        ? { key, deviceId: "clone", commitId: "b", updatedAt: 20, publishedAt: 20 }
+        : key === "root-a"
+          ? { key, deviceId: "clone", commitId: "a", updatedAt: 10, publishedAt: 10 }
+          : null,
       syncEntryBytes: entryBytes,
       policy: { syncQuotaBytes: 1000, syncQuotaMaxItems: 100 }
     });

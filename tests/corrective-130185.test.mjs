@@ -214,6 +214,13 @@ for (const browser of ["firefox", "chrome"]) {
     const entryBytes = (key, value) => Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value));
     const owner = createTestRecoveryLifecycle({
       compareDeviceSnapshotGenerationRecency: (left, right) => (right.updatedAt || 0) - (left.updatedAt || 0),
+      deviceRootDescriptor: key => key === rootB
+        ? { key, deviceId: "clone", commitId: "b", updatedAt: 20, publishedAt: 20 }
+        : key === rootA
+          ? { key, deviceId: "clone", commitId: "a", updatedAt: 10, publishedAt: 10 }
+          : key === rootC
+            ? { key, deviceId: "clone", commitId: "c", updatedAt: 30, publishedAt: 30 }
+            : null,
       syncEntryBytes: entryBytes,
       policy: { syncQuotaBytes: 1000, syncQuotaMaxItems: 100 }
     });
@@ -229,6 +236,7 @@ for (const browser of ["firefox", "chrome"]) {
       readDeviceSnapshots: async all => decoded(all || {}),
       syncItemsFitInSnapshot: owner.syncItemsFitInSnapshot,
       planDeviceSnapshotPublicationCapacity: owner.planDeviceSnapshotPublicationCapacity,
+      prepareDeviceSnapshotEmergencyQuotaRetryCapacity: async () => false,
       writeSyncItems: async items => {
         if (Object.hasOwn(items, rootC)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
         Object.assign(store, structuredClone(items));

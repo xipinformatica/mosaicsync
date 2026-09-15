@@ -1,4 +1,14 @@
-Current release: 1.33.0.26
+Current release: 1.33.0.28
+
+## 1.33.0.28 — independent Recovery retirement authority corrective
+
+1.33.0.28 closes a narrow Recovery safety gap exposed while auditing the 1.33.0.27 emergency quota path. Routine pre-publication capacity planning now derives retirement candidates through the same `verifiedProfileDeviceSnapshotDescriptors()` classifier used by emergency quota reclaim and ordinary superseded-generation pruning. A fallback-assisted/torn generation (`usedPreviousGeneration === true`) may remain readable Recovery material, but it can never authorize retiring the independently valid predecessor it depends on. With three generations, an older root remains safely retirable whenever another independent fallback survives. The 1.33.0.27 emergency retry state machine, two-generation retention policy, remote cleanup authority, schemas and Sync wire format are unchanged. Permanent protection: `tests/corrective-133028.test.mjs`.
+
+## 1.33.0.27 — bounded self-only Recovery quota retry
+
+1.33.0.27 keeps the existing two-generation Recovery retention policy and all cross-device cleanup authority unchanged. If a prepared immutable Recovery publication passes MosaicSync's normal capacity planning but the browser still rejects the commit with a real quota error, the background takes a fresh namespace view and may reclaim at most one older independently verified generation belonging to the acting device. The candidate is frozen, re-read/revalidated immediately before deletion, must leave another independent own fallback, and is rejected if the remaining fallback is torn/previous-generation-assisted or if MosaicSync's own accounting still says the exact prepared publication cannot fit. Only after successful reclaim is the **same** prepared publication object retried, exactly once. A failed/unsafe reclaim returns the original quota outcome; a second quota rejection stops; a generic retry error follows the existing error path. Remote Recovery, retention timing, schemas and pending Sync journals are untouched. Permanent protection: `tests/corrective-133027.test.mjs`.
+
+The root `README.md` is also intentionally shortened in this release: product overview, privacy, support, build instructions and documentation links stay there, while chronological engineering detail remains in this file and `CHANGELOG.md`.
 
 ## 1.33.0.26 — Browser bookmark drag-to-shortcut
 

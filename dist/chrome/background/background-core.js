@@ -215,9 +215,11 @@ export function startBackground(adapter) {
     syncEntryBytes
   });
   const {
+    confirmedDeviceSnapshotEmergencyQuotaReclaimKeys,
     confirmedDeviceSnapshotGarbageCollectionKeys,
     confirmedManualRecoveryCleanupKeys,
     confirmedSupersededDeviceSnapshotKeys,
+    planDeviceSnapshotEmergencyQuotaReclaim,
     planDeviceSnapshotGarbageCollection,
     planDeviceSnapshotPublicationCapacity,
     planManualRecoveryCleanup,
@@ -3734,6 +3736,36 @@ export function startBackground(adapter) {
     });
   }
 
+  async function prepareDeviceSnapshotEmergencyQuotaRetryCapacity(deviceId, publication) {
+    try {
+      const observed = await browser.storage.sync.get(null);
+      const observedSnapshots = await readDeviceSnapshots(observed);
+      const plan = planDeviceSnapshotEmergencyQuotaReclaim(observed, deviceId, publication, observedSnapshots);
+      if (!plan.removeKeys.length) return false;
+
+      // Freeze the intended root, then re-read immediately before destruction.
+      // The second derivation may cancel the deletion but can never expand it.
+      const latest = await browser.storage.sync.get(null);
+      const latestSnapshots = await readDeviceSnapshots(latest);
+      const keys = confirmedDeviceSnapshotEmergencyQuotaReclaimKeys(
+        latest,
+        latestSnapshots,
+        plan,
+        deviceId,
+        publication
+      );
+      if (!keys.length) return false;
+      await removeSyncItems(keys);
+      return true;
+    } catch (error) {
+      // Quota recovery is opportunistic. If its safety proof or deletion fails,
+      // preserve the original quota outcome rather than replacing it with a
+      // different failure or pretending that capacity was reclaimed.
+      console.warn(`${PRODUCT_NAME}: emergency Recovery quota reclaim skipped`, error);
+      return false;
+    }
+  }
+
   async function publishProfileDeviceSnapshot(fullState, meta, { force = false } = {}) {
     const profileRevisionFor = snapshot => {
       if (!snapshot?.deviceId || !snapshot?.commitId) return "";
@@ -3781,8 +3813,17 @@ export function startBackground(adapter) {
     try {
       await commitProfileDeviceSnapshotPublication(publication);
     } catch (error) {
-      if (isQuotaError(error)) return { written: false, reason: "quota", setRevision: "" };
-      throw error;
+      if (!isQuotaError(error)) throw error;
+      const reclaimed = await prepareDeviceSnapshotEmergencyQuotaRetryCapacity(meta.deviceId, publication);
+      if (!reclaimed) return { written: false, reason: "quota", setRevision: "" };
+      try {
+        // Retry the exact immutable publication once. Rebuilding here would mint
+        // a second commitId and turn one Recovery operation into two generations.
+        await commitProfileDeviceSnapshotPublication(publication);
+      } catch (retryError) {
+        if (isQuotaError(retryError)) return { written: false, reason: "quota", setRevision: "" };
+        throw retryError;
+      }
     }
 
     let refreshedAll = await browser.storage.sync.get(null);

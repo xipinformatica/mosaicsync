@@ -106,17 +106,17 @@ export function createRecoveryGenerationLifecycle({
     const publicationItems = { ...publication?.chunkWrites, [publication?.rootKey]: publication?.rootValue };
     if (syncItemsFitInSnapshot(values, publicationItems)) return { all: values, removeKeys: [] };
 
-    // Preserve the 1.30.18.22 rule exactly: staging may retire only older decoded
-    // complete-profile generations, and never the last complete fallback.
-    const valid = (Array.isArray(snapshots) ? snapshots : [])
-      .filter(snapshot => snapshot?.deviceId === deviceId && snapshot.profileComplete === true && snapshot.rootKey)
+    // Staging may retire only older independently verified complete-profile
+    // generations. A torn root decoded through its previous-generation fallback
+    // is readable Recovery material, but it cannot authorize retiring that fallback.
+    const valid = verifiedProfileDeviceSnapshotDescriptors(values, snapshots, deviceId)
       .sort(compareDeviceSnapshotGenerationRecency);
     if (valid.length < 2) return { all: values, removeKeys: [] };
 
     const simulated = { ...values };
     const removeKeys = [];
     for (let index = valid.length - 1; index >= 1; index -= 1) {
-      const keys = deviceSnapshotKeysForRoot(simulated, valid[index].rootKey);
+      const keys = deviceSnapshotKeysForRoot(simulated, valid[index].key);
       if (!keys.length) continue;
       for (const key of keys) {
         delete simulated[key];
@@ -125,6 +125,39 @@ export function createRecoveryGenerationLifecycle({
       if (syncItemsFitInSnapshot(simulated, publicationItems)) return { all: simulated, removeKeys };
     }
     return { all: values, removeKeys: [] };
+  }
+
+  function planDeviceSnapshotEmergencyQuotaReclaim(all, deviceId, publication, snapshots) {
+    const values = all && typeof all === "object" ? all : {};
+    const publicationItems = { ...publication?.chunkWrites, [publication?.rootKey]: publication?.rootValue };
+    const roots = verifiedProfileDeviceSnapshotDescriptors(values, snapshots, deviceId)
+      .sort(compareDeviceSnapshotGenerationRecency);
+    // Emergency quota recovery may retire at most one older independently
+    // verified generation belonging to the acting device. One independently
+    // verified fallback must remain before the immutable replacement is retried.
+    if (roots.length < 2) return { all: values, rootKeys: [], removeKeys: [] };
+
+    const candidate = roots[roots.length - 1];
+    const keys = deviceSnapshotKeysForRoot(values, candidate.key);
+    if (!keys.length) return { all: values, rootKeys: [], removeKeys: [] };
+    const simulated = { ...values };
+    for (const key of keys) delete simulated[key];
+    // The local accounting model is only a veto after a browser quota error:
+    // never destroy a fallback when even our own optimistic model says the
+    // exact prepared publication still cannot fit.
+    if (!syncItemsFitInSnapshot(simulated, publicationItems)) {
+      return { all: values, rootKeys: [], removeKeys: [] };
+    }
+    return { all: simulated, rootKeys: [candidate.key], removeKeys: keys };
+  }
+
+  function confirmedDeviceSnapshotEmergencyQuotaReclaimKeys(latest, latestSnapshots, plan, deviceId, publication) {
+    const requested = new Set(Array.isArray(plan?.rootKeys) ? plan.rootKeys : []);
+    if (!requested.size) return [];
+    const refreshed = planDeviceSnapshotEmergencyQuotaReclaim(latest, deviceId, publication, latestSnapshots);
+    const stillEligible = new Set(refreshed.rootKeys);
+    const rootKeys = [...requested].filter(rootKey => stillEligible.has(rootKey));
+    return [...new Set(rootKeys.flatMap(rootKey => deviceSnapshotKeysForRoot(latest, rootKey)))];
   }
 
   function supersededDeviceSnapshotRootKeys(all, snapshots, deviceId, { protectRootKey = "" } = {}) {
@@ -393,10 +426,12 @@ export function createRecoveryGenerationLifecycle({
   }
 
   return Object.freeze({
+    confirmedDeviceSnapshotEmergencyQuotaReclaimKeys,
     confirmedDeviceSnapshotGarbageCollectionKeys,
     confirmedManualRecoveryCleanupKeys,
     confirmedSupersededDeviceSnapshotKeys,
     currentDeviceSnapshotRootHeader,
+    planDeviceSnapshotEmergencyQuotaReclaim,
     planDeviceSnapshotGarbageCollection,
     planDeviceSnapshotPublicationCapacity,
     planManualRecoveryCleanup,

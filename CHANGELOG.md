@@ -1,3 +1,18 @@
+## 1.33.0.28
+
+- Corrects routine Recovery capacity planning so only independently verified complete generations can authorize fallback retirement; a torn/fallback-assisted generation can remain readable but cannot cause deletion of the predecessor it depends on.
+- Reuses the shared `verifiedProfileDeviceSnapshotDescriptors()` classifier instead of maintaining a weaker hand-written retirement filter, aligning routine staging with the 1.33.0.27 emergency quota and superseded-generation safety rules.
+- Adds permanent red-before-green coverage for the two-generation torn-survivor case, the three-generation safe-retirement case, the shared-classifier contract and the intentional distinction between Recovery readability and destructive authority.
+- Leaves the 1.33.0.27 emergency retry, normal two-generation retention, remote-device cleanup, Sync/Recovery wire formats, permissions, schemas and browser floors unchanged.
+
+## 1.33.0.27
+
+- Adds one bounded emergency Recovery quota-retry path without changing normal two-generation retention: if the browser unexpectedly rejects a prepared Recovery publication for total Sync quota, MosaicSync may retire at most one older independently verified generation belonging to the acting device, then retry the exact same immutable publication once.
+- Emergency reclaim is self-only, never touches another device, never removes the last independently verified own fallback, rejects torn/previous-generation-assisted survivors, re-reads and revalidates immediately before deletion, and refuses destructive work when one fallback would still not make the prepared publication fit.
+- Cleanup alone is never success: failed/unsafe reclaim performs no retry, a second quota failure stops after exactly two total commit attempts, and generic retry errors retain their existing semantics. Partial failed generations continue to use the existing chunks-first/root-last rollback/orphan-GC rules.
+- Simplifies the root README so it serves as a concise product/project entry point instead of duplicating `CHANGELOG.md` and `README-DEVELOPMENT.md`.
+- Adds permanent adversarial coverage for self-only authority, last-copy/torn-survivor protection, frozen revalidation, impossible-to-fit veto, exact publication reuse, deletion failure, bounded retry and browser parity. No new permission, schema, Sync/Recovery wire format, retention policy or browser floor.
+
 ## 1.33.0.26
 
 - Adds explicit browser-bookmark drag-to-shortcut conversion from MosaicSync's Bookmarks window. Starting a drag releases the modal without losing the native drag source, then valid launcher targets accept copy semantics.

@@ -207,6 +207,7 @@ for (const browserName of ["firefox", "chrome"]) {
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
       prepareDeviceSnapshotPublicationCapacity: async all => all,
+      prepareDeviceSnapshotEmergencyQuotaRetryCapacity: async () => false,
       writeSyncItems: async items => { events.push(["write", Object.keys(items)]); Object.assign(store, structuredClone(items)); },
       removeSyncItems: async keys => { events.push(["remove", [...keys]]); for (const key of keys) delete store[key]; },
       commitProfileDeviceSnapshotPublication: async value => {
@@ -279,6 +280,7 @@ for (const browserName of ["firefox", "chrome"]) {
       readSyncSnapshot: async () => ({ records: new Map(), settings: null, dataset: null, assets: new Map() }),
       buildProfileDeviceSnapshotPublication: async () => publication,
       prepareDeviceSnapshotPublicationCapacity: async all => all,
+      prepareDeviceSnapshotEmergencyQuotaRetryCapacity: async () => false,
       writeSyncItems: async items => {
         if (Object.hasOwn(items, generationRootKey)) { const error = new Error("injected root quota failure"); error.name = "QuotaExceededError"; throw error; }
         Object.assign(store, structuredClone(items));
