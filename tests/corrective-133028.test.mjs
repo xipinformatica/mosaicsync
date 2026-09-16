@@ -152,3 +152,31 @@ test("1.33.0.28 Recovery retirement corrective stays in Sync, Recovery, security
     assert.ok(files.includes("tests/corrective-133028.test.mjs"), `${group} must include corrective-133028.test.mjs`);
   }
 });
+
+test("1.33.0.29 manual superseded Recovery cleanup cannot retire the independent fallback behind a torn newer generation", () => {
+  const owner = lifecycle();
+  const all = {};
+  const a1 = addGeneration(all, "A", "1", 10, 120);
+  addGeneration(all, "A", "2", 20, 120);
+  const plan = owner.planManualRecoveryCleanup(all, [
+    snapshot("A", "2", 20, { usedPreviousGeneration: true }),
+    snapshot("A", "1", 10)
+  ], { mode: "superseded", currentDeviceId: "A" });
+
+  assert.deepEqual(plan.rootKeys, [], "torn A2 must not mark independently valid A1 as manually superseded");
+  assert.ok(all[a1]);
+});
+
+test("1.33.0.29 whole-device manual Recovery cleanup requires an independently verified fallback on the acting device", () => {
+  const owner = lifecycle();
+  const all = {};
+  addGeneration(all, "A", "2", 20, 120);
+  const b1 = addGeneration(all, "B", "1", 10, 120);
+  const plan = owner.planManualRecoveryCleanup(all, [
+    snapshot("A", "2", 20, { usedPreviousGeneration: true }),
+    snapshot("B", "1", 10)
+  ], { mode: "device", deviceId: "B", currentDeviceId: "A" });
+
+  assert.deepEqual(plan.rootKeys, [], "a torn-only acting-device fallback must not authorize wiping another device's Recovery set");
+  assert.ok(all[b1]);
+});

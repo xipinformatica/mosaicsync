@@ -4602,7 +4602,7 @@ ${site.url}`;
     updateImagePreview();
     updateShortcutSpaceChoice();
     shortcutDialog.showModal();
-    queueMicrotask(() => shortcutTitle.focus());
+    queueMicrotask(() => (item ? shortcutTitle : shortcutUrl).focus());
   }
 
   function isSettingsOpen() {

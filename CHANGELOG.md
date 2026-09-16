@@ -1,3 +1,8 @@
+## 1.33.0.29
+
+- Adding a shortcut no longer requires a name. Enter the website address and MosaicSync will use the site's address as the name automatically; you can still type your own name whenever you want.
+- Strengthens permanent tests for Recovery cleanup and bookmark drag-and-drop without changing their existing behavior.
+
 ## 1.33.0.28
 
 - Corrects routine Recovery capacity planning so only independently verified complete generations can authorize fallback retirement; a torn/fallback-assisted generation can remain readable but cannot cause deletion of the predecessor it depends on.

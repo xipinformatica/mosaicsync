@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import vm from "node:vm";
 import { testFilesForGroup } from "../tools/test-groups.mjs";
 
 const NEWTAB = "src/shared/newtab/newtab.js";
@@ -75,4 +76,128 @@ test("1.33.0.26 bookmark drag regression is covered by New Tab, security, browse
     const files = testFilesForGroup(group).map(file => file.replaceAll("\\", "/"));
     assert.ok(files.includes("tests/corrective-133026.test.mjs"), `${group} must include corrective-133026.test.mjs`);
   }
+});
+
+function extractRuntimeFunction(source, name) {
+  let start = source.indexOf(`async function ${name}`);
+  if (start < 0) start = source.indexOf(`function ${name}`);
+  assert.ok(start >= 0, `missing ${name}`);
+  const openParen = source.indexOf("(", start);
+  let parenDepth = 0;
+  let paramQuote = "", paramEscaped = false;
+  let closeParen = -1;
+  for (let i = openParen; i < source.length; i += 1) {
+    const c = source[i];
+    if (paramQuote) {
+      if (paramEscaped) { paramEscaped = false; continue; }
+      if (c === "\\") { paramEscaped = true; continue; }
+      if (c === paramQuote) paramQuote = "";
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") { paramQuote = c; continue; }
+    if (c === "(") parenDepth += 1;
+    else if (c === ")" && --parenDepth === 0) { closeParen = i; break; }
+  }
+  assert.ok(closeParen > openParen, `missing parameter boundary for ${name}`);
+  const brace = source.indexOf("{", closeParen);
+  let depth = 0, quote = "", escaped = false, lineComment = false, blockComment = false;
+  for (let i = brace; i < source.length; i += 1) {
+    const c = source[i], n = source[i + 1];
+    if (lineComment) { if (c === "\n") lineComment = false; continue; }
+    if (blockComment) { if (c === "*" && n === "/") { blockComment = false; i += 1; } continue; }
+    if (quote) {
+      if (escaped) { escaped = false; continue; }
+      if (c === "\\") { escaped = true; continue; }
+      if (c === quote) quote = "";
+      continue;
+    }
+    if (c === "/" && n === "/") { lineComment = true; i += 1; continue; }
+    if (c === "/" && n === "*") { blockComment = true; i += 1; continue; }
+    if (c === '"' || c === "'" || c === "`") { quote = c; continue; }
+    if (c === "{") depth += 1;
+    else if (c === "}" && --depth === 0) return source.slice(start, i + 1);
+  }
+  throw new Error(`unterminated ${name}`);
+}
+
+async function runBookmarkDrop({ shortcuts, position = null, targetId = "" }) {
+  const payloadFn = extractRuntimeFunction(newtab, "bookmarkDragPayloadFor");
+  const recordFn = extractRuntimeFunction(newtab, "bookmarkShortcutRecord");
+  const commitFn = extractRuntimeFunction(newtab, "commitBookmarkShortcutDrop");
+  let nextId = 0;
+  const calls = { save: 0, render: 0, hydrated: [] };
+  const context = {
+    drag: { title: "Example Bookmark", url: "https://www.example.com/path", committing: false, committed: false },
+    state: { shortcuts: structuredClone(shortcuts), settings: {}, updatedAt: 100 },
+    normalizeShortcutUrl(value) {
+      const url = new URL(String(value));
+      if (!/^https?:$/.test(url.protocol)) throw new Error("unsafe");
+      return url.href;
+    },
+    hostLabel(value) { return new URL(value).hostname.replace(/^www\./, ""); },
+    uid() { nextId += 1; return `new-${nextId}`; },
+    getTopLevelItem(id) { return context.state.shortcuts.find(item => item.id === id) || null; },
+    nextMutationTime(...values) {
+      const flat = values.flat(Infinity).map(Number).filter(Number.isFinite);
+      return Math.max(100, ...flat) + 1;
+    },
+    async saveState() { calls.save += 1; },
+    render() { calls.render += 1; },
+    document: { querySelector() { return null; } },
+    CSS: { escape(value) { return String(value); } },
+    folderPopover: { hidden: true },
+    openFolder() {},
+    showToast() {},
+    t(key) { return key; },
+    requestMissingSiteIcons(ids) { calls.hydrated.push(...ids); },
+    visibleTopLevelCapacity() { return 24; },
+    shortcutOrderMode: "manual",
+    setTimeout() { return 0; },
+    console
+  };
+  vm.createContext(context);
+  vm.runInContext(`let bookmarkDrag = this.drag; const shortcutOrderMode = this.shortcutOrderMode; ${payloadFn}; ${recordFn}; ${commitFn}; this.commitForTest = commitBookmarkShortcutDrop;`, context);
+  const committed = await context.commitForTest({ position, targetId });
+  return { committed, state: context.state, calls };
+}
+
+test("1.33.0.29 bookmark drag behavior creates a real shortcut in an empty tile", async () => {
+  const result = await runBookmarkDrop({ shortcuts: [], position: 3 });
+  assert.equal(result.committed, true);
+  assert.equal(result.state.shortcuts.length, 1);
+  const shortcut = result.state.shortcuts[0];
+  assert.equal(shortcut.type, "shortcut");
+  assert.equal(shortcut.title, "Example Bookmark");
+  assert.equal(shortcut.url, "https://www.example.com/path");
+  assert.equal(shortcut.position, 3);
+  assert.equal(result.calls.save, 1);
+  assert.deepEqual(result.calls.hydrated, [shortcut.id]);
+});
+
+test("1.33.0.29 bookmark drag behavior appends the converted shortcut to an existing folder", async () => {
+  const folder = { type: "folder", id: "folder-1", title: "Folder", position: 0, modifiedAt: 90, items: [] };
+  const result = await runBookmarkDrop({ shortcuts: [folder], targetId: "folder-1" });
+  assert.equal(result.committed, true);
+  const updated = result.state.shortcuts[0];
+  assert.equal(updated.type, "folder");
+  assert.equal(updated.items.length, 1);
+  assert.equal(updated.items[0].title, "Example Bookmark");
+  assert.equal(updated.items[0].position, 0);
+  assert.equal(result.calls.save, 1);
+});
+
+test("1.33.0.29 bookmark drag behavior turns an occupied shortcut into a two-item folder without overwriting it", async () => {
+  const existing = { type: "shortcut", id: "old", title: "Existing", url: "https://old.test/", position: 4, modifiedAt: 90 };
+  const result = await runBookmarkDrop({ shortcuts: [existing], targetId: "old" });
+  assert.equal(result.committed, true);
+  assert.equal(result.state.shortcuts.length, 1);
+  const folder = result.state.shortcuts[0];
+  assert.equal(folder.type, "folder");
+  assert.equal(folder.position, 4);
+  assert.equal(folder.items.length, 2);
+  assert.equal(folder.items[0].id, "old");
+  assert.equal(folder.items[0].position, 0);
+  assert.equal(folder.items[1].title, "Example Bookmark");
+  assert.equal(folder.items[1].position, 1);
+  assert.equal(result.calls.save, 1);
 });

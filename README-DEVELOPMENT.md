@@ -1,4 +1,10 @@
-Current release: 1.33.0.28
+Current release: 1.33.0.29
+
+## 1.33.0.29 — optional shortcut names and carried-forward test hardening
+
+1.33.0.29 is a narrow New Tab usability release over 1.33.0.28. The Add Shortcut form no longer marks the title input as required: the URL remains mandatory, and the existing save-boundary fallback (`shortcutTitle.value.trim() || hostLabel(url)`) supplies the normalized site host when the user leaves the name blank. New shortcut creation now focuses the mandatory URL field; editing an existing shortcut keeps the established name-first focus. No persisted schema, Sync/Recovery wire format, permission, CSP, browser floor, artwork policy or storage authority changes. Permanent feature protection: `tests/feature-133029.test.mjs`.
+
+The release also carries forward the two test-only hardening items from the independent 1.33.0.28 adversarial audit. `tests/corrective-133028.test.mjs` now directly executes manual Recovery cleanup against torn/fallback-assisted generations, and `tests/corrective-133026.test.mjs` now executes the real bookmark drop mutation logic for empty-tile, existing-folder and occupied-shortcut→folder cases instead of relying only on source-shape assertions. Production behavior for both subsystems is unchanged.
 
 ## 1.33.0.28 — independent Recovery retirement authority corrective
 
