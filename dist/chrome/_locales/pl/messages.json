@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Prywatna strona nowej karty Chrome z folderami, personalizacją i opcjonalnym Chrome Sync. Zero telemetrii MosaicSync."
-  },
-  "actionOpenHome": {
-    "message": "Otwórz MosaicSync"
-  }
-}

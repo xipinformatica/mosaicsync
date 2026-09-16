@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Adatvédelem-központú újlap a Firefoxhoz mappákkal, testreszabható elrendezéssel és választható Firefox Synckel. A MosaicSync nulla telemetriát használ."
-  },
-  "actionOpenHome": {
-    "message": "MosaicSync megnyitása"
-  }
-}

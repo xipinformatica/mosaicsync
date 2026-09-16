@@ -1,8 +1,0 @@
-{
-  "extensionDescription": {
-    "message": "Nová karta Firefoxu zameraná na súkromie s priečinkami, vlastným vzhľadom a voliteľnou synchronizáciou Firefox Sync. Žiadna telemetria MosaicSync."
-  },
-  "actionOpenHome": {
-    "message": "Otvoriť MosaicSync"
-  }
-}
