@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Pestanya nova del Firefox centrada en la privadesa, amb carpetes, personalització i Firefox Sync opcional. Zero telemetria de MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Obre MosaicSync"
+  }
+}

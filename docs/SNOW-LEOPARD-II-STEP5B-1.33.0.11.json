@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.11",
+  "purpose": "Snow Leopard II Step 5B routine Sync-watch maintenance-gate evidence; no product telemetry",
+  "baselineVersion": "1.33.0.10",
+  "measuredPath": "established Sync-on five-minute SYNC_WATCH_ALARM",
+  "optimization": {
+    "avoidedWork": "one storage.local metadata read when alarm-entry metadata proves 24-hour device-snapshot GC is not due",
+    "preservedFreshnessBoundary": "when GC can be due, readLocalMeta() still runs immediately before maybeGarbageCollectStaleDeviceSnapshots(); GC keeps its own full Sync read and pre-delete revalidation"
+  },
+  "redBeforeGreen": {
+    "untouched133010": {
+      "tests": 4,
+      "passed": 2,
+      "failed": 2
+    },
+    "implemented133011": {
+      "tests": 4,
+      "passed": 4,
+      "failed": 0
+    }
+  },
+  "runtimeCensus": {
+    "firefox": {
+      "routine133010": {
+        "localReads": 7,
+        "fullSyncReads": 2
+      },
+      "routine133011": {
+        "localReads": 6,
+        "fullSyncReads": 2
+      },
+      "gcDue133010": {
+        "localReads": 8,
+        "fullSyncReads": 3
+      },
+      "gcDue133011": {
+        "localReads": 8,
+        "fullSyncReads": 3
+      }
+    },
+    "chrome": {
+      "routine133010": {
+        "localReads": 7,
+        "fullSyncReads": 2
+      },
+      "routine133011": {
+        "localReads": 6,
+        "fullSyncReads": 2
+      },
+      "gcDue133010": {
+        "localReads": 8,
+        "fullSyncReads": 3
+      },
+      "gcDue133011": {
+        "localReads": 8,
+        "fullSyncReads": 3
+      }
+    }
+  },
+  "correctnessBoundaries": [
+    "alarm still runs catastrophic-loss detection and reconciliation before the maintenance gate",
+    "alarm-entry metadata is used only to prove the negative not-due case",
+    "GC-due path re-reads current local metadata immediately before maintenance",
+    "device-snapshot GC retains fresh storage.sync.get(null) and pre-delete Sync revalidation",
+    "durable pending Sync journals, Recovery authority, schemas and wire formats are unchanged"
+  ]
+}

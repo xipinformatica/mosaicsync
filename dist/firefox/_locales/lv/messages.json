@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Uz privātumu orientēta Firefox jaunās cilnes lapa ar mapēm, pielāgojamu izkārtojumu un izvēles Firefox Sync. MosaicSync neizmanto telemetriju."
+  },
+  "actionOpenHome": {
+    "message": "Atvērt MosaicSync"
+  }
+}

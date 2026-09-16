@@ -1,0 +1,1202 @@
+Current release: 1.33.0.29
+
+## 1.33.0.29 — optional shortcut names and carried-forward test hardening
+
+1.33.0.29 is a narrow New Tab usability release over 1.33.0.28. The Add Shortcut form no longer marks the title input as required: the URL remains mandatory, and the existing save-boundary fallback (`shortcutTitle.value.trim() || hostLabel(url)`) supplies the normalized site host when the user leaves the name blank. New shortcut creation now focuses the mandatory URL field; editing an existing shortcut keeps the established name-first focus. No persisted schema, Sync/Recovery wire format, permission, CSP, browser floor, artwork policy or storage authority changes. Permanent feature protection: `tests/feature-133029.test.mjs`.
+
+The release also carries forward the two test-only hardening items from the independent 1.33.0.28 adversarial audit. `tests/corrective-133028.test.mjs` now directly executes manual Recovery cleanup against torn/fallback-assisted generations, and `tests/corrective-133026.test.mjs` now executes the real bookmark drop mutation logic for empty-tile, existing-folder and occupied-shortcut→folder cases instead of relying only on source-shape assertions. Production behavior for both subsystems is unchanged.
+
+## 1.33.0.28 — independent Recovery retirement authority corrective
+
+1.33.0.28 closes a narrow Recovery safety gap exposed while auditing the 1.33.0.27 emergency quota path. Routine pre-publication capacity planning now derives retirement candidates through the same `verifiedProfileDeviceSnapshotDescriptors()` classifier used by emergency quota reclaim and ordinary superseded-generation pruning. A fallback-assisted/torn generation (`usedPreviousGeneration === true`) may remain readable Recovery material, but it can never authorize retiring the independently valid predecessor it depends on. With three generations, an older root remains safely retirable whenever another independent fallback survives. The 1.33.0.27 emergency retry state machine, two-generation retention policy, remote cleanup authority, schemas and Sync wire format are unchanged. Permanent protection: `tests/corrective-133028.test.mjs`.
+
+## 1.33.0.27 — bounded self-only Recovery quota retry
+
+1.33.0.27 keeps the existing two-generation Recovery retention policy and all cross-device cleanup authority unchanged. If a prepared immutable Recovery publication passes MosaicSync's normal capacity planning but the browser still rejects the commit with a real quota error, the background takes a fresh namespace view and may reclaim at most one older independently verified generation belonging to the acting device. The candidate is frozen, re-read/revalidated immediately before deletion, must leave another independent own fallback, and is rejected if the remaining fallback is torn/previous-generation-assisted or if MosaicSync's own accounting still says the exact prepared publication cannot fit. Only after successful reclaim is the **same** prepared publication object retried, exactly once. A failed/unsafe reclaim returns the original quota outcome; a second quota rejection stops; a generic retry error follows the existing error path. Remote Recovery, retention timing, schemas and pending Sync journals are untouched. Permanent protection: `tests/corrective-133027.test.mjs`.
+
+The root `README.md` is also intentionally shortened in this release: product overview, privacy, support, build instructions and documentation links stay there, while chronological engineering detail remains in this file and `CHANGELOG.md`.
+
+## 1.33.0.26 — Browser bookmark drag-to-shortcut
+
+1.33.0.26 adds one explicit bridge from the browser-owned Bookmarks reader into MosaicSync: dragging an HTTP(S) bookmark closes the modal after native drag start and lets the user drop it onto the launcher. Empty slots preserve the chosen Manual position; dropping onto an existing folder appends a normal shortcut there; dropping onto an occupied shortcut creates a folder so no existing shortcut is overwritten. Cancelling or dropping outside a valid target performs no state mutation. The browser bookmark itself remains unchanged, and learned favicon pixels continue to use MosaicSync's device-local artwork path. No permission, persisted schema, Sync/Recovery wire format or browser-floor change is introduced. Permanent protection: `tests/corrective-133026.test.mjs`.
+
+## 1.33.0.25 — first-paint parity contract unification
+
+1.33.0.25 intentionally changes no MosaicSync runtime behavior. It closes the final test-contract drift gap found after the 1.33.0.24 review: first-paint ownership completeness and first-paint value equality now consume one shared test-only geometry ownership declaration. A property classified as `PARITY_REQUIRED` is therefore automatically enrolled in the real bootstrap-versus-authoritative value comparison; there is no second independently maintained geometry list that can forget it. Reserved test-only mutation probe names avoid collisions with future production CSS variables, and a permanent regression proves that a fully classified property with divergent formulas is rejected. Production New Tab, Sync, Recovery, storage, permissions, schemas and privacy behavior remain unchanged. Permanent protection: `tests/helpers/first-paint-geometry-contract.mjs` and `tests/corrective-133025.test.mjs`.
+
+## 1.33.0.24 — first-paint ownership-completeness hardening
+
+1.33.0.24 intentionally changes no MosaicSync runtime behavior. It closes the remaining test-contract gap identified after the 1.33.0.23 review: the parity regression no longer protects only a hardcoded list of known geometry variables. A new completeness meta-contract executes the real authoritative `applySettings()` geometry owner and the real synchronous bootstrap across the established tile-size/column matrix, requires every observed authoritative geometry property to belong to exactly one ownership class, requires every bootstrap-written geometry property to be parity-owned, and mutation-tests both directions so a future authoritative-only or bootstrap-only property fails until explicitly classified. Production New Tab, Sync, Recovery, storage, permissions, schemas and privacy behavior remain unchanged. Permanent protection: `tests/corrective-133024.test.mjs`.
+
+
+## 1.33.0.23 — positive-only Sync liveness probe and first-paint parity hardening
+
+1.33.0.23 keeps the 1.33.0.22 product behavior and narrows one recurring background read. When catastrophic-loss continuity is healthy, the first liveness check now asks only for reset intent plus the fixed Personal/Work settings/dataset keys. A positive fixed-key live-core result proves the namespace is alive and skips that one full `storage.sync.get(null)` materialization. A negative/empty probe is deliberately inconclusive because dynamic item keys may be the only delivered live signal; targeted-read failure is likewise optimization-only. Both cases fall through to the existing two independent full negative confirmations before quarantine. Normal authoritative reconciliation still performs its complete Sync read and Recovery validation/self-heal exactly as before.
+
+The release also closes the structural first-paint test blind spot exposed by the .21 artwork and .22 folder-geometry corrections. `tests/corrective-133023.test.mjs` executes the real synchronous bootstrap and the real authoritative `applySettings()` geometry owner at multiple tile sizes/column counts, and separately asserts the semantic artwork states shared across bootstrap/authoritative handoff. The historical Snow Leopard II storage snapshots remain frozen; their live-reproduction tests now explicitly recognize this separately-proven positive-only optimization instead of treating the old full-read count as immutable forever.
+
+## 1.33.0.22 — folder first-frame geometry and child-editor context corrective
+
+1.33.0.22 keeps the 1.33.0.21 rendering/defaults/documentation baseline and makes two narrow New Tab corrections. The classic synchronous bootstrap now computes the folder mosaic and folder-item CSS geometry from the saved tile size with the same formulas as authoritative `applySettings()`, so non-default tile sizes do not first paint folder mini-icons at the 76px reference geometry and then resize them. Editing a child shortcut no longer destroys the open folder context; the native Shortcut Editor overlays the folder, the document outside-click handler ignores pointer activity while that dialog is open, and the existing `render()` preservation logic refreshes/repositions a surviving folder after Save while naturally closing it if delete/move dissolves the folder. Permanent protection: `tests/corrective-133022.test.mjs`.
+
+## 1.33.0.21 — New Tab first-frame polish, fresh-install defaults and Developer Guide normalization
+
+1.33.0.21 keeps the 1.33.0.20 Sync/Recovery correctness baseline unchanged and makes four scoped maintenance/UI changes. Session render snapshots that explicitly mark known artwork as `imageDeferred` no longer render a transient fallback letter; successful device-local favicon/site-artwork hydration uses the existing preview-aware render-manifest refresh instead of racing the ordinary writer, improving repeat New Tab handoff without blocking first paint. Fresh installations now enable per-appearance built-in wallpaper defaults (`solarDrift` for Light, `blueglow` for Dark) while existing stored settings continue to normalize from their own persisted values. The Add/Edit Shortcut no-color swatch replaces its font `×` with a CSS-drawn centered cross. Finally, `DEVELOPER-GUIDE.md` is converted from an accumulated release ledger into an evergreen current-state developer manual: still-valid release-era invariants are integrated by subsystem and chronological history remains in this file, `CHANGELOG.md`, ADRs and the regression catalogue. Permanent protection: `tests/corrective-133021.test.mjs`.
+
+## 1.33.0.20 — live-completeness Recovery/error-lifecycle corrective
+
+1.33.0.20 is a narrow post-audit corrective over 1.33.0.19 and does not reopen Snow Leopard II. The 1.33.0.19 unchanged-reconcile side effects now distinguish fallback-assisted profile completeness from authoritative live completeness: missing-own-Recovery self-heal and stale non-quota Sync-error clearing require both live Personal and Work ledgers to validate. Torn Personal or Work delivery therefore keeps the generic error and does not manufacture a new Recovery generation; when the missing live ledger arrives, the same no-op reconcile converges by repairing Recovery and clearing the stale error. Regression coverage also proves frozen Recovery cleanup targets cannot expand to post-plan generations, survivor-publication failure aborts destructive cleanup, network-learned artwork remains device-local, and different-intent Shortcut Editor rapid opens have one owner. Permanent protection: `tests/corrective-133020.test.mjs`.
+
+## 1.33.0.19 — post-Snow-Leopard-II correctness corrective
+
+1.33.0.19 introduced the distributed post-plan Recovery survivor protocol, unchanged-state Recovery self-heal, Shortcut Editor rapid-open serialization and stale non-quota error clearing. Its later unknown-unknowns audit found that the last two unchanged-reconcile side effects used fallback-assisted completeness where authoritative live completeness was required; 1.33.0.20 narrows those predicates without changing the underlying Sync or Recovery formats. Permanent historical protection remains in `tests/corrective-133019.test.mjs`. Snow Leopard II remains complete/frozen at 1.33.0.18.
+
+## 1.33.0.18 — Snow Leopard II Step 8: final freeze
+
+1.33.0.18 is the Snow Leopard II freeze endpoint. It makes no further performance optimization. The final adversarial audit closes two pre-existing low-severity same-session dialog reentrancy races: rapid concurrent Bookmarks opens and rapid concurrent Wallpaper Gallery opens now re-check native dialog ownership immediately before `showModal()`, so a superseded same-session open attempt returns instead of throwing `InvalidStateError`. Step 8 also adds a runtime execution regression for the Step-7 `builtin-icons.js` ownership contract, proving the second evaluation is a true no-op and the installed global API is immutable. Sync, Recovery, journals, storage authority, schemas, permissions and privacy boundaries are unchanged. Permanent protection: `tests/optimization-133018.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP8-1.33.0.18.json`. **Snow Leopard II is COMPLETE at 1.33.0.18.**
+
+## 1.33.0.17 — Snow Leopard II Step 7: runtime-loading/dead-work closure
+
+1.33.0.17 removes one proven duplicate startup edge and then stops. `builtin-icons.js` remains the classic parser-time glyph owner required by `render-bootstrap.js`, but `newtab.js` no longer also imports the same idempotent file into the static ES-module graph. Critical-path census moves **23→22 modules / 644,249→640,098 raw bytes** while classic bootstrap work stays **9 scripts / 28,892 bytes**. Reachability remains 0/0/0 for high-confidence unreachable shared modules, unused named imports and unreferenced private functions. Defensive/reference exports and explicit test hooks remain intentionally retained. Permanent protection: `tests/optimization-133017.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP7-1.33.0.17.json`. Step 7 is DONE; Step 8 final freeze/adversarial audit is next.
+
+## 1.33.0.16 — Snow Leopard II Step 6D: folder-popover closed-payload release
+
+1.33.0.16 closes Step 6 with one final demonstrated closed-UI retention case. `closeFolder()` now releases the generated folder-item controls and their per-item click/drag/context-menu listener closures while preserving the reusable popover shell and authoritative folder data. A 40-item fixture moves 40 retained generated item roots after close to 0 across 50 repeated cycles, including already-hidden idempotent close. `openFolder()` still rebuilds synchronously before display, deferred folder artwork hydration already revalidates active-folder/hidden ownership, and cross-Space drag preserves its source element before closing the popover. Permanent protection: `tests/optimization-133016.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6D-1.33.0.16.json`. Step 6 is DONE; Step 7 runtime loading/dead work is next.
+
+## 1.33.0.15 — Snow Leopard II Step 6C: async dialog-session ownership corrective
+
+1.33.0.15 closes the close→reopen ABA gap found independently in Recovery Copies and reproduced in Bookmarks. Recovery and Bookmarks async work now belongs to a specific dialog-open generation; superseded responses cannot populate a later session. Recovery cleanup itself is not cancelled and remains background-owned/freshly revalidated. Permanent protection: `tests/optimization-133015.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6C-1.33.0.15.json`. Step 6 remains in progress.
+
+
+## 1.33.0.14 — Snow Leopard II Step 6B: Recovery-manager closed-payload release
+
+1.33.0.14 continues Step 6 with a second demonstrated closed-UI retention case. The Recovery Copies manager now clears its generated device/generation list on dialog close, and late model/cleanup responses cannot rebuild hidden controls after close. A deterministic 120-node fixture moves 120 retained dynamic nodes after close to 0 across 50 cycles. Background Recovery cleanup eligibility/revalidation is unchanged. Permanent protection: `tests/optimization-133014.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6B-1.33.0.14.json`. Step 6 remains in progress.
+
+## 1.33.0.13 — Snow Leopard II Step 6A: closed Wallpaper Gallery payload release
+
+1.33.0.13 begins Step 6 lifetime/memory work with one demonstrated closed-UI retention case. The lazy Wallpaper Gallery shell remains mounted after first use, but its generated choice grid is now cleared on the native dialog `close` event. A 30-choice fixture moves 90 retained dynamic elements after close to 0, and 50 repeated cycles return to the same shell-only state. Reopen still renders the grid synchronously before `showModal()`. Permanent protection: `tests/optimization-133013.test.mjs`; frozen evidence: `docs/SNOW-LEOPARD-II-STEP6A-1.33.0.13.json`. Step 6 remains in progress.
+
+## 1.33.0.12 — Snow Leopard II Step 5C: queue-owned continuity snapshot reuse
+
+1.33.0.12 closes Step 5. The serialized background queue now carries the exact durable Sync-continuity snapshot it already read through the same reconciliation turn, avoiding a second `storage.local` read before the healthy continuity transition. Routine alarms move 6→5 local reads, GC-due alarms 8→7 while keeping their fresh pre-cleanup metadata read, and established Sync-on startup 13→11. Full Sync reads and continuity writes are unchanged. `LOCAL_SYNC_CONTINUITY_KEY` remains background-only single-writer state. Permanent protection: `tests/optimization-133012.test.mjs`. Step 6 lifetime/memory analysis is next.
+
+## 1.33.0.11 — Snow Leopard II Step 5B: routine alarm metadata gate
+
+1.33.0.11 makes the first Step-5 production optimization. The five-minute Sync-watch alarm no longer re-reads `storage.local` merely to discover that 24-hour device-snapshot GC is not due. The metadata captured at alarm entry is used only for this negative maintenance gate; when GC can be due, the historical fresh `readLocalMeta()` remains immediately before `maybeGarbageCollectStaleDeviceSnapshots()`. Routine deterministic alarm cost falls from 7 to 6 local reads with Sync reads unchanged at 2; the GC-due control remains 8 local reads / 3 full Sync reads. Permanent protection: `tests/optimization-133011.test.mjs`.
+
+## 1.33.0.10 — Snow Leopard II Step 5A: storage/background census
+
+1.33.0.10 begins Step 5 as a measurement-only release. It adds a local developer census for direct extension-storage calls, background worker wake/listener topology and deterministic cold-worker startup/Sync-watch storage counts in both generated browsers. The snapshot records 117 direct storage API call sites and shows 0 full Sync reads on an established Sync-off startup, 2 on an established Sync-on startup and 3 on a Sync-watch alarm. No production storage read is removed because the adjacent reads currently cross distinct freshness, durable-journal, catastrophic-loss or destructive-cleanup boundaries.
+
+## 1.33.0.9 — Snow Leopard II Step 4C: Frequently Visited reconciliation frugality
+
+1.33.0.9 closes Step 4. The delayed startup permission reconciliation remains, but after a fully verified live Frequently Visited refresh it performs only the required Top Sites permission recheck instead of rebuilding the same cached cards, favicon decode work and session projection. Failed/unverified starts and missing permission still take the full recovery path. No Sync/Recovery/storage-authority, permission, privacy or format changes.
+
+## 1.33.0.8 — Snow Leopard II Step 4B: effective-only destination background readiness
+
+1.33.0.8 narrows destination-Space image warming again: hover/focus/drag/keyboard intent and the correctness-owned Space-switch preload now resolve only the background that can actually be painted under the current effective Light/Dark appearance. The active Space keeps its broader post-paint alternate-theme warm for later appearance continuity. No Sync/Recovery/storage-authority behavior changes.
+
+
+## 1.33.0.7 — Snow Leopard II Step 4A: intent-driven inactive-Space background warming
+
+1.33.0.7 closes Step 3 after the Wallpaper Gallery and Bookmarks extractions and begins Step 4. Inactive-Space backgrounds are no longer decoded automatically from broad New Tab lifecycle paths. A destination background is warmed only when pointer/focus/drag/keyboard intent indicates a likely Space switch; the actual switch path still awaits destination readiness before visual commit. Active-Space post-paint warming and every Sync/Recovery/storage authority boundary remain unchanged.
+
+## 1.33.0.6 — Snow Leopard II Step 3B: lazy Bookmarks UI
+
+1.33.0.6 moves the Bookmarks dialog shell and dedicated Bookmarks controller out of ordinary New Tab startup. The persistent launcher button owns only the first-use dynamic loader; after activation, the existing controller resumes its historical UI ownership and `core/bookmarks.js` remains lazy. The measured structural result versus 1.33.0.5 is 631→598 initial live elements, 523→490 secondary elements, 198→186 eager ID bindings, and 24→23 static modules / 655,718→640,462 raw static-module bytes. The safe programmatic shell adds a small deferred package payload; Step 3 optimizes startup work rather than archive size.
+
+## 1.33.0.5 — Snow Leopard II Step 3A process hardening
+
+1.33.0.5 is the process-only follow-up requested as ".4.1"; Chromium requires a maximum of four numeric version components, so the valid unified identity advances to 1.33.0.5. The canonical 1.33.0.4 dynamic Wallpaper Gallery implementation is unchanged. Its regression file now belongs to focused Startup/New Tab certification, and the critical-path census masks raw script/style contents before structural DOM counting. Step 3 remains in progress.
+
+## 1.33.0.4 — Snow Leopard II Step 3A: lazy Wallpaper Gallery pilot
+
+1.33.0.4 begins Step 3 with the smallest Settings-owned dialog boundary. The Wallpaper Gallery shell moves out of initial HTML and eager ID binding into a dynamically imported constructor used only on first open. The lazy opener carries the Settings ownership generation across style/module preparation so a close/reopen cannot resurrect stale child UI. Initial live DOM drops from 642 to 631 elements and eager ID bindings from 200 to 198. This is a pilot pattern, not the completion of Step 3.
+
+## 1.33.0.3 — Snow Leopard II Step 2: state computation and serialization
+
+1.33.0.3 removes two measured duplicate-defensive costs without weakening trust boundaries. Authoritative compact `storage.local` payloads are cloned directly into optimistic-write baselines instead of normalize+projection reconstruction, and already-normalized intended state is carried through Settings-clock stamping in persistence, background Sync and optimistic rebase. Raw/public inputs remain defensively normalized. Step 3 now moves to secondary Settings/dialog DOM and eager wiring.
+
+## 1.33.0.2 — Snow Leopard II Step 1: New Tab critical-path census
+
+1.33.0.2 completes Step 1 without changing launcher semantics. `npm run perf:critical-path` now inventories parser-time bootstraps, the static New Tab module closure, already-deferred dynamic modules, initial DOM ownership and eager ID bindings; `docs/SNOW-LEOPARD-II-CENSUS-1.33.0.2.json` freezes the result. The runtime adds only finer local startup timing markers so future real-browser runs can separate shell localization, eager UI binding, module setup, session-cache readiness and authoritative local materialization. No telemetry, network reporting or extension-storage persistence is introduced.
+
+## 1.33.0.1 — Snow Leopard II Step 0: measurement foundation
+
+1.33.0.1 starts Snow Leopard II from frozen correctness baseline 1.32.1.8. This release intentionally changes no production optimization behavior. It adds `npm run perf:baseline`, machine-readable benchmark distributions, deterministic New Tab DOM/module/storage-call budgets and richer real-browser startup snapshots when compatible browser drivers are available. The immutable baseline is `docs/SNOW-LEOPARD-II-BASELINE-1.33.0.1.json`; the journey tracker is `docs/SNOW-LEOPARD-II.md`. Performance collection is local-only and is not product telemetry.
+
+## 1.32.1.8 — Settings child-dialog ownership corrective
+
+1.32.1.8 closes the final pre-Snow-Leopard-II correctness finding from the 1.32.1.5 unknown-unknowns audit. Custom Branding preparation crosses asynchronous stylesheet/module/device-local read boundaries; the request now carries the Settings ownership generation that launched it and is discarded if Settings closes before completion, even if a later Settings session has already reopened.
+
+The fix is presentation/lifecycle-only. Custom Branding remains device-local, and Normal Sync/Recovery data, algorithms, persisted schemas and wire formats are unchanged. Permanent `corrective-13218` regressions were proven red 3/3 on untouched 1.32.1.7.
+
+## 1.32.1.7 — logical mutation-clock safe-integer corrective
+
+1.32.1.7 closes the MEDIUM logical-clock defect found by the 1.32.1.5 unknown-unknowns audit. JavaScript `Number` values above the safe-integer range cannot provide a strict +1 logical clock (`1e20 + 1 === 1e20`), so an imported/corrupt timestamp could remain unchanged across later user mutations and distort deterministic conflict ordering.
+
+The model now defines one explicit logical-clock domain: non-negative safe integers. State/workspace/item/Settings normalization rejects non-safe clocks; Sync comparison/reconstruction does the same for remote records, including tombstone namespace-move ordering. `nextMutationTime()` ignores invalid observations and throws at the theoretical `Number.MAX_SAFE_INTEGER` exhaustion boundary rather than pretending to advance. No schema or wire-format change is required because valid clocks remain ordinary JSON numbers.
+
+Permanent coverage: `tests/corrective-13217.test.mjs` was red 4/4 on untouched 1.32.1.6 and covers persisted normalization, mutation advancement/exhaustion, Sync conflict ordering, and Sync reconstruction.
+
+## 1.32.1.6 — stale Space-hydration ownership corrective
+
+1.32.1.6 closes the HIGH concurrency defect found by the 1.32.1.5 unknown-unknowns audit. A normal Space switch or cross-Space drag preview could begin device-local asset hydration from state S0, receive a newer authoritative S1 state/storage baseline while awaiting, then resume and replace live state with the stale hydrated S0 result. The next user edit could therefore be persisted with S1 as its baseline even though the intended state was derived from S0, defeating the normal rebase trigger and deleting an unrelated concurrent change.
+
+Space hydration now remains local to the owning UI operation until both ownership and state generation are revalidated after every relevant await. If authoritative state changes, hydration retries from the current state. If the Space switch/drag preview is superseded or torn down, the stale result is abandoned. `tests/corrective-13216.test.mjs` permanently reproduces the scheduler interleaving and verifies that the concurrent shortcut survives the next save. Normal Sync/Recovery algorithms, schemas and wire formats are unchanged.
+
+## 1.32.1.5 — Settings child-dialog and Sync-status UI corrective
+
+1.32.1.5 is a narrow New Tab UI corrective over 1.32.1.4. It does not change Normal Sync/Recovery state, wire formats, profile format or permissions.
+
+- Sync status keeps dataset authorship and incoming receipt timing separate. Exact receipt provenance resolves to the synchronized friendly device name; collaborative/non-exact provenance uses a truthful multi-device label rather than an invented single sender.
+- Folder popovers no longer use the old fixed `305px` item-area ceiling. The panel is a bounded column flex layout and the item grid scrolls only when its real content exceeds the viewport-constrained available height.
+- Settings now has one child-dialog ownership predicate covering Wallpaper Gallery, Custom Branding and Recovery safety copies. Outside-click/Escape logic cannot close Settings behind one of those native child dialogs.
+- `tests/corrective-13215.test.mjs` permanently protects the three regressions, including every-locale collaborative Sync wording.
+
+## 1.32.1.4 — normalization fixed-point corrective
+
+1.32.1.4 closes a Sync-reachable normalization defect found by the independent unknown-unknowns/state-machine audit. When two valid top-level records arrived with the same position, `repairTopLevelPositionsWithinCapacity()` could assign the loser a lower free slot while returning the array in pre-repair order. A second normalization then reordered the array even though no user data changed. Ordinary two-device Sync can create this shape when different devices concurrently move different shortcuts into the same slot.
+
+The capacity-bounded repair now searches forward from a colliding valid position, wraps only when required, and sorts once by final assigned positions before returning. The repaired workspace is therefore canonical after the first pass, profile export/import is stable after collision repair, and the permanent suite includes a seeded collision-heavy fixed-point property plus a real record-level two-device merge reproduction.
+
+The fresh post-fix chaos audit also exposed a no-op rebase edge in `concurrency.js`: when a stale caller carried no workspace mutation, rebuilding that untouched workspace through Sync-record materialization could advance bookkeeping timestamps already implied by Settings group clocks. `rebaseWorkspace()` now returns the normalized latest workspace directly when base and intended workspace payloads are identical, so no-op intent cannot create a false local/Sync signature change. No Sync/Recovery wire-format, profile-format, schema, permission or browser-floor change is introduced.
+
+
+## 1.32.1.3 — adversarial correctness corrective
+
+1.32.1.3 closes the five confirmed defects from the 1.32.1.3 adversarial forensic audit without reopening Journey 3 or changing Normal Sync/Recovery formats. Top-level placement is capacity-aware across ordinary add, Frequently Visited insertion, cross-Space moves, folder ungrouping and live grid shrink; full destinations reject before mutation and normalization repairs legacy/imported positions into the visible grid when the record count fits.
+
+Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
+# MosaicSync development
+
+> **Current release: 1.33.0.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+
+Requires Node.js 22+.
+
+
+
+## 1.32.1.2 — localization semantic-completeness corrective
+
+1.32.1.2 closes the localization-audit gap exposed after 1.32.1.1. All 33 source UI catalogs now carry the same 473-key contract. The complete Recovery safety-copy manager and Custom Branding surfaces are contextually translated across all 32 non-English catalogs, and the previously hard-coded Recovery eyebrow `Sync storage` is promoted into the normal source-string catalog so runtime localization owns it.
+
+The corrective adds `tests/localization-integrity-13212.test.mjs`. It rejects unreviewed exact-English multi-word fallbacks in non-English catalogs, explicitly guards the Recovery/Custom Branding surfaces, and scans visible New Tab static text/labels for literals that bypass the localization catalog unless they are reviewed invariants. Legitimately identical or borrowed terms are documented as narrow exceptions instead of silently weakening the gate. No runtime feature logic, permissions, Sync/Recovery data model, profile format, persisted schema, browser floor, first-paint ownership or Custom Branding storage boundary changes.
+
+
+
+## 1.32.1.1 — Custom Branding identity-slot correction
+
+1.32.1.1 fixes the visual ownership error in the initial Custom Branding presentation. Custom branding no longer owns a separate absolute/centered launcher surface. `newtab.html` exposes IDs on the existing built-in brand mark/name and `newtab.js` switches those exact nodes between the MosaicSync identity and the user-provided identity. The existing `brandHelloButton` remains the sole Hello/mascot owner.
+
+The correction stays post-paint exactly like 1.32.1: visible branding first ensures the secondary stylesheet is available, then swaps the existing brand mark/name. Horizontal custom logos use bounded `max-width`/`max-height` rules with preserved aspect ratio. The centered Spaces selector, critical first-paint stylesheet, device-local branding schema, profile-v3 backup format, Sync/Recovery boundaries, permissions and browser floors are unchanged.
+
+
+
+
+## 1.32.1 — Custom Branding
+
+1.32.1 adds a deliberately narrow device-local branding domain: one optional PNG/JPEG/WebP logo and one exact text line. The domain is stored only in `storage.local`; it is not part of synchronized state, Sync clocks, pending journals, Recovery generations or automatic cross-device propagation. Profile format v3 explicitly embeds the branding record so export/import remains self-contained and browser-neutral, while v1/v2 profiles remain supported.
+
+New Tab reads branding only from post-paint maintenance and loads its presentation/editor CSS from the secondary stylesheet before making the branding surface visible. Settings validates/optimizes raster uploads to a bounded canonical copy. Normal profile import and Welcome source selection both treat branding transactionally with the authoritative local profile decision and roll it back if the corresponding local state commit fails. The built-in MosaicSync mascot/Hello effect remains independent and unchanged.
+
+## 1.32.0.10 — Recovery safety-copy storage management
+
+1.32.0.10 is a narrow post-freeze user feature motivated by Firefox Sync quota pressure. The normal Recovery retention policy remains conservative, but Settings now exposes a guarded manager for verified complete Recovery generations only. It can show copy size/date by device, delete one superseded generation, retire all superseded generations while keeping each device's newest complete copy, or remove an old device's whole Recovery set only when the current device still owns a verified complete fallback.
+
+Manual cleanup follows the existing Recovery ownership model rather than exposing raw Sync keys. `recovery-generation-lifecycle.js` plans eligibility from decoded verified complete generations. The privileged background reads Sync state, calculates bytes, and performs deletion through the existing expected-change-aware `removeSyncItems()` helper. Before any destructive action, the background takes a fresh full Sync view and calls `confirmedManualRecoveryCleanupKeys()`; eligibility loss cancels the action. Incomplete/torn/orphan generations are reported only as unmanaged Recovery usage and cannot be targeted manually.
+
+The New Tab manager is lazy: it loads only when the user opens **Manage** beside Recovery safety copies, so it adds no first-paint storage read, await, DOM work or browser API call. New Tab has no direct destructive `storage.sync` access. Live layout/settings, cumulative pending Sync mutations, cross-Space transaction journals, reset authority and device-local artwork are never part of manual Recovery cleanup.
+
+## 1.32.0.9 — cross-Space semantic intent / durable authority correction
+
+Cross-Space moves now follow the same ownership rule established for ordinary user mutations in 1.32.0.7: the New Tab page describes **what the user did**, while the persistence layer decides from fresh durable metadata **whether Sync protection is active**. Drag and shortcut-editor Space moves always construct a `crossSpaceSyncIntent`; `persistNormalizedState()` re-reads `LOCAL_META_KEY` inside the existing persistence lock and writes the dedicated per-move journal only when durable Sync is enabled and initialized. Never reintroduce cached `meta.syncEnabled` / `meta.syncInitialized` gating around cross-Space intent construction. This preserves destination-first crash recovery even when an open page briefly has stale Sync status, while the inverse stale-cache direction remains safe because durable Sync OFF discards the intent. No wire-format or journal-schema change.
+
+## 1.32.0.8 — Welcome source-candidate authority correction
+
+A complete persistence-intent audit found one older Welcome/setup authority gap after the 1.32.0.7 Sync-eligibility correction. When setup was rerun on an already-initialized Sync device, choosing Start empty, importing current Firefox shortcuts or importing a MosaicSync profile wrote that candidate immediately into authoritative `LOCAL_STATE_KEY` before the later “which copy should win?” decision. The background could therefore observe and publish that provisional layout before the user chose the synchronized copy. 1.32.0.8 keeps all three local starting-source candidates memory-only until source resolution. Local-only/no-remote flows commit immediately before completion/bootstrap; the conflict panel commits only when “Use this computer” wins; choosing the synchronized copy never commits the candidate. Imported device-local preferences are staged with the profile candidate and applied only when that candidate wins. No Sync journal, Recovery, schema, permission, first-paint or browser-floor contract changes.
+
+## 1.32.0.7 — Journey 3 final stale-meta Sync durability correction
+
+Independent adversarial audit found one residual first-Sync handoff window after 1.32.0.6's final bootstrap reread: durable Sync authority could already be initialized while an already-open New Tab still held stale cached meta and therefore suppressed cumulative pending-journal recording for a genuine user mutation. 1.32.0.7 makes the ownership contract explicit: New Tab persistence identifies whether a write is a user Sync-eligible mutation; the shared persistence transaction, under its existing write lock and fresh durable-meta reread, alone decides whether Normal Sync durability is active and therefore whether the mutation receives a pending journal. This avoids another inherently racy "last reread" in bootstrap and preserves deliberate non-Sync internal/device-local writes.
+
+The permanent regression injects the edit after bootstrap's post-initialization reread in both Firefox- and Chromium-shaped generated runtimes, proves the edit remains local, proves the already-running bootstrap does not pretend to publish it, and proves the exact newer pending journal survives for normal reconciliation. No feature, permission, schema, Sync/Recovery format, first-paint, or browser-floor change.
+
+## 1.32.0.6 — Journey 3 freeze-audit bootstrap concurrency correction
+
+The Step-7 freeze audit found two pre-existing Normal Sync bootstrap races, so the maintainability freeze remains conditional on this narrow corrective release. Remote bootstrap now participates in the existing baseline/rebase persistence contract and uses the actual committed rebased state for subsequent Sync publication. Local and remote bootstrap completion now acknowledge only the entry-time cumulative pending-journal `journalId`, so a newer replacement generation remains durable. Thirteen permanent regressions cover explicit Restore, automatic await-remote delivery, local authoritative publication and Firefox/Chromium generated-runtime parity. No ownership extraction, feature, schema, permission, Sync/Recovery wire-format or first-paint change is introduced.
+
+
+## 1.32.0.5 — Journey 3 Step 6 proven contract cleanup
+
+Step 6 does not introduce another ownership extraction. It removes only redundant glue left intentionally intact during the mechanical Step-5 Bookmarks move. The Bookmarks controller now keeps `open()` private to its own event wiring; `newtab.js` no longer performs the redundant post-paint bookmark-folder-color hydration call; and localized refresh no longer rebuilds the sidebar twice. Folder colors are still read and validated inside `loadBookmarksIntoDialog()` immediately before rendering the browser-owned bookmark tree.
+
+This cleanup removes one device-local `localStorage` read from every New Tab that never opens Bookmarks and one duplicate DOM rebuild during Bookmarks relocalization. It adds no first-paint await, browser API call, storage operation, network work, timer, serialization or Sync/Recovery dependency. Four permanent `contract-simplification-13205` regressions were proven red on untouched 1.32.0.4 before the cleanup. Runtime reachability remains clean, so the retained review-only exports from the earlier dead-code audit remain intentionally retained.
+
+
+## 1.32.0.4 — forensic Sync durability correction before Step 6
+
+The post-Step-5 forensic audit found a pre-existing concurrency gap in durable pending Normal Sync journal cleanup. A completed retry could read an older cumulative journal, yield while a New Tab atomically persisted newer local state + a newer journal, then remove the shared journal key and accidentally delete that newer retry authority. Combined authority cleanup could also remove one journal class before a second remove failed, and a stale New Tab could recreate pending authority around a Sync disable/reset transition.
+
+1.32.0.4 corrects the race without adding browser-storage I/O. `background/sync-pending-journal.js` now serializes journal writes/acknowledgements/authority cleanup with the existing `LOCAL_ASSET_WRITE_LOCK_NAME` cross-context persistence lock. Combined cross-Space + local-mutation cleanup uses one fail-closed `storage.local.remove([...keys])` call. Authority-changing callers keep their metadata commit inside the same serialized transition through the explicit already-held-lock `writeLocalMeta` path, avoiding a nested non-reentrant Web-Lock request. If that metadata commit fails after cleanup, the exact removed journals are restored before unlock; this compensation runs only on failure. `core/storage.js` adds `LOCAL_META_KEY` to the existing transaction read only when outbound journal creation is requested; if durable Sync authority became disabled or uninitialized while a stale tab waited, the user's local state still commits but no fresh outbound journal is created. Missing legacy/test meta retains the prior caller-directed behavior.
+
+Seven deterministic regressions reproduce the stale conditional clear, partial cleanup failure, queued authority-transition writer, stale local-mutation writer and stale cross-Space writer. They were proven red 7/7 on the vulnerable 1.32.0.3 candidate before the correction. This is a reliability fix, not another maintainability extraction; Step 6 remains paused until this release is certified.
+
+## 1.32.0.3 — 3rd Maintainability Journey, Step 5
+
+Step 5 chooses exactly one New Tab ownership boundary: the Bookmarks dialog UI lifecycle. `src/shared/newtab/bookmarks-controller.js` now owns bookmark-dialog mutable UI state, folder/search rendering, folder-color persistence/rendering, permission-dialog handling and bookmark-local listeners. `newtab.js` remains the orchestration root and still owns first-paint/startup, global menu coordination and the lazy `core/bookmarks.js` loader used by both the dialog and Frequently Visited's explicit “Add to bookmarks” action.
+
+The extraction must preserve startup behavior. `bookmarks-controller.js` is a static New Tab dependency, but it performs no top-level storage/network/browser work, adds no first-paint await and keeps the existing folder-color `localStorage` read in `schedulePostPaintMaintenance()`. The browser Bookmarks API is still dynamically imported only when needed. Ten dedicated Step-5 regressions, the full generated New Tab runtime smoke (now opening the Bookmarks dialog on both browser shapes), startup tests and explicit pre/post module-load measurements protect the boundary.
+
+## 1.32.0.2 — 3rd Maintainability Journey, Step 3
+
+Step 3 mechanically moves the safe background-side durable pending Sync journal storage owner into `src/shared/background/sync-pending-journal.js`. The module owns cross-Space journal validation/enumeration, background-side journal write/advance/clear, cumulative local-mutation journal read/clear, combined authority-transition cleanup and durable journal-key construction. It retains the 1.31.5 fail-closed rule: a failed `storage.local` read/remove remains an error and must never be interpreted as “no pending work.”
+
+Two responsibilities deliberately do **not** move. `src/shared/core/storage.js` still creates the initial cross-Space intent and cumulative local-mutation journal in the same `storage.local.set(...)` transaction as authoritative local state, preserving crash safety without an extra storage write. `background-core.js` still decides when to replay, publish, reconcile, mark Sync state or execute destination-first cross-Space phases. The new module must not use `storage.sync`, Recovery generation APIs, alarms/timers, network work or New Tab/DOM code. Nine dedicated Step-3 regressions freeze this ownership split in addition to the existing 1.31.5 fault-injection coverage.
+
+## 1.32.0.1 — 3rd Maintainability Journey, Step 2
+
+The 3rd Maintainability Journey begins with one mechanical ownership extraction only. `src/shared/background/sync-remote-observation.js` now owns the existing synchronous remote Sync observation/applied-state policy: dataset revision interpretation, remote receipt/provenance bookkeeping, applied Personal/Work/device revision markers and latest Personal/Work origin selection. `background-core.js` remains the sole effectful orchestrator for storage, publication, reconciliation, Recovery, durable journals, alarms, diagnostics and mutation ordering. The extracted module must remain browser-neutral and synchronous; no new storage/network work, Promise layer, startup/first-paint dependency, schema, permission or wire-format change is allowed. Eight dedicated ownership/behavior regressions freeze this boundary.
+
+## 1.31.5 durable Sync-journal fail-closed hardening
+
+1.31.5 closes a fault-boundary hole in the durable outbound Sync journals. A failed `storage.local` read is no longer converted to an empty cross-Space journal list or a `null` local-mutation journal, because inability to read durable retry authority is not evidence that no pending transaction exists. New publication therefore stops rather than bypassing unknown durable work. Cleanup of both journals is also fail-closed: Sync disable/reset-style authority transitions proceed only after journal reads/removals succeed, while a failed cleanup leaves the prior Sync authority intact so the user/browser can retry once storage recovers. The wire format, journal schema, normal successful publication ordering and Recovery architecture are unchanged.
+
+## 1.31.4 localization-safe separate wallpaper dim controls
+
+1.31.4 fixes a Settings layout defect exposed by long translations in the separate Light/Dark wallpaper controls. The darkness label previously shared one horizontal grid row with its slider and percentage, so unbreakable compound words such as German `Hintergrundabdunklung` could force the row wider than its half-card and visually overlap the neighbouring control. The label now spans a dedicated full-width row, with slider and percentage beneath it, and may wrap safely. The correction changes no wording, wallpaper behavior or persisted settings and is covered across all 33 shipped runtime locale catalogs.
+
+## 1.31.3 synchronized Frequently Visited permission handoff + fresh-grid defaults
+
+1.31.3 closes the first-run gap where Firefox Sync could correctly restore `frequentlyVisitedEnabled:true` on a new device while the device-local optional Top Sites permission was still absent. If a complete synchronized copy is already available when the user chooses it in Welcome, that same user gesture starts the optional permission request immediately. If the synchronized ON intent becomes authoritative only after the gesture has expired, Welcome/New Tab presents a one-time localized permission step; choosing Continue leaves the synchronized preference ON and the established inline Grant-permission recovery action remains available. The browser permission and all history-derived site candidates remain device-local and are never synchronized.
+
+Fresh/default profiles now start at 11 columns × 4 rows. Existing profiles keep their explicitly saved grid settings, and the existing user-selectable 6–12 column / 2–8 row bounds are unchanged. The critical CSS fallback is also 11 columns so a fresh profile does not first-paint with the former 8-column geometry before authoritative settings load.
+
+## 1.31.2 developer-handoff documentation
+
+1.31.2 keeps the 1.31.1 runtime frozen and adds no production behavior. The repository now includes root-level `DEVELOPER-GUIDE.md`, linked prominently from `README.md`, as the onboarding path for a developer or automated code reviewer seeing MosaicSync for the first time. The guide maps canonical source ownership, First Paint and non-authoritative startup projections, Normal Sync, intentional reset, tombstones, Restore, Recovery, browser adapters, artwork/privacy boundaries, MV3 concurrency, build/test/smoke/certification/package workflows, frozen-architecture warnings and the exact files to inspect for common maintenance tasks. Only release/version identity surfaces change in runtime files; permissions, CSP, schemas, Sync/Recovery wire formats, browser floors and product behavior remain identical to 1.31.1.
+
+## 1.31.1 post-audit corrective hardening
+
+1.31.1 is a narrow correction to the 1.31.0 freeze candidate. It closes four reproduced audit findings without reopening the five-step architecture program: reset-intent authority is checked before uninitialized bootstrap; coherent Restore source choice preserves relevant live deletion tombstones; quota staging and catastrophic-Recovery now share the same live-core evidence predicate; and abandoned remote-image requests are cancelled/aborted on terminal failure. The release adds generated Firefox/Chromium regressions for all three Sync/Restore failures plus direct resource-cancellation coverage. No feature, permission, CSP, schema, wire-format, adapter topology or browser-floor change is allowed in this correction.
+
+## 1.31.0 post-audit quality corrections
+
+- Intentional Sync reset is sentinel-first without requiring free quota: the orchestrator removes only enough old items to create capacity while retaining at least one old item, commits and verifies reset-intent, then removes every old key. If the browser stops or rejects the sentinel, the namespace cannot be empty and the initiating device remains unable to republish automatically.
+- Restore still chooses one coherent Personal+Work source. Divergent modern live ledgers remain preferred unless a complete atomic profile and both live ledgers have the same non-empty publisher and the atomic copy is at least as new in both Spaces and strictly newer in one. Cross-publisher, missing-clock and straddling cases remain conservative.
+- Remote image downloads have a 12-second abort boundary and stream-enforced 1 MB input cap before image decoding. Declared oversize responses fail before reading; undeclared oversize streams are cancelled as soon as the cap is crossed.
+- Deterministic package bytes are written to a sibling temporary file, validated, and atomically replace the final ZIP. A failed build leaves any previous final-named artifact intact and removes its temporary file.
+- The generated Firefox and Chromium New Tab harness executes the real Fit → Fill → Fit preview transition. No feature, permission, CSP, persisted schema or Sync/Recovery wire-format change is introduced.
+
+## 1.30.18.46 universal live image-style preview correction
+
+- The shortcut editor’s Image-style `change` event and `cover` class remain the existing live preview mechanism; no Save/persist path is added to selection changes.
+- One universal `#shortcutDialog .image-preview.cover > img` rule now appears after every responsive dialog image-size rule and has greater specificity than the contain-size selectors. Cover therefore renders 100% × 100% with `object-fit: cover` on normal desktop, short laptop and narrow layouts.
+- Removing the `cover` class immediately falls back to the existing responsive contain dimensions. The 1.30.18.45 folder-density correction and every Sync/Recovery/runtime contract remain unchanged.
+
+## 1.30.18.45 folder density + live image-style preview correction
+
+- Folder popover tiles move upward by reducing only stacked vertical padding between the existing header and item artwork. Tile dimensions, columns, labels, horizontal spacing, footer controls and drag behavior remain unchanged.
+- The shortcut editor already dispatched `change` to `updateImagePreview()`, but the compact laptop rule `#shortcutDialog .image-preview img` had greater specificity than the base `.image-preview.cover img` rule. A cover-specific selector at matching dialog specificity now wins, so Fit-inside/Fill-tile changes are visible before Save in both normal and short-screen layouts.
+- No persisted state, Sync/Recovery behavior, localization catalog, permission, CSP or browser-adapter contract changes.
+
+## 1.30.18.44 reset preference + first-paint scrollbar correction
+
+`Clear Sync copy` resets the synchronized relationship, not the user’s Sync preference. If `syncEnabled` was true before the explicit reset, the initiating device must remain `syncEnabled:true` but `syncInitialized:false`, `syncBootstrapMode:"await-remote"`, `syncStatus:"waiting"`; automatic publication remains impossible because local mutation publication requires initialized Sync. The quota-safe 1.30.18.43 ordering remains mandatory: arm intentional-reset continuity locally, clear the per-extension Sync namespace, retire deleted-namespace suppression/evidence, write and verify only the versioned reset-intent sentinel. A peer or initiator waiting on that sentinel must not recreate the prior profile until an explicit new authoritative source is chosen. Reset confirmation/completion semantics must match this state in every runtime locale.
+
+The New Tab scrolling owner remains `.page` (`html`/`body` stay overflow-hidden). Scrollbar presentation is first-paint-owned in `newtab-critical.css`: Firefox uses a thin scrollbar with `scrollbar-color` and a transparent track; Chromium uses equivalent `::-webkit-scrollbar` rules. Light appearance uses a restrained dark-grey thumb and Dark appearance a subtle light-grey thumb. The track must remain transparent, including hover, so platform-native opaque tracks cannot cover bright wallpapers. Scrollbar styling must not change page overflow ownership or launcher geometry.
+
+## 1.30.18.43 quota-safe explicit Sync reset
+
+`Clear Sync copy` is a destructive, user-confirmed reset of MosaicSync’s browser-native Sync namespace. The old marker-first order could fail when the namespace was already at quota because adding the reset-intent record itself required free bytes. The 1.30.18.43 order is: preserve the local profile, arm intentional-reset continuity and turn local Sync off, call the per-extension `storage.sync.clear()` operation, retire stale own-write/delivery suppression, write back only the tiny versioned reset-intent sentinel, and verify that this sentinel is the sole remaining Sync item. A failure before the clear restores the prior local control state; a failure after the clear keeps Sync off rather than risking automatic resurrection. Peers that observe the existing reset-intent schema continue to wait for an explicit new authoritative source.
+
+The Settings confirmation explicitly warns that synchronized shortcuts, folders, settings, synchronized images and Recovery copies are deleted from Firefox/Chromium Sync while the current device’s local layout is retained. The warning and completion message exist in all 33 runtime locales. No permission, CSP, state schema or Sync/Recovery wire-format version changes are part of this release.
+
+## 1.30.18.42 Sync atomicity and clock-jump correction
+
+This corrective release follows a reproduced Firefox/CachyOS ↔ Windows incident rather than reopening generic refactoring. The investigation proved that complete immutable device generations crossed Firefox Sync successfully, but also exposed three unsafe interactions in the local Sync orchestration.
+
+- **Own-write suppression is exact and one-shot, not wall-clock-authoritative.** A matching key/signature capability is consumed once even if its legacy expiry timestamp is now in the past. Expiry remains only bounded-cleanup metadata, so an OS clock correction cannot turn a delayed exact echo into a remote change. Mismatched values still count as external and consume the stale token.
+- **Storage-event bursts are coalesced.** Unresolved Sync keys are accumulated and reconciled through one serialized drain instead of queuing one full reconciliation per event. Background checks do not flip the Settings card to `syncing`; the active “Updating Sync…” state is reserved for explicit work that actually needs it.
+- **Recovery generations are atomic.** `selectAtomicRecoverySnapshot()` chooses one verified device generation. Personal and Work come from that same generation; complete snapshots from different devices are never unioned record-by-record. Recovery generations are explicit Restore/bootstrap fallbacks and no longer participate in initialized-device live merging.
+- **Normal live Sync requires coherent shared ledgers.** If Personal or Work is missing/torn, an initialized device preserves its local Space and waits rather than filling holes from an immutable safety snapshot. Bootstrap/Restore chooses one coherent Personal+Work source, never a cross-source profile hybrid.
+- **Receipt provenance is conservative.** Collaborative shared ledgers do not claim that one device supplied the resulting layout. A friendly device name is displayed only for an exact atomic source; 1.30.18.41 metadata that attached a newest-publisher name to a merged ledger normalizes to generic provenance.
+- **Catastrophic-loss confirmation ignores stale Recovery-only bytes.** Two namespace reads must both show no live shared Personal/Work core before quarantine is planned. Locally retained Recovery generations, device-name records and other safety metadata cannot mask a real live-core loss, and those same Recovery generations cannot cancel an active quarantine by themselves.
+
+There is no Sync/Recovery wire-schema version bump, permission change, CSP change or new product feature. Existing complete generations remain readable. The release changes source-selection/orchestration policy so safety copies cannot synthesize a layout that never existed on one device.
+
+## 1.30.18.41 Frequently Visited micro-shift correction
+
+Frequently Visited reservation and live cards use one explicit 48 px row height in blocking critical CSS. Stable title/host line heights fit that border box exactly, so a two-row live commit cannot enlarge content-sized grid tracks after the shortcut grid paints. The existing synchronous privacy-safe reservation, responsive capacity, detached favicon decode, atomic commit and disabled zero-space path remain unchanged; no measurement, timer, extra I/O or delayed paint is introduced.
+
+## 1.30.18.40 shortcut-editor presentation correction
+
+This release corrects three demonstrated presentation defects in the published 1.30.18.39 shortcut editor. Native disclosure state is removed from artwork help so pointer hover closes immediately and cannot survive dialog reuse; the tooltip is constrained to the complete artwork row; all four artwork actions share one desktop row; and Light-mode labels no longer inherit the white input surface. Keyboard focus remains an equivalent help path. Generic small-window scrolling remains the safety fallback. No Sync, Recovery, first-paint, state/schema, permission, CSP, browser-adapter or privacy boundary changes.
+
+
+## 1.30.18.39 post-freeze UI correction
+
+This release follows the frozen maintenance policy: two demonstrated user-facing defects justify narrow presentation changes, while a documentation correction adds the already-public Chrome listing.
+
+- Wide-but-short laptop viewports receive a height-aware shortcut-editor layout. Image actions use a stable two-column grid, visual options share one row, and artwork explanations move into an accessible hover/focus/click information bubble. Generic dialog scrolling remains the fail-safe for exceptionally small viewports and long localized content.
+- Shortcut hover retains its restrained highlight, outline, shadow and one-pixel lift without scaling tile artwork onto fractional pixels.
+- The README links both official browser stores.
+- No Sync, Recovery, first-paint, state/schema, permission, CSP, browser-adapter or privacy boundary changes.
+
+## 1.30.18.38 post-M6 external-audit correction
+
+This release follows the permanent maintenance policy exactly: external code-first review demonstrated one reachable Chromium API-contract bug plus two maintenance-tool defects, so only those concrete findings are corrected. This is **not M7** and does not restart generic refinement.
+
+- `hydrateDeviceFavicons()` uses `getNativeTopSites({ limit: 100 })`; shared New Tab code no longer calls `browser.topSites.get()` directly.
+- The generated Chromium New Tab smoke is schema-strict and throws on `topSites.get(options)`, while Firefox must preserve its richer Top Sites options path through the default adapter.
+- M1 Chromium automation supports Chrome for Testing or Chromium. Known branded Google Chrome command-line targets are rejected because current branded Chrome no longer supports the unpacked-extension command-line contract M1 uses.
+- Maintenance ESM roots use Node `fileURLToPath()` rather than URL `.pathname`, preserving Windows drive-letter/path semantics.
+- Scope stops here: no adjacent favicon redesign, test-group cleanup, certification optimization, CSP change, Sync/Recovery change or production refactor belongs in 1.30.18.38.
+
+## 1.30.18.37 Maintenance Infrastructure M6: final audit/freeze
+
+M6 completed the planned Maintenance Infrastructure roadmap and formalized the stop policy. External review after M6 then found the narrow issues corrected by 1.30.18.38; that corrective release does not constitute a new infrastructure phase.
+
+## 1.30.18.36 Maintenance Infrastructure M4+M5: focused tests and deterministic property fuzzing
+
+This release keeps the 1.30.18.32 application architecture frozen. Production runtime changes are release identity only.
+
+- `npm test` remains the single authoritative full regression suite.
+- `tools/test-groups.mjs` and `tools/run-test-group.mjs` provide dependency-free, cross-platform convenience subsets for startup, New Tab, Sync, Recovery, security, browser parity, core state and release tooling.
+- Every test file must belong to at least one targeted group; group membership is deterministic and regression-tested.
+- `tests/harness/deterministic-fuzz.mjs` uses a small seeded xorshift generator. Seeds and case numbers are included in failures so every generated case is exactly reproducible.
+- Property/fuzz coverage is intentionally restricted to high-value trust boundaries: state normalization/prototype-pollution resistance, checksum-valid and malformed profile imports, Recovery continuity normalization/tombstones, and HTTP(S)-only navigation safety.
+- No external fuzzing dependency, unbounded random campaign, production test hook or runtime refactor is permitted for this phase. If a generated case reveals a real defect, stop and handle that defect as a separate product change rather than hiding it inside test infrastructure.
+
+## 1.30.18.35 Maintenance Infrastructure M3: permanent knowledge policy
+
+- `docs/ARCHITECTURE.md` is the canonical ownership map. It describes who owns authoritative state, startup acceleration, Normal Sync, Recovery, artwork, browser adapters, import/export and release boundaries.
+- `docs/adr/` records a deliberately small set of non-obvious accepted/frozen decisions. ADRs explain *why* a boundary exists and name the evidence that must be reconsidered before changing it. They are not a second implementation specification.
+- `docs/REGRESSION-CATALOG.md` records high-value historical failure families and points to the permanent regression tests that protect them. It is not a replacement for `CHANGELOG.md`.
+- Documentation must not become another technical source of truth for release version, schema constants or runtime configuration. Source constants/manifests remain authoritative for those values.
+- A new ADR is justified only for a decision whose rationale would otherwise be easy to "simplify" away later. Routine implementation details stay in code/tests rather than expanding the decision catalogue indefinitely.
+- M3 changes documentation/tests plus release identity only. The 1.30.18.32 application architecture, M1 browser-smoke boundary and M2 certification boundary remain frozen.
+
+
+## 1.30.18.34 Maintenance Infrastructure M2: one-command certification policy
+
+- `npm run certify` is the single canonical full-release certification entry point. It must fail closed if any required gate fails.
+- Full certification requires, in order, the canonical build, full regression suite, runtime reachability, real Firefox + Chromium smoke, benchmark, runtime size report, generated release contracts, deterministic public packaging, packaged release contracts, clean-source re-extraction/rebuild/retest/repackage, and byte-for-byte comparison of Firefox, Chromium, GitHub-ready source and `build-manifest.json`.
+- `npm run certify:mechanical` exists only for constrained environments that cannot launch the real browsers. It may run all non-browser gates but must report `MECHANICAL_ONLY` / `fullyCertified:false`; it is never equivalent to `npm run certify`.
+- Certification writes `artifacts/certification-report.json` with the certification level and SHA-256 evidence. A mismatch in any compared artifact is a hard failure.
+- The clean-room pass starts from the just-packaged GitHub-ready source ZIP, not from retained JavaScript memory or the original working directory.
+- M2 changes maintenance tooling/tests/docs only. The 1.30.18.32 application architecture and all later validated runtime behavior remain frozen.
+
+## 1.30.18.33 Maintenance Infrastructure M1: real-browser smoke policy
+
+- The five-step architecture-refinement program remains frozen at 1.30.18.32. M1 adds maintenance guardrails around that runtime; it does not reopen production architecture.
+- `npm run smoke:probe` reports which Firefox/GeckoDriver and Chromium/ChromeDriver binaries the machine can use. Explicit paths may be supplied through `MOSAICSYNC_FIREFOX_BIN`, `MOSAICSYNC_GECKODRIVER_BIN`, `MOSAICSYNC_CHROME_BIN`, `MOSAICSYNC_CHROMEDRIVER_BIN`, and on Linux `MOSAICSYNC_XVFB_BIN`.
+- `npm run smoke:firefox` creates the isolated Firefox-development package, starts a fresh WebDriver profile, temporarily installs the distinct `mosaicsync-dev@xipinformatica.cat` add-on, and exercises the real browser New Tab override.
+- `npm run smoke:chrome` builds the generated Chromium runtime and exercises it through a fresh WebDriver profile. Chrome for Testing is preferred because consumer Chrome builds may restrict command-line unpacked-extension loading.
+- `npm run smoke:browsers` requires both real browser lanes to pass. Missing browsers/drivers are failures, never silent skips.
+- The smoke requires the actual extension page to reach `interactionReady`, opens Settings, switches Work/Personal Spaces, checks the disabled Frequently Visited state, and follows a real shortcut navigation. It deliberately avoids granting optional Top Sites/Bookmarks/Web host permissions so the test itself cannot broaden the extension's permission surface.
+- Browser-smoke profiles are temporary and isolated. They do not reuse the user's normal Firefox/Chromium profile or production MosaicSync storage.
+
+## 1.30.18.32 Step 5.6 final freeze policy
+
+- Step 5.6 is audit/certification first. No architectural or product-code change belongs in the final freeze release unless a demonstrated production defect requires a narrow correction.
+- The final audit covers startup/first paint, New Tab/Settings, Spaces/folders/drag, Frequently Visited, artwork/favicons, storage/import, normal Sync, Recovery/MV3 lifecycle, browser parity/adapters, permissions/privacy/CSP, reachability and deterministic build/package reproducibility.
+- The trusted Step-5 lineage explicitly excludes withdrawn 1.30.18.26; 1.30.18.27 restored the Step-5.1 runtime and 1.30.18.28 corrected the pure color-owner extraction behind a full generated-New-Tab startup regression.
+- After the final .32 clean-room build/test/package reproduction passes, Steps 1–5 are frozen. Future architecture work requires a concrete bug, browser/platform requirement, security/privacy requirement or separately approved product objective.
+
+## 1.30.18.31 Step 5.5 build/package policy
+
+- Begin from the manually validated/live 1.30.18.30 source. Step 5.5 may simplify deterministic build/release tooling, but production algorithms and all completed Step-1 through Step-5.4 ownership boundaries remain frozen.
+- `src/shared/core/constants.js` is the canonical release-version source for release-contract validation. Do not maintain a second independent hard-coded version in packaging/contract tooling.
+- `tools/package.py` owns the required canonical build before any public or development ZIP is created, so packaging cannot consume a stale same-version `dist/` tree.
+- Firefox, Chromium, GitHub-ready source and temporary Firefox-development packaging share one deterministic ZIP writer and therefore one timestamp, permission, compression, path normalization and entry-order contract.
+- A tooling refactor must prove the existing browser runtime ZIPs remain byte-identical before a release identity bump. Runtime package differences in Step 5.5 are permitted only where the version identity itself changes.
+- Release-contract validation, build-manifest hashing, package-size reporting, source exclusions and the distinct development Gecko ID remain mandatory safety boundaries rather than cleanup targets.
+- Recovery, Sync, first-paint/session/cache ownership, New Tab/Settings/Frequently Visited behavior, favicon policy, storage schemas, permissions, CSP, locales and browser adapters remain unchanged.
+
+
+## 1.30.18.30 Step 5.4 test-architecture policy
+
+- Begin from the manually validated 1.30.18.29 runtime. Step 5.4 changes tests/harnesses and release identity only; production algorithms and ownership boundaries remain frozen.
+- New Tab refactors are no longer considered protected by direct helper/source-shape tests alone. The full generated Firefox and Chromium `newtab.js` module graphs must import without startup exceptions and reach the authoritative `interactionReady` phase.
+- The full-startup smoke must prove that later wiring actually happened: Settings opens from its generated click handler, color swatches attach listeners, the storage-change listener is registered, and enabled Frequently Visited executes the browser Top Sites path and renders.
+- Frequently Visited enable/disable is exercised through the generated Settings change listener so source-order/source-token assertions are supplementary rather than the sole proof of this interaction boundary.
+- The harness carries a negative mutation regression for the withdrawn 1.30.18.26 failure class. If an extracted helper silently changes an established caller contract again, the integration gate must fail before `interactionReady`.
+- Source-shape tests remain appropriate where source structure is itself the product/release contract: manifests, CSP/permissions, HTML semantics, CSS/first-paint ownership, generated-file identity and release packaging. Do not remove those merely to reduce regex counts.
+- Recovery, normal Sync, first-paint/session/cache ownership, favicon policy, Settings behavior, Frequently Visited product semantics, storage schemas, permissions, CSP, locales and browser adapters remain unchanged.
+
+## 1.30.18.29 Step 5.3 dead-code retirement policy
+
+- Begin from the manually validated 1.30.18.28 runtime. Do not resurrect or reuse withdrawn 1.30.18.26.
+- Delete production code only when high-confidence reachability evidence agrees: no runtime module root, no named-import use, no private lexical caller, and no generated Firefox/Chromium behavior depends on it.
+- Test-only/reference exports are not dead merely because production does not import them. Defensive model wrappers, the registrable-domain comparison reference helper and explicit `ForTests` cache hooks remain intentionally retained.
+- This release retires only the superseded `workspaceAllowsAutoIcons` private helper and the unused `settingsRecordEqual` import in `concurrency.js`; the canonical `shortcutAllowsFaviconRecovery` path remains unchanged and is exercised on both generated browsers.
+- Recovery, Sync, first-paint/session/cache ownership, Frequently Visited, Settings orchestration, browser adapters, permissions, CSP, schemas and persisted formats remain frozen.
+
+## 1.30.18.28 Step 5.2 corrective extraction policy
+
+- 1.30.18.28 resumes Step 5.2 only from the safe 1.30.18.27 rollback baseline, whose production implementation is the certified 1.30.18.25 code apart from release identity. Withdrawn 1.30.18.26 must never be used as a development baseline.
+- A behavior-preserving extraction must preserve the existing callable contract unless a separately justified product change requires otherwise. The New Tab color helpers therefore remain `normalizeHexColor(value)` and `hexToRgb(hex)`; the extracted owner carries the existing pure `validHex` dependency itself.
+- Any New Tab extraction must include a generated Firefox and generated Chromium startup regression that exercises the real initialization boundary affected by the change. Direct helper equivalence and generated-file presence are not sufficient certification by themselves.
+- The 1.30.18.28 regression is required to fail against the withdrawn 1.30.18.26 implementation and pass against the corrected implementation before release certification.
+- Settings DOM/event ordering, Frequently Visited, startup/first-paint/session ownership, favicon behavior, Sync, Recovery, storage, permissions, CSP, schemas and locales remain frozen.
+
+## 1.30.18.25 Step 5.1 inventory / ownership policy
+
+- Step 5 begins with evidence only. 1.30.18.25 may add deterministic inventory tooling, documentation and ownership regressions, but it must not perform a production refactor.
+- Steps 1–3 and the audited 1.30.18.24 Step-4 Recovery architecture are frozen. Do not change Recovery, first-paint/cache ownership, browser capability semantics, Sync behavior or persisted formats without a demonstrated production defect.
+- New Tab already has one canonical source owner under `src/shared/newtab`; do not create or merge browser-specific New Tab copies. The old anticipated Step-5 browser-New-Tab consolidation is therefore already satisfied by Step 3.2.
+- Firefox and Chromium overlays must be judged by capability responsibility, not file-count symmetry. Chrome's `platform.js`, `permission-platform.js`, `i18n-platform.js`, browser shim and background adapter represent genuine platform differences and are not cleanup targets merely because shared defaults exist.
+- Large files are only concentration signals. `newtab.js`, `background-core.js`, `model.js` and `storage.js` may be considered in later Step-5 phases only when a cohesive owner can be named and generated-browser behavior can be proven unchanged.
+- No source may be deleted as dead from grep/static-import evidence alone; manifest entrypoints, classic bootstrap scripts, workers and MV3 listener reachability require explicit runtime-path proof.
+
+## 1.30.18.24 Step 4 Recovery continuity boundary policy
+
+- `src/shared/background/recovery-continuity.js` is the browser-neutral owner of continuity/tombstone normalization, deterministic stale penalty and jitter, and quarantine, startup-warmup, attempt, restart-grace, retry/failure, healthy, recovered, and intentional-reset transition planning.
+- Every clock value is supplied explicitly by `background-core.js`; the continuity module must not read browser storage, schedule alarms, publish Recovery data, verify publications, replay mutation journals, reconcile normal Sync, or perform reset effects.
+- `background-core.js` remains the sole orchestrator for local/Sync reads and writes, alarms, diagnostics/status, Recovery bootstrap and verification, cross-Space/local pending replay, reset observation, and normal Sync policy.
+- The persisted continuity key, schema, fields, tombstone representation, timing constants, attempt cap, state names, status payloads, and recovery ordering are frozen to `.23` behavior.
+- Generated Firefox and Chromium copies of format, store, lifecycle, and continuity modules must be pairwise byte-identical. Direct transition equivalence and real generated-runtime interruption tests remain mandatory.
+- This release completes the planned Step-4 implementation. Step 4 is not frozen until the requested post-release forensic audit confirms the boundary and finds no corrective work.
+
+## 1.30.18.23 Step 4 Recovery lifecycle boundary policy
+
+- `src/shared/background/recovery-generation-lifecycle.js` is the browser-neutral owner of verified-generation classification, quota-capacity/fallback-retirement planning, superseded-generation retention, and stale/orphan GC eligibility.
+- Lifecycle methods are synchronous functions of explicit Sync views, decoded snapshots, policy constants, metadata observations, and caller-supplied time. They must not access browser storage, clocks, timers, alarms, mutation journals, normal Sync merges, or catastrophic continuity.
+- `background-core.js` remains the orchestrator for `storage.sync` reads/removals, local metadata writes, GC scheduling, publication trust, merge/reconcile work, and catastrophic-loss recovery. Destructive actions still obtain a second full Sync view and ask the lifecycle owner to revalidate candidates immediately before removal.
+- `recovery-generation-format.js` remains the wire-format/validation owner and `recovery-generation-store.js` remains the mechanical read/prepare/commit/verify owner. Generated Firefox and Chromium copies of all three modules must be pairwise byte-identical.
+- The `.22` verified-only retention, fallback readability, future-schema preservation, local-observation aging, orphan grace, root-last publication, and failed-replacement guarantees are behaviorally frozen and covered by equivalence plus MV3 interruption/restart tests.
+- Keys, schemas, payloads, permissions, privacy boundaries, normal Sync semantics, user-facing behavior, and Steps 1–3 remain unchanged.
+
+## 1.30.18.22 Step 4 validation-aware Recovery retention policy
+
+- Only a generation that decodes its own complete Personal+Work root and chunks may authorize fallback retirement or consume one of the two retained generation slots.
+- A torn root decoded through `previousProfile` remains a valid Recovery read, but `usedPreviousGeneration` disqualifies that root from post-write verification and retention accounting.
+- New publications are verified before normal superseded-generation pruning. Failed verification preserves every known-good fallback.
+- Current-schema unreadable roots use the existing elapsed-time plus repeated-GC-observation orphan grace. Unknown or future schemas are preserved.
+- Pruning and GC must re-read and re-decode `storage.sync` immediately before deleting keys; roots that become complete or cease to be demonstrably stale survive.
+- Keys, schemas, permissions, privacy boundaries, normal Sync policy and user-facing behavior remain frozen.
+
+## 1.30.18.21 Step 4 Recovery-generation storage/publication boundary policy
+
+- `src/shared/background/recovery-generation-store.js` owns only browser-neutral generation storage mechanics: complete-profile wire-publication assembly behind the format seam, verified reads/own-generation selection, immutable chunk-first/root-last commit with new-chunk rollback, and post-write verification.
+- The store receives the existing Sync read/write/remove primitives from the core. It must not contain browser adapters, normal Sync merge policy, publication-trust decisions, capacity/retirement policy, GC timing, mutation journals, alarms or catastrophic-loss continuity.
+- `background-core.js` continues choosing authoritative Personal+Work records and tombstones before preparation. It also retains quota-aware capacity preparation, previous verified fallback policy, superseded-generation retirement, stale/orphan cleanup, profile merge revisions and all Recovery state-machine behavior.
+- The immutable publication invariant is mandatory: generation chunks commit first and the authoritative root commits last. Any failure before the root becomes authoritative rolls back only the new generation's chunks.
+- `DEVICE_SNAPSHOT_MAX_CHUNKS` is one shared encode/decode invariant with the historical value `96`; existing keys, schemas, payload v2 compatibility, legacy fixed-root/a-b reads and previous-generation fallback fields remain unchanged.
+- Generated Firefox and Chromium store modules must be byte-identical. Steps 1–3 remain frozen and no product behavior belongs in this phase.
+
+## 1.30.18.20 Step 4 Recovery-generation format boundary policy
+
+- Step 4 begins with ownership, not algorithm changes. `src/shared/background/recovery-generation-format.js` owns only the immutable Recovery-generation representation contract: modern/legacy keys, root/chunk classification, bounded gzip codec, manifest/chunk validation, profile-completeness metadata, previous-generation descriptors, generation ordering descriptors and its bounded performance-only decode cache.
+- The shared background core still owns `storage.sync` orchestration, publication, chunk-first/root-last commit ordering, capacity retirement, verified-fallback preservation, GC, normal Sync merge/reconcile policy, pending mutation journals and catastrophic continuity/quarantine/restart behavior. Do not move those simply to reduce line count.
+- The format module must remain browser-neutral and storage-policy-free: no `browser.storage`, alarms, continuity keys, quota writes or browser adapters. Generated Firefox and Chromium copies must be byte-identical.
+- Existing persisted key names, schema versions, payload version 2 compatibility, legacy fixed-root/a-b readers and previous-profile fallback semantics are frozen. A modern generation must fail closed on missing/mismatched chunks before any decode-cache hit can be trusted.
+- Step-1 first paint, Step-2 state/session/cache ownership and Step-3 browser capability boundaries remain frozen throughout Step 4 unless a demonstrated production defect requires otherwise.
+
+## 1.30.18.19 pre-Step-4 hardening policy
+
+- This release closes the final audited Frequently Visited first-frame geometry gaps and adds Recovery characterization only. It does **not** begin Recovery production refactoring.
+- While FV is enabled, configured responsive capacity owns stable startup geometry. The synchronous reservation and any live padding cells are paint-hidden with `visibility:hidden`/non-interactive styling while retaining normal FV card dimensions; no browser-history-derived cardinality, URL, title or favicon data is persisted to achieve this.
+- Sparse or empty live FV results may not collapse the configured startup row capacity underneath an already-painted shortcut grid. Missing Top Sites permission reuses that reserved capacity by overlaying the recovery control rather than adding a normal-flow row.
+- Real FV cards retain detached favicon preparation and decode/fallback settlement before their visible atomic commit. Disabled FV continues to own zero startup space.
+- The Recovery hardening in this release is characterization-only: generated Firefox and Chrome production backgrounds must prove that a durable pending local mutation is not replayed while catastrophic namespace loss is quarantined, and is replayed only after Recovery has reconstructed and verified authoritative remote state.
+- Existing generated-runtime coverage for worker restart grace, failed immutable root commit fallback, invalid snapshot/decompression outcomes and quota fallback preservation remains mandatory; do not duplicate tests merely to increase test count.
+- `background-core.js`, browser background adapters, Recovery/Sync/state schemas, persisted key formats, permissions, CSP, normal Sync semantics, Step-2 session/cache ownership and automatic-favicon Sync policy remain frozen.
+- After this release, Steps 1–3 are considered fully frozen. Step 4 may begin only behind the Recovery characterization suite; Step 4 must simplify ownership without changing Recovery's external safety semantics unless a demonstrated defect requires it.
+
+## 1.30.18.18 Frequently Visited first-frame geometry policy
+
+- Frequently Visited browser-history candidates, titles, URLs and favicons remain session/live-only and must never enter the persistent render manifest.
+- The synchronous New Tab bootstrap may read only the existing privacy-safe FV enabled/count compatibility hints to reserve final responsive row geometry before the shortcut cache paints.
+- The reservation is invisible and accessibility-hidden; it contains no navigation target or browser-derived content.
+- Real FV cards retain the existing detached favicon decode/atomic-commit path. Releasing the reservation and committing real cards must occur in the same task so the shortcut grid does not move.
+- Disabled FV preserves the zero-space first frame. Permission-recovery and authoritative empty/disabled states must explicitly clear any pending geometry reservation.
+- This corrective release does not reopen Step-2 state/cache/session ownership: the new bootstrap is presentation geometry only, not a new state owner.
+
+## 1.30.18.17 Step 3.2 browser-boundary consolidation policy
+
+- Canonical browser-neutral shells have one source owner: `src/shared/background/background.js` and `src/shared/newtab/newtab.html`. Chromium's required classic `browser-shim.js` line is injected deterministically at build time before other New Tab bootstrap scripts; Firefox receives no extra first-paint script.
+- Manifest `_locales` wrappers are generated deterministically from `src/shared/manifest-locales.json`, which stores one shared action label and explicit reviewed Firefox/Chrome descriptions for each of the 33 supported manifest locales.
+- Common optional Top Sites / HTTP(S) permission policy lives in `src/shared/core/permissions.js`; only genuine browser capability differences live in `permission-platform.js` (Firefox data-collection consent/revoke vs Chromium's no-op Sync-permission contract and browser-specific unavailable message).
+- Firefox/Chromium manifests, favicon/background adapters, Chrome's browser shim, Chrome platform adapter and Chrome localization-brand adapter remain separate because they represent real capability/store/runtime differences. Do not merge them for line-count symmetry.
+- Step 2 first-paint/cache/session ownership remains frozen. No feature, schema, permission-set, CSP, privacy, Sync/Recovery or UI behavior change belongs in this release.
+
+## 1.30.18.16 Step 3 adapter-boundary hardening policy
+
+1.30.18.16 is test-first boundary hardening on the accepted 1.30.18.15 architecture. Production favicon behavior must remain unchanged unless a production-runtime regression demonstrates a defect. Permanent regressions execute generated Firefox/Chrome backgrounds with their real adapters: Firefox open-tab `tabs.query()` cache hydration, Firefox `tabs.onUpdated` expected-navigation-gated learning and marker cleanup, and Chromium protected Chrome Web Store `_favicon` handling with sentinel rejection and stripped remote provenance. Automatic/browser-learned favicon pixels remain device-local and must project to `imageKind: "none"` / no synchronized image provenance. Step-2 first-paint/cache/session ownership, state/meta/Sync/Recovery schemas, permissions, CSP, browser-history persistence and UI behavior remain frozen.
+
+## 1.30.18.15 Step 3.1 shared-background policy
+
+- One canonical `src/shared/background/background-core.js` owns Sync, Recovery, persistence orchestration, metadata transitions, alarms, queues and shared favicon policy.
+- Firefox and Chrome background entrypoints stay tiny; browser adapters contain only genuine platform capabilities such as Firefox data-collection permission handling, Firefox tab favicon lookup, Chromium `_favicon`, and Chrome Web Store protection.
+- Do not duplicate shared background semantics back into browser overlays. Fix shared policy once in the canonical core.
+- This release is extraction-only: no Step 2 reopening, feature work, schema changes, permission changes or behavioral redesign.
+
+## 1.30.18.14 Step 2.3 / Step 2 completion policy
+
+- Step 2.3 narrows the persistent `mosaicsync.render-manifest.v1` payload to a **presentation-only visual cache**. It is not a profile/state replica and must not acquire new authoritative fields.
+- The v5 persistent cache may contain only: a readiness gate, a Personal/Work paint-authorization hint, Space-switcher labels/visibility, Personal-grid geometry, visual shortcut/folder identity, and bounded artwork previews.
+- It must not persist shortcut navigation URLs, state/settings mutation clocks, Frequently Visited settings/candidates, or the semantic First-Paint Contract. Work shortcut structure must not be retained.
+- Persistent first-paint cards are inert and have no `href`; the authoritative New Tab installs validated navigation only after session/local state has won.
+- Cache adoption is based on current visual equivalence (layout, order, titles, folder mosaic identity and artwork identity), not on revision-clock equality or URL equality. A corrupt/unusable preview cannot authorize reuse over immediately drawable session artwork.
+- The disposable render-manifest schema advances to v5. State/meta/Sync/Recovery/profile schema versions remain unchanged.
+- With Step 2.3 certified, **Step 2 is complete**. The next roadmap stage is Step 3: consolidate duplicated Firefox/Chrome background semantics behind shared core logic while preserving thin browser-specific adapters.
+- No Step 3 refactor belongs in 1.30.18.14.
+
+
+## 1.30.18.13 device attribution feature policy
+
+- This release temporarily pauses the five-step maintainability journey and changes only device naming and synchronized-change attribution.
+- Each MosaicSync installation owns a stable local `deviceName` attached to its existing `deviceId`. The user may name it during Welcome when opting into Sync and rename it later in Settings.
+- Device names synchronize as a tiny dedicated metadata record keyed by device ID. Layout/profile datasets continue to carry only their existing origin device ID; Settings resolves that ID to the human-readable name.
+- The latest synchronized-change display uses the source dataset timestamp, not the local receipt timestamp. When useful, local receipt time is shown separately.
+- Device names are not part of profile export/Recovery layout data and do not contain artwork or browsing history.
+- Preserve all existing permissions, CSP, layout/Sync/Recovery schemas and backend-free privacy model.
+
+## 1.30.18.12 post-audit Step 2.2 corrective policy
+
+- Do not begin Step 2.3 in this release. 1.30.18.12 exists only to close verified post-publication 1.30.18.11 audit findings and the already-intended manual detected-favicon Sync behavior.
+- Every Frequently Visited render request, including disabled/empty states, invalidates older detached decode work. A stale decode may never make browser-history cards visible again after a newer render state wins.
+- Live Frequently Visited artwork and its warm-session derivative are separate representations. Live rendering uses the browser's original candidate; optimization failure may remove only the disposable session derivative, never downgrade live artwork.
+- Background full-record Sync/status metadata writes preserve current onboarding fields unless the one verified remote-bootstrap transition explicitly owns onboarding completion. Acquiring the persistence lock around a stale whole record is not permission to restore unrelated setup state.
+- Manual detected-favicon Sync remains metadata-only by default. New Browser-source choices use compact exact image identity rather than the coarse legacy `b` source marker; matching may cross Browser/site source classes when the image identity is the same, and legacy `b` records are upgraded from the selected local pixels when those pixels still exist. Image bytes continue to synchronize only through the existing explicit **Sync this image** path.
+- Keep the physical persistence Web Lock name, all Sync/Recovery/state/profile schemas, permissions, CSP, localization and backend-free privacy model unchanged.
+- Regression coverage must use deferred decode/concurrency behavior for the race fixes rather than only source-order assertions.
+
+## 1.30.18.11 Step 2.2 ownership/concurrency closure policy
+
+- The cross-context Web Lock remains physically named `mosaicsync.local-assets.write.v1` for rolling-version compatibility, but the source helper is deliberately named for **persistence** ownership. State, active-Space, meta and startup-repair transitions that can conflict across extension contexts must share that ordering boundary.
+- Ordinary structural profile persistence does **not** own `mosaicsync.active-space.v1`. The dedicated active-Space writer owns that pointer, and structural session publication derives its active Space from the persisted pointer while the lock is held.
+- Startup repair is conditional repair, not a blind replay of a stale startup read. If active-Space or meta authority looked missing/invalid, the repair transaction must acquire the persistence lock, re-read current storage, and write only fields that are still missing/invalid.
+- Independent setup/UI meta changes use `updateLocalMeta()` field intent against the authoritative record re-read inside the lock. Coherent Sync/status state-machine transitions may still use serialized full-record `writeLocalMeta()` semantics.
+- Generic structural session warming has no Frequently Visited parameter or physical FV key access. Browser-derived FV candidates have one writer domain: the dedicated session-only projection path.
+- Oversized native FV favicons are reduced to bounded, disposable first-paint derivatives. The visible FV strip is committed only after its detached favicon decode jobs settle; failed decodes become fallbacks before commit. These derivatives never enter persistent localStorage, `storage.local` profile state, Sync, Recovery or export.
+- Settings-open appearance changes may update lightweight canvas text/shadow presentation immediately, but the full page wallpaper/background/dim commit stays deferred until the Settings surface is safe to repaint.
+- This release remains zero-feature in scope: no Step 2.3 expansion is allowed until these ownership/concurrency invariants are certified.
+
+## 1.30.18.10 Step 2.2 session-ownership policy
+
+- Structural `storage.session` render-state publication is part of the same cross-context Web Lock transaction as the authoritative `storage.local` state write. An older transaction must never release the persistence lock and publish stale startup structure after a newer transaction has won.
+- `writeActiveSpace()` uses the same persistence lock and re-reads the persisted active-Space pointer before publishing the shared startup projection. After concurrent Space writes settle, `LOCAL_ACTIVE_SPACE_KEY`, session `activeSpaceId` and `firstPaint.activeSpaceId` must agree.
+- Browser-derived Frequently Visited candidates physically own `SESSION_FREQUENTLY_VISITED_PROJECTION_KEY`. FV refresh and Top Sites permission clearing never rewrite `SESSION_RENDER_STATE_KEY`; semantic field ownership is now physical storage-key ownership.
+- The dedicated FV session key is disposable and device-local. It is composed with structural session state only after validation, never synchronized, recovered or exported, and its key is included in deterministic generated bootstrap configuration.
+- Race regressions must be truly interleaved: pause an older structural writer while it owns the persistence lock, race active-Space writes, and pause FV/permission operations across newer structural publication. Sequential final-state tests are not sufficient for these ownership invariants.
+- A cold browser session intentionally has no persistent FV site candidates. Once authoritative startup completes, a missing warm FV projection starts live Top Sites acquisition immediately rather than adding the generic 250 ms post-paint delay; warm sessions retain the delayed refresh to avoid redundant work.
+- This release does not broaden Step 2 into shortcut-grid, favicon/artwork, appearance, wallpaper, normal Sync or Recovery refactors. Those remain frozen until the session-ownership baseline is audited.
+
+## 1.30.18.9 Step 2.1 startup-cache ownership policy
+
+- Step 2 begins by removing duplicated ownership, not by rewriting the grid. Full shared session startup snapshots are published only at authoritative startup/persistence boundaries; routine New Tab presentation work must not republish structural Space/grid state.
+- Device-local Frequently Visited updates own only `firstPaint.frequent` in the shared session snapshot. Browser-history-derived site candidates must not be serialized into the persistent page localStorage render manifest.
+- Every runtime page-local render-manifest publication, including delayed artwork-preview refresh, must prove that the tab's structural projection still matches shared `storage.session` immediately before commit. A stale open New Tab must not downgrade a newer startup projection.
+- The render-manifest v2 upgrade bridge is retired. Current classic bootstrap scripts consume generated key/schema configuration emitted from canonical core constants; do not reintroduce duplicated schema literals.
+- Keep shortcut/grid bootstrap mechanics, favicon/artwork ownership, theme/appearance hints, wallpapers, normal Sync and Recovery otherwise unchanged in Step 2.1. Further consolidation requires another audit after this release.
+- Preserve or improve startup performance. Simplification is not accepted if it materially slows New Tab.
+
+## 1.30.18.8 Step 1.2 first-paint hardening policy
+
+- Do not begin physical cache consolidation yet. 1.30.18.8 closes the remaining Step-1 lifecycle/ownership gaps so Step 2 can remove duplication from a measured baseline.
+- Top Sites permission removal must write a session-only suppression tombstone even if no complete session render snapshot exists. The tombstone is device-local, never synchronized, and must survive unrelated background state writes until the permission is granted again.
+- The early session bootstrap reads the suppression marker alongside the existing render-state/meta keys. A next New Tab must be able to clear older boot-painted Frequently Visited cards from that marker before normal session/local authoritative hydration.
+- Generic background writes must preserve the latest known device-local Frequently Visited projection rather than transiently replacing it with `frequent: null`; an active permission-suppression marker always wins.
+- Session-cache write deduplication may use in-memory fingerprints only as a candidate optimization. Before skipping, the writer must verify that the actual shared `storage.session` bytes still match, because background/New Tab contexts do not share JavaScript memory.
+- Background-only profile changes must refresh the session first-paint representation. Regressions explicitly cover Space-name changes and favicon/artwork learning while no New Tab context is alive.
+- The persistent localStorage render manifest remains a synchronous page-owned accelerator that an MV3/background context cannot directly rewrite. Step 2 must simplify/consolidate that ownership boundary rather than adding another persistent cache.
+- Preserve 1.30.18.7 warm-grid reuse, localization protection, quota accounting/messaging, Work-grid safety, all features and at least the existing startup performance envelope. No normal Sync/Recovery/profile schema or permission-policy redesign belongs in this release.
+
+## 1.30.18.6 first-paint contract / maintainability-foundation policy
+
+- The fast launcher paths share one explicit first-paint contract for the subset of state they are allowed to paint before authoritative `storage.local` hydration: active Space, Multiple Spaces enablement, sanitized Personal/Work labels and the bounded Frequently Visited snapshot. Fast layers may differ in transport/storage, but they must not invent different visible truth.
+- Work keeps its conservative shortcut-grid authorization gate. Frequently Visited is global browser-derived presentation data and may paint from the validated disposable first-paint contract in Work without authorizing the Work shortcut grid early.
+- First-paint cache creation and invalidation are centralized. State/Frequently-Visited changes refresh the render manifest and session acceleration snapshot through the same projection rules instead of independent partial writers.
+- Disposable startup-cache formats are explicit and versioned. The current format has a bounded read-only 1.30.18.5 compatibility bridge so the first tab after upgrade can remain visually continuous; authoritative state rewrites the current format. Deleting all startup caches must remain correctness-safe.
+- Sync-storage UX must distinguish core layout/settings bytes, complete recovery-safety-copy bytes, synchronized shortcut artwork and metadata/cleanup overhead. Healthy Sync remains green; 10–25 KiB free warns that storage is getting full, under 10 KiB warns that it is almost full, and an essential quota failure explicitly states that recent local changes remain on this device until capacity is available.
+- `docs/ARCHITECTURE.md` is the maintained ownership map for Authoritative state, Normal Sync, Recovery, Artwork, First Paint, UI, Browser adapters and Import/export. New work should simplify or replace existing layers rather than add parallel representations without retiring older complexity.
+- Step 1 intentionally does not collapse the existing startup caches. Consolidation belongs to the next maintainability stage after this contract and its behavioral regressions have soaked. No maintainability refactor is accepted if the startup/performance gates materially regress.
+
+
+## 1.30.18.5 first-frame continuity / local-observation retention policy
+
+- Every startup layer that is allowed to paint the Space switcher must carry the same personalized Space labels. The synchronous render manifest, the browser.session render snapshot and authoritative local state may differ in weight, but a faster cache must never downgrade a correct custom label to Personal/Work.
+- The session render snapshot remains disposable and lightweight; adding Space labels is a presentation-cache schema change only and does not change the authoritative MosaicSync state or Sync schemas.
+- Recovery retirement for other logical devices must be aged from local GC observations, never from a remote publisher's wall-clock timestamps. A newly observed generation is fresh on this installation even if the publishing computer's clock is badly wrong.
+- Root-less recovery fragments require multiple independent GC observations plus the existing wall-time grace before reclamation. A single forward clock correction cannot make the immediately following observation destructive. A backward correction restarts the wall-time observation safely.
+- Near-quota rotation must retain one verified complete fallback even if the attempted replacement fails after pre-retirement. This interaction is covered as one end-to-end failure test, not only as isolated helper tests.
+
+## 1.30.18.4 first-paint truthfulness / recovery-maintenance policy
+
+- The first visible New Tab frame must be visually truthful. Static HTML must not expose default Space names before authoritative/custom names are known; a tiny synchronous render-manifest bootstrap may reveal saved custom names immediately, otherwise the Space switcher stays hidden until authoritative labels are available.
+- A shortcut that is already known to own artwork must not paint a fallback letter merely because the disposable first-frame preview is temporarily missing. Background artwork-only hydration also refreshes the first-frame manifest/preview so future tabs stay visually consistent without delaying the launcher.
+- Recovery-generation recency is based on the logical profile `updatedAt` before wall-clock publication time. A just-committed generation is protected from its own cleanup and must still decode as complete before MosaicSync reports recovery protection as healthy.
+- If two verified recovery generations fit but staging a third would exceed Sync quota, MosaicSync may retire only the oldest verified generation after proving one complete fallback remains and the new generation can fit. A failed replacement must never leave zero verified fallbacks.
+- Root-less recovery chunks are treated as potentially in-flight until this installation has observed the same root-less group across a local grace period. Cleanup must not infer abandonment from another publisher's wall clock.
+- The recovery publication path reuses its initial full Sync read rather than immediately fetching the same complete namespace again.
+- Regression harnesses must be able to model separate physical/browser Sync views that share one copied persistent MosaicSync `deviceId`; key-separation alone is not sufficient coverage for cloned-profile recovery.
+- These changes do not alter ordinary shortcut/Settings Sync identity, state/profile payload schemas, permissions, CSP, localization coverage, telemetry or backend behavior.
+
+## 1.30.18.3 cloned-profile recovery-snapshot identity policy
+
+- `meta.deviceId` remains the stable identity used by ordinary Sync records, Settings tie-breaking and dataset origin. Cloning/restoring a browser profile may duplicate that value, so it must not also be the sole writable namespace for complete recovery snapshots.
+- New complete Personal+Work recovery snapshots publish to immutable commit-scoped roots (`deviceId + commitId`) with matching commit-scoped chunks. Two concurrently active clones sharing a copied `deviceId` therefore cannot overwrite each other's root or chunk keys during publication.
+- Publication remains root-last: chunks are written first, the unique root is the authority marker, and a failed root write removes only chunks belonging to that failed generation. An already complete recovery generation must remain untouched.
+- Legacy fixed per-device roots and their `a/b` chunks remain readable. During the first immutable publication, an available legacy complete root may be retained as the existing torn-delivery fallback. No device/profile snapshot payload schema bump is required.
+- Generation cleanup is bounded to the historical two-complete-generation footprint per logical `deviceId`, and stale-device retention remains age/cap based. Cleanup can occur only after a new root is complete.
+- The ordinary Sync/state/meta schemas, profile format, permissions, CSP, localization, UI, telemetry and backend behavior remain unchanged.
+
+
+
+## 1.30.18.2 Frequently Visited permission-recovery policy
+
+- The synchronized `frequentlyVisitedEnabled` setting expresses user intent only. The browser's optional Top Sites permission remains installation-local and must never be inferred from the synchronized toggle value.
+- Startup and permission-change reconciliation quietly use `permissions.contains()`. If the preference is ON and the permission is present, no prompt or recovery UI appears. If the permission is missing, the launcher replaces any stale cached Frequent cards with an explicit localized recovery surface and Settings highlights the same one-click action.
+- `permissions.request()` remains user-gesture driven. The launcher and Settings recovery buttons share one synchronous request path; granting permission clears the device-local candidate cache and refreshes suggestions immediately without mutating the already-ON synchronized preference.
+- Missing permission never silently flips the synchronized setting OFF, and a browser update with an intact permission never asks again. Permission add/remove events continue to self-heal the live page.
+- 1.30.18.1 cache authority remains load-bearing: the live recovery state clears cached Frequently Visited targets before making the recovery button interactive. No new localization keys, Sync/state schema, manifest permissions, telemetry or backend behavior are introduced.
+
+## 1.30.18.1 first-paint cache authority policy
+
+- `storage.local` remains authoritative. A non-Personal `storage.session` snapshot cannot become actionable until the already-running raw local read confirms Multiple Spaces is still enabled; Personal session paint remains fast but is visual-only until authoritative reconciliation.
+- The synchronous localStorage render manifest never paints a non-Personal Space. When it paints Personal, both the shortcut grid/empty state and the cached Frequently Visited section are inert until their respective authoritative handoffs.
+- Authoritative grid adoption or a full authoritative render is the only normal path that unlocks cached launcher interaction. Frequently Visited unlocks independently only after its own authoritative refresh. A startup failure discards still-unverified cached targets instead of enabling them.
+- Render-manifest writes project Personal when Multiple Spaces is disabled, and boot-grid folder adoption validates the first four cached child IDs, titles and navigation URLs before DOM reuse.
+- These are cache/read-boundary changes only: no Sync/state schema, permissions, telemetry, backend or authoritative profile semantics change.
+
+## 1.30.18 state-consistency / render-efficiency policy
+
+- If Multiple Spaces is disabled, disposable session render snapshots project Personal even if a background write temporarily carries Work as the active Space. Authoritative storage materialization already enforces the same invariant.
+- External `storage.local` state changes may skip a full Manual-grid rebuild only when an exact, fail-closed render-input comparison proves the active visible grid is unchanged. Settings-open, open-folder, Recent-order and Sync-waiting cases keep the ordinary render path.
+- Inactive-Space wallpaper preloading is disabled while Multiple Spaces is off and resumes when the feature is enabled.
+- Profile import remains whole-profile authority: missing historical fields/Spaces migrate to current defaults rather than inheriting unrelated current Sync state.
+
+## 1.30.17 mixed-version Settings clock policy
+
+- A Settings record with an explicit fine-grained clock for a logical control always outranks a legacy record that has no clock for that control, even if the legacy whole-record `modifiedAt` is later and the values differ.
+- This is intentional rolling-upgrade behavior: a pre-1.30.15 client cannot prove which individual control caused its whole Settings timestamp to advance, so allowing it to override explicit modern intent would reintroduce stale-field clobbering.
+- Legacy-only Settings remain readable and are modernized with fine clocks when reconstructed/republished. Two legacy records retain the prior deterministic whole-record ordering. Modern-vs-modern fine-clock semantics are unchanged.
+- Permanent regressions exercise both raw legacy device-snapshot decoding and raw legacy shared-ledger Settings against modern fine-clock state on Firefox and Chrome.
+
+## 1.30.16 browser/store release-contract policy
+
+Production manifests are an explicit browser/store capability contract, not merely valid JSON. Firefox is desktop-only and must not contain `browser_specific_settings.gecko_android`; its New Tab and Home overrides are deliberate. Chrome declares the oldest supported API floor explicitly with `minimum_chrome_version: 104`, driven by the Manifest V3 `_favicon` API; `storage.session` is older (Chrome 102+) and the other newer optional optimization APIs are guarded/fallback-capable. Exact top-level manifest keys, required/optional/host permissions, production identity and browser-specific differences are allow-listed against the generated runtime and final public ZIPs.
+
+Firefox's optional `browsingActivity` and `technicalAndInteraction` data-collection categories are retained deliberately. They describe user-created shortcut URLs/domains and MosaicSync configuration/recovery metadata that the user explicitly sends through browser-native Firefox Sync; they do **not** indicate developer analytics or telemetry. Every declared category has a centralized machine-readable rationale. Future manifest capabilities, permissions, data categories or fixed external endpoints must fail the release-contract gate until deliberately reviewed and approved.
+
+## 1.30.15 fine-grained Settings conflict policy
+
+- Synchronized Settings must be ordered at the granularity of an independent user decision, not by one whole-record timestamp. The authoritative compact grouping contract lives in `SETTINGS_SYNC_CLOCK_GROUPS`; only inseparable internal representation fields may share a clock.
+- Every logical Settings mutation advances only its own clock through `nextMutationTime`. Local optimistic concurrency, shared-ledger reconciliation, device/profile snapshots and recovery use the same `mergeSettingsRecords` semantics. Same-logical-setting conflicts remain deterministic; unrelated settings merge independently.
+- Existing records without fine clocks inherit the previous `settingsModifiedAt` baseline. Legacy old-client records are tolerated conservatively; missing intent information from an old client must never be invented.
+- `autoSiteIcons`, `webAccessPrompted`, browser permissions, active/default Space presentation and browsing-derived data remain device-local and must not enter the fine-clock Sync record.
+- Explicit reset / **Use this device** is an authority-epoch replacement, not an ordinary per-setting merge. Pre-reset Settings clocks must not resurrect through a peer.
+- Persisted state schema is 19 and Sync schema is 11. The `.mosaicsync` container format and device/profile snapshot envelope versions remain unchanged because the clock metadata is carried inside the existing state/Settings payloads.
+
+## 1.30.14 recovery hardening and manual detected-favicon intent policy
+
+1.30.14 keeps the 1.30.13 catastrophic-loss architecture and makes its first-loss and restart decisions more conservative. A first catastrophic-zero transition requires two independent observations: `storage.sync.getBytesInUse(null)` must report zero and a full `storage.sync.get(null)` read must also contain no keys. A persisted quarantine/recovering state whose deadline elapsed while the browser was closed receives a fresh startup warm-up before authoritative publication, because time spent with Firefox/Chrome closed is not evidence that browser Sync had a chance to redeliver Extension-Storage. Before a live recovery publication begins, the worker persists a short restart-grace deadline; if MV3 terminates the worker mid-publication, its replacement waits through that one-shot grace before another attempt rather than immediately generating another recovery write.
+
+A peer observing a valid intentional reset no longer drops permanently out of Sync. It preserves its local profile for safety/UX but remains `syncEnabled` in the existing non-publishing `await-remote` mode. The first later complete post-reset profile is treated as an authoritative replacement and **must not** merge the observer's pre-reset local shortcuts/settings back into the new epoch. Reset control records require a non-empty initiating device ID. The explicit-reset non-zero-marker ordering from 1.30.13 remains unchanged.
+
+Manual **Choose detected favicon** selections carry a compact optional synchronized `favPref` token. This field represents user intent only: no selected favicon pixels and no raw favicon URL are included in the shortcut Sync record. Network candidates use short hashes of the normalized candidate resource and selected image; browser-native candidates use a one-byte class token. The field is omitted when unused. A receiving browser retains the token even when Website Access is unavailable and reconstructs the preferred candidate locally through the bounded favicon recovery queue when a legal source becomes available. An exact preference match clears the temporary fallback marker; if the site changes its favicon resources, the best currently discoverable favicon may be shown provisionally while the original preference remains eligible for bounded retry. Explicit preference recovery is allowed even if automatic site-icon learning is disabled, because a user choice is not an automatic-learning preference. The existing **Sync this image** control remains separate and is the only explicit path that sends optimized favicon/image bytes through `storage.sync`.
+
+Do not turn `favPref` into a remote-image transport, persist raw potentially tokenized favicon URLs, or make ordinary automatically learned favicons synchronize this field. Changing the shortcut URL, selecting a built-in icon, uploading another local image, clearing artwork or choosing an explicit web image must clear the old favicon preference so a locator from one site cannot be reused for another.
+
+## 1.30.13 catastrophic Sync-loss containment and self-healing policy
+
+1.30.13 treats total disappearance of MosaicSync's `storage.sync` namespace as an external failure condition only when the current device has durable evidence that it previously participated in a complete synchronized profile. A genuinely new device with no continuity evidence keeps the existing `await-remote` behavior and never invents or publishes a source profile.
+
+An established device that observes exactly zero MosaicSync Sync bytes must preserve `mosaicsync.state`, onboarding state and Sync identity, enter a device-local quarantine, and avoid all Sync publication until the recovery deadline. The quarantine is deliberately silent in the UI. A complete Personal+Work remote profile appearing during the quarantine cancels recovery immediately and normal reconciliation resumes. Non-zero partial/corrupt delivery remains the responsibility of the existing torn-delivery/checksum/previous-generation paths and is not classified as catastrophic absence.
+
+If the namespace remains truly empty through quarantine, a surviving device may republish its current valid local Personal+Work profile through the existing authoritative generation machinery. Recovery reuses the serialized background queue, preserves verified recent deletion tombstones in a bounded device-local continuity record, keeps pending local/cross-Space mutation journals until the base profile is published, then replays them and verifies a complete remote profile before declaring success. Recent devices receive the shortest recovery delay; stale devices add a bounded delay and every device adds deterministic jitter so several survivors do not stampede the empty namespace at the same instant. Existing deterministic merge/tombstone rules remain authoritative after a recovery generation appears.
+
+A MosaicSync-controlled **Clear Sync copy** must never intentionally create a zero-byte namespace. 1.30.13 first publishes a small versioned `reset-intent` control record, then removes the other MosaicSync Sync records and disables Sync while preserving the local profile. Other 1.30.13 devices that observe that valid reset marker respect it rather than auto-resurrecting the old cloud copy. A later explicit local bootstrap publishes a complete profile first and only then removes the reset marker. This reserves a raw zero-byte namespace for external uninstall/storage loss instead of normal MosaicSync semantics.
+
+Recovery UX is intentionally non-blocking: suspicion/quarantine is silent; confirmed automatic repair emits a localized informational toast; successful verification emits a localized completion toast; exhausted recovery attempts emit a localized failure warning while explicitly preserving the local profile. The new user-facing strings are present in all supported runtime locales.
+
+The continuity/recovery records are device-local protocol metadata only. They are not exported in profiles, do not contain browsing telemetry, and add no permissions or MosaicSync backend. This release does not change the existing shortcut/settings/profile Sync schema; it adds only the reset-control record and local recovery metadata.
+
+## 1.30.12 install/reinstall preservation and Firefox development-identity policy
+
+`runtime.onInstalled` reason values are browser lifecycle notifications, not authorization to destroy MosaicSync data. In particular, `reason === "install"` must never by itself reset `mosaicsync.state`, `mosaicsync.meta`, onboarding, Sync enablement/bootstrap/status, applied revision markers, remote-receipt bookkeeping, pending Sync recovery state, or icon-recovery state. `ensureLocalStorage()` remains the single normal initializer: when authoritative local keys are genuinely absent it materializes the default first-install state; when they survive a reinstall/recovery/false-install transition, they are normalized/migrated and preserved. An incomplete surviving onboarding state may still foreground Welcome, but Welcome must not be reached by first destroying the surviving Sync/recovery state. Explicit destructive reset/clear behavior must remain user-initiated.
+
+Public Firefox builds keep the production Gecko ID `mosaicsync@xipinformatica.cat`. Routine `about:debugging` builds must use the separate development ID `mosaicsync-dev@xipinformatica.cat` and a visible `MosaicSync Dev` name. `python tools/package.py --firefox-dev` (or `npm run firefox:dev`) creates that non-release package from the built Firefox runtime without mutating `dist/firefox`; public packaging continues to emit only the Firefox, Chrome and GitHub-ready release ZIPs. Never submit the development-ID package to AMO, and never use a same-production-ID temporary package as the routine development workflow.
+
+This policy is defense in depth, not a claim that WebExtension code can prevent Firefox from uninstalling an add-on or deleting its storage namespace. Signed AMO upgrade behavior must therefore be validated separately on a disposable profile with real MosaicSync data before broad rollout.
+
+## 1.30.11 live Settings appearance-preview policy
+
+1.30.11 restores the safe live appearance-preview architecture after the stricter 1.30 Settings freeze accidentally removed real-time wallpaper and darkness feedback. While Settings is open, any direct appearance gesture may update only the fixed `#appearancePreviewLayer` / `#appearancePreviewImage` surface and its private `--appearance-preview-dim` value. The real `.page` `backgroundColor`/`backgroundImage`, root `--page-bg`, root `--background-dim`, and authoritative canvas-text choice must remain frozen until Settings closes. The preview layer must remain a simple paint-contained Settings-only surface using a plain `<img>` with `object-fit: cover`; do not replace it with CSS `background-image`, filters, backdrop effects, or any path that mutates the real full-viewport page underneath the open Settings panel.
+
+The preview DOM is the first child of `#page`, but its styling belongs in the deferred secondary stylesheet rather than the first-frame critical CSS because `openSettings()` awaits secondary styles before exposing the panel. Wallpaper/preset changes, ordinary background darkness, active separate Light/Dark darkness, and explicit Light/Dark theme selection must all update this preview immediately. External storage/Sync reconciliation remains paint-free while Settings is open. On close, the existing next-animation-frame `commitDeferredLauncherVisual()` performs one authoritative `applySettings()` commit and `clearAppearancePreviewLayer()` hides/resets the preview. Reopening Settings before that frame must continue to suppress a stale commit.
+
+## 1.30.10 verified device-snapshot decode cache policy
+
+1.30.10 is a zero-new-features background performance/refinement release on top of 1.30.9. Preserve every 1.30.9 trusted-state and 1.30.8 Sync correctness invariant. Complete chunked device/profile snapshot generations may be reused only through a worker-local decoded-generation cache whose maximum entry count is tied to `DEVICE_SNAPSHOT_MAX_RECENT_DEVICES` (currently 8). On every read, the current root/manifest, expected chunk set, per-chunk schema/device/commit/slot/index/total metadata, assembled data length and `dataFingerprint` must still be checked before any cache lookup. Only a generation that previously completed the normal Base64 decode, bounded gzip decompression, JSON parse, Personal/Work reconstruction and record/settings validation may enter the cache. Cache identity must include the generation plus every manifest field that affects the returned decoded result or an existing validation decision. Incomplete, corrupt, malformed, oversized, fingerprint-failing or record/settings-validation-failing generations are never cached as failures. Previous-generation fallback remains independently verifiable and a later-completed current generation must be accepted normally. The cache is disposable performance state only: never persist it, never make conflict resolution depend on it, and treat worker restart/cache loss as a CPU miss only.
+
+Regression coverage must use deterministic decode counts rather than fragile wall-clock thresholds: eight unchanged retained device generations decode on the first read and add zero expensive decodes on an identical second read. Keep explicit tests for incomplete→complete delivery, changed/corrupt chunks after cache population, manifest/generation invalidation, invalid decode/record validation non-caching, previous-generation fallback/current completion and Firefox/Chrome parity. The final `writeLocalStateWithBaseline()` normalization remains the durable persistence trust boundary; do not combine this cache with a normalized-write bypass or Sync conflict redesign.
+
+## 1.30.9 trusted-state efficiency and cleanup policy
+
+1.30.9 is a zero-new-features refinement release on top of 1.30.8. Preserve the complete 1.30.8 Sync/evidence architecture unchanged. The live New Tab `state` has already crossed `normalizeState()`; controlled internal preference mutations may use `replaceWorkspaceTrustedNormalized()` only when the workspace being inserted is constructed entirely from an already-normalized workspace plus known-valid normalized values/timestamps. The ordinary persistence writer remains the final defensive boundary and still normalizes/projects before durable storage. Public/raw-state callers continue to use defensive wrappers. Background Personal/Work publication may reuse the `newState` already normalized by `pushLocalMutation()` rather than normalizing it again before complete profile snapshot publication. The watchdog may suppress only the duplicate pending-local retry that was already completed earlier in the same serialized alarm task; it must not skip pending recovery on foreground/startup/message checks.
+
+### Requirement fulfilled by 1.30.10: verified device-snapshot generation cache
+
+The mandatory next-release cache recorded for 1.30.9 was implemented in 1.30.10 with stricter current-manifest/chunk/fingerprint revalidation before lookup, an eight-entry bound tied to retained recent devices, previous-generation fallback coverage and deterministic decode-count regressions. Preserve those invariants in future releases; the cache remains disposable performance state and never a correctness source.
+
+## 1.30.8 Sync same-key concurrency hardening policy
+
+1.30.8 is a zero-new-features correctness release on top of 1.30.7. Preserve all 1.30.7 normalized fast paths, compact-baseline reuse, foreground single-flight, workspace-clock fallback, post-write authoritative ledger and five-minute semantic watchdog. The new invariant is that an unexpected synchronized core value actually delivered by the browser must not be forgotten merely because a nearly simultaneous local publication overwrites the same `storage.sync` key before the queued reconcile reads it. Background `storage.onChanged` therefore keeps a short-lived, bounded in-memory evidence set for valid Personal/Work record/settings values, including a deterministically newer `oldValue` displaced by an expected own write. Before semantic freshness checks/reconciliation and before Personal/Work commit-marker construction, MosaicSync repairs the current shared key through the existing `chooseNewerRecord()` rule. The evidence layer is short-lived worker-local state only: it is never synchronized, never exported and never changes the public schema. It protects values observed by the currently running background context; normal durable `storage.sync` and device/profile snapshots remain the reconstruction sources after a worker restart. No new permissions, transport, telemetry, backend, heartbeat, feature or visual change is allowed.
+
+### Deferred optimization: device-snapshot generation decode cache
+
+Do **not** implement this cache as part of 1.30.8. Revisit it in a later zero-feature performance release only after the new Sync concurrency path has accumulated stable hardware/cross-device evidence. The intended design is a very small worker-local cache of **successfully decoded and fingerprint-verified complete device/profile generations**, keyed by immutable generation identity (device/commit/slot/data fingerprint). It must be bounded, disposable on MV3 worker restart, and must never cache incomplete, malformed, fingerprint-failing or partially delivered generations. Measure real decode frequency and snapshot sizes first; suggest this optimization again when Sync correctness is stable and a performance-focused release is appropriate.
+
+## 1.30.7 zero-feature performance/refinement policy
+
+1.30.7 keeps the complete 1.30.6 correctness/privacy model and removes redundant work rather than changing product behavior. Trusted internal Cross-Space operations use normalized fast paths after a single trust-boundary normalization; storage writes may carry an exact compact persisted baseline through the transaction instead of rebuilding it from hydrated image-heavy state; favicon commits reuse the compact baseline already returned by local materialization. Simultaneous foreground Sync freshness requests are coalesced only while one background check is queued/running—there is deliberately no completed-result freshness cache that could hide a missed `storage.onChanged` delivery. Foreground interval throttling uses monotonic `performance.now()`, while persisted diagnostics retain wall-clock timestamps. Normal publication still rebases against the delivered remote ledger and still constructs commit markers from the authoritative post-write ledger. Equal workspace clocks continue to fall back to exact semantic signatures; only obviously changed clocks take the positive fast path. Expected own Sync echoes do not replace useful remote-delivery forensic evidence. Settings remains a single-scroll-owner surface. No new features, permissions, transport, telemetry, backend, schema or visual behavior are introduced.
+
+## 1.30.6 Sync delivery resilience policy
+
+1.30.6 remains strictly zero-new-features maintenance. Firefox/Chromium `storage.sync` remains the only synchronization transport; MosaicSync does not introduce a server, heartbeat/pulse key or shorter polling interval and cannot claim to force browser-account delivery. An already-open New Tab may request one throttled foreground freshness check when it becomes visible/focused or returns from bfcache; this must reuse the existing `mosaicsync:reconcile-if-needed` background message, the serialized `enqueue()` queue and the existing five-minute semantic watchdog. The foreground path may self-heal the existing watchdog alarm but must not create another timer. Sync forensics live under a dedicated `storage.local` diagnostics key, never normal meta and never `storage.sync`, and contain only timestamps/outcomes/revision identifiers needed to distinguish browser delivery delay from MosaicSync reconciliation failure. Normal Personal/Work publication must rebase candidate records/settings against the currently delivered remote snapshot before writing and must construct its dataset marker from the post-write ledger, preventing a missed Sync event plus a local edit from overwriting/masking a newer remote record. Preserve all 1.30.5 Settings scroll behavior and all existing merge/tombstone/cross-Space/profile safety rules.
+
+## 1.30.5 Settings scroll-lifecycle refinement policy
+
+1.30.5 remains strictly zero-new-features maintenance and deliberately preserves the 1.30.4 rendering experiment: `.settings-dialog` is the sole vertical scroll owner and `.settings-dialog .dialog-card` remains normal-flow content with `max-height:none` and `overflow:visible`. The only runtime follow-up is to align locale-change scroll preservation with that architecture by saving/restoring `settingsDialog.scrollTop` instead of the now-non-scrollable `settingsForm`. Regression coverage stress-toggles Separate Light/Dark Wallpapers and Frequently Visited through their visibility-only paths and protects the scroll-owner contract. Do not change `hidden`/`display:none`, wallpaper preview timing, permission flow, native-dialog/container choice, scroll anchoring or overscroll behavior in this release; hardware results must still isolate the 1.30.4 scroll-frame hypothesis.
+
+## 1.30.4 Settings single-scroll-owner isolation policy
+
+1.30.4 remains strictly zero-new-features maintenance. The reproduced Firefox blank Settings failure survived the unpublished 1.30.3 native-dialog removal, so the next diagnostic variable is scroll ownership only: `.settings-dialog` owns vertical scrolling and `.settings-dialog .dialog-card` must remain normal-flow content with `max-height:none` and `overflow:visible`. Do not simultaneously change the Settings container primitive, `hidden` strategy, preview painting, storage-echo behavior or timing; the hardware result must prove or disprove the scroll-frame hypothesis cleanly. All validated 1.30.3 Space ownership, async cancellation, System-theme ordering, favicon timeout/recovery-queue, final-persistence and pointer-lifecycle fixes remain mandatory. 1.30.3 is an unpublished diagnostic candidate, not a public-history release.
+
+
+## 1.30.3 Settings stability and async-ownership policy
+
+1.30.3 remains strictly zero-new-features maintenance. The Settings surface must not use a native modeless `<dialog>`: real Firefox hardware reproduced freezes when Separate Light/Dark Wallpapers expanded on Linux and Windows and when Frequently Visited expanded on Linux. Settings remains a fixed, programmatically named ARIA dialog surface with explicit open/close/Escape/outside-click lifecycle; Separate Wallpapers must expand already-prepared controls without repainting both wallpaper previews in the checkbox gesture, and Frequently Visited has one parent visibility owner. A Space cannot switch while Settings is open. Async shortcut artwork and custom-wallpaper jobs must prove generation, owning editor/Space and live-surface identity after awaits before mutating state. System-theme reconciliation is generation-controlled and must resolve browser/media signals before painting. Every favicon quality subscan propagates completeness/timeouts; durable recovery-queue read-modify-write mutations rebase through a short serialized queue and reject non-finite timestamps. Continuous sliders may debounce persistence, but their final interaction persists immediately. No permission, synchronized/storage/profile schema, CSP or user-facing feature changes are allowed.
+
+## 1.30.2 Snow Leopard refinement policy
+
+1.30.2 is strictly zero-new-features maintenance on top of 1.30.1. The explicit Light/Dark selector may paint the already-existing page background immediately while Settings is open so a configured per-theme wallpaper always matches the selected appearance; this exception must stay narrow and must never invoke the broad Settings/grid renderer. Ordinary full-page appearance/background work remains deferred until Settings closes. Favicon final-quality completion must propagate partial original-origin scans instead of entering the device-local completed-audit ledger early; ledger read-modify-write operations are serialized and reject non-finite metadata. Manual detected-favicon discovery must revalidate its generation/URL after awaited bookkeeping before launching network work. Disposable render-manifest persistence must avoid identical writes, and Long Task diagnostics stay behind the developer-metrics gate. No permissions, synchronized/storage/profile schemas, CSP or user-facing features change.
+
+## 1.30.1 Snow Leopard maintenance policy
+
+1.30.1 is a maintenance-first corrective release that folds in the unpublished 1.30 release candidate. Keep the 1.27.9 persisted-state/draft separation, complete Personal+Work Sync recovery model, build-time canonical New Tab source, favicon safety/suitability policy and security boundaries. While Settings is open, never mutate a full-viewport wallpaper/background layer beneath the panel; apply the final full-page appearance only after close. Sync UI must distinguish an authoritative local publication from a foreign-device receipt. Automatic favicon quality follow-up remains bounded: a fast provisional result is followed by one complete bounded quality audit, completed audits are remembered device-locally, and upgrading to 1.30.1 re-opens older automatic favicons once so existing users receive the improved winner. The obsolete monolithic CSS and Personal-only snapshot writer are removed only after their useful tests are transferred to current runtime paths. Galician is supported; Arabic remains deferred pending dedicated RTL engineering.
+
+## 1.27.9 Snow Leopard maintenance policy
+
+- **Zero new features.** The release is limited to correctness, consolidation, test strengthening, package hygiene and measured low-risk optimization. No new UI surface, permission, storage/Sync/profile schema, CSP change, telemetry or remote code is allowed.
+- Open Settings has an explicit persisted-baseline + pending-local-draft model. Incoming state becomes the new baseline, untouched controls refresh from it, and only unpersisted dirty fields are overlaid back onto the working state. Dirty means pending persistence, not focus; the latest local value wins while dirty and clears only when that write succeeds.
+- The 1.27.8.9 Settings-open paint guard remains the visual lifecycle boundary. Draft merging happens before preview/reconciliation so the isolated preview reflects the merged user intent without allowing launcher/root repaint behind open Settings.
+- Favicon discovery uses one reviewed suitability/preference policy for automatic winner comparison, manual picker ordering and bounded early termination. Raw pixel size alone must never terminate quality discovery. Early exit remains bounded for network/battery efficiency but requires strong provenance, geometry and sufficient resolution.
+- `src/shared/newtab/` is the canonical maintained New Tab runtime source. The build copies its `newtab.js`, `newtab-critical.css` and `newtab-secondary.css` into Firefox and Chrome with no runtime import layer. Browser-specific background workers and overlays remain explicit.
+- The historical monolithic `src/shared/newtab/newtab.css` is retained only for reviewed legacy/full-CSS regression assertions and is excluded from runtime packages. Runtime loads only critical + on-demand secondary CSS.
+- All maintenance changes require failing-first behavioral regressions where a current correctness defect exists, plus positive preservation coverage. All 32 UI locales, both manifest locale trees, Sync safety tests, image/SVG/profile hardening and historical regression tests remain mandatory gates.
+- Migration/compatibility code is not deleted merely because it is old. Direct upgrades may skip releases; retirement requires proof that an input can no longer occur.
+
+## 1.27.8.9 corrective release policy
+
+- Scope is frozen to the mascot restoration, first-frame Light theme correctness, drag/drop localization, Settings-open render lifecycle hardening, and general favicon candidate suitability. No Sync schema, permission, CSP, profile-format or bootstrap-DOM change is part of this release.
+- Full launcher/root setting commits and grid rebuilds are deferred while Settings is open and coalesced into one authoritative commit on the animation frame after Settings closes. The model still adopts incoming storage/Sync state immediately; no own-write event is broadly ignored.
+- The isolated appearance-preview layer remains the only wallpaper surface mutated while Settings is open. Theme-button transitions keep their existing dedicated live skin path.
+- `appearance-bootstrap.js` sets `data-effective-theme` from the same disposable hint used for the first-frame background color so Light mode never starts with Dark launcher variables. Authoritative storage remains final.
+- The drag/drop choice popover refreshes Move/Create-folder headings and helper lines through `t()` every time it opens.
+- Favicon resolution uses a bounded suitability score: resolution saturates once tile-ready, while provenance and square geometry decide among sufficiently large candidates. There are no site-specific exceptions.
+- The mascot's `brand-hello-pop` and `brand-easter-wave` keyframes are critical-owned again; logo hover never activates deferred CSS.
+
+## 1.27.8.8 internal startup-style lifecycle candidate
+
+- New Tab startup must perform **zero unsolicited insertion of `newtab-secondary.css`**. `secondary-style-bootstrap.js` is an idempotent provider only; it must not schedule `requestAnimationFrame`, timers, or other automatic CSSOM mutations merely because a New Tab opened.
+- Any launcher-reachable secondary surface must await `ensureSecondaryStyles()` before becoming visible: Settings, Bookmarks, shortcut editor, folder popover, drag/drop choice menu, Frequently Visited context menu, toast feedback, and the brand hello animation. Secondary sub-surfaces opened only inside one of those already-loaded parents may rely on the parent boundary.
+- UI that can appear automatically during startup/reconciliation must not depend on the secondary sheet. The Website Access prompt therefore remains fully styled by `newtab-critical.css`.
+- Custom launcher native buttons that exist or can be inserted around first paint (`.settings-button`, `.bookmarks-button`, `.space-button`, `.add-slot`, `.edit-chip`, `.empty-ghost-tile`) explicitly use `appearance: none` in critical CSS.
+- Keep launcher DOM bootstrap/adoption architecture unchanged unless real-hardware testing proves the pill persists after this CSS lifecycle fix. Do not combine a bootstrap-structure rewrite with the stylesheet experiment without evidence.
+- The final architecture preserves strict CSP and packaged-only styles; no inline styles/scripts, remote CSS, telemetry, or page-hiding startup workaround is permitted.
+
+## Internal candidate 1.27.8.6 launcher native-appearance policy
+
+- Custom-styled launcher `<button>` controls that intentionally replace browser-native chrome must explicitly declare `appearance: none` in `newtab-critical.css`; do not rely on border/background overrides alone.
+- The current protected launcher controls are `.settings-button`, `.bookmarks-button` and `.space-button`. The brand control is a `<span>`, not a native button, and does not need this reset.
+- The reset belongs in blocking critical CSS so it is present before first paint and remains effective during later style recalculation. Do not add a late override, `!important`, or a new secondary-sheet launcher rule.
+- This internal candidate intentionally left the delayed secondary stylesheet architecture unchanged. Real-hardware testing showed that was insufficient; the public 1.27.8.9 policy above supersedes that loader behavior while retaining the native-appearance hardening.
+
+## 1.27.8.5 first-frame CSS ownership policy
+
+- Launcher-visible New Tab components are permanently owned by `newtab-critical.css`. Deferred `newtab-secondary.css` must not re-declare their normal geometry, paint/compositor properties or launcher image-layer behavior after the first frame.
+- In particular, `.settings-button` and its normal launcher states are critical-only. Re-declaring the fixed backdrop-filtered control in the secondary sheet can make Firefox rebuild its compositor layer a couple of frames after paint even when the declarations are identical.
+- Launcher tile/folder-mosaic image rules are likewise critical-only. Combined rules that also serve secondary folder-popover tiles must be split so only `.folder-item-tile` declarations remain in the secondary stylesheet.
+- Regression tests enforce CSS ownership in both directions: secondary/editor selectors stay out of critical CSS, and launcher-visible selectors stay out of secondary CSS.
+- The historical monolithic `newtab.css` may remain as reviewed reference for legacy tests, but it is not part of the runtime loading contract. `newtab.html` must not link it and `secondary-style-bootstrap.js` must load only `newtab-secondary.css`.
+- 1.27.8.5 is intentionally a narrow visual-integrity follow-up. It does not alter the 1.27.8.4 Frequently Visited Sync migration, wallpaper preview isolation, folder hydration scheduler, storage bootstrap, hover behavior, PCP instrumentation, permissions, Sync conflict semantics or image/navigation safety.
+
+## 1.27.8.4 New Tab performance, appearance-preview and Frequently Visited policy
+
+- New Tab first-frame CSS is split into a launcher-only critical sheet plus a genuinely secondary-only sheet. Critical and secondary runtime rules must not duplicate the whole monolithic source, and secondary UI styling must remain CSP-safe and packaged locally.
+- The tiny pre-module local-storage bootstrap may start only the frozen authoritative local-state/meta/active-Space/asset-index read. The main module must consume that same Promise/result; it must not create an alternate persistence path or weaken normal normalization/concurrency checks.
+- Deferred closed-folder artwork is pixel-only work. All child records remain authoritative immediately. Hidden artwork must hydrate in bounded idle chunks with yielding between chunks, and folder-open hydration must reject stale async completion if a structural mutation occurred meanwhile.
+- Startup timing remains local, ephemeral diagnostics only. Paint/PCP and bounded long-task timing may be recorded in the current page context, but nothing may be persisted, transmitted or turned into telemetry.
+- While Settings is open, separate Light/Dark wallpaper and darkness changes must paint only the isolated appearance-preview layer. The real root/page wallpaper/dim surface stays frozen until the dialog closes and the deferred authoritative commit runs, preserving the Firefox compositor workaround.
+- Frequently Visited **Show** and **Count** are user profile preferences and synchronize through normal MosaicSync settings records. Actual Top Sites/history data, hidden-site data and the optional browser permission remain device-local. A receiving device whose synchronized preference is ON but whose permission is missing keeps the preference ON and exposes the existing user-gesture-only Grant permission action.
+- Legacy device-local Frequently Visited migration must not allow a default OFF/5 installation to race against and overwrite another device's meaningful legacy ON/non-default preference.
+- Shortcut hover remains transform/paint-only with no grid reflow; 1.27.8.4 intentionally makes the hover enlargement more noticeable while keeping layout geometry unchanged.
+
+## 1.27.8.3 New Tab critical-path performance policy
+
+- New Tab optimization must reduce work on the visible/interactive critical path rather than merely improving post-paint microbenchmarks. Local-only phase timings may be recorded in the page context for diagnosis, but they must never be persisted, transmitted, or turned into telemetry.
+- The synchronous first frame uses a deliberately smaller critical stylesheet. The complete stylesheet is loaded immediately afterward by an external CSP-safe bootstrap; no inline event handler, `unsafe-inline` exception, remote stylesheet, or visual-feature removal is permitted.
+- A bootstrap grid may become the authoritative interactive grid only after a strict structural match against current state, including revision/settings clocks, grid geometry, current order, shortcut IDs/titles/navigation targets and the first four folder-child IDs. Any uncertainty must fall back to the established full renderer.
+- Closed folders remain fully authoritative at the record level. Startup may defer only hidden child artwork bytes beyond the four visible mosaic cells; opening the folder hydrates missing pixels immediately and post-paint idle work warms the remainder.
+- Normal current-schema startup reuses the exact compact `storage.local` state as the optimistic-write baseline instead of projecting the hydrated render state. Legacy/migration paths still construct a canonical baseline explicitly.
+- Authoritative local storage I/O should begin as early as possible and overlap secondary UI initialization without changing read/write/concurrency semantics.
+
+## 1.27.8.2 New Tab startup-performance policy
+
+- The synchronous render manifest is a first-frame visual cache, not authoritative state. A matching preview may remain visible while the authoritative content-addressed image decodes, but only when its `imageKey` matches the shortcut's current asset identity; stale previews must fail closed to the normal built-in/fallback path.
+- Device-local image validation remains mandatory at the `storage.local` trust boundary. Once exact bytes have passed validation, their transient data-URL→asset-ID memo may be reused by normalization and write-baseline construction during the same startup instead of hashing the same bytes repeatedly. The memo is never persisted as a trust bypass.
+- Custom wallpaper bytes do not compete with visible shortcut artwork on the first authoritative asset read. The compact state keeps the content-addressed wallpaper ID authoritative, the existing tiny appearance preview remains on screen, and the full wallpaper asset is hydrated immediately after the shortcut grid gets a frame to paint.
+- A closed folder contributes only its first four children to the synchronous first-frame manifest/preview-generation workload because only four mosaic cells can be visible. The authoritative folder contents remain complete and unchanged.
+- Full and preview tile images request asynchronous browser decode scheduling. Matching bootstrap artwork remains recognizable until the full image reports itself decodable; no image quality, CSP, URL validation, Sync, schema or security rule is weakened for performance.
+- Performance regressions are tested with image-heavy startup fixtures. The benchmark must retain explicit comparisons for normalization/write-baseline work with and without a prevalidated asset memo.
+
+## 1.27.8.1 distributed Sync validation and recovery-protection policy
+
+- `syncStatus` describes whether the ordinary Personal+Work synchronized profile is usable; complete-profile recovery protection is tracked separately as `unknown`, `protected` or `limited`. A quota/size failure of the extra safety generation must never be silently discarded.
+- Every production path that attempts `publishProfileDeviceSnapshot()` must propagate its outcome into local metadata. Work-only edits and cross-Space transactions are covered by the same rule as Personal edits/bootstrap/reconciliation.
+- A failed target generation never flips the authoritative root. If chunk writes succeed but the root write fails, target chunks are cleaned up and the previous complete generation remains valid.
+- Release-level Sync validation must include two independent production background instances sharing an emulated remote `storage.sync`, not only source-shape assertions. The harness must support partial/out-of-order delivery and missed `storage.onChanged` notifications, and convergence must be verified after the watchdog path.
+- 1.27.8.1 intentionally does not change whole-record conflict/LWW/tombstone semantics; clock-skew and per-field shortcut merging remain separate design work.
+
+## Internal candidate 1.27.8 complete-profile Sync safety policy
+
+- Personal and Work are one readiness unit. A fresh profile must not become Sync-ready until both Spaces are explicitly complete.
+- The device-owned fast snapshot remains payload-version compatible with 1.27.7 for Personal, but 1.27.8 adds validated Work records/settings and marks the generation as a complete profile.
+- Full-profile generations are root-last and double-buffered. The active root retains a descriptor for the immediately previous complete generation so a receiver can fall back if the current root arrives before all current chunks.
+- A trusted existing device may publish its complete local profile. A half-restored fresh profile with no applied Work/profile revision and default-empty Work must not publish that emptiness.
+- Local edits made while a fresh profile is waiting are merged after a complete remote baseline arrives, then published as normal per-record changes; unrelated remote records are preserved.
+- A complete profile snapshot may repair a torn compatibility ledger by merging any visible partial records under the existing deterministic conflict clocks and recommitting the dataset marker last.
+- `syncStatus: ready` is a profile-level state. Personal-only success must never mask Work pending/integrity failure.
+
+## 1.27.7 favicon state/render-consistency policy
+
+Device-local automatic favicon/cache hydration intentionally does **not** advance synchronized workspace/core clocks. New Tab must therefore never suppress a `storage.local` state event solely because its `updatedAt`/settings clocks match a recent in-page write. Exact own-write echoes and genuine device-artwork changes are both handled through the existing Sync-signature/device-artwork fast path; a real background favicon update must be able to mutate the in-memory shortcut and patch the currently visible top-level tile, folder mosaic and open folder contents. If the fast path cannot prove the change is display-cache-only, the authoritative state/render path remains the fallback.
+
+Manual **Choose detected favicon** discovery remains separate from the automatic resolver. If the shortcut already contains learned automatic artwork with provenance `favicon` or browser-native `firefox`, those exact validated pixels may be exposed as an already-known detected candidate and deduplicated against fresh discovery. Uploaded/user artwork and bundled built-in icons must never be relabeled as detected favicons. A successful page inspection that finds no candidates retains the normal empty-state message; if page-head inspection itself fails and no fallback candidate exists, the UI must report the localized inspection-failure state instead of falsely claiming that the website has no icons.
+
+Regression coverage must exercise the production page-icon scanner against a fixture containing declared inline SVG and PNG favicon metadata, prove current learned-candidate provenance/deduplication, prove storage-event suppression cannot hide device-local artwork changes, and keep automatic `resolveFaviconForUrl()` byte-identical to 1.27.6 unless a future release explicitly changes automatic favicon behavior. No new permission, host-permission, state/Sync/profile-schema, CSP, telemetry or remote-code behavior is introduced by this consistency fix.
+
+## 1.27.5 tile-artwork / favicon-permission / build-integrity policy
+
+Contained top-level shortcut artwork uses a proportional 58/76 ratio (about 76%) across the supported 60–96 px tile-size range; bundled top-level MosaicSync icons use 78%. Tile dimensions, grid density and Cover-mode edge-to-edge behavior remain unchanged. The synchronous first-paint renderer and authoritative renderer must use the same ratio so startup cannot visibly resize artwork after hydration.
+
+The manual **Choose detected favicon** cache is gated by a live `hasWebAccess({ refresh: true })` permission read before cache access. Redirect-origin `/favicon.ico` may share the existing two-wide ordered fallback batch, but the automatic `resolveFaviconForUrl()` ranking/winner/single-flight pipeline remains a protected baseline. The manual picker intentionally keeps ordered two-wide batches rather than a completion-order worker pool unless a future change can prove candidate-priority and network semantics remain stable.
+
+The compact PSL build must emit deterministic semantic rule counts and SHA-256 metadata, reject implausibly small wildcard/exception sets, duplicate rules and embedded rule whitespace, and remain functionally equivalent to the authoritative source for exact/private/wildcard/exception/IDN behavior. Package-size regression checks cover total/category growth, missing categories and significant individual top-file growth; JavaScript and Python category classifiers must remain equivalent. Compact locale generation must preserve arbitrary Unicode, quotes, backslashes, newlines, placeholder-like text and other literal content exactly. `src/` is authoritative; generated compact runtime artifacts under `dist/` must never be edited directly.
+
+## 1.27.4 runtime-size / favicon-picker lifecycle policy
+
+The reviewed files under `src/shared/core/i18n-locales/` remain the authoritative human-readable 33-language catalogs. `tools/build.mjs` may generate a compact runtime representation in `dist/` only when exhaustive tests prove exact source→runtime key/value equivalence. Locale lazy-loading remains unchanged: English plus only the active locale are loaded, and compacting must not cause all catalogs to parse on New Tab startup.
+
+The authoritative `src/shared/core/public_suffix_list.dat` remains the complete upstream PSL with provenance/comments. The build emits a rules-only runtime copy with a compact license/provenance header. Every non-comment rule and its order must be byte-text equivalent after trimming; no PSL rule may be removed or rewritten. Package-size monitoring is deterministic and category-based. `package-size-baseline.json` is a conscious release baseline, not a hard product-size ceiling; unexpected category/total deflated growth above the configured 15% tolerance must require an explicit baseline update.
+
+The automatic favicon resolver remains the protected 1.27.2/1.27.3 baseline and must not be modified by manual-picker optimizations. Manual candidate discovery may use at most two simultaneous bounded fetch/decode jobs. A repeated exact-URL picker request may reuse only a tiny short-lived in-memory cache (30-second TTL, four-entry cap, explicit retained-character bounds); permission is still checked before cache use and refreshed before cache admission. Site-declared inline data favicons remain supported only through the existing declared-image decoding/SVG safety path. Closing the shortcut editor or changing its URL must increment the picker generation, release candidate DOM/data immediately and cause late async results to be ignored.
+
+Detected-favicon accessibility metadata may expose dimensions and a localized Browser/Website source label without adding raw technical source strings to the UI. No discovered candidate except the one deliberately selected becomes persisted artwork. Obsolete CSS may be removed only when full-source/runtime searches confirm no static or dynamic use.
+
+## 1.27.3 favicon-choice / folder-follow / recency-efficiency policy
+
+The automatic favicon resolver remains a protected baseline: `resolveFaviconForUrl()` must remain byte-for-byte identical to 1.27.2 unless a future release explicitly changes automatic favicon behavior. The manual favicon chooser is a separate user-initiated path that reuses the same bounded fetch, image-dimension and SVG-safety primitives, returns at most eight deduplicated validated images, and never widens host permissions or introduces a remote favicon proxy. Choosing one makes those exact pixels explicit user artwork so automatic recovery cannot overwrite the user's selection; optional image Sync remains user-controlled through the existing checkbox.
+
+Open folder popovers must remain visually attached while `.page` scrolls or the viewport resizes. Reposition work is coalesced through `requestAnimationFrame` so scroll events cannot create an unbounded layout loop. Recent mode remains presentation-only: top-level visual-slot dragover now stops propagation and advertises no-drop, while ordinary same-tab shortcut navigation records recency locally without scheduling a grid render that will be discarded by immediate navigation. Modified/background opens continue to schedule Recent rendering because MosaicSync remains visible.
+
+Regression coverage must lock both chronological directions of built-in-icon/upload conflict resolution, automatic favicon resolver byte identity, favicon-choice bounds/deduplication, explicit-selection semantics, folder scroll/resize coalescing, Recent dragover containment, and localization completeness.
+
+## 1.27.2 Recent-mode / editor / projection hardening policy
+
+1.27.2 keeps **Recently opened** strictly presentation-only at the top-level grid. While Recent mode is active, top-level visual-slot drops must not create or move canonical Manual positions: Frequently Visited drag-to-grid and folder-child extraction-to-grid are blocked, top-level drag sources remain disabled, and normal Add shortcut ignores the Recent visual slot and selects a canonical free Manual position. Folder-internal reordering may continue because it does not depend on the top-level Recent projection. Manual mode retains the existing exact-slot drag/drop behavior.
+
+The shortcut editor should fit without a visible internal scrollbar on normal desktop-height viewports by modestly tightening vertical spacing, image-preview size and action margins. The generic dialog overflow remains intact as a fallback for genuinely short viewports and localization/accessibility must not be weakened to remove scrolling.
+
+Disposable render-manifest projection must allow-list `builtinIcon` and `colorTag` exactly like the session render snapshot. A shortcut claiming `imageSourceKind: "builtin"` without a valid `builtinIcon` must normalize to source kind `none`, allowing normal favicon recovery instead of creating a permanently icon-less malformed state. A deliberate synchronized built-in-icon choice remains normal last-writer-wins presentation metadata and may replace local uploaded artwork; this behavior is intentional and regression-tested.
+
+Regression coverage must execute the real empty-slot drop path in Recent and Manual modes, execute folder popover positioning for one-line/two-line/clipped/clamped/flipped geometry, and mechanically compare classic first-paint Recent ordering against the authoritative sorter across varied inputs.
+
+## 1.27.1 folder-popover positioning policy
+
+1.27.1 is a presentation-only correction to 1.27.0. The `.shortcut-label` element intentionally reserves a two-line slot (`min-height: 34px`) for grid alignment, so its element rectangle is not a valid visual anchor for one-line folder titles. Folder popover placement must measure the actually rendered visible text line boxes and use their bottom edge, with a 3 px nominal gap. Line boxes clipped beyond the label viewport must not influence the anchor. If text-range geometry is unexpectedly unavailable, placement may safely fall back to the label element rectangle.
+
+The existing horizontal centering, 12 px viewport clamping, estimated-height collision handling and above-the-tile fallback remain unchanged. No permissions, storage/Sync/profile schemas, favicon behavior, CSP, telemetry, remote code, localization strings or feature semantics change in this patch.
+
+## 1.27.0 feature / presentation policy
+
+1.27.0 adds synchronized shortcut metadata for `builtinIcon` and `colorTag`. Both fields are strict allow-list values at the model boundary. A built-in icon is packaged MosaicSync UI artwork, not imported SVG/user markup: selecting one clears shortcut image bytes, local/sync asset IDs and automatic favicon state, and automatic favicon recovery must not overwrite it. Built-in icon metadata synchronizes as part of the shortcut record without consuming image-asset quota. Shortcut color tags are visual metadata and synchronize with the shortcut. The local state schema is 18 and the Sync record schema is 10; older records without these optional fields continue to normalize to the empty/default values.
+
+The **Recently opened** order is a device-local presentation mode. Its mode and bounded per-shortcut last-opened timestamps live only in `localStorage` under the centralized `SHORTCUT_ORDER_PREF_KEY` / `SHORTCUT_USAGE_PREF_KEY`; they must never enter MosaicSync profile exports, browser Sync records or canonical shortcut `position` fields. Manual order remains authoritative and drag reordering is disabled only while the recent presentation is active. The synchronous first-paint projection and authoritative renderer must use the same recency semantics to avoid a startup layout jump.
+
+The lightweight `storage.session` render snapshot is also a presentation boundary. It must carry only allow-listed `builtinIcon` / `colorTag` values (including folder children), and the authoritative visual-reconciliation signature must include those fields. This guarantees an older or incomplete disposable startup projection is repainted from authoritative state instead of leaving a built-in icon/color visually stale.
+
+Folder **Open all in background** reuses the existing final HTTP(S)-validated background-tab path for each child. It introduces no new data model. Folder popovers must remain visually close to their visible tile/label (`4px` nominal gap) while retaining viewport clamping and above/below collision handling.
+
+All 1.27.0 user-visible labels, icon names and color names remain in the 32-locale UI catalog. Do not hardcode new user-facing English. The release does not broaden permissions, CSP, remote code, telemetry or favicon network behavior.
+
+## 1.26.17.7 optional-permission recovery policy
+
+Frequently Visited stores user intent separately from the browser's optional `topSites` grant. If the preference is enabled while the grant is unavailable, MosaicSync must keep the preference enabled, render no Top Sites data, show a localized direct permission-recovery action, and request the permission only from that explicit user gesture. Denial/revocation must never force an OFF state or require an OFF → ON toggle to recover.
+
+`permissions.onAdded` / `permissions.onRemoved` and one delayed post-start reconciliation keep the UI aligned with the browser's live permission state. If a grant becomes available again, suggestions refresh automatically; if it remains unavailable, the recovery action remains available. Profile import preserves the remembered Frequently Visited preference independently from the installation-local permission state. No permission is silently granted, and the manifest permission model is unchanged.
+
+The exact-URL favicon single-flight optimization from 1.26.17.6 remains unchanged. Regression coverage must compose the production queue grouping with the real `applyProactiveFaviconResults()` stale-result checks so a shared resolver result cannot hydrate an ID that changed URL, was deleted, or moved into a Space that no longer allows automatic icons while networking was in flight.
+
+## 1.26.17.6 performance/stability policy
+
+The favicon recovery engine may coalesce only resolver jobs with the **exact same normalized shortcut URL and the same quality mode**. Distinct pages on one origin remain independent because page-level metadata can legitimately advertise different icons. The concurrency limit applies to distinct resolver jobs; a shared validated result may fan out to multiple matching shortcut records, but every record still goes through the existing stale-state re-read, per-ID applicability checks, durable backoff and atomic device-local commit path.
+
+Frequently Visited may reuse its explicit-shortcut host `Set` only while both the in-memory state identity and `stateMutationGeneration` are unchanged. A state replacement or generation advance must rebuild the Set so local edits, imports, Sync restores and cross-Space changes cannot leave stale duplicate filtering.
+
+Production New Tab performance diagnostics remain local development instrumentation only. `console.debug` performance output must be gated by `devMetricsEnabled()` / `MOSAICSYNC_DEV_METRICS === true`; no telemetry or remote reporting is introduced.
+
+The 1.26.17.5 URL/profile hardening remains a frozen safety boundary. Behavioral regression coverage now executes the classic first-paint renderer against hostile shortcut/Frequently Visited URLs and verifies fail-closed behavior when the shared URL helper is absent. Prototype-pollution tests also assert that dangerous own keys do not survive on normalized settings, Spaces, folders, shortcuts or nested children.
+
+## 1.26.17.5 shared HTTP(S) validation / import hardening policy
+
+Shortcut URL acceptance is centralized in `src/shared/core/http-url-safety.js`, a deliberately tiny script with no import/export syntax so the exact same validator can be used by synchronous classic first-paint code and ES-module code. It accepts only syntactically valid `http:`/`https:` URLs up to 2048 characters and otherwise returns an empty string. Do not reintroduce independent shortcut-scheme regexes in model/storage/import/render code unless a different URL semantic is genuinely required.
+
+`render-bootstrap.js` remains a disposable synchronous first-frame optimization. The shared URL helper is loaded immediately before it at the bottom of New Tab; it must not be moved into the head/startup-I/O path or expanded with networking, timers, storage reads or other work. If the helper is unavailable, the bootstrap must fail closed and leave rendering to the authoritative module path.
+
+Profile normalization must continue to reconstruct fresh allow-listed objects. Regression coverage deliberately injects checksum-valid `__proto__`, `constructor` and `prototype` keys at multiple profile/package levels, including nested folder children and the asset envelope. Accepted inputs must normalize those keys away; rejected inputs must leave existing state and `Object.prototype` untouched.
+
+- `npm run build` — generates `dist/firefox` and `dist/chrome` from the shared source plus browser overlays.
+- `npm test` — builds and runs the permanent regression suite.
+- `npm run bench` — runs the reproducible 200-shortcut worst-case microbenchmark.
+- `python tools/package.py` — creates deterministic Firefox/Chrome runtime ZIPs from `dist/`.
+
+The runtime ZIPs should be created from `dist/firefox` and `dist/chrome`; tests, fixtures and documentation are development-only and are not shipped inside the extension packages.
+
+## 1.26.17.4 import/navigation hardening policy
+
+Profile imports retain the intentionally generous 256 MiB abuse ceiling, but the `File.size` boundary must be checked before `File.text()` in every import entry point so an oversized local file cannot force a large allocation before structural validation. The parser keeps its independent post-read character limit. The specific too-large UI error remains localized through every supported MosaicSync UI catalog.
+
+Shortcut URLs are normalized to HTTP(S) at the model/profile/Sync trust boundaries. The authoritative New Tab navigation sinks also fail closed independently: top-level tiles, folder-item anchors, permission-resume navigation and “Open in new tab” must never navigate a shortcut whose current URL is not valid HTTP(S). This is defense-in-depth and must not loosen the central model invariant.
+
+A user-confirmed `.mosaicsync` restore remains an authoritative profile replacement. When Sync is enabled, `bootstrapLocal()` intentionally publishes that restored profile as the synchronized source; historical Sync tombstones must not silently override an explicit backup restore. Concurrent local writes continue through the existing write-baseline/rebase architecture; audit-driven changes to self-write suppression require a reproducing behavioral test rather than a speculative rewrite.
+
+Historical upgrade maintenance is keyed from the `previousVersion` range that needs repair. Do not gate old migrations on the current `VERSION` literal. Frequently Visited below 900 px keeps the current configurable show-and-wrap behavior; do not reintroduce the obsolete rule that hid card 4 and later.
+
+## 1.24.11 engineering policy
+
+1.24.11 treats 1.24.10 runtime behavior as frozen. Persistent/session key names and runtime tuning limits live in `core/constants.js`; non-module first-paint bootstrap scripts may duplicate only the two session-render key literals they must access before modules load. Runtime caches must be explicitly bounded. Build output is generated from shared source plus browser overlays, and `build-manifest.json` records the SHA-256 hash of every generated runtime file.
+
+The regression suite intentionally tests failure paths as well as happy paths: legacy inline-profile migration, corrupt local assets, invalid session snapshots, localization completeness, accessible dialog naming, bounded URL/cache behavior, favicon recovery, Sync semantics, asset/profile integrity, and Firefox/Chrome parity.
+
+## 1.24.12 security/correctness policy
+
+1.24.12 keeps the 1.24.11 runtime/profile architecture frozen while hardening trust boundaries and concurrent local writes. New Tab mutations retain a compact write baseline; `storage.js` re-reads the latest compact state inside the asset-write lock and three-way rebases only the caller's delta when another tab committed first. Disjoint settings fields are merged independently, while same-field/same-record conflicts retain the existing deterministic MosaicSync ordering.
+
+Profile v2 import requires the asset envelope to contain exactly the content-addressed assets referenced by the compact profile state. Remote SVGs are admitted only if self-contained and free of active/embed/external-resource constructs. CSP/XSS, asset/input bounds, same-extension runtime messaging, and long-lived cache limits are permanent automated contracts.
+
+## 1.24.13 storage-failure policy
+
+1.24.13 keeps the 1.24.12 architecture and behavior frozen. A failed atomic `storage.local` state/asset commit must leave the complete previous transaction intact: MosaicSync must never retry by publishing compact state without the referenced local assets. Background silent-write suppression is transactional as well; if the local write fails, both the in-memory and `storage.session` suppression markers are removed so a later legitimate change cannot be accidentally ignored.
+
+The Firefox text-platform passthrough intentionally declares the same `(value, locale, key)` call shape as the Chrome overlay while remaining a no-op.
+
+## 1.24.14 optimization policy
+
+1.24.14 keeps correctness reads and conflict semantics unchanged. Detailed Sync usage accounting is demand-driven by Settings rather than recomputed after every mutation. The source package includes the deterministic 200-shortcut benchmark fixture so future micro-optimizations can be measured before they are accepted. Image-heavy writes use a per-operation asset-ID memo only to avoid recomputing the same pure hash within one transaction; it is cleared immediately after persistence and is not a long-lived image cache.
+
+## 1.24.14b favicon-quality policy
+
+1.24.14b is intentionally narrow. The normal favicon-first path is unchanged. Only an existing low-resolution icon undergoing an explicit quality retry may probe additional same-origin conventional static icon paths, with `/icon.ico` first. A high-quality result can satisfy the retry before HTML/manifest discovery, which keeps authenticated or WAF-protected page shells out of the critical path. No domain-specific favicon mapping is used.
+## 1.24.14c authenticated-deep-link favicon policy
+
+1.24.14c keeps the fast favicon-first resolver and the 1.24.14b conventional-path quality probes. If a credential-free quality fetch of a deep shortcut redirects to a different origin (for example, an account/login provider), MosaicSync now inspects the original site's public root for declared application icons before considering redirect-destination artwork. The recovery probe accepts root metadata only when the root itself remains on the original origin. No host-specific mapping or third-party favicon service is used; image fetches retain the existing bounds, MIME/SVG validation, no-referrer policy, and `credentials: "omit"`.
+
+
+
+## 1.24.14d Chrome native-favicon quality policy
+
+Chrome's `_favicon` endpoint is a browser-local fast fallback, but the requested output size is not treated as intrinsic source quality: Chrome may upscale a small cached favicon. Native pixels therefore carry unknown quality metadata and remain eligible for the same generic quality-recovery pipeline as other automatically learned favicons. The upgrade path also treats the historical `firefox` source-kind label as browser-native/reconstructable artwork on Chrome. Firefox manifests intentionally omit Chrome-only `version_name`; the human-facing release label remains available through MosaicSync's internal `VERSION` constant and UI.
+## 1.24.14e favicon resolver policy
+
+The resolver is deliberately two-stage. The first pass favors latency: browser-local artwork and `/favicon.ico` may be displayed immediately as provisional device-local pixels. The first quality follow-up is not a failure and becomes due immediately, with the existing alarm remaining the MV3 durability fallback.
+
+The quality pass favors authority: HTML/manifest-declared artwork is inspected before guessed filenames, including cross-host CDN artwork permitted by the all-sites Website Access grant. Authenticated deep-link redirects still trigger recovery from the original site's public root. Only after declared discovery has failed to reach high quality may `/favicon.ico` and the conventional quality guesses run, and those guesses share a 1.5-second post-discovery fallback budget so they cannot consume the main 8-second discovery deadline.
+
+Chrome's private `_favicon` cache is read before the optional host-permission gate because it is browser-local. It is a provisional fallback only and carries unknown intrinsic quality. Brand-new Chrome sites do not need to be visited first: when MosaicSync Website Access has already been granted, the same declared-site network resolver runs even with an empty Chrome favicon cache. Without that optional host permission, MosaicSync cannot independently fetch a never-visited website and correctly falls back to browser-local data only. No third-party favicon service or hostname-specific mapping is used.
+
+
+## 1.24.14f UI-polish policy
+
+Donation is live at `https://ko-fi.com/mosaicsync`; both Welcome and Settings route through the shared `DONATE_URL` constant and no “coming soon / being prepared” UI state remains. User-facing donation copy continues through the reviewed localization catalogs.
+
+Anchored help tooltips must not rely on escaping a scrolling dialog's `overflow` rules. While visible, the existing localized tooltip DOM node is moved to `document.body`, positioned with `position: fixed`, clamped to a safe viewport margin, flipped below the anchor when there is insufficient room above, and restored to its original parent when hidden. This keeps one source of localized content and avoids clipping in every supported language.
+
+## 1.24.14g adversarial-hardening policy
+
+1.24.14g keeps Sync conflict semantics and favicon resolver ordering unchanged. Read-only Sync status requests stay on the serialized background queue but cannot persist a durable Sync error when the inspection itself fails. Firefox data-collection permission revocation clears pending cross-Space journals before disabling Sync, matching the explicit disable path. Viewport-portaled tooltips must remove themselves if their original UI host has already been disconnected.
+
+Profile import remains independent of browser Sync quota. Its pre-parse length check is a deliberately extreme 256 Mi-character abuse/OOM ceiling, not a normal profile-size product limit, and profile format v2 is unchanged. Content-addressed local projection fails closed if a single transaction ever presents two different payloads for one asset ID. Permanent tests cover same-shortcut concurrent conflicts, destination-first cross-Space interruption/replay, the collision guard, profile-size boundaries, tooltip teardown, and read-only background-error isolation. The favicon-learning network/queue architecture is deliberately deferred to 1.24.14h.
+
+## 1.24.14h favicon-queue policy
+
+Click-triggered favicon learning is split into three phases: a short serialized eligibility/preflight read, browser/native plus remote quality resolution outside MosaicSync's state/Sync mutation queue, and a short serialized commit. The commit always reloads current local state and re-finds eligible shortcut targets before applying pixels through the existing optimistic-rebase write path. This prevents a slow favicon host from delaying Sync reconciliation while preserving deletion and concurrent-edit safety.
+
+The separate tab-favicon work queue is bounded to three simultaneous jobs and to the existing pending-navigation entry cap; repeated `tabs.onUpdated` events for one tab replace queued stale work with the newest snapshot. The favicon resolver itself, permissions, profile/storage/Sync schemas and localization remain unchanged.
+## 1.24.14i proactive favicon hardening
+
+The 1.24.14h network/state-queue split remains intact. 1.24.14i makes proactive recovery Space-aware: pending work is validated against the shortcut's current Space and that Space's `autoSiteIcons` setting at prune/commit time, and an idempotent rediscovery is an unchanged success rather than a stale failure. Behavioral tests cover the real batch engine and scheduler instead of relying only on source-text canaries. No persisted schema, profile format, Sync namespace, permission, or localization changes were introduced.
+
+## 1.24.14j favicon commit-failure policy
+
+The proactive favicon architecture from 1.24.14h/i remains unchanged: network discovery runs outside the serialized state/Sync queue and commits re-read current state. 1.24.14j hardens the seam with the generic background `enqueue()` contract. `enqueue()` intentionally resolves failed tasks as `{ ok: false, error }`; the batch engine must treat that shape as a transient commit failure and retain the durable recovery item through normal backoff rather than deleting it as stale. Permanent tests compose the real queue wrapper with a throwing commit on Firefox and Chrome. Equal-clock Sync settings records are also pinned against the existing deviceId tie-break, including a missing-deviceId case. No conflict algorithm, persisted schema, permission, UI string or favicon discovery rule changes.
+
+
+## 1.24.14k duplicate-record-ID policy
+
+Every Sync-addressable record inside a workspace must have a unique ID across top-level shortcuts, folders, and folder children. `normalizeWorkspace()` repairs invalid duplicates before `flattenStateNormalized()` builds its ID-keyed `Map`, preserving all otherwise-valid records instead of silently allowing a later record to overwrite an earlier one. Profile files receive one additional file-boundary repair across Personal and Work so a hostile/hand-edited backup cannot leave an ambiguous same-ID record in both Spaces. This cross-Space repair is intentionally **not** part of general Sync reconciliation: legitimate cross-Space move/reconcile mechanics keep their existing IDs and conflict semantics.
+
+## 1.26.17.2 per-appearance wallpaper darkness policy
+
+When separate Light/Dark wallpapers are enabled, wallpaper darkness is part of each appearance rather than a shared global value. `lightBackgroundDim` and `darkBackgroundDim` travel with the synchronized visual settings and complete `.mosaicsync` profile backups; the legacy `backgroundDim` remains authoritative only when separate theme wallpapers are disabled.
+
+The one-time migration from older state must preserve the appearance actually active after system-theme reconciliation: the active Light or Dark appearance inherits the legacy `backgroundDim`, while the opposite appearance starts at 0%. Older Sync records that do not contain the new fields must not erase values already migrated on a newer client. The synchronous appearance hint stores the **effective** current darkness so first paint never applies the other appearance's value during a later automatic theme switch.
+
+Settings exposes independent darkness sliders beside the Light and Dark wallpaper choices and hides the legacy single darkness slider while separate wallpapers are enabled. These controls reuse the existing localized `Background darkness` string; no new hardcoded user-facing English is introduced. Runtime theme switching must resolve wallpaper and darkness together, including while the Settings preview layer is open.
+
+## 1.26.17.1 Frequently Visited global-exclusion policy
+
+Frequently Visited is a device-local discovery aid, not a per-Space duplicate list. Before a candidate is shown, MosaicSync builds one canonical host set from every shortcut in every stored Space, including shortcuts nested inside folders, and excludes any candidate whose canonical host is already present anywhere in MosaicSync. The helper iterates the `spaces` object rather than only the active compatibility aliases, so the behavior naturally covers future stored Spaces as well as Personal and Work. Matching semantics remain host-based and unchanged; this release only broadens the shortcut scope from active Space to all Spaces.
+
+## 1.26.17 favicon, Sync self-heal and release-identity policy
+
+1.26.17 treats automatic favicon retrieval as one coherent capability/recovery pipeline. The browser's live `permissions.contains()` result is authoritative for remote Website Access. New iconless shortcuts are targeted immediately; network work stays outside the serialized state queue; commit-time ownership is resolved again across Personal/Work; permission failures do not consume website retry budget; and Chromium may use its permission-free native favicon database even when remote Website Access is absent. A browser-native provisional icon is useful fallback artwork but must not pin a quality-only queue forever while Website Access is unavailable. Revoking Website Access drops quality-only recovery work that can no longer run while preserving genuinely missing-icon work for any source the platform can still use; a later explicit grant re-seeds upgrade candidates.
+
+Chromium's `_favicon` endpoint can return the browser's generic placeholder for an unknown page. MosaicSync pins the private endpoint to `scaleFactor=1x`, avoids forced cache reuse, and learns successful generic-placeholder signatures from a reserved `.invalid` URL into a tiny bounded in-memory set. A failed sentinel probe is never cached. If the placeholder identity cannot be established for a native read, that native result fails closed and is not persisted; a later request can retry the sentinel. Browser-local misses without Website Access use a bounded retry cadence rather than remaining immediately due.
+
+Remote favicon identity is determined from known image byte signatures before unreliable HTTP MIME labels; bounded inline `data:image/...` favicons use the same safety path. Remote SVGs are self-contained-only and their real root element must be found after XML prolog comments/processing instructions rather than by a raw first-`<svg` search. Intrinsic SVG/raster geometry validation is the actual pre-decode memory-safety boundary. Requested `createImageBitmap` resize dimensions are an additional bounded-output measure and must not be described as a guarantee that the browser decoder avoids intrinsic allocation.
+
+Frequently Visited remains device-local. Its first-frame snapshot is bounded and stale-while-revalidate. The synchronous bootstrap filters the persisted hidden-domain list before painting; if that list exists but cannot be parsed/read safely, the disposable first-frame snapshot is skipped rather than failing open and flashing a possibly hidden site. Drag-to-grid and registrable-domain hiding remain browser-neutral and do not enter browser Sync or profile backups.
+
+Firefox/Chrome Sync self-healing must not depend on a browser restart once changed extension-sync data is locally visible. `storage.onChanged` remains the fast event path and `reconcileIfNewCommit()` keeps revision markers as a cheap signal, but equal markers are not proof that all current remote records were applied: usable semantic records/settings are compared with the current local workspaces before the no-op exit. The periodic Sync watchdog performs the same verification and triggers a full merge when content disagrees. When a complete atomic device snapshot is available while the compatibility shared ledger is visibly partial, MosaicSync may apply the usable device core locally but must not immediately republish/repair that partial ledger; the watchdog revisits it after delivery settles.
+
+Automatically learned/browser-native favicon pixels are intentionally **device-local for browser Sync** but are intentionally included in an explicit complete `.mosaicsync` profile export so a user can transfer the full profile between MosaicSync installations. Recovery retry diagnostics, Website Access UI memory, disposable render snapshots and Frequently Visited hidden-domain state remain excluded from profile exports.
+
+Release identity has exactly one canonical, browser-valid numeric version string. Firefox manifest, Chrome manifest and `version_name`, shared `VERSION`, Settings labels, build manifest, package names, README/current docs, release notes and current-version tests must match exactly. MosaicSync never uses a separate internal/display/technical version. Corrective releases therefore use another valid numeric component (for example `1.26.17.1`) rather than a letter suffix. Unpublished candidate numbers do not receive standalone entries in the public `CHANGELOG.md`; their changes are folded into the next published release.
+
+## 1.26.12 remote-image and local-asset integrity policy
+
+Remote favicon decoding must remain bounded *before* `createImageBitmap` whenever MosaicSync can determine intrinsic dimensions from the resource header. Raster candidates with known geometry above the shared 4096px / 8-million-pixel background limit are rejected before optimization or raw-data fallback; safe SVG favicons likewise have their root raster geometry checked before decoding. PNG, GIF, JPEG, ICO/DIB and all standard WebP container variants stay covered by the pre-decode metadata path.
+
+Content-addressed `storage.local` pixels must not be trusted solely because an ID is already listed in the local asset index. Exact bytes that were already hydrated/verified may use the in-memory fast path; otherwise the persisted value is checked before reuse. Missing/corrupt bytes are repaired atomically with the compact state write, while a valid-but-different value under the same content ID fails closed as a collision. Keep the verification cache pruned to live asset IDs so normal shortcut edits do not add repeated image reads or unbounded memory.
+
+## 1.26.11 appearance lifecycle regression policy
+
+1.26.11 keeps the 1.26.9 runtime appearance/wallpaper isolation architecture unchanged and closes its highest-value automated test gap. Permanent Firefox/Chrome behavioral tests execute the production preview/commit functions rather than only matching source text. They must prove that a live theme switch while Settings is open updates the isolated preview immediately, leaves the real `.page` background untouched, commits the authoritative background exactly once after the real Settings `close` event plus one animation frame, clears the preview state, and suppresses that commit if Settings is reopened before the frame runs.
+
+The preview surface is a fixed first child of `#page`, not a DOM sibling. Native `<dialog>` top-layer painting remains above it. Do not move runtime DOM solely for terminology; keep the paint-isolation behavior stable.
+
+The legacy favicon-quality upgrade repair is determined solely by the historical `previousVersion` range that needs repair. Do not reintroduce a current-`VERSION` allowlist: it creates dead historical entries and forces unrelated future release edits without changing migration semantics.
+
+The current release is `1.30.18.12` across both browser manifests, Chrome `version_name`, shared `VERSION`, Settings labels and package filenames. Historical/internal-candidate references remain historical.
+
+## 1.26.9 live appearance / wallpaper paint-isolation policy
+
+1.26.9 completes the 1.26.5/1.26.8 Firefox paint workaround without reopening the original disappearing-Settings failure path. While Settings is open, Light/Dark/System theme skin changes remain immediate through `applyThemeSkinVisual()`, and the matching effective wallpaper now changes immediately as well.
+
+The important invariant is that the real full-viewport `.page` background still **must not** be mutated while the open Settings surface is painted. `applyPageBackgroundVisual()` therefore mirrors the effective color/wallpaper onto the paint-contained `#appearancePreviewLayer` while Settings is open and marks one deferred authoritative commit. The preview layer is a simple fixed child surface containing a plain `object-fit: cover` `<img>` with no CSS `background-image`, filters, or backdrop effects. After Settings closes, the existing next-frame `commitDeferredAppearanceVisual()` updates the real `.page` background through normal `applySettings()` and hides/resets the preview layer. This also protects any unrelated Settings control that calls `applySettings()` while the dialog is open: the background portion is automatically routed to the safe preview layer.
+
+Do not remove the preview layer by restoring direct `page.style.backgroundImage` / `page.style.backgroundColor` writes under an open Settings dialog, and do not duplicate persistence logic for wallpaper settings. State continues through the ordinary audited writer.
+
+The 1.26.8 release remains the historical intermediate step that restored live theme skin but intentionally deferred the wallpaper itself.
+
+The current version string must be `1.26.9` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+
+## 1.26.7 folder drag-out stability policy
+
+1.26.7 is a narrow functional fix on top of the 1.26.5 stable architecture. A shortcut nested in a folder may be dragged onto an empty top-level grid slot. The operation is implemented in shared `core/model.js` as `moveShortcutOutOfFolder()` so Firefox and Chrome use the same tested state transition. The UI continues to persist through the ordinary `saveState()` path; there is no drag-specific storage queue or message type.
+
+The transition must preserve the shortcut ID/content, update mutation clocks, renumber remaining folder children, collapse a two-child folder to the remaining top-level shortcut, reject occupied destinations without partial mutation, and persist exactly once through the normal state writer. No new user-facing strings are required.
+
+The current version string must be `1.26.7` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest and package filenames. Historical release references remain historical.
+
+## 1.26.5 Settings appearance-isolation policy
+
+1.26.5 is rebuilt from the clean 1.26.3 baseline after auditing and removing failed wallpaper-freeze workarounds. The current version string must be `1.26.5` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical release references remain historical.
+
+The Settings dialog is a paint-safety boundary. While `settingsDialog.open` is true, a change to the configured/effective appearance must **not** call `applySettings()` or otherwise mutate root `data-effective-theme`, `color-scheme`, page wallpaper/background styling or canvas-contrast styling. The appearance selector may update its own selected state immediately and state persistence continues normally. Active Light/Dark wallpaper changes follow the same rule. One deferred final appearance is committed from the Settings `close` event on the following animation frame, after the dialog has left its painted state.
+
+Theme-wallpaper persistence uses the ordinary audited `saveState()` / `writeLocalState()` pipeline and its existing optimistic rebase, local-asset transaction and Sync-journal guarantees. Do not reintroduce the 1.26.2 compact `writeThemeWallpaperSettings()` writer, the 1.26.3 `mosaicsync:set-theme-wallpapers` background message, own-write echo signatures, separate theme-wallpaper persistence queues, or async visual-decode scheduling. Those mechanisms did not solve the paint failure and duplicated established persistence logic.
+
+The 1.26.4 inline wallpaper-gallery experiment is rolled back. The 1.26.3 visual Light/Dark cards remain and continue to use the existing gallery. Bookmark folder colors, GitHub project links and unrelated 1.26.3 behavior remain intact. No new permissions, remote services, state/Sync/profile schema or custom-wallpaper binary behavior is introduced.
+
+## 1.26.3 UI isolation policy
+
+1.26.3 is the stabilization follow-up to 1.26.2. The current version string must be `1.26.3` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical release references remain historical.
+
+The Separate light/dark wallpapers controls must not persist directly from the New Tab document. The UI may update its three primitive in-memory fields and visible preview immediately, but the canonical compact write is owned by the background context through `mosaicsync:set-theme-wallpapers`. The UI path must not call `writeThemeWallpaperSettings()`, `saveState()`, `warmSessionRenderCache()`, render-manifest persistence, profile hydration/normalization or full `render()` as part of this preference transaction.
+
+A New Tab pre-registers a lightweight echo signature derived from the compact Sync-relevant state plus local artwork references before sending the background message. An exact matching local-storage event is adopted only as the new compact write baseline and returns without hydration or rerender. Any concurrent state that does not match that exact echo signature follows the ordinary reconciliation path.
+
+Light/Dark wallpaper selection uses visual buttons and the existing MosaicSync wallpaper gallery; do not reintroduce native `<select>` controls for these two selectors. Bookmark folder colors intentionally remain device-local, but when assigned they fill the full folder row/card with computed readable contrast rather than a subtle edge-only marker.
+
+The canonical GitHub project URL is `https://github.com/xipinformatica/mosaicsync`; Settings and Welcome place it immediately after MPL 2.0 and before Support. No new permission, remote wallpaper provider, state/Sync/profile schema or custom-wallpaper binary behavior is introduced.
+
+## 1.26.2 UI/persistence stabilization policy
+
+1.26.2 is a focused correction to the 1.26 workflow features. The current version string must be `1.26.2` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames. Historical changelog/QA references remain historical.
+
+The Bookmarks dialog is modal. Its transient folder-color palette must be appended to the active `bookmarksDialog` *before* entering the Popover top layer, so it remains inside the modal's non-inert DOM subtree and can receive pointer/keyboard input in both Firefox and Chromium. The selected color must remain a bounded device-local preference and be visibly applied without changing bookmark data.
+
+Light/dark wallpaper toggles/selectors must never call the generic image-aware `saveState()` path. They use `writeThemeWallpaperSettings()`, a compact settings-only transaction that patches only `themeWallpapersEnabled`, `lightBackgroundPreset` and `darkBackgroundPreset`, serializes with ordinary local writes, rebases concurrent-tab settings through the established field-level rules, and records the same durable Sync mutation journal when Sync is active. Heavy artwork hashing/projection is forbidden on this UI path. A concurrent rebase is the only case where the active Space is rehydrated.
+
+No permissions, state/Sync/profile schema versions, localization keys, remote providers, bookmark data, or custom-wallpaper binary storage rules change in this release.
+
+## 1.26.0 workflow feature release
+
+1.26.0 adds narrowly scoped New Tab workflow improvements without introducing a third-party wallpaper service or new permissions. The current version string must be `1.26.0` everywhere: Firefox/Chrome manifest versions, Chrome `version_name`, shared `VERSION`, Settings label, build manifest, QA metadata and package filenames.
+
+Light/dark wallpaper selection synchronizes only fixed built-in preset identifiers (`themeWallpapersEnabled`, `lightBackgroundPreset`, `darkBackgroundPreset`) through the existing settings record. Custom wallpaper bytes remain in the established device-local asset path; the existing current background is the fallback whenever a per-appearance preset is not selected. This changes local state schema 16→17 and Sync schema 8→9, while profile format stays v2.
+
+The default-Space preference, bookmark-folder color map and Frequently Visited enable/count preferences are device-side UI preferences, not Sync state. The default Space and bookmark colors intentionally remain device-local because their semantics are device-specific and bookmark folder IDs are not a safe cross-profile identity. Frequently Visited count is profile-exported because it is portable UI preference, but it still does not enter browser Sync.
+
+Shortcut right-click opens a background tab; middle-click remains native anchor behavior. Editing stays on the three-dot action. `Alt+Shift+1` and `Alt+Shift+2` switch Personal/Work only while MosaicSync itself has focus and do nothing while a dialog or form control is active. Frequently Visited right-click actions are localized; bookmark creation accepts only HTTP(S) URLs and invokes the existing optional bookmarks permission from the explicit menu click.
+
+Bookmark folder colors use a bounded seven-color palette in localStorage and are pruned when corresponding local bookmark-folder IDs disappear. No Unsplash or other remote wallpaper provider is part of this release. All newly exposed copy is present in every one of the 32 UI catalogs.
+
+## 1.25.16.1 version-consistency hotfix
+
+1.25.16.1 is a tiny packaging/UI consistency follow-up to the submitted 1.25.16 build. Firefox and Chrome must use the exact same current version string everywhere: manifest `version`, Chrome `version_name`, shared internal `VERSION`, user-visible Settings version label, build manifest, package filenames, QA metadata and current-version regression expectations. The runtime behavior, localization loader fix, permissions, Sync/storage/profile schemas, favicon architecture and UI strings are otherwise unchanged. Permanent tests require the Settings label and manifests to match the shared runtime version so a stale displayed version cannot ship again.
+
+## 1.25.16 validator-clean locale loading
+
+1.25.16 removes the AMO static-validator warning caused by `import(modulePath)` in the shared UI locale loader. The lazy-loading architecture remains, but every non-English catalog is now behind a fixed loader function whose `import()` argument is a literal bundled `./i18n-locales/*.js` path. Do not reintroduce variable/computed runtime import targets. Both Firefox and Chrome use public/internal version `1.25.16`; Chrome also exposes `version_name: 1.25.16`. No new UI strings, permissions, persisted schemas, Sync behavior, or profile-format changes are part of this release.
+
+## 1.24.14m3 unified legal-link migration
+
+1.24.14m3 is intentionally a link-only patch on top of 1.24.14m2. All in-extension Privacy and MPL links must target the unified single-file website anchors `#privacy` and `#license`; the retired `/privacy/` and `/license/` paths must not appear in runtime source. Technical browser version: `1.24.14.15`; Chrome `version_name`: `1.24.14m3`.
+
+## 1.24.14m2 mascot pill rasterization fix
+
+1.24.14m2 is intentionally a visual-only patch on top of 1.24.14m1. Welcome and Settings must render the Donate mascot “Thank you!” pill with an inset 1 px ring rather than a physical rounded border, avoiding the two bright edge pixels seen from border anti-aliasing. Keep its geometry, localized text, animation and interaction unchanged. Technical browser version: `1.24.14.14`; Chrome `version_name`: `1.24.14m2`.
+
+## 1.24.14m1 EU localization and tooltip policy
+
+1.24.14m1 is intentionally localization/UI-only on top of the 1.24.14m runtime. Every supported UI catalog must have exact key and placeholder parity with English, and the browser selector/autodetection layer must recognize every published locale. The eleven added EU locales are Bulgarian, Croatian, Estonian, Greek, Hungarian, Latvian, Lithuanian, Maltese, Romanian, Slovak and Slovenian; together with the existing catalogs MosaicSync covers all 24 official EU languages. Chrome platform adaptation is regression-tested so browser-brand inflection cannot leave Firefox/Mozilla wording in the new Chrome catalogs.
+
+Localized mascot greetings must be content-sized rather than assuming English string width. Viewport-portaled help tooltips must become non-renderable before their active fixed-position class is removed or the node is restored to its clipped wrapper; this prevents Firefox from painting a transient legacy-position frame during CSS teardown. These UI rules do not alter Sync/storage semantics.
+
+## 1.24.14m convergence, retry and localization hardening
+
+1.24.14m is the corrective release from the comprehensive 1.24.14l self-audit. Live Sync records compare the cross-Space namespace-generation marker (`spaceMoveAt`) before ordinary modification time; this removes a three-device winner cycle while keeping tombstones stronger than stale ordinary edits. Property tests permanently require the merge primitive to be commutative, associative and idempotent.
+
+Sync-relevant New Tab writes also persist `mosaicsync.pending-sync-mutation.v1` atomically with the compact local state. The journal keeps the oldest unsent before-state and newest local after-state, so multiple edits coalesce without losing deletions. Publication failure leaves the journal intact; startup and the five-minute Sync watch retry it before any remote-revision short-circuit, and journal IDs prevent an older completion from clearing newer work. Cross-Space moves continue to use their existing independent destination-first transaction journals.
+
+Mutation clocks use `nextMutationTime()` to advance beyond observed record/workspace clocks, including imported future clocks. User-facing dynamic Sync and automatic-icon status is rendered through localization keys instead of background-generated English; warning metadata is structured (`syncSkippedAssets` / `syncFastSnapshotFallback`) and the local meta schema advances to 11. All 21 catalogs retain identical keys/placeholders, browser timing copy is cadence-neutral, and Polish/Swedish/Korean Space terminology is consistent. The favicon engine, local asset GC architecture, device-snapshot commit ordering and profile format are deliberately unchanged.
+
+## 1.24.14l fault-injection hardening
+
+1.24.14l keeps the 1.24.14k/j model and favicon behavior intact and focuses on persistence failure boundaries. Local content-addressed assets now carry an optional `pendingGcIds` retry list inside the existing local asset-index object. The list is written atomically with the compact state and current asset index whenever old pixels become stale. If post-commit deletion fails or the browser stops before cleanup completes, a later startup re-reads current compact references under the asset write lock and only deletes IDs that are still unreferenced. This is an additive field inside the existing asset-index schema, not a schema-version change.
+
+Per-device Sync snapshots retain root-last double buffering. Before a chunked publish, only the inactive target slot may be cleared; after the new root commits, chunks not named by the new root are best-effort reclaimed. This prevents stale historical chunk tails/opposite slots from consuming Sync quota indefinitely while preserving the previous authoritative generation if the new root write fails. Snapshot gzip decoding also enforces the decompressed-byte ceiling incrementally while streaming.
+
+The live-state ID invariant is pinned explicitly: record IDs are unique within each Space, but the same logical ID may temporarily exist in both Personal and Work during destination-first cross-Space convergence. Hostile profile import remains the boundary that repairs ambiguous cross-Space duplicate IDs.
+
+
+## Frozen maintenance boundary
+
+After 1.30.18.37, use `docs/MAINTENANCE-POLICY.md` and `docs/COMPATIBILITY.md` before proposing production architecture or browser-floor changes.

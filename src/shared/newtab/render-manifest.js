@@ -1,0 +1,195 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ */
+/*
+ * Disposable synchronous-first-frame visual-cache maintenance.
+ * Loaded only after first paint; none of this code sits on the New Tab's static
+ * module graph. Preview images are tiny visual derivatives, never authoritative
+ * profile assets.
+ *
+ * Step 2.3 narrows this persistent Web Storage layer to presentation only:
+ * Personal-grid geometry/labels, Space-switcher labels and bounded artwork
+ * previews. Navigation URLs, revision clocks, Frequently Visited candidates and
+ * the shared semantic First-Paint Contract belong to newer authoritative/session
+ * layers and are intentionally absent here.
+ */
+import { optimizeImageDataUrl } from "../core/image-optimizer.js";
+import { normalizeFirstPaintSpaceName } from "../core/first-paint-contract.js";
+import {
+  RENDER_MANIFEST_KEY,
+  RENDER_MANIFEST_SCHEMA_VERSION,
+  RENDER_MANIFEST_MAX_CHARS,
+  RENDER_PREVIEW_CONCURRENCY,
+  RENDER_PREVIEW_DIMENSION,
+  RENDER_PREVIEW_MAX_CHARS,
+  RENDER_PREVIEW_TARGET_BYTES
+} from "../core/constants.js";
+import { projectRenderCacheItem, renderPreviewIdentity, renderCachePreviewUsable } from "./ui-utils.js";
+
+const KEY = RENDER_MANIFEST_KEY;
+let manifestCache = null;
+let lastSerialized = null;
+
+function ensureManifestCache() {
+  if (manifestCache) return manifestCache;
+  try {
+    const raw = localStorage.getItem(KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (parsed?.version === RENDER_MANIFEST_SCHEMA_VERSION && Array.isArray(parsed.shortcuts)) {
+      manifestCache = parsed;
+      lastSerialized = raw;
+    }
+  } catch {}
+  return manifestCache;
+}
+
+export function seedRenderManifest(manifest) {
+  if (!manifestCache && manifest?.version === RENDER_MANIFEST_SCHEMA_VERSION) {
+    manifestCache = manifest;
+    lastSerialized = JSON.stringify(manifest);
+  } else ensureManifestCache();
+}
+
+function cachedPreviews() {
+  ensureManifestCache();
+  const previews = new Map();
+  const visit = item => {
+    if (!item || typeof item !== "object") return;
+    if (item.imageKey && renderCachePreviewUsable(item.preview)) previews.set(item.imageKey, item.preview);
+    if (item.type === "folder") for (const child of item.items || []) visit(child);
+  };
+  for (const item of manifestCache?.shortcuts || []) visit(item);
+  return previews;
+}
+
+function effectivePaintSpaceId(currentState) {
+  const spacesDisabled = currentState?.spaces?.personal?.settings?.multipleSpacesEnabled === false;
+  if (spacesDisabled) return "personal";
+  return currentState?.activeSpaceId === "work" ? "work" : "personal";
+}
+
+function personalGridSource(currentState, paintSpaceId) {
+  if (paintSpaceId !== "personal") return null;
+  const personal = currentState?.spaces?.personal;
+  if (!personal) return currentState;
+  if (currentState?.activeSpaceId === "personal") return currentState;
+  return {
+    ...currentState,
+    activeSpaceId: "personal",
+    shortcuts: personal.shortcuts || [],
+    settings: personal.settings || currentState.settings
+  };
+}
+
+function serializeWithinBudget(manifest) {
+  let serialized = JSON.stringify(manifest);
+  if (serialized.length <= RENDER_MANIFEST_MAX_CHARS) return serialized;
+
+  const previewItems = [];
+  const visit = item => {
+    if (item?.preview) previewItems.push(item);
+    if (item?.type === "folder") for (const child of item.items || []) visit(child);
+  };
+  for (const item of manifest.shortcuts || []) visit(item);
+  for (let index = previewItems.length - 1; index >= 0 && serialized.length > RENDER_MANIFEST_MAX_CHARS; index -= 1) {
+    previewItems[index].preview = "";
+    serialized = JSON.stringify(manifest);
+  }
+
+  return serialized;
+}
+
+export function persistRenderManifest(currentState, currentMeta, extraPreviews = null) {
+  if (!currentState?.settings || !currentMeta) return false;
+  const paintSpaceId = effectivePaintSpaceId(currentState);
+  const gridSource = personalGridSource(currentState, paintSpaceId);
+  const personalSettings = currentState?.spaces?.personal?.settings || currentState.settings || {};
+  const previews = cachedPreviews();
+  if (extraPreviews) for (const [key, value] of extraPreviews) previews.set(key, value);
+  const manifest = {
+    version: RENDER_MANIFEST_SCHEMA_VERSION,
+    ready: currentMeta.onboardingCompleted === true,
+    // This is a visual paint authorization marker, not the active-Space owner.
+    // storage.local + storage.session retain authoritative active-Space ownership.
+    paintSpaceId,
+    spaceSwitcher: {
+      visible: personalSettings.multipleSpacesEnabled !== false,
+      personal: normalizeFirstPaintSpaceName(currentState?.spaces?.personal?.settings?.spaceName),
+      work: normalizeFirstPaintSpaceName(currentState?.spaces?.work?.settings?.spaceName)
+    },
+    // Work has never been authorized for synchronous persistent grid paint. Do
+    // not retain a dormant Work shortcut copy in localStorage merely to refuse it.
+    layout: gridSource ? {
+      columns: gridSource.settings.columns,
+      rows: gridSource.settings.rows,
+      tileSize: gridSource.settings.tileSize,
+      brandVisible: gridSource.settings.brandVisible !== false
+    } : null,
+    shortcuts: gridSource
+      ? (gridSource.shortcuts || []).map(item => projectRenderCacheItem(item, key => previews.get(key) || "")).filter(Boolean)
+      : []
+  };
+  const serialized = serializeWithinBudget(manifest);
+  if (serialized.length > RENDER_MANIFEST_MAX_CHARS) {
+    try { localStorage.removeItem(KEY); } catch {}
+    lastSerialized = null;
+    manifestCache = null;
+    return false;
+  }
+  if (serialized === lastSerialized) return true;
+  try {
+    localStorage.setItem(KEY, serialized);
+    lastSerialized = serialized;
+    manifestCache = manifest;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function refreshRenderManifestPreviews(currentState, currentMeta, { shouldCommit = null } = {}) {
+  if (!currentState?.settings || currentMeta?.onboardingCompleted !== true) return false;
+  const paintSpaceId = effectivePaintSpaceId(currentState);
+  const gridSource = personalGridSource(currentState, paintSpaceId);
+  if (!gridSource) return false;
+  const existing = cachedPreviews();
+  const generated = new Map();
+  const jobs = new Map();
+  const visit = item => {
+    if (!item || item.type !== "shortcut") return;
+    const image = typeof item.image === "string" ? item.image : "";
+    const key = renderPreviewIdentity(item);
+    if (!image || !key || existing.has(key) || jobs.has(key)) return;
+    jobs.set(key, image);
+  };
+  for (const item of gridSource.shortcuts || []) {
+    if (item?.type === "folder") {
+      for (const child of (item.items || []).slice(0, 4)) visit(child);
+    } else visit(item);
+  }
+  if (!jobs.size) return false;
+
+  const entries = [...jobs];
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(RENDER_PREVIEW_CONCURRENCY, entries.length) }, async () => {
+    while (cursor < entries.length) {
+      const [key, image] = entries[cursor++];
+      try {
+        const preview = image.length <= RENDER_PREVIEW_MAX_CHARS ? image : await optimizeImageDataUrl(image, {
+          maxWidth: RENDER_PREVIEW_DIMENSION,
+          maxHeight: RENDER_PREVIEW_DIMENSION,
+          minWidth: 16,
+          minHeight: 16,
+          targetBytes: RENDER_PREVIEW_TARGET_BYTES,
+          initialQuality: 0.78
+        });
+        if (renderCachePreviewUsable(preview)) generated.set(key, preview);
+      } catch {}
+    }
+  });
+  await Promise.all(workers);
+  if (!generated.size || (shouldCommit && !(await shouldCommit()))) return false;
+  return persistRenderManifest(currentState, currentMeta, generated);
+}

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Σελίδα νέας καρτέλας για Firefox με έμφαση στην ιδιωτικότητα, φακέλους, προσαρμόσιμη διάταξη και προαιρετικό Firefox Sync. Μηδενική τηλεμετρία από το MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Άνοιγμα MosaicSync"
+  }
+}

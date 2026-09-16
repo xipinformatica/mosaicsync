@@ -1,0 +1,48 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const VERSION = "1.33.0.29";
+
+test("1.30 has one exact release identity across public/runtime surfaces", () => {
+  const ff = JSON.parse(fs.readFileSync("dist/firefox/manifest.json", "utf8"));
+  const chrome = JSON.parse(fs.readFileSync("dist/chrome/manifest.json", "utf8"));
+  const constants = fs.readFileSync("dist/firefox/core/constants.js", "utf8");
+  const ffHtml = fs.readFileSync("dist/firefox/newtab/newtab.html", "utf8");
+  const chromeHtml = fs.readFileSync("dist/chrome/newtab/newtab.html", "utf8");
+  const readme = fs.readFileSync("README.md", "utf8");
+  const developerGuide = fs.readFileSync("DEVELOPER-GUIDE.md", "utf8");
+  const devReadme = fs.readFileSync("README-DEVELOPMENT.md", "utf8");
+  const releaseNotes = fs.readFileSync("docs/RELEASE-1.33.0.29.md", "utf8");
+  const qa = fs.readFileSync("docs/QA-1.33.0.29.md", "utf8");
+  const baseline = JSON.parse(fs.readFileSync("package-size-baseline.json", "utf8"));
+  const buildManifest = JSON.parse(fs.readFileSync("build-manifest.json", "utf8"));
+  assert.equal(ff.version, VERSION);
+  assert.equal(chrome.version, VERSION);
+  assert.equal(chrome.version_name, VERSION);
+  assert.match(constants, new RegExp(`export const VERSION = "${VERSION.replaceAll(".", "\\.")}";`));
+  assert.match(ffHtml, new RegExp(`MosaicSync · ${VERSION.replaceAll(".", "\\.")}`, "g"));
+  assert.match(chromeHtml, new RegExp(`MosaicSync · ${VERSION.replaceAll(".", "\\.")}`, "g"));
+  assert.match(readme, new RegExp(`Current source release: ${VERSION.replaceAll(".", "\\.")}`));
+  assert.match(readme, /New developer\? Start here: \[DEVELOPER-GUIDE\.md\]\(DEVELOPER-GUIDE\.md\)/);
+  assert.match(developerGuide, /^# MosaicSync Developer Guide$/m);
+  assert.match(developerGuide, /edit `src\/`, not `dist\/`/i);
+  assert.match(devReadme, /1\.30/);
+  assert.match(releaseNotes, new RegExp(`^# MosaicSync ${VERSION.replaceAll(".", "\\.")} publication notes`, "m"));
+  assert.match(releaseNotes, new RegExp(`## GitHub release title\\n\\n` + "`MosaicSync " + VERSION.replaceAll(".", "\\.") + "`"));
+  assert.match(qa, new RegExp(`^# MosaicSync ${VERSION.replaceAll(".", "\\.")} QA / release-candidate checklist`, "m"));
+  assert.equal(baseline.browsers.firefox.version, VERSION);
+  assert.equal(baseline.browsers.chrome.version, VERSION);
+  assert.equal(buildManifest.browsers.firefox.version, VERSION);
+  assert.equal(buildManifest.browsers.chrome.version, VERSION);
+});
+
+test("1.30 public changelog keeps internal candidates out of the public release sequence", () => {
+  const changelog = fs.readFileSync("CHANGELOG.md", "utf8");
+  assert.match(changelog, new RegExp(`^## ${VERSION.replaceAll(".", "\\.")}\\n`));
+  for (const unpublished of ["1.27.8", "1.27.8.1", "1.27.8.2", "1.27.8.3", "1.27.8.4", "1.27.8.5", "1.27.8.6", "1.27.8.7", "1.27.8.8", "1.26.13", "1.26.13b", "1.26.14", "1.26.15", "1.26.16", "1.26.17", "1.26.17.1", "1.26.17.2", "1.30.3"]) {
+    assert.doesNotMatch(changelog, new RegExp(`^## ${unpublished.replaceAll(".", "\\.")}(?:\\s|$)`, "m"));
+  }
+  const headings = [...changelog.matchAll(/^## ([^\n]+)$/gm)].map(match => match[1]);
+  assert.deepEqual(headings.slice(0, 92), [VERSION, "1.33.0.28", "1.33.0.27", "1.33.0.26", "1.33.0.25", "1.33.0.24", "1.33.0.23", "1.33.0.22", "1.33.0.21", "1.33.0.20", "1.33.0.19", "1.33.0.18", "1.33.0.17", "1.33.0.16", "1.33.0.15", "1.33.0.14", "1.33.0.13", "1.33.0.12", "1.33.0.11", "1.33.0.10", "1.33.0.9", "1.33.0.8", "1.33.0.7", "1.33.0.6", "1.33.0.5", "1.33.0.4", "1.33.0.3", "1.33.0.2", "1.33.0.1", "1.32.1.8", "1.32.1.7", "1.32.1.6", "1.32.1.5", "1.32.1.4", "1.32.1.3", "1.32.1.2", "1.32.1.1", "1.32.1", "1.32.0.10", "1.32.0.9", "1.32.0.8", "1.32.0.7", "1.32.0.6", "1.32.0.5", "1.32.0.4", "1.32.0.2", "1.32.0.1", "1.31.5", "1.31.4", "1.31.3", "1.31.2", "1.31.1", "1.31.0", "1.30.18.46", "1.30.18.45", "1.30.18.44", "1.30.18.43", "1.30.18.42", "1.30.18.41", "1.30.18.40", "1.30.18.39", "1.30.18.38", "1.30.18.37", "1.30.18.36", "1.30.18.35", "1.30.18.34", "1.30.18.33", "1.30.18.32", "1.30.18.31", "1.30.18.30", "1.30.18.29", "1.30.18.28", "1.30.18.27", "1.30.18.26 — withdrawn", "1.30.18.25", "1.30.18.24", "1.30.18.23", "1.30.18.22", "1.30.18.21", "1.30.18.20", "1.30.18.19", "1.30.18.18", "1.30.18.17", "1.30.18.16", "1.30.18.15", "1.30.18.14", "1.30.18.13", "1.30.18.12", "1.30.18.11", "1.30.18.10", "1.30.18.9", "1.30.18.8"]);
+});

@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.6",
+  "step": "3B",
+  "purpose": "Lazy Bookmarks secondary UI",
+  "baseline": {
+    "version": "1.33.0.5",
+    "initialElements": 631,
+    "secondaryElements": 523,
+    "eagerBindings": 198,
+    "secondaryEagerBindings": 163,
+    "staticModuleCount": 24,
+    "staticModuleBytes": 655718,
+    "startupHtmlBytes": 52027,
+    "startupHtmlPlusStaticModuleBytes": 707745
+  },
+  "after": {
+    "initialElements": 598,
+    "secondaryElements": 490,
+    "eagerBindings": 186,
+    "secondaryEagerBindings": 151,
+    "staticModuleCount": 23,
+    "staticModuleBytes": 640462,
+    "startupHtmlBytes": 49564,
+    "startupHtmlPlusStaticModuleBytes": 690026,
+    "deferredModuleCount": 43,
+    "bookmarksDeferredRoots": [
+      "core/bookmarks.js",
+      "newtab/bookmarks-controller.js",
+      "newtab/bookmarks-shell.js"
+    ]
+  },
+  "delta": {
+    "initialElements": -33,
+    "secondaryElements": -33,
+    "eagerBindings": -12,
+    "secondaryEagerBindings": -12,
+    "staticModuleCount": -1,
+    "staticModuleBytes": -15256,
+    "startupHtmlBytes": -2463,
+    "startupHtmlPlusStaticModuleBytes": -17719
+  },
+  "packageTradeoff": {
+    "firefox": {
+      "baselineRawBytes": 2411733,
+      "afterRawBytes": 2417379,
+      "deltaRawBytes": 5646,
+      "baselineDeflatedBytes": 704607,
+      "afterDeflatedBytes": 706308,
+      "deltaDeflatedBytes": 1701
+    },
+    "chromium": {
+      "baselineRawBytes": 2433375,
+      "afterRawBytes": 2439021,
+      "deltaRawBytes": 5646,
+      "baselineDeflatedBytes": 719122,
+      "afterDeflatedBytes": 720824,
+      "deltaDeflatedBytes": 1702
+    }
+  },
+  "correctness": {
+    "controllerRemainsDedicatedOwner": true,
+    "browserBookmarksApiRemainsLazy": true,
+    "secondaryCssStillPrecedesVisibility": true,
+    "safeDomConstructionOnly": true,
+    "syncRecoveryAuthorityChanged": false,
+    "permissionsChanged": false,
+    "schemasChanged": false
+  },
+  "interpretation": "Step 3B trades a small deferred package-size increase for less HTML parsing/DOM allocation, fewer eager bindings, and one less statically evaluated module on every New Tab. It does not claim a universal wall-clock improvement without compatible real-browser timing drivers."
+}

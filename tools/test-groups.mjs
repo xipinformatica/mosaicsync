@@ -1,0 +1,324 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const TEST_DIR = "tests";
+
+const GROUPS = Object.freeze({
+  startup: {
+    description: "Startup, first-paint, generated New Tab readiness and appearance lifecycle",
+    patterns: [
+      /startup/i,
+      /snow-leopard-ii/i,
+      /appearance-lifecycle/i,
+      /secondary-styles/i,
+      /test-architecture/i,
+      /newtab-appearance-color/i,
+      /browser-smoke/i,
+      /corrective-13018(?:1[0489]?|9)?\.test\.mjs$/i,
+      /corrective-130181[0148]\.test\.mjs$/i,
+      /corrective-1301841\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /optimization-13304\.test\.mjs$/i,
+      /optimization-13306\.test\.mjs$/i,
+      /optimization-13307\.test\.mjs$/i,
+      /optimization-13308\.test\.mjs$/i,
+      /optimization-13309\.test\.mjs$/i,
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i,
+      /optimization-133013\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i,
+      /optimization-133015\.test\.mjs$/i,
+      /optimization-133017\.test\.mjs$/i,
+      /optimization-133018\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133024\.test\.mjs$/i,
+      /corrective-133025\.test\.mjs$/i
+    ]
+  },
+  newtab: {
+    description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
+    patterns: [
+      /accessibility/i,
+      /appearance/i,
+      /features/i,
+      /custom-branding/i,
+      /folder/i,
+      /frequent/i,
+      /hardcoded-ui/i,
+      /improvements/i,
+      /legal-links/i,
+      /localization/i,
+      /newtab/i,
+      /bookmarks-controller/i,
+      /contract-simplification/i,
+      /settings-footer/i,
+      /theme-wallpaper/i,
+      /ui-polish/i,
+      /snow-leopard/i,
+      /stabilization/i,
+      /corrective-12789/i,
+      /corrective-130(?:1|2|4|5|18|181|1810|1811|1812|1813|1814|1818|1819)\.test\.mjs$/i,
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1301846\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-1314\.test\.mjs$/i,
+      /corrective-13208\.test\.mjs$/i,
+      /corrective-13209\.test\.mjs$/i,
+      /corrective-132010\.test\.mjs$/i,
+      /corrective-13213\.test\.mjs$/i,
+      /corrective-13214\.test\.mjs$/i,
+      /corrective-13215\.test\.mjs$/i,
+      /corrective-13216\.test\.mjs$/i,
+      /corrective-13218\.test\.mjs$/i,
+      /optimization-13303\.test\.mjs$/i,
+      /optimization-13304\.test\.mjs$/i,
+      /optimization-13306\.test\.mjs$/i,
+      /optimization-13307\.test\.mjs$/i,
+      /optimization-13308\.test\.mjs$/i,
+      /optimization-13309\.test\.mjs$/i,
+      /optimization-133013\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i,
+      /optimization-133015\.test\.mjs$/i,
+      /optimization-133017\.test\.mjs$/i,
+      /optimization-133018\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133024\.test\.mjs$/i,
+      /corrective-133025\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i,
+      /feature-133029\.test\.mjs$/i
+    ]
+  },
+  sync: {
+    description: "Normal Sync, concurrent writes, profile state, distributed merge and journals",
+    patterns: [
+      /concurrent-writes/i,
+      /model-sync/i,
+      /profile-assets/i,
+      /sync-/i,
+      /production-background-e2e/i,
+      /corrective-130(?:6|7|8|9|13|14|15)\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-1315\.test\.mjs$/i,
+      /corrective-13204\.test\.mjs$/i,
+      /corrective-13206\.test\.mjs$/i,
+      /corrective-13207\.test\.mjs$/i,
+      /corrective-13208\.test\.mjs$/i,
+      /corrective-13209\.test\.mjs$/i,
+      /corrective-132010\.test\.mjs$/i,
+      /corrective-13214\.test\.mjs$/i,
+      /corrective-13215\.test\.mjs$/i,
+      /corrective-13216\.test\.mjs$/i,
+      /corrective-13217\.test\.mjs$/i,
+      /optimization-13303\.test\.mjs$/i,
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133027\.test\.mjs$/i,
+      /corrective-133028\.test\.mjs$/i
+    ]
+  },
+  recovery: {
+    description: "Catastrophic Recovery, immutable generations, retention, restart and failure behavior",
+    patterns: [
+      /recovery-/i,
+      /corrective-13013\.test\.mjs$/i,
+      /corrective-1301819\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i,
+      /corrective-132010\.test\.mjs$/i,
+      /optimization-133012\.test\.mjs$/i,
+      /optimization-133014\.test\.mjs$/i,
+      /optimization-133015\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133027\.test\.mjs$/i,
+      /corrective-133028\.test\.mjs$/i
+    ]
+  },
+  security: {
+    description: "Import validation, URL safety, hardening, hostile input and corruption handling",
+    patterns: [
+      /hardening/i,
+      /custom-branding/i,
+      /security/i,
+      /imports/i,
+      /profile-security/i,
+      /upgrade-corruption/i,
+      /property-fuzz/i,
+      /validator/i,
+      /fault-injection/i,
+      /cache-bounds/i,
+      /corrective-13213\.test\.mjs$/i,
+      /corrective-13217\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i,
+      /corrective-133027\.test\.mjs$/i,
+      /corrective-133028\.test\.mjs$/i
+    ]
+  },
+  browser: {
+    description: "Generated Firefox/Chromium parity, adapters, permissions and browser-native favicon behavior",
+    patterns: [
+      /parity/i,
+      /browser-smoke/i,
+      /production-background-e2e/i,
+      /permission-recovery/i,
+      /frequent-firefox/i,
+      /favicon-/i,
+      /corrective-130181[567]\.test\.mjs$/i,
+      /corrective-13012\.test\.mjs$/i,
+      /corrective-1301838\.test\.mjs$/i,
+      /test-architecture/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i,
+      /corrective-133027\.test\.mjs$/i,
+      /feature-133029\.test\.mjs$/i
+    ]
+  },
+  core: {
+    description: "Core state/storage utilities and cross-cutting model invariants",
+    patterns: [
+      /storage-registry/i,
+      /custom-branding/i,
+      /utils\.test/i,
+      /cache-bounds/i,
+      /corrective-13010\.test\.mjs$/i,
+      /corrective-13018[3-8]\.test\.mjs$/i,
+      /corrective-1311\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-13213\.test\.mjs$/i,
+      /corrective-13214\.test\.mjs$/i,
+      /corrective-13216\.test\.mjs$/i,
+      /corrective-13217\.test\.mjs$/i,
+      /optimization-13303\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i
+    ]
+  },
+  release: {
+    description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
+    patterns: [
+      /build-/i,
+      /custom-branding/i,
+      /complexity-inventory/i,
+      /dead-code-retirement/i,
+      /maintenance-/i,
+      /bookmarks-controller/i,
+      /contract-simplification/i,
+      /release-/i,
+      /optimization-/i,
+      /performance-hardening/i,
+      /snow-leopard-ii/i,
+      /corrective-1303\.test\.mjs$/i,
+      /corrective-1301838\.test\.mjs$/i,
+      /corrective-13018(?:39|4[01])\.test\.mjs$/i,
+      /corrective-1301842\.test\.mjs$/i,
+      /corrective-1301843\.test\.mjs$/i,
+      /corrective-1301844\.test\.mjs$/i,
+      /corrective-1301845\.test\.mjs$/i,
+      /corrective-1301846\.test\.mjs$/i,
+      /corrective-1310\.test\.mjs$/i,
+      /corrective-1313\.test\.mjs$/i,
+      /corrective-1314\.test\.mjs$/i,
+      /corrective-13204\.test\.mjs$/i,
+      /corrective-13206\.test\.mjs$/i,
+      /corrective-13207\.test\.mjs$/i,
+      /corrective-13208\.test\.mjs$/i,
+      /corrective-13209\.test\.mjs$/i,
+      /corrective-132010\.test\.mjs$/i,
+      /corrective-13213\.test\.mjs$/i,
+      /corrective-13214\.test\.mjs$/i,
+      /corrective-13215\.test\.mjs$/i,
+      /corrective-13216\.test\.mjs$/i,
+      /corrective-13218\.test\.mjs$/i,
+      /process-13305\.test\.mjs$/i,
+      /optimization-133010\.test\.mjs$/i,
+      /optimization-133011\.test\.mjs$/i,
+      /corrective-133019\.test\.mjs$/i,
+      /corrective-133020\.test\.mjs$/i,
+      /corrective-133021\.test\.mjs$/i,
+      /corrective-133022\.test\.mjs$/i,
+      /corrective-133023\.test\.mjs$/i,
+      /corrective-133024\.test\.mjs$/i,
+      /corrective-133025\.test\.mjs$/i,
+      /corrective-133026\.test\.mjs$/i,
+      /corrective-133027\.test\.mjs$/i,
+      /corrective-133028\.test\.mjs$/i,
+      /feature-133029\.test\.mjs$/i
+    ]
+  }
+});
+
+export function listTestGroups() {
+  return Object.entries(GROUPS).map(([name, value]) => ({ name, description: value.description }));
+}
+
+export function discoverTestFiles(root = process.cwd()) {
+  const testDir = path.join(root, TEST_DIR);
+  return fs.readdirSync(testDir, { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith(".test.mjs"))
+    .map(entry => `${TEST_DIR}/${entry.name}`)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+export function testFilesForGroup(name, root = process.cwd()) {
+  const group = GROUPS[name];
+  if (!group) throw new Error(`Unknown test group: ${name}`);
+  return discoverTestFiles(root).filter(file => group.patterns.some(pattern => pattern.test(path.basename(file))));
+}
+
+export function testGroupCoverage(root = process.cwd()) {
+  const files = discoverTestFiles(root);
+  const memberships = new Map(files.map(file => [file, []]));
+  for (const { name } of listTestGroups()) {
+    for (const file of testFilesForGroup(name, root)) memberships.get(file)?.push(name);
+  }
+  return {
+    files,
+    memberships,
+    ungrouped: files.filter(file => memberships.get(file)?.length === 0)
+  };
+}

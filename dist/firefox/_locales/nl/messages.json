@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Privacygerichte Firefox-nieuwe-tab met mappen, aanpassingen en optionele Firefox Sync. Geen MosaicSync-telemetrie."
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync openen"
+  }
+}

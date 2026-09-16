@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Privatlivsfokuseret Firefox Ny fane med mapper, tilpasning og valgfri Firefox Sync. Ingen MosaicSync-telemetri."
+  },
+  "actionOpenHome": {
+    "message": "Åbn MosaicSync"
+  }
+}

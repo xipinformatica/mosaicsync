@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.3",
+  "step": 2,
+  "purpose": "Snow Leopard II state computation and serialization optimization snapshot",
+  "correctnessContract": {
+    "persistedBaseline": "Only exact authoritative compact storage.local state payloads may use createPersistedWriteBaseline(); the result is a detached clone and remains an optimistic-concurrency baseline, never render authority.",
+    "trustedStamping": "stampSettingsMutationClocksTrustedNormalized() accepts only states already returned by normalizeState() in the same operation; raw/public callers retain stampSettingsMutationClocks().",
+    "persistenceBoundary": "writeLocalStateResult() still normalizes live intended state, and persisted/base state still normalizes before trusted Settings-clock stamping."
+  },
+  "benchmarks": {
+    "defensiveWriteBaseline200": {
+      "samples": 5,
+      "iterationsPerSample": 4,
+      "medianMs": 80.725653,
+      "p95Ms": 82.425844,
+      "minMs": 80.026648,
+      "maxMs": 82.425844
+    },
+    "persistedCompactBaselineClone200": {
+      "samples": 5,
+      "iterationsPerSample": 8,
+      "medianMs": 0.430808,
+      "p95Ms": 0.464843,
+      "minMs": 0.416054,
+      "maxMs": 0.464843
+    },
+    "baselineMedianSpeedup": 187.38,
+    "defensiveSettingsClockStamping200": {
+      "samples": 5,
+      "iterationsPerSample": 2,
+      "medianMs": 84.837505,
+      "p95Ms": 86.00949,
+      "minMs": 82.452172,
+      "maxMs": 86.00949
+    },
+    "trustedNormalizedSettingsClockStamping200": {
+      "samples": 5,
+      "iterationsPerSample": 4,
+      "medianMs": 1.176447,
+      "p95Ms": 2.099012,
+      "minMs": 1.153405,
+      "maxMs": 2.099012
+    },
+    "settingsStampMedianSpeedup": 72.11
+  },
+  "package": {
+    "firefox": {
+      "rawBytes": 2408757,
+      "deflatedBytes": 703420
+    },
+    "chrome": {
+      "rawBytes": 2430399,
+      "deflatedBytes": 717935
+    }
+  },
+  "optimizedPaths": [
+    "New Tab storage.onChanged optimistic baseline adoption",
+    "writeLocalStateResult -> Settings-clock stamping",
+    "background pushLocalMutation Settings-clock stamping",
+    "rebaseConcurrentState Settings-clock stamping"
+  ],
+  "notOptimized": [
+    "raw/imported/persisted normalizeState trust boundaries",
+    "writeLocalStateResult live-state validation",
+    "persisted/base-state validation before trusted stamping",
+    "Sync/Recovery conflict semantics or wire formats"
+  ]
+}

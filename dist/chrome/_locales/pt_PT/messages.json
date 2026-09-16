@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Novo separador do Chrome focado na privacidade, com pastas, personalização e Chrome Sync opcional. Zero telemetria MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Abrir MosaicSync"
+  }
+}

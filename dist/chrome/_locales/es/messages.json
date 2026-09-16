@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Nueva pestaña de Chrome centrada en la privacidad, con carpetas, personalización y Chrome Sync opcional. Cero telemetría de MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Abrir MosaicSync"
+  }
+}

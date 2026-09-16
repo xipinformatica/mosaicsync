@@ -1,0 +1,36 @@
+{
+  "version": "1.33.0.13",
+  "step": "6A",
+  "title": "Closed Wallpaper Gallery payload release",
+  "scope": "New Tab lifetime / retained secondary UI DOM",
+  "wallpaperGallery": {
+    "fixtureChoices": 30,
+    "fixtureElementsPerChoice": 3,
+    "before": {
+      "version": "1.33.0.12",
+      "retainedDynamicElementsAfterClose": 90,
+      "behavior": "lazy shell and its last rendered wallpaper-choice payload remain attached after close"
+    },
+    "after": {
+      "version": "1.33.0.13",
+      "retainedDynamicElementsAfterClose": 0,
+      "repeatedCycles": 50,
+      "shellInstances": 1,
+      "behavior": "shell remains mounted, dynamic choice payload is released on native dialog close and rebuilt before the next showModal"
+    }
+  },
+  "auditedNegativeControls": [
+    "Bookmarks close already resets dynamic tree arrays and DOM payload",
+    "Shortcut-editor close already cancels detected-favicon work and clears candidate DOM",
+    "Custom Branding close already invalidates upload ownership and releases the in-memory draft",
+    "canonical-host, locale-catalog, background-preload, favicon-choice and Recovery-decode caches are explicitly bounded",
+    "image optimizer clears completed/failed worker requests and terminates its idle worker"
+  ],
+  "correctnessBoundaries": [
+    "Wallpaper Gallery module/shell remains lazy and memoized",
+    "Settings ownership-generation revalidation before first gallery mount is unchanged",
+    "gallery contents are rebuilt synchronously before showModal on every open",
+    "background selection/persistence and image-preload behavior are unchanged",
+    "no Sync, Recovery, permission, schema, network or privacy behavior changes"
+  ]
+}

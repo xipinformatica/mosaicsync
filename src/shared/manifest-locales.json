@@ -1,0 +1,167 @@
+{
+  "bg": {
+    "actionOpenHome": "Отвори MosaicSync",
+    "firefoxDescription": "Ориентиран към поверителността нов раздел за Firefox с папки, персонализирана визия и по избор Firefox Sync. Нулева телеметрия от MosaicSync.",
+    "chromeDescription": "Ориентиран към поверителността нов раздел за Chrome с папки, персонализирана визия и по избор Chrome Sync. Нулева телеметрия от MosaicSync."
+  },
+  "ca": {
+    "actionOpenHome": "Obre MosaicSync",
+    "firefoxDescription": "Pestanya nova del Firefox centrada en la privadesa, amb carpetes, personalització i Firefox Sync opcional. Zero telemetria de MosaicSync.",
+    "chromeDescription": "Pestanya nova del Chrome centrada en la privadesa, amb carpetes, personalització i Chrome Sync opcional. Zero telemetria de MosaicSync."
+  },
+  "cs": {
+    "actionOpenHome": "Otevřít MosaicSync",
+    "firefoxDescription": "Nová karta Firefoxu zaměřená na soukromí se složkami, přizpůsobením a volitelným Firefox Sync. Žádná telemetrie MosaicSync.",
+    "chromeDescription": "Nová karta Chromu zaměřená na soukromí se složkami, přizpůsobením a volitelnou synchronizací Chrome Sync. Žádná telemetrie MosaicSync."
+  },
+  "da": {
+    "actionOpenHome": "Åbn MosaicSync",
+    "firefoxDescription": "Privatlivsfokuseret Firefox Ny fane med mapper, tilpasning og valgfri Firefox Sync. Ingen MosaicSync-telemetri.",
+    "chromeDescription": "Privatlivsfokuseret ny fane i Chrome med mapper, tilpasning og valgfri Chrome Sync. Ingen MosaicSync-telemetri."
+  },
+  "de": {
+    "actionOpenHome": "MosaicSync öffnen",
+    "firefoxDescription": "Datenschutzorientierter Firefox-Neuer-Tab mit Ordnern, Anpassungen und optionalem Firefox Sync. Keine MosaicSync-Telemetrie.",
+    "chromeDescription": "Datenschutzorientierter Chrome-Neuer-Tab mit Ordnern, Anpassungen und optionalem Chrome Sync. Keine MosaicSync-Telemetrie."
+  },
+  "el": {
+    "actionOpenHome": "Άνοιγμα MosaicSync",
+    "firefoxDescription": "Σελίδα νέας καρτέλας για Firefox με έμφαση στην ιδιωτικότητα, φακέλους, προσαρμόσιμη διάταξη και προαιρετικό Firefox Sync. Μηδενική τηλεμετρία από το MosaicSync.",
+    "chromeDescription": "Σελίδα νέας καρτέλας για Chrome με έμφαση στην ιδιωτικότητα, φακέλους, προσαρμόσιμη διάταξη και προαιρετικό Chrome Sync. Μηδενική τηλεμετρία από το MosaicSync."
+  },
+  "en": {
+    "actionOpenHome": "Open MosaicSync",
+    "firefoxDescription": "Privacy-first Firefox New Tab with folders, custom visuals and optional Firefox Sync. Zero MosaicSync telemetry.",
+    "chromeDescription": "Privacy-first Chrome New Tab with folders, custom visuals and optional Chrome Sync. Zero MosaicSync telemetry."
+  },
+  "es": {
+    "actionOpenHome": "Abrir MosaicSync",
+    "firefoxDescription": "Nueva pestaña de Firefox centrada en la privacidad, con carpetas, personalización y Firefox Sync opcional. Cero telemetría de MosaicSync.",
+    "chromeDescription": "Nueva pestaña de Chrome centrada en la privacidad, con carpetas, personalización y Chrome Sync opcional. Cero telemetría de MosaicSync."
+  },
+  "et": {
+    "actionOpenHome": "Ava MosaicSync",
+    "firefoxDescription": "Privaatsust esikohale seadev Firefoxi uue vahelehe leht kaustade, kohandatava paigutuse ja valikulise Firefox Synciga. MosaicSync ei kogu telemeetriat.",
+    "chromeDescription": "Privaatsust esikohale seadev Chrome'i uue vahelehe leht kaustade, kohandatava paigutuse ja valikulise Chrome Synciga. MosaicSync ei kogu telemeetriat."
+  },
+  "eu": {
+    "actionOpenHome": "Ireki MosaicSync",
+    "firefoxDescription": "Pribatutasuna lehenesten duen Firefoxeko Fitxa Berria, karpetekin, ikusizko pertsonalizazioekin eta aukerako Firefox Sync sinkronizazioarekin. MosaicSync telemetriarik gabe.",
+    "chromeDescription": "Pribatutasuna lehenesten duen Chrome fitxa berria, karpetekin, ikusizko pertsonalizazioekin eta aukerako Chrome Sync-ekin. MosaicSync telemetriarik gabe."
+  },
+  "fi": {
+    "actionOpenHome": "Avaa MosaicSync",
+    "firefoxDescription": "Yksityisyyteen keskittyvä Firefoxin Uusi välilehti kansioilla, mukautuksilla ja valinnaisella Firefox Syncillä. Ei MosaicSync-telemetriaa.",
+    "chromeDescription": "Yksityisyyteen keskittyvä Chromen uusi välilehti kansioilla, mukautuksilla ja valinnaisella Chrome Syncillä. Ei MosaicSync-telemetriaa."
+  },
+  "fr": {
+    "actionOpenHome": "Ouvrir MosaicSync",
+    "firefoxDescription": "Nouvel onglet Firefox axé sur la confidentialité, avec dossiers, personnalisation et Firefox Sync facultatif. Zéro télémétrie MosaicSync.",
+    "chromeDescription": "Nouvel onglet Chrome axé sur la confidentialité, avec dossiers, personnalisation et Chrome Sync facultatif. Zéro télémétrie MosaicSync."
+  },
+  "ga": {
+    "actionOpenHome": "Oscail MosaicSync",
+    "firefoxDescription": "Cluaisín Nua Firefox dírithe ar phríobháideachas le fillteáin, saincheapadh agus Firefox Sync roghnach. Gan teiliméadracht MosaicSync.",
+    "chromeDescription": "Cluaisín Nua Chrome dírithe ar phríobháideachas le fillteáin, saincheapadh agus Chrome Sync roghnach. Gan teiliméadracht MosaicSync."
+  },
+  "gl": {
+    "actionOpenHome": "Abrir MosaicSync",
+    "firefoxDescription": "Nova lapela de Firefox centrada na privacidade, con cartafoles, elementos visuais personalizados e Firefox Sync opcional. Cero telemetría de MosaicSync.",
+    "chromeDescription": "Nova lapela de Chrome centrada na privacidade, con cartafoles, elementos visuais personalizados e Chrome Sync opcional. Cero telemetría de MosaicSync."
+  },
+  "hr": {
+    "actionOpenHome": "Otvori MosaicSync",
+    "firefoxDescription": "Nova kartica za Firefox usmjerena na privatnost, s mapama, prilagođenim izgledom i neobaveznim Firefox Syncom. Nulta telemetrija MosaicSynca.",
+    "chromeDescription": "Nova kartica za Chrome usmjerena na privatnost, s mapama, prilagođenim izgledom i neobaveznim Chrome Syncom. Nulta telemetrija MosaicSynca."
+  },
+  "hu": {
+    "actionOpenHome": "MosaicSync megnyitása",
+    "firefoxDescription": "Adatvédelem-központú újlap a Firefoxhoz mappákkal, testreszabható elrendezéssel és választható Firefox Synckel. A MosaicSync nulla telemetriát használ.",
+    "chromeDescription": "Adatvédelem-központú újlap a Chromehoz mappákkal, testreszabható elrendezéssel és választható Chrome Synckel. A MosaicSync nulla telemetriát használ."
+  },
+  "it": {
+    "actionOpenHome": "Apri MosaicSync",
+    "firefoxDescription": "Nuova scheda di Firefox orientata alla privacy, con cartelle, personalizzazione e Firefox Sync opzionale. Zero telemetria MosaicSync.",
+    "chromeDescription": "Nuova scheda di Chrome orientata alla privacy, con cartelle, personalizzazione e Chrome Sync opzionale. Zero telemetria MosaicSync."
+  },
+  "ja": {
+    "actionOpenHome": "MosaicSync を開く",
+    "firefoxDescription": "フォルダー、カスタマイズ、任意の Firefox Sync を備えたプライバシー重視の Firefox 新しいタブ。MosaicSync テレメトリーなし。",
+    "chromeDescription": "フォルダー、カスタマイズ、任意の Chrome Sync を備えた、プライバシー重視の Chrome 新しいタブ。MosaicSync のテレメトリーはありません。"
+  },
+  "ko": {
+    "actionOpenHome": "MosaicSync 열기",
+    "firefoxDescription": "폴더, 사용자 지정, 선택적 Firefox Sync를 제공하는 개인정보 중심의 Firefox 새 탭. MosaicSync 텔레메트리 없음.",
+    "chromeDescription": "폴더, 사용자 지정, 선택적 Chrome Sync를 제공하는 개인정보 중심의 Chrome 새 탭. MosaicSync 텔레메트리는 없습니다."
+  },
+  "lt": {
+    "actionOpenHome": "Atverti MosaicSync",
+    "firefoxDescription": "Privatumui skirtas Firefox naujo skirtuko puslapis su aplankais, pritaikomu išdėstymu ir pasirenkamu Firefox Sync. MosaicSync nerenka telemetrijos.",
+    "chromeDescription": "Privatumui skirtas Chrome naujo skirtuko puslapis su aplankais, pritaikomu išdėstymu ir pasirenkamu Chrome Sync. MosaicSync nerenka telemetrijos."
+  },
+  "lv": {
+    "actionOpenHome": "Atvērt MosaicSync",
+    "firefoxDescription": "Uz privātumu orientēta Firefox jaunās cilnes lapa ar mapēm, pielāgojamu izkārtojumu un izvēles Firefox Sync. MosaicSync neizmanto telemetriju.",
+    "chromeDescription": "Uz privātumu orientēta Chrome jaunās cilnes lapa ar mapēm, pielāgojamu izkārtojumu un izvēles Chrome Sync. MosaicSync neizmanto telemetriju."
+  },
+  "mt": {
+    "actionOpenHome": "Iftaħ MosaicSync",
+    "firefoxDescription": "Paġna ta’ tab ġdida għal Firefox iffukata fuq il-privatezza, b’folders, tqassim personalizzabbli u Firefox Sync fakultattiv. Ebda telemetrija minn MosaicSync.",
+    "chromeDescription": "Paġna ta’ tab ġdida għal Chrome iffukata fuq il-privatezza, b’folders, tqassim personalizzabbli u Chrome Sync fakultattiv. Ebda telemetrija minn MosaicSync."
+  },
+  "nap": {
+    "actionOpenHome": "Arape MosaicSync",
+    "firefoxDescription": "Scheda nova 'e Firefox, rispettosa d'a privacy, cu cartelle, aspietto perzunalizzato e Firefox Sync facoltativo. Nisciuna telemetria MosaicSync.",
+    "chromeDescription": "Scheda nova 'e Chrome, rispettosa d'a privacy, cu cartelle, aspietto perzunalizzato e Chrome Sync facoltativo. Nisciuna telemetria MosaicSync."
+  },
+  "nb_NO": {
+    "actionOpenHome": "Åpne MosaicSync",
+    "firefoxDescription": "Personvernfokusert Firefox Ny fane med mapper, tilpasning og valgfri Firefox Sync. Ingen MosaicSync-telemetri.",
+    "chromeDescription": "Personvernfokusert ny fane i Chrome med mapper, tilpasning og valgfri Chrome Sync. Ingen MosaicSync-telemetri."
+  },
+  "nl": {
+    "actionOpenHome": "MosaicSync openen",
+    "firefoxDescription": "Privacygerichte Firefox-nieuwe-tab met mappen, aanpassingen en optionele Firefox Sync. Geen MosaicSync-telemetrie.",
+    "chromeDescription": "Privacygerichte Chrome-nieuwe-tab met mappen, aanpassingen en optionele Chrome Sync. Geen MosaicSync-telemetrie."
+  },
+  "pl": {
+    "actionOpenHome": "Otwórz MosaicSync",
+    "firefoxDescription": "Prywatna strona nowej karty Firefoksa z folderami, personalizacją i opcjonalnym Firefox Sync. Zero telemetrii MosaicSync.",
+    "chromeDescription": "Prywatna strona nowej karty Chrome z folderami, personalizacją i opcjonalnym Chrome Sync. Zero telemetrii MosaicSync."
+  },
+  "pt_PT": {
+    "actionOpenHome": "Abrir MosaicSync",
+    "firefoxDescription": "Novo separador do Firefox focado na privacidade, com pastas, personalização e Firefox Sync opcional. Zero telemetria MosaicSync.",
+    "chromeDescription": "Novo separador do Chrome focado na privacidade, com pastas, personalização e Chrome Sync opcional. Zero telemetria MosaicSync."
+  },
+  "ro": {
+    "actionOpenHome": "Deschide MosaicSync",
+    "firefoxDescription": "Filă nouă pentru Firefox axată pe confidențialitate, cu dosare, aspect personalizat și Firefox Sync opțional. Zero telemetrie MosaicSync.",
+    "chromeDescription": "Filă nouă pentru Chrome axată pe confidențialitate, cu dosare, aspect personalizat și Chrome Sync opțional. Zero telemetrie MosaicSync."
+  },
+  "sk": {
+    "actionOpenHome": "Otvoriť MosaicSync",
+    "firefoxDescription": "Nová karta Firefoxu zameraná na súkromie s priečinkami, vlastným vzhľadom a voliteľnou synchronizáciou Firefox Sync. Žiadna telemetria MosaicSync.",
+    "chromeDescription": "Nová karta pre Chrome zameraná na súkromie s priečinkami, vlastným vzhľadom a voliteľnou synchronizáciou Chrome Sync. Žiadna telemetria MosaicSync."
+  },
+  "sl": {
+    "actionOpenHome": "Odpri MosaicSync",
+    "firefoxDescription": "Stran novega zavihka za Firefox s poudarkom na zasebnosti, mapami, prilagodljivo postavitvijo in izbirnim Firefox Sync. MosaicSync ne uporablja telemetrije.",
+    "chromeDescription": "Stran novega zavihka za Chrome s poudarkom na zasebnosti, mapami, prilagodljivo postavitvijo in izbirnim Chrome Sync. MosaicSync ne uporablja telemetrije."
+  },
+  "sv_SE": {
+    "actionOpenHome": "Öppna MosaicSync",
+    "firefoxDescription": "Integritetsfokuserad Firefox Ny flik med mappar, anpassning och valfri Firefox Sync. Ingen MosaicSync-telemetri.",
+    "chromeDescription": "Integritetsfokuserad ny flik i Chrome med mappar, anpassning och valfri Chrome Sync. Ingen MosaicSync-telemetri."
+  },
+  "zh_CN": {
+    "actionOpenHome": "打开 MosaicSync",
+    "firefoxDescription": "注重隐私的 Firefox 新标签页，支持文件夹、自定义和可选 Firefox Sync。MosaicSync 零遥测。",
+    "chromeDescription": "注重隐私的 Chrome 新标签页，支持文件夹、自定义和可选 Chrome Sync。MosaicSync 零遥测。"
+  },
+  "zh_TW": {
+    "actionOpenHome": "開啟 MosaicSync",
+    "firefoxDescription": "注重隱私的 Firefox 新分頁，支援資料夾、自訂與可選 Firefox Sync。MosaicSync 零遙測。",
+    "chromeDescription": "注重隱私的 Chrome 新分頁，支援資料夾、自訂與可選 Chrome Sync。MosaicSync 零遙測。"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Datenschutzorientierter Chrome-Neuer-Tab mit Ordnern, Anpassungen und optionalem Chrome Sync. Keine MosaicSync-Telemetrie."
+  },
+  "actionOpenHome": {
+    "message": "MosaicSync öffnen"
+  }
+}

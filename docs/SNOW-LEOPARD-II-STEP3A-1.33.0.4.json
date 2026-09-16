@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.4",
+  "purpose": "Snow Leopard II Step 3A lazy secondary-UI pilot",
+  "baseline13302": {
+    "initialElements": 642,
+    "secondaryElements": 534,
+    "eagerBindings": 200,
+    "secondaryEagerBindings": 165
+  },
+  "after": {
+    "initialElements": 631,
+    "secondaryElements": 523,
+    "eagerBindings": 198,
+    "secondaryEagerBindings": 163,
+    "staticModuleCount": 24,
+    "staticModuleRawBytes": 655718,
+    "htmlRawBytes": 52027,
+    "combinedStartupSourceBytes": 707745,
+    "combinedStartupSourceDeltaBytes": -128
+  },
+  "deferredWallpaperGallery": {
+    "root": "newtab/wallpaper-gallery-shell.js",
+    "moduleCount": 1,
+    "rawBytes": 3104,
+    "modules": [
+      {
+        "path": "newtab/wallpaper-gallery-shell.js",
+        "rawBytes": 3104
+      }
+    ]
+  },
+  "safety": {
+    "settingsOwnershipGeneration": true,
+    "dynamicCloseWiring": true,
+    "telemetryAdded": false,
+    "syncRecoveryChanged": false
+  },
+  "status": "pilot-complete-step3-in-progress",
+  "baseline13303": {
+    "htmlRawBytes": 52905,
+    "staticModuleRawBytes": 654968,
+    "combinedStartupSourceBytes": 707873
+  }
+}

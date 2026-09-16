@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Privacy-first Firefox New Tab with folders, custom visuals and optional Firefox Sync. Zero MosaicSync telemetry."
+  },
+  "actionOpenHome": {
+    "message": "Open MosaicSync"
+  }
+}

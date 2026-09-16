@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "version": "1.33.0.18",
+  "journey": "Snow Leopard II",
+  "step": 8,
+  "title": "Freeze and adversarial performance/correctness audit",
+  "status": "DONE",
+  "certification": "MECHANICAL_ONLY",
+  "baselineVersion": "1.33.0.1",
+  "finalOptimizationBaseline": "1.33.0.17",
+  "corrective": {
+    "bookmarksRapidOpen": true,
+    "wallpaperGalleryRapidOpen": true,
+    "builtinIconsRuntimeTest": true,
+    "scope": "final UI reentrancy corrections and Step-7 runtime contract hardening only"
+  },
+  "redBeforeGreen": {
+    "untouched133017RapidOpenReproducer": {
+      "cases": 2,
+      "passed": 0,
+      "failed": 2,
+      "failure": "second native showModal call throws InvalidStateError"
+    },
+    "implemented133018RapidOpenReproducer": {
+      "cases": 2,
+      "passed": 2,
+      "failed": 0
+    },
+    "builtinIconsRuntimeHardening": "passes on both 1.33.0.17 behavior and 1.33.0.18; added because Step-7 shipped only source/topology guards"
+  },
+  "optimizationPolicy": {
+    "additionalPerformanceChanges": false,
+    "reason": "Step 8 is a freeze/red-team phase. No new optimization target was accepted after Step 7 closure."
+  },
+  "deterministicJourneyComparison": {
+    "initialNewTabDom": {
+      "baselineElements": 642,
+      "finalElements": 598,
+      "deltaElements": -44,
+      "baselineRawBytes": 52905,
+      "finalRawBytes": 49565,
+      "deltaRawBytes": -3340,
+      "baselineDialogs": 6,
+      "finalDialogs": 4
+    },
+    "eagerStaticModuleGraph": {
+      "baselineModules": 24,
+      "finalModules": 22,
+      "deltaModules": -2,
+      "baselineRawBytes": 653457,
+      "finalRawBytes": 640143,
+      "deltaRawBytes": -13314
+    },
+    "parserBlockingClassicPath": {
+      "finalScripts": 9,
+      "finalRawBytes": 28892,
+      "note": "Step 7 deliberately retained the classic builtin-icons owner required by first paint."
+    },
+    "reachability": {
+      "highConfidenceUnreachableSharedModules": 0,
+      "unusedNamedImports": 0,
+      "unreferencedPrivateFunctions": 0
+    }
+  },
+  "storageBackgroundFreeze": {
+    "firefox": {
+      "routineSyncWatch": {
+        "localReads": 5,
+        "localWrites": 2,
+        "fullSyncReads": 2
+      },
+      "gcDueSyncWatch": {
+        "localReads": 7,
+        "localWrites": 3,
+        "fullSyncReads": 3
+      },
+      "startupSyncOn": {
+        "localReads": 11,
+        "localWrites": 3,
+        "fullSyncReads": 2
+      }
+    },
+    "chrome": {
+      "routineSyncWatch": {
+        "localReads": 5,
+        "localWrites": 2,
+        "fullSyncReads": 2
+      },
+      "gcDueSyncWatch": {
+        "localReads": 7,
+        "localWrites": 3,
+        "fullSyncReads": 3
+      },
+      "startupSyncOn": {
+        "localReads": 11,
+        "localWrites": 3,
+        "fullSyncReads": 2
+      }
+    },
+    "authorityNote": "No Sync freshness, pending-journal, catastrophic-loss, Recovery or destructive-cleanup read was removed in Step 8."
+  },
+  "lifetimeFreeze": {
+    "wallpaperGallery": "generated choice payload cleared on close",
+    "recoveryManager": "generated controls cleared; per-open generations reject superseded async results",
+    "bookmarks": "dynamic state reset on close; per-open generations reject stale async results; Step 8 serializes same-session rapid opens",
+    "folderPopover": "generated folder item controls cleared on close",
+    "customBranding": "draft/upload generation invalidated on close",
+    "boundedCachesAndWorker": "locale/background/favicon/Recovery caches remain bounded; image-worker requests clear and worker idles out"
+  },
+  "browserEnvironment": {
+    "chromium": "/usr/bin/chromium",
+    "xvfb": "/usr/bin/Xvfb",
+    "chromedriver": null,
+    "firefox": null,
+    "geckodriver": null,
+    "realBrowserTimingOrHeapClaim": false
+  },
+  "finalCertification": {
+    "status": "PASS",
+    "tests": {
+      "ordinary": 1238,
+      "instrumentation": 8,
+      "total": 1246,
+      "passed": 1246,
+      "failed": 0
+    },
+    "focusedGroups": {
+      "startup": "245/245",
+      "newTab": "461/461",
+      "sync": "277/277",
+      "recovery": "152/152",
+      "browserParityPermissions": "178/178",
+      "core": "164/164",
+      "security": "146/146",
+      "release": "349/349"
+    },
+    "generatedReleaseContracts": "PASS",
+    "packagedFirefoxContract": "PASS",
+    "packagedChromeContract": "PASS",
+    "candidateCleanRoomReproducible": true,
+    "finalHandoffCleanRoomRequired": true
+  },
+  "journeyDecision": "Snow Leopard II COMPLETE at 1.33.0.18 after final certification seal",
+  "runtimePackageFinal": {
+    "firefox": {
+      "rawBytes": 2424360,
+      "deflatedBytes": 708042
+    },
+    "chrome": {
+      "rawBytes": 2446003,
+      "deflatedBytes": 722559
+    },
+    "packageSizeClaim": "not a Snow Leopard II success metric; performance gains are work/topology reductions, not package shrinkage"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Nova lapela de Chrome centrada na privacidade, con cartafoles, elementos visuais personalizados e Chrome Sync opcional. Cero telemetría de MosaicSync."
+  },
+  "actionOpenHome": {
+    "message": "Abrir MosaicSync"
+  }
+}
