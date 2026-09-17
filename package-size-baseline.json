@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.29",
-      "rawBytes": 2444439,
-      "deflatedBytes": 712462,
+      "version": "1.33.0.30",
+      "rawBytes": 2446837,
+      "deflatedBytes": 713244,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,8 +13,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 392567,
-          "deflatedBytes": 93007
+          "rawBytes": 393958,
+          "deflatedBytes": 93322
         },
         "localization": {
           "files": 34,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 449693,
-          "deflatedBytes": 107310
+          "rawBytes": 450700,
+          "deflatedBytes": 107778
         },
         "other": {
           "files": 1,
@@ -59,7 +59,7 @@
         "shared-core": {
           "files": 27,
           "rawBytes": 296367,
-          "deflatedBytes": 84136
+          "deflatedBytes": 84135
         },
         "wallpapers": {
           "files": 29,
@@ -76,8 +76,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 367640,
-          "deflatedBytes": 80058
+          "rawBytes": 367908,
+          "deflatedBytes": 80175
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 310794,
-          "deflatedBytes": 69034
+          "rawBytes": 311165,
+          "deflatedBytes": 69083
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.29",
-      "rawBytes": 2466082,
-      "deflatedBytes": 726979,
+      "version": "1.33.0.30",
+      "rawBytes": 2468480,
+      "deflatedBytes": 727760,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,8 +267,8 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 391896,
-          "deflatedBytes": 92757
+          "rawBytes": 393287,
+          "deflatedBytes": 93072
         },
         "localization": {
           "files": 34,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1368,
-          "deflatedBytes": 556
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 16,
-          "rawBytes": 449693,
-          "deflatedBytes": 107310
+          "rawBytes": 450700,
+          "deflatedBytes": 107778
         },
         "other": {
           "files": 1,
@@ -313,7 +313,7 @@
         "shared-core": {
           "files": 28,
           "rawBytes": 307338,
-          "deflatedBytes": 87553
+          "deflatedBytes": 87552
         },
         "wallpapers": {
           "files": 29,
@@ -330,8 +330,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 367640,
-          "deflatedBytes": 80058
+          "rawBytes": 367908,
+          "deflatedBytes": 80175
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 310794,
-          "deflatedBytes": 69034
+          "rawBytes": 311165,
+          "deflatedBytes": 69083
         },
         {
           "path": "core/public_suffix_list.dat",

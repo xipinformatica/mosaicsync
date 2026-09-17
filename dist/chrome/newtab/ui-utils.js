@@ -105,8 +105,20 @@ export function safeShortcutNavigationUrl(value) {
 export function normalizeShortcutUrl(raw) {
   let value = String(raw || "").trim();
   if (!value) throw new Error("Enter a URL.");
-  if (!/^[a-z][a-z0-9+.-]*:/i.test(value)) {
-    const looksLocal = /^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/|$)/i.test(value);
+
+  const explicitScheme = /^[a-z][a-z0-9+.-]*:/i.test(value);
+  const hostPortMatch = value.match(/^([^\s/:?#]+(?:\.[^\s/:?#]+)+|localhost):(\d+)(?=[/?#]|$)/i);
+  const ipv6PortMatch = value.match(/^\[[0-9a-f:.]+\]:(\d+)(?=[/?#]|$)/i);
+  const schemelessHostPort = Boolean(hostPortMatch || ipv6PortMatch);
+
+  // A letter-led hostname followed by a numeric port (example.com:8443) is
+  // syntactically indistinguishable from an arbitrary URI scheme to the generic
+  // scheme grammar. Treat only clear hostname/localhost/IPv6 + numeric-port
+  // shapes as schemeless web addresses; real non-HTTP schemes remain untouched
+  // so the centralized HTTP(S)-only safety gate rejects them.
+  if (!explicitScheme || schemelessHostPort) {
+    const looksLocal = /^(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?(\/|$)/i.test(value) ||
+      /^\[::1\](?::\d+)?(?:[/?#]|$)/i.test(value);
     value = `${looksLocal ? "http" : "https"}://${value}`;
   }
   const safeUrl = safeShortcutNavigationUrl(value);

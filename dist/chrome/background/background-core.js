@@ -4244,7 +4244,13 @@ export function startBackground(adapter) {
         deviceId,
         deviceName: name || "",
         currentDevice,
-        canRemoveDevice: !currentDevice && (grouped.get(meta.deviceId)?.length || 0) > 0,
+        canRemoveDevice: !currentDevice && planManualRecoveryCleanup(values, snapshots, {
+          mode: "device",
+          deviceId,
+          currentDeviceId: meta.deviceId,
+          rootSeenPass: meta.deviceSnapshotRootSeenPass || {},
+          gcPass: Number(meta.deviceSnapshotGcPass) || 0
+        }).rootKeys.length > 0,
         bytes: list.reduce((sum, root) => sum + (rootBytes.get(root.key) || 0), 0),
         latestAt: Math.max(...list.map(root => Number(root.publishedAt) || Number(root.updatedAt) || 0), 0),
         generations: list.map((root, index) => ({
@@ -4294,18 +4300,20 @@ export function startBackground(adapter) {
       mode,
       rootKey: typeof message.rootKey === "string" ? message.rootKey : "",
       deviceId: typeof message.deviceId === "string" ? message.deviceId : "",
-      currentDeviceId: meta.deviceId
+      currentDeviceId: meta.deviceId,
+      rootSeenPass: meta.deviceSnapshotRootSeenPass || {},
+      gcPass: Number(meta.deviceSnapshotGcPass) || 0
     });
     if (!plan.rootKeys.length) return { ok: false, error: "That Recovery copy is protected or no longer available." };
 
     if (mode === "device") {
-      // Distributed survivor invariant: freeze the target roots first, then
-      // publish a brand-new verified generation for the acting device before
-      // any delete is revalidated. confirmedManualRecoveryCleanupKeys() can only
-      // delete roots from the frozen plan, so two devices doing opposite cleanup
-      // cannot both include the other's post-plan survivor. A cycle would require
-      // each post-plan publication to happen before the other device's earlier
-      // plan, which is temporally impossible.
+      // Distributed survivor invariant: device-mode planning is allowed only
+      // for target roots that have remained visible across multiple local GC
+      // observations. Freeze that mature target set first, then publish a fresh
+      // verified generation for the acting device before any delete is
+      // revalidated. If the other device is concurrently doing the same thing,
+      // its newly published survivor is either outside this frozen set or is too
+      // newly observed to authorize whole-device deletion on a later plan.
       const { state: survivorState } = await ensureLocalStorage();
       const survivor = await publishProfileDeviceSnapshot(survivorState, meta, { force: true });
       if (!survivor?.written) {

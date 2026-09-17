@@ -4,7 +4,7 @@
 
 MosaicSync is an open-source New Tab/start-page extension for Firefox and Chromium-based desktop browsers. It keeps shortcuts, folders and Spaces easy to reach while using browser-native synchronization instead of a MosaicSync account or analytics backend.
 
-**Current source release: 1.33.0.29**
+**Current source release: 1.33.0.30**
 
 - Website: https://xipinformatica.cat/mosaicsync/
 - Firefox Add-ons: https://addons.mozilla.org/addon/mosaicsync/

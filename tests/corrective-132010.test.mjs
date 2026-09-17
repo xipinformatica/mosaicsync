@@ -82,6 +82,15 @@ function lifecycle() {
   });
 }
 
+function matureDeviceObservation(all, gcPass = 10) {
+  return {
+    rootSeenPass: Object.fromEntries(
+      Object.keys(all || {}).filter(key => !key.includes(".chunk.")).map(key => [key, 1])
+    ),
+    gcPass
+  };
+}
+
 function fixture() {
   const all = {};
   const localOld = addGeneration(all, "local", "old", 10);
@@ -126,16 +135,16 @@ test("1.32.0.10 Recovery manager can remove an old device only while the current
   const owner = lifecycle();
   const { all, snapshots, remoteOld, remoteNew } = fixture();
   assert.deepEqual(new Set(owner.planManualRecoveryCleanup(all, snapshots, {
-    mode: "device", deviceId: "remote", currentDeviceId: "local"
+    mode: "device", deviceId: "remote", currentDeviceId: "local", ...matureDeviceObservation(all)
   }).rootKeys), new Set([remoteOld, remoteNew]));
   assert.deepEqual(owner.planManualRecoveryCleanup(all, snapshots, {
-    mode: "device", deviceId: "local", currentDeviceId: "local"
+    mode: "device", deviceId: "local", currentDeviceId: "local", ...matureDeviceObservation(all)
   }).rootKeys, [], "the current device's complete Recovery set must not be removable as a group");
 
   const remoteOnly = {};
   const remoteRoot = addGeneration(remoteOnly, "remote", "only", 1);
   assert.deepEqual(owner.planManualRecoveryCleanup(remoteOnly, [snapshot("remote", "only", 1)], {
-    mode: "device", deviceId: "remote", currentDeviceId: "local"
+    mode: "device", deviceId: "remote", currentDeviceId: "local", ...matureDeviceObservation(remoteOnly)
   }).rootKeys, [], "old-device cleanup must not proceed without a verified complete current-device fallback");
   assert.ok(remoteOnly[remoteRoot]);
 });
@@ -190,13 +199,13 @@ test("1.32.0.10 old-device group cleanup requires a verified fallback owned by t
   addGeneration(all, "third", "fallback", 30);
   const snapshots = [snapshot("remote", "target", 20), snapshot("third", "fallback", 30)];
   assert.deepEqual(owner.planManualRecoveryCleanup(all, snapshots, {
-    mode: "device", deviceId: "remote", currentDeviceId: "local"
+    mode: "device", deviceId: "remote", currentDeviceId: "local", ...matureDeviceObservation(all)
   }).rootKeys, [], "a third-party fallback is not enough to authorize deleting an old device set");
 
   const current = addGeneration(all, "local", "current", 40);
   snapshots.push(snapshot("local", "current", 40));
   assert.deepEqual(owner.planManualRecoveryCleanup(all, snapshots, {
-    mode: "device", deviceId: "remote", currentDeviceId: "local"
+    mode: "device", deviceId: "remote", currentDeviceId: "local", ...matureDeviceObservation(all)
   }).rootKeys, [target]);
   assert.ok(all[current]);
 });
@@ -205,7 +214,7 @@ test("1.32.0.10 device cleanup revalidation cancels when the current-device fall
   const owner = lifecycle();
   const { all, snapshots, remoteOld, remoteNew } = fixture();
   const plan = owner.planManualRecoveryCleanup(all, snapshots, {
-    mode: "device", deviceId: "remote", currentDeviceId: "local"
+    mode: "device", deviceId: "remote", currentDeviceId: "local", ...matureDeviceObservation(all)
   });
   assert.deepEqual(new Set(plan.rootKeys), new Set([remoteOld, remoteNew]));
 

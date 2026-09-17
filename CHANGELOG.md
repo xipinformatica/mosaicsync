@@ -1,3 +1,11 @@
+# Changelog
+
+## 1.33.0.30
+
+- Makes Recovery cleanup safer when two devices manage old safety copies at the same time.
+- Shortcut addresses such as `localhost:3000` and `example.com:8443` now work correctly without a typed scheme.
+- Invalid shortcut addresses are rejected before MosaicSync asks for optional website access.
+
 ## 1.33.0.29
 
 - Adding a shortcut no longer requires a name. Enter the website address and MosaicSync will use the site's address as the name automatically; you can still type your own name whenever you want.
@@ -1302,8 +1310,6 @@ Commit-failure resilience follow-up on 1.24.14i. Proactive favicon networking st
 ## 1.24.14i
 
 Precision hardening after the 1.24.14h queue split. Proactive favicon recovery is now Space-aware at prune and commit time, so an in-flight Personal→Work move can retain useful recovery work while respecting the destination Space's own automatic-icon preference. Idempotent favicon rediscovery is recorded as unchanged success rather than stale/failure and avoids unnecessary local-state writes. Direct behavioral coverage now exercises the proactive batch engine, post-network queue re-reads, URL/deletion/permission staleness, Space moves, same-URL shortcut isolation, scheduler coalescing/concurrency, and same-field settings conflict convergence. No Sync/profile/storage schema changes and no new permissions or UI strings.
-
-# Changelog
 
 ## 1.24.14h
 

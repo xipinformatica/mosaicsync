@@ -4923,31 +4923,14 @@ ${site.url}`;
   shortcutForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    // Saving a new iconless shortcut is a user gesture, so it is the one safe
-    // moment to request MosaicSync's single optional all-websites permission if
-    // onboarding did not already decide it. The shortcut itself is saved even
-    // if the user declines; only automatic icon hydration is skipped.
-    const shouldRequestWebAccess = state.settings.autoSiteIcons &&
-      !pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;
-    const webAccessPermissionPromise = shouldRequestWebAccess
-      ? requestWebAccessFromGesture()
-      : null;
-
     try {
+      // Validate every synchronous precondition before starting the optional
+      // all-websites permission request. normalizeShortcutUrl() is synchronous,
+      // so the request still occurs in the original submit user gesture while an
+      // invalid URL or impossible destination now causes zero permission prompts.
       const url = normalizeShortcutUrl(shortcutUrl.value);
       const title = shortcutTitle.value.trim() || hostLabel(url);
       const image = pendingShortcutImage;
-      let imageSyncData = pendingShortcutSyncData;
-      const imageSyncKind = image
-        ? (shortcutSyncImage.checked ? "sync" : "device")
-        : (!shortcutArtworkEdited && ["sync", "local"].includes(pendingShortcutImageKind) ? "sync" : "none");
-      if (imageSyncKind === "sync" && image && !imageSyncData) {
-        imageSyncData = await optimizeImageDataUrl(image, {
-          maxWidth: 128, maxHeight: 128, minWidth: 48, minHeight: 48,
-          targetBytes: SHORTCUT_SYNC_IMAGE_TARGET_BYTES
-        });
-      }
-      if (imageSyncKind !== "sync") imageSyncData = "";
       const id = shortcutId.value;
       const record = id ? findShortcutRecord(id) : null;
       let savedShortcutId = id;
@@ -4964,6 +4947,28 @@ ${site.url}`;
       if (!record && !editingParentFolderId && !movedAcrossSpaces && firstEmptyTopLevelPosition(editingPreferredPosition) == null) {
         throw new Error(t("operationFailed"));
       }
+
+      // Saving a new iconless shortcut is a user gesture, so this remains the
+      // one safe moment to request MosaicSync's optional all-websites permission.
+      // Attach rejection handling immediately so a later save failure cannot
+      // leave an abandoned rejecting Promise.
+      const shouldRequestWebAccess = state.settings.autoSiteIcons &&
+        !pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;
+      const webAccessPermissionPromise = shouldRequestWebAccess
+        ? Promise.resolve(requestWebAccessFromGesture()).catch(() => false)
+        : null;
+
+      let imageSyncData = pendingShortcutSyncData;
+      const imageSyncKind = image
+        ? (shortcutSyncImage.checked ? "sync" : "device")
+        : (!shortcutArtworkEdited && ["sync", "local"].includes(pendingShortcutImageKind) ? "sync" : "none");
+      if (imageSyncKind === "sync" && image && !imageSyncData) {
+        imageSyncData = await optimizeImageDataUrl(image, {
+          maxWidth: 128, maxHeight: 128, minWidth: 48, minHeight: 48,
+          targetBytes: SHORTCUT_SYNC_IMAGE_TARGET_BYTES
+        });
+      }
+      if (imageSyncKind !== "sync") imageSyncData = "";
 
       if (record) {
         const mutationTimestamp = nextMutationTime(state.updatedAt, record.item.modifiedAt, record.parentFolder?.modifiedAt);
@@ -5050,11 +5055,7 @@ ${site.url}`;
       await saveState({ crossSpaceSyncIntent });
 
       if (webAccessPermissionPromise) {
-        try {
-          webAccessGranted = (await webAccessPermissionPromise) === true;
-        } catch {
-          webAccessGranted = false;
-        }
+        webAccessGranted = (await webAccessPermissionPromise) === true;
         state.settings.webAccessPrompted = true;
         if (!webAccessGranted) {
           // Automatic recovery cannot honestly remain enabled without the host

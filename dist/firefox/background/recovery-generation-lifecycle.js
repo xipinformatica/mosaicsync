@@ -345,9 +345,14 @@ export function createRecoveryGenerationLifecycle({
     return groups;
   }
 
-  function planManualRecoveryCleanup(all, snapshots, { mode = "", rootKey = "", deviceId = "", currentDeviceId = "" } = {}) {
+  function planManualRecoveryCleanup(all, snapshots, {
+    mode = "", rootKey = "", deviceId = "", currentDeviceId = "",
+    rootSeenPass = {}, gcPass = 0
+  } = {}) {
     const values = all && typeof all === "object" ? all : {};
     const groups = manualRecoveryGroups(values, snapshots);
+    const observedRoots = rootSeenPass && typeof rootSeenPass === "object" ? rootSeenPass : {};
+    const observedGcPass = Math.max(0, Math.trunc(Number(gcPass) || 0));
     let rootKeys = [];
 
     if (mode === "superseded") {
@@ -369,11 +374,19 @@ export function createRecoveryGenerationLifecycle({
       if (targetDevice && current && targetDevice !== current) {
         const target = groups.get(targetDevice) || [];
         const currentFallbacks = groups.get(current) || [];
-        // Removing an old device is intentionally stricter than deleting a
-        // superseded generation: the device performing the cleanup must itself
-        // retain a verified complete Recovery fallback. Do not rely on a third
-        // remote device remaining available across the destructive operation.
-        if (target.length && currentFallbacks.length > 0) rootKeys = target.map(entry => entry.key);
+        // Whole-device deletion is deliberately stricter than ordinary
+        // superseded-generation cleanup. In addition to an independently verified
+        // current-device fallback, every target root must already have remained
+        // visible across multiple local Recovery-GC observations. A generation
+        // that has just appeared (notably the fresh survivor published by another
+        // device while it performs its own cleanup) therefore cannot immediately
+        // become destructive authority on this device. No new Sync key or Recovery
+        // wire field is needed: this reuses the device-local observation journal.
+        const targetMature = target.length > 0 && observedGcPass > 0 && target.every(entry => {
+          const firstSeenPass = Math.max(0, Math.trunc(Number(observedRoots[entry.key]) || 0));
+          return firstSeenPass > 0 && observedGcPass - firstSeenPass >= settings.orphanMinGcPasses;
+        });
+        if (targetMature && currentFallbacks.length > 0) rootKeys = target.map(entry => entry.key);
       }
     }
 
@@ -382,6 +395,8 @@ export function createRecoveryGenerationLifecycle({
       rootKey: String(rootKey || ""),
       deviceId: String(deviceId || ""),
       currentDeviceId: String(currentDeviceId || ""),
+      rootSeenPass: Object.freeze({ ...observedRoots }),
+      gcPass: observedGcPass,
       rootKeys: [...new Set(rootKeys)]
     });
   }
@@ -394,7 +409,9 @@ export function createRecoveryGenerationLifecycle({
       mode: plan?.mode,
       rootKey: plan?.rootKey,
       deviceId: plan?.deviceId,
-      currentDeviceId: plan?.currentDeviceId
+      currentDeviceId: plan?.currentDeviceId,
+      rootSeenPass: plan?.rootSeenPass || {},
+      gcPass: Number(plan?.gcPass) || 0
     });
     const stillEligible = new Set(refreshed.rootKeys);
     const rootKeys = [...requested].filter(rootKey => stillEligible.has(rootKey));

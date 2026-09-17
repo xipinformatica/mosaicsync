@@ -1,4 +1,12 @@
-Current release: 1.33.0.29
+# MosaicSync development
+
+Current release: 1.33.0.30
+
+## 1.33.0.30 — Recovery cleanup maturity, URL-port normalization and permission-order corrective
+
+1.33.0.30 is a narrow post-audit corrective over 1.33.0.29. Whole-device Recovery cleanup now requires every target generation to have remained visible across multiple device-local Recovery-GC observations before that target set may receive destructive authority. The original target set is still frozen and freshly revalidated, so a newly delivered generation — including the fresh survivor published by another device while it performs an opposite cleanup — blocks a later whole-device plan instead of being swept into it. This reuses existing local observation metadata and changes no Sync or Recovery wire format.
+
+New Tab URL normalization now distinguishes a genuine unsupported URI scheme from a schemeless dotted hostname/localhost/IPv6 literal followed by a numeric port, so common inputs such as `localhost:3000` and `example.com:8443/path` work while `ftp:`, `file:`, `mailto:`, `javascript:` and other unsupported schemes still fail closed. Shortcut submission also completes synchronous URL/destination validation before starting the optional all-websites permission request, and the permission Promise owns its rejection immediately. Blank-name saving is now protected by an executable submit-path regression rather than only source-shape inspection. Permanent protection: `tests/corrective-133030.test.mjs`.
 
 ## 1.33.0.29 — optional shortcut names and carried-forward test hardening
 
@@ -168,9 +176,9 @@ The fresh post-fix chaos audit also exposed a no-op rebase edge in `concurrency.
 1.32.1.3 closes the five confirmed defects from the 1.32.1.3 adversarial forensic audit without reopening Journey 3 or changing Normal Sync/Recovery formats. Top-level placement is capacity-aware across ordinary add, Frequently Visited insertion, cross-Space moves, folder ungrouping and live grid shrink; full destinations reject before mutation and normalization repairs legacy/imported positions into the visible grid when the record count fits.
 
 Profile import now performs bounded iterative structural preflight before asset-envelope traversal/integrity hashing and validates imported PNG/JPEG/WebP raster structure, geometry and decoder acceptance instead of trusting MIME/base64 syntax. Custom Branding import writes are serialized in their own device-local lock domain so rollback cannot overwrite a later branding save, and open New Tabs adopt branding storage changes. Settings import no longer installs imported state into live memory until the durable profile-state commit succeeds. No new permission, Sync/Recovery wire format, persisted state schema, profile-format version, CSP or browser floor is introduced.
-# MosaicSync development
+### Historical engineering baseline note
 
-> **Current release: 1.33.0.3.** The versioned sections below are historical engineering policies and regression records. Older version numbers such as 1.26.6 are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
+The versioned sections below are historical engineering policies and regression records. Older version numbers are intentionally preserved to describe the release in which that behavior was introduced; they are not active release identifiers.
 
 Requires Node.js 22+.
 
