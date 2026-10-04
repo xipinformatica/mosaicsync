@@ -1,5 +1,10 @@
 # MosaicSync Developer Guide
 
+## Folder-discovery hint invariant (1.33.0.31+)
+
+The folder-discovery hint is presentation-only onboarding. It must remain device-local, one-time, lazy-loaded, and unable to mutate profile/Sync/Recovery state. Never clone `.shortcut-slot`, copy `data-id`, animate real launcher slots, or advertise drag-and-drop while shortcut order is `recent`. Revalidate eligibility immediately before mounting; any folder in any Space suppresses the hint, while the threshold counts only top-level shortcuts in the active Space. Direct grid child replacement may cancel a mounted hint, but descendant favicon/preview artwork churn must not consume it. Async pre-mount work must remain generation-cancellable, temporary eligibility failures must be retryable from a later pointer movement, and candidate pairs must be genuinely neighbouring rather than merely consecutive across large Manual-layout gaps. Reduced-motion users receive static guidance with no Web Animations API movement. If the motion tutorial demonstrates later folder-creation steps, those steps must remain fake inert overlay UI only: reuse existing localized action labels, never invoke production drop-choice/folder-creation handlers, and keep the real launcher structurally unchanged.
+
+
 > **Start here if you are new to the MosaicSync codebase.**
 >
 > This guide explains how the repository is organized, how the application starts, where authoritative data lives, how Sync and Recovery differ, which files own the major behaviors, how Firefox and Chromium are kept aligned, and how to make changes without accidentally removing protections that exist for real historical bugs.

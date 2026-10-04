@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.33.0.32
+
+- Improves the one-time folder tip so it now shows the complete folder-creation flow, including the choice menu and the resulting folder opening with both shortcuts inside.
+
+## 1.33.0.31
+
+- Adds a one-time visual tip that shows how to organize shortcuts into folders once your current Space starts filling up.
+- The tip never changes your shortcuts and does not appear when drag-and-drop ordering is unavailable.
+
 ## 1.33.0.30
 
 - Makes Recovery cleanup safer when two devices manage old safety copies at the same time.
