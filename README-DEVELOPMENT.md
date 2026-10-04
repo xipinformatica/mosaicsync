@@ -1,14 +1,6 @@
 # MosaicSync development
 
-Current release: 1.33.0.31
-
-## 1.33.0.31 — one-time folder discovery hint
-
-1.33.0.31 adds one quiet, device-local discoverability hint for folders. When the active Space has at least six top-level shortcuts, no folder exists in either Space, manual ordering is active, and the launcher is idle, MosaicSync can demonstrate the real drag gesture once: a presentation-only ghost of one shortcut moves onto a neighbouring shortcut while the existing drag-over visual is represented and the callout explains that the next real step is to choose “Create folder”. The demonstration never moves or mutates real shortcut DOM/state, never runs in Recently opened order, respects `prefers-reduced-motion` with a static arrow/ring alternative, and is suppressed permanently once a folder or the real drop-choice gesture is observed.
-
-The tutorial is isolated in lazy-loaded `newtab/folder-discovery-hint.js`; it has no imports from model/storage/permissions/profile/Recovery and cannot call Sync or state mutation APIs. Its only persistent side effect is the device-local `localStorage` flag `mosaicsync.folder-hint.v1`. Permanent protection: `tests/feature-133031.test.mjs`.
-
-The independent pre-publication audit then hardened the one-time lifecycle before publication: the grid observer was narrowed from subtree mutations to direct child replacement so late favicon/preview hydration cannot burn the hint; async stylesheet mounting now has generation-based cancellation authority; temporary idle/visibility/readiness failures re-arm pointer discovery; and Manual-layout candidate selection rejects very large gaps. These were protected with behavioral red-before-green regressions, including a motion-path guard that proves WAAPI animation stays inside the inert overlay.
+Current release: 1.33.0.30
 
 ## 1.33.0.30 — Recovery cleanup maturity, URL-port normalization and permission-order corrective
 
