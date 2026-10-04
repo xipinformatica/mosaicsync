@@ -330,7 +330,14 @@ export function createFolderDiscoveryHint({
 
   function animate(element, keyframes, options) {
     if (typeof element?.animate !== "function") return null;
-    const animation = element.animate(keyframes, options);
+    // WAAPI timing-level easing warps the entire iteration, including the
+    // keyframe offsets that define this tutorial's staged wall-clock schedule.
+    // Keep iteration progress linear and apply the requested curve per segment.
+    const curve = options?.easing;
+    const segmented = curve && curve !== "linear"
+      ? keyframes.map(frame => ({ easing: curve, ...frame }))
+      : keyframes;
+    const animation = element.animate(segmented, { ...options, easing: "linear" });
     if (animation) animations.add(animation);
     return animation;
   }
@@ -432,6 +439,11 @@ export function createFolderDiscoveryHint({
     layerEl.append(ghost, ring, callout);
     if (!reducedMotion) layerEl.append(choice, fakeFolder, fakeFolderPanel);
     documentRef.body.append(layerEl);
+    if (!reducedMotion) {
+      const calloutHeight = callout.getBoundingClientRect?.().height || 0;
+      const aboveTop = Math.min(sourceRect.top, targetRect.top) - calloutHeight - 14;
+      if (calloutHeight && aboveTop >= 12) callout.style.top = `${aboveTop}px`;
+    }
     layer = layerEl;
     mounted = true;
     writeSeen();

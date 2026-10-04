@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.33.0.33
+
+- Corrects the one-time folder tutorial so each step plays in the intended order and the guidance no longer covers the choice menu or opened folder.
+
 ## 1.33.0.32
 
 - Improves the one-time folder tip so it now shows the complete folder-creation flow, including the choice menu and the resulting folder opening with both shortcuts inside.

@@ -1,6 +1,10 @@
 # MosaicSync development
 
-Current release: 1.33.0.32
+Current release: 1.33.0.33
+
+## 1.33.0.33 — folder tutorial timing and placement corrective
+
+1.33.0.33 is a narrow corrective over the published 1.33.0.32 folder-discovery demonstration. The staged Web Animations sequence now keeps iteration progress linear and applies easing per keyframe segment, so the authored offsets map to real wall-clock time: the shortcut ghost reaches its neighbour before the choice popover appears, the localized “Create folder” action remains visibly emphasized while the popover is readable, and the fake folder/panel follow in order. For motion-enabled users, the callout is also measured after mounting and moved above the demonstrated pair when space permits so it cannot cover the fake choice popover or folder panel. No real launcher state, folder semantics, Sync/Recovery behavior, permissions, schema, CSP or reduced-motion behavior changes. Permanent protection: `tests/feature-133033.test.mjs`.
 
 ## 1.33.0.32 — complete visual folder-discovery demonstration
 

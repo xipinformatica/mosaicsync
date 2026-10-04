@@ -305,7 +305,7 @@ test("1.33.0.31 motion animation touches overlay elements only and uses composit
   for (const call of calls) {
     assert.equal(belongsToLayer(call.element), true, "every animated node must belong to the inert overlay");
     for (const frame of call.keyframes) {
-      for (const key of Object.keys(frame)) assert.ok(["transform", "opacity", "offset"].includes(key), `unexpected animated property ${key}`);
+      for (const key of Object.keys(frame)) assert.ok(["transform", "opacity", "offset", "easing"].includes(key), `unexpected animated property ${key}`);
     }
   }
 });

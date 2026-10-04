@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.32",
-      "rawBytes": 2482920,
-      "deflatedBytes": 722739,
+      "version": "1.33.0.33",
+      "rawBytes": 2483620,
+      "deflatedBytes": 723016,
       "categories": {
         "assets": {
           "files": 2,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 17,
-          "rawBytes": 476472,
-          "deflatedBytes": 114092
+          "rawBytes": 477172,
+          "deflatedBytes": 114369
         },
         "other": {
           "files": 1,
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.32",
-      "rawBytes": 2504563,
-      "deflatedBytes": 737255,
+      "version": "1.33.0.33",
+      "rawBytes": 2505263,
+      "deflatedBytes": 737532,
       "categories": {
         "assets": {
           "files": 6,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 17,
-          "rawBytes": 476472,
-          "deflatedBytes": 114092
+          "rawBytes": 477172,
+          "deflatedBytes": 114369
         },
         "other": {
           "files": 1,
