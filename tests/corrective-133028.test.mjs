@@ -175,7 +175,10 @@ test("1.33.0.29 whole-device manual Recovery cleanup requires an independently v
   const plan = owner.planManualRecoveryCleanup(all, [
     snapshot("A", "2", 20, { usedPreviousGeneration: true }),
     snapshot("B", "1", 10)
-  ], { mode: "device", deviceId: "B", currentDeviceId: "A" });
+  ], {
+    mode: "device", deviceId: "B", currentDeviceId: "A",
+    rootSeenPass: { [b1]: 1 }, gcPass: 10
+  });
 
   assert.deepEqual(plan.rootKeys, [], "a torn-only acting-device fallback must not authorize wiping another device's Recovery set");
   assert.ok(all[b1]);

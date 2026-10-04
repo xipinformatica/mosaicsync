@@ -14,6 +14,7 @@ import {
   FREQUENTLY_VISITED_COUNT_PREF_KEY,
   FREQUENTLY_VISITED_HIDDEN_DOMAINS_KEY,
   FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY,
+  FOLDER_DISCOVERY_HINT_KEY,
   DEFAULT_SPACE_PREF_KEY,
   SHORTCUT_COLOR_TAG_KEYS,
   SHORTCUT_ORDER_PREF_KEY,
@@ -187,6 +188,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let renderManifestModulePromise = null;
   let registrableDomainModulePromise = null;
   let boundedResponseModulePromise = null;
+  let folderDiscoveryHintModulePromise = null;
   const bootRenderManifest = globalThis.__mosaicsyncBootGrid?.manifest || null;
   const bootArtworkPreviews = new Map();
   const indexBootArtwork = item => {
@@ -210,6 +212,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   };
   const loadRegistrableDomainModule = () => registrableDomainModulePromise ||= import("../core/registrable-domain.js");
   const loadBoundedResponseModule = () => boundedResponseModulePromise ||= import("../core/bounded-response.js");
+  const loadFolderDiscoveryHintModule = () => folderDiscoveryHintModulePromise ||= import("./folder-discovery-hint.js");
   const optimizeImageDataUrl = async (...args) => (await loadImageOptimizerModule()).optimizeImageDataUrl(...args);
   const optimizeImageFile = async (...args) => (await loadImageOptimizerModule()).optimizeImageFile(...args);
   const imageBlobToDataUrl = async (...args) => (await loadImageOptimizerModule()).imageBlobToDataUrl(...args);
@@ -645,6 +648,52 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let recentOrderRenderTimer = null;
   let frequentContextMenu = null;
   const backgroundPreloadCache = new Map();
+  let folderDiscoveryHint = null;
+
+  function folderDiscoverySnapshot() {
+    const anyFolder = SPACE_IDS.some(spaceId =>
+      (state?.spaces?.[spaceId]?.shortcuts || []).some(item => item?.type === "folder")
+    );
+    const activeShortcutCount = (state?.shortcuts || []).filter(item => item?.type === "shortcut").length;
+    const childDialogOpen = typeof isSettingsChildDialogOpen === "function" && isSettingsChildDialogOpen();
+    return {
+      activeShortcutCount,
+      anyFolder,
+      orderMode: shortcutOrderMode,
+      visible: document.visibilityState === "visible",
+      renderReady: document.documentElement.dataset.renderReady === "true",
+      awaitingRemote: isAwaitingRemote(meta),
+      idle: !dragId && !crossSpaceDrag && !folderDragId && !bookmarkDrag && !frequentDragSite &&
+        !pendingDrop && folderPopover.hidden && !shortcutDialog?.open && !bookmarksDialog?.open &&
+        !isSettingsOpen() && !childDialogOpen && dropChoice.hidden
+    };
+  }
+
+  async function initializeFolderDiscoveryHint() {
+    if (folderDiscoveryHint) return folderDiscoveryHint;
+    try {
+      if (localStorage.getItem(FOLDER_DISCOVERY_HINT_KEY) === "1") return null;
+    } catch {}
+    if (folderDiscoverySnapshot().anyFolder) {
+      try { localStorage.setItem(FOLDER_DISCOVERY_HINT_KEY, "1"); } catch {}
+      return null;
+    }
+    const module = await loadFolderDiscoveryHintModule();
+    if (folderDiscoveryHint) return folderDiscoveryHint;
+    folderDiscoveryHint = module.createFolderDiscoveryHint({
+      grid,
+      snapshot: folderDiscoverySnapshot,
+      translate: t,
+      flagKey: FOLDER_DISCOVERY_HINT_KEY
+    });
+    return folderDiscoveryHint;
+  }
+
+  function rearmFolderDiscoveryHintAfterAdd() {
+    if (shortcutOrderMode === "recent") return;
+    if (folderDiscoveryHint) { folderDiscoveryHint.arm(); return; }
+    void initializeFolderDiscoveryHint().then(controller => controller?.arm()).catch(() => {});
+  }
 
   // ---------------------------------------------------------------------------
   // Startup and persisted state
@@ -1595,6 +1644,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     scheduleFrequentlyVisitedRefresh(0);
     requestMissingSiteIcons([shortcut.id]);
     showToast(t("shortcutAdded"));
+    if (typeof rearmFolderDiscoveryHintAfterAdd === "function") rearmFolderDiscoveryHintAfterAdd();
     return true;
   }
 
@@ -3846,6 +3896,8 @@ ${site.url}`;
     const source = getTopLevelItem(sourceId);
     const target = getTopLevelItem(targetId);
     if (!source || !target) return;
+    if (typeof folderDiscoveryHint !== "undefined") folderDiscoveryHint?.markKnownFolder();
+    try { if (typeof localStorage !== "undefined") localStorage.setItem(FOLDER_DISCOVERY_HINT_KEY, "1"); } catch {}
 
     // Folders never nest, so dropping a folder onto another occupied slot is unambiguous.
     if (source.type === "folder") {
@@ -4066,6 +4118,7 @@ ${site.url}`;
         await saveState();
         render();
         showToast(t("shortcutAdded"));
+        if (typeof rearmFolderDiscoveryHintAfterAdd === "function") rearmFolderDiscoveryHintAfterAdd();
       }
 
       drag.committed = true;
@@ -4923,31 +4976,14 @@ ${site.url}`;
   shortcutForm.addEventListener("submit", async event => {
     event.preventDefault();
 
-    // Saving a new iconless shortcut is a user gesture, so it is the one safe
-    // moment to request MosaicSync's single optional all-websites permission if
-    // onboarding did not already decide it. The shortcut itself is saved even
-    // if the user declines; only automatic icon hydration is skipped.
-    const shouldRequestWebAccess = state.settings.autoSiteIcons &&
-      !pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;
-    const webAccessPermissionPromise = shouldRequestWebAccess
-      ? requestWebAccessFromGesture()
-      : null;
-
     try {
+      // Validate every synchronous precondition before starting the optional
+      // all-websites permission request. normalizeShortcutUrl() is synchronous,
+      // so the request still occurs in the original submit user gesture while an
+      // invalid URL or impossible destination now causes zero permission prompts.
       const url = normalizeShortcutUrl(shortcutUrl.value);
       const title = shortcutTitle.value.trim() || hostLabel(url);
       const image = pendingShortcutImage;
-      let imageSyncData = pendingShortcutSyncData;
-      const imageSyncKind = image
-        ? (shortcutSyncImage.checked ? "sync" : "device")
-        : (!shortcutArtworkEdited && ["sync", "local"].includes(pendingShortcutImageKind) ? "sync" : "none");
-      if (imageSyncKind === "sync" && image && !imageSyncData) {
-        imageSyncData = await optimizeImageDataUrl(image, {
-          maxWidth: 128, maxHeight: 128, minWidth: 48, minHeight: 48,
-          targetBytes: SHORTCUT_SYNC_IMAGE_TARGET_BYTES
-        });
-      }
-      if (imageSyncKind !== "sync") imageSyncData = "";
       const id = shortcutId.value;
       const record = id ? findShortcutRecord(id) : null;
       let savedShortcutId = id;
@@ -4964,6 +5000,28 @@ ${site.url}`;
       if (!record && !editingParentFolderId && !movedAcrossSpaces && firstEmptyTopLevelPosition(editingPreferredPosition) == null) {
         throw new Error(t("operationFailed"));
       }
+
+      // Saving a new iconless shortcut is a user gesture, so this remains the
+      // one safe moment to request MosaicSync's optional all-websites permission.
+      // Attach rejection handling immediately so a later save failure cannot
+      // leave an abandoned rejecting Promise.
+      const shouldRequestWebAccess = state.settings.autoSiteIcons &&
+        !pendingShortcutImage && !pendingShortcutBuiltinIcon && !webAccessGranted;
+      const webAccessPermissionPromise = shouldRequestWebAccess
+        ? Promise.resolve(requestWebAccessFromGesture()).catch(() => false)
+        : null;
+
+      let imageSyncData = pendingShortcutSyncData;
+      const imageSyncKind = image
+        ? (shortcutSyncImage.checked ? "sync" : "device")
+        : (!shortcutArtworkEdited && ["sync", "local"].includes(pendingShortcutImageKind) ? "sync" : "none");
+      if (imageSyncKind === "sync" && image && !imageSyncData) {
+        imageSyncData = await optimizeImageDataUrl(image, {
+          maxWidth: 128, maxHeight: 128, minWidth: 48, minHeight: 48,
+          targetBytes: SHORTCUT_SYNC_IMAGE_TARGET_BYTES
+        });
+      }
+      if (imageSyncKind !== "sync") imageSyncData = "";
 
       if (record) {
         const mutationTimestamp = nextMutationTime(state.updatedAt, record.item.modifiedAt, record.parentFolder?.modifiedAt);
@@ -5050,11 +5108,7 @@ ${site.url}`;
       await saveState({ crossSpaceSyncIntent });
 
       if (webAccessPermissionPromise) {
-        try {
-          webAccessGranted = (await webAccessPermissionPromise) === true;
-        } catch {
-          webAccessGranted = false;
-        }
+        webAccessGranted = (await webAccessPermissionPromise) === true;
         state.settings.webAccessPrompted = true;
         if (!webAccessGranted) {
           // Automatic recovery cannot honestly remain enabled without the host
@@ -5079,6 +5133,7 @@ ${site.url}`;
       showToast(movedAcrossSpaces
         ? t("movedToSpace", { space: displaySpaceName(destinationSpaceId) })
         : (record ? t("shortcutUpdated") : t("shortcutAdded")));
+      if (!record && !movedAcrossSpaces && typeof rearmFolderDiscoveryHintAfterAdd === "function") rearmFolderDiscoveryHintAfterAdd();
 
       // A newly saved iconless shortcut should fill itself without requiring a
       // first visit. Target just this record for low latency; the normal idle
@@ -7362,15 +7417,21 @@ ${t("clearSyncWarning")}`);
   settingsShortcutOrder?.addEventListener("change", () => {
     writeShortcutOrderPreference(settingsShortcutOrder.value);
     render();
+    if (shortcutOrderMode !== "recent") folderDiscoveryHint?.rearmPointer();
     scheduleRenderManifestRefresh(state, meta);
   });
   window.addEventListener("storage", event => {
     if (event.storageArea !== localStorage) return;
+    if (event.key === FOLDER_DISCOVERY_HINT_KEY && event.newValue === "1") {
+      folderDiscoveryHint?.suppress();
+      return;
+    }
     if (event.key === SHORTCUT_ORDER_PREF_KEY) {
       shortcutOrderMode = readShortcutOrderPreference();
       if (settingsShortcutOrder) settingsShortcutOrder.value = shortcutOrderMode;
       updateFrequentDragAvailability();
       if (!isAwaitingRemote()) requestLauncherRenderAfterExternalState();
+      if (shortcutOrderMode !== "recent") folderDiscoveryHint?.rearmPointer();
       scheduleRenderManifestRefresh(state, meta);
       return;
     }
@@ -8009,6 +8070,7 @@ ${t("clearSyncWarning")}`);
   loadState().then(() => {
     devMark("newtab:load-state:end");
     devMeasure("newtab:load-state", "newtab:load-state:start", "newtab:load-state:end");
+    void initializeFolderDiscoveryHint().catch(error => console.warn(`${PRODUCT_NAME}: folder discovery hint unavailable`, error));
   }).catch(error => {
     console.error(error);
     discardUnverifiedStartupCaches();

@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.33.0.29";
+export const VERSION = "1.33.0.31";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -45,6 +45,7 @@ export const DEFAULT_SPACE_PREF_KEY = "mosaicsync.default-space.v1";
 export const BOOKMARK_FOLDER_COLORS_PREF_KEY = "mosaicsync.bookmark-folder-colors.v1";
 export const SHORTCUT_ORDER_PREF_KEY = "mosaicsync.shortcut-order.v1";
 export const SHORTCUT_USAGE_PREF_KEY = "mosaicsync.shortcut-usage.v1";
+export const FOLDER_DISCOVERY_HINT_KEY = "mosaicsync.folder-hint.v1";
 export const UI_LOCALE_STORAGE_KEY = "mosaicsync.ui-locale.v1";
 export const SESSION_LOCAL_IGNORE_KEY = "mosaicsync.session.local-ignore";
 export const SESSION_SYNC_EXPECTATIONS_KEY = "mosaicsync.session.sync-expectations";

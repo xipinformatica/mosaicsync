@@ -1,5 +1,10 @@
 # MosaicSync Developer Guide
 
+## Folder-discovery hint invariant (1.33.0.31+)
+
+The folder-discovery hint is presentation-only onboarding. It must remain device-local, one-time, lazy-loaded, and unable to mutate profile/Sync/Recovery state. Never clone `.shortcut-slot`, copy `data-id`, animate real launcher slots, or advertise drag-and-drop while shortcut order is `recent`. Revalidate eligibility immediately before mounting; any folder in any Space suppresses the hint, while the threshold counts only top-level shortcuts in the active Space. Direct grid child replacement may cancel a mounted hint, but descendant favicon/preview artwork churn must not consume it. Async pre-mount work must remain generation-cancellable, temporary eligibility failures must be retryable from a later pointer movement, and candidate pairs must be genuinely neighbouring rather than merely consecutive across large Manual-layout gaps. Reduced-motion users receive static guidance with no Web Animations API movement.
+
+
 > **Start here if you are new to the MosaicSync codebase.**
 >
 > This guide explains how the repository is organized, how the application starts, where authoritative data lives, how Sync and Recovery differ, which files own the major behaviors, how Firefox and Chromium are kept aligned, and how to make changes without accidentally removing protections that exist for real historical bugs.
@@ -707,7 +712,7 @@ src/shared/background/background-core.js
 
 ### Recovery invariants
 
-Whole-device Recovery cleanup has a distributed survivor protocol. Freeze the intended target roots **before** publishing the acting-device survivor; then publish and verify a fresh complete current-device generation; take the fresh destructive view; and delete only the intersection of still-eligible roots with the original **frozen target** set. Never expand an in-flight deletion plan to a newly observed target generation. The hard mutual-cleanup survivor guarantee requires concurrently destructive peers that implement this protocol; older peers cannot retroactively honor it.
+Whole-device Recovery cleanup has a distributed survivor protocol. A target device's independently verified roots may receive whole-device destructive authority only after **every target root has remained visible across multiple device-local Recovery-GC observations**. Freeze that mature target set **before** publishing the acting-device survivor; then publish and verify a fresh complete current-device generation; take the fresh destructive view; and delete only the intersection of still-eligible roots with the original frozen target. A newly observed target generation must block a later whole-device plan rather than being swept into it. This deliberately reuses device-local observation metadata instead of adding a Sync/Recovery wire marker. Never weaken the separate rule that the acting device itself must retain an independently verified complete fallback.
 
 A healthy initialized reconcile may republish the current device's Recovery generation when none remains, but only after complete live Personal+Work delivery is authoritative. Recovery fallback completeness alone is not permission to manufacture a new generation. Recovery remains a safety layer, not a live merge input.
 

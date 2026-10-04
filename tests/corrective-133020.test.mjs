@@ -68,7 +68,8 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.33.0.20 ${browser}: Recovery cleanup never expands beyond its frozen target roots`, () => {
     const result = run(browser, "corrective-133020-frozen-target-survives-post-plan-generation");
-    assert.equal(result.oldRemoved, true);
+    assert.equal(result.cancelled, true);
+    assert.equal(result.oldPreserved, true);
     assert.equal(result.newSurvived, true);
   });
 

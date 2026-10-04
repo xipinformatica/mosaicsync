@@ -3259,9 +3259,9 @@ else if (scenario === 'recovery-manager-132010-safe-cleanup') {
 
 else if (scenario === 'recovery-manager-132010-device-revalidation') {
   const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
-  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-b'});
   const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'current',publishedAt:500});
   const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote',publishedAt:400});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-b',deviceSnapshotGcPass:10,deviceSnapshotRootSeenPass:{[current.rootKey]:1,[remote.rootKey]:1}});
   await sync.set({...current.entries,...remote.entries});
   const originalGet=sync.get.bind(sync);
   let sawFreshSurvivor=false;
@@ -3306,9 +3306,9 @@ else if (scenario === 'recovery-manager-132010-remove-failure') {
 
 else if (scenario === 'corrective-133019-device-cleanup-survivor') {
   const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
-  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A',lastAppliedWorkSyncRevision:'work-seed',lastAppliedProfileSnapshotRevision:'profile-seed'});
   const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current',publishedAt:500});
   const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'remote',publishedAt:400});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A',lastAppliedWorkSyncRevision:'work-seed',lastAppliedProfileSnapshotRevision:'profile-seed',deviceSnapshotGcPass:10,deviceSnapshotRootSeenPass:{[current.rootKey]:1,[remote.rootKey]:1}});
   await sync.set({...current.entries,...remote.entries});
   const before=await sync.get(null);
   const beforeOwn=deviceSnapshotRootEntries(before,'device-a').map(([key])=>key);
@@ -3468,10 +3468,10 @@ else if (scenario === 'corrective-133020-total-live-wipe-negative-control') {
 
 else if (scenario === 'corrective-133020-frozen-target-survives-post-plan-generation') {
   const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)],work:[shortcut('work','https://work.test/',100)]});
-  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A'});
   const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current-a',publishedAt:500});
   const oldTarget=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'old-b',publishedAt:400});
   const newTarget=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'new-b',publishedAt:900});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A',deviceSnapshotGcPass:10,deviceSnapshotRootSeenPass:{[current.rootKey]:1,[oldTarget.rootKey]:1}});
   await sync.set({...current.entries,...oldTarget.entries});
 
   const originalGet=sync.get.bind(sync);
@@ -3492,20 +3492,20 @@ else if (scenario === 'corrective-133020-frozen-target-survives-post-plan-genera
   };
 
   const result=await send({type:'mosaicsync:cleanup-recovery-copies',mode:'device',deviceId:'device-b'});
-  assert.equal(result?.ok,true);
+  assert.equal(result?.ok,false,'a newly observed target generation should now cancel whole-device cleanup rather than expand destructive authority');
   assert.equal(sawFreshSurvivor,true,'fixture must observe the post-plan acting-device survivor');
   assert.equal(injectedPostPlan,true,'fixture must publish a target generation after the original delete plan');
   const after=await originalGet(null);
-  assert.equal(Object.hasOwn(after,oldTarget.rootKey),false,'the originally frozen target generation should be removed');
+  assert.equal(Object.hasOwn(after,oldTarget.rootKey),true,'the original target generation must remain when fresh target state invalidates whole-device maturity');
   assert.equal(Object.hasOwn(after,newTarget.rootKey),true,'a target generation published after plan capture must never be added to the delete set');
-  console.log(JSON.stringify({ok:true,oldRemoved:true,newSurvived:true}));
+  console.log(JSON.stringify({ok:true,cancelled:true,oldPreserved:true,newSurvived:true}));
 }
 
 else if (scenario === 'corrective-133020-survivor-publication-failure-aborts-cleanup') {
   const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)],work:[shortcut('work','https://work.test/',100)]});
-  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A'});
   const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-a',commitId:'current-a',publishedAt:500});
   const target=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'target-b',publishedAt:400});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,deviceId:'device-a',deviceName:'A',deviceSnapshotGcPass:10,deviceSnapshotRootSeenPass:{[current.rootKey]:1,[target.rootKey]:1}});
   await sync.set({...current.entries,...target.entries});
   const originalSet=sync.set.bind(sync);
   sync.set=async()=>{ throw new Error('simulated survivor publication failure'); };
