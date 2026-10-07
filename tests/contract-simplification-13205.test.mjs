@@ -27,7 +27,7 @@ test("1.32.0.5 keeps Bookmarks opening private to controller-owned event wiring"
 });
 
 test("1.32.0.5 localization refresh rebuilds the Bookmarks sidebar only once", () => {
-  const browserBlock = owner.match(/function renderBookmarkBrowser\(\)\s*\{([\s\S]*?)\n  \}\n\n  async function loadBookmarksIntoDialog/);
+  const browserBlock = owner.match(/function renderBookmarkBrowser\([^)]*\)\s*\{([\s\S]*?)\n  \}\n\n  async function loadBookmarksIntoDialog/);
   assert.ok(browserBlock);
   assert.match(browserBlock[1], /renderBookmarkSidebar\(\)/);
 

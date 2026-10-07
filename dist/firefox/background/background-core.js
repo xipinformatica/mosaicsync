@@ -99,6 +99,13 @@ import {
   workspaceStateNormalized
 } from "../core/model.js";
 import {
+  automaticFaviconArtwork as automaticFaviconArtworkPolicy,
+  isAutomaticArtworkSourceKind,
+  learnedArtworkDisposition,
+  learnedArtworkMayReplace,
+  shortcutNeedsProactiveFavicon as shortcutNeedsProactiveFaviconPolicy
+} from "../core/artwork-policy.js";
+import {
   clearSessionFrequentlyVisitedSnapshot,
   clearSessionFrequentlyVisitedSuppression,
   ensureLocalStorage,
@@ -2641,8 +2648,7 @@ export function startBackground(adapter) {
   }
 
   function automaticFaviconArtwork(shortcut) {
-    return Boolean(shortcut?.image) && shortcut.imageSyncKind === "device" &&
-      ["favicon", "firefox"].includes(shortcut.imageSourceKind || "none") && /^https?:/i.test(shortcut.url || "");
+    return automaticFaviconArtworkPolicy(shortcut);
   }
 
   function manualFaviconPreferencePending(shortcut) {
@@ -2652,13 +2658,9 @@ export function startBackground(adapter) {
   }
 
   function shortcutNeedsProactiveFavicon(shortcut) {
-    if (!shortcut || shortcut.type !== "shortcut" || shortcut.builtinIcon || !/^https?:/i.test(shortcut.url || "")) return false;
-    if (manualFaviconPreferencePending(shortcut)) return true;
-    const sourceKind = shortcut.imageSourceKind || "none";
-    if (sourceKind === "firefox") return true;
-    if (sourceKind === "favicon") return !shortcut.image;
-    if (sourceKind === "none") return !shortcut.image;
-    return !shortcut.image && sourceKind === "upload" && shortcut.imageSyncKind === "device";
+    return shortcutNeedsProactiveFaviconPolicy(shortcut, {
+      manualPreferencePending: manualFaviconPreferencePending(shortcut)
+    });
   }
 
   function findShortcutInItems(items, id) {
@@ -2729,13 +2731,14 @@ export function startBackground(adapter) {
       const preferenceUpgrade = Boolean(result.allowFaviconUpgrade) && manualFaviconPreferencePending(shortcut);
       const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) && automaticFaviconArtwork(shortcut);
       if (!shortcutNeedsProactiveFavicon(shortcut) && !upgradingRecoveredFavicon && !preferenceUpgrade) continue;
-      const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
-      const nextFallback = customUploadFallback
+      const disposition = learnedArtworkDisposition(shortcut, { sourceKind: "favicon", sourceUrl: result.sourceUrl });
+      const nextFallback = disposition.preservesUserProvenance
         ? (currentPreference ? result.preferenceMatched !== true : true)
         : false;
       if (shortcut.image === result.image && shortcut.imageSyncKind === "device" && !shortcut.imageAssetId &&
           shortcut.imageIsFallback === nextFallback &&
-          (customUploadFallback || (shortcut.imageSourceKind === "favicon" && shortcut.imageSourceUrl === result.sourceUrl))) {
+          shortcut.imageSourceKind === disposition.imageSourceKind &&
+          shortcut.imageSourceUrl === disposition.imageSourceUrl) {
         unchangedIds.add(result.id);
         continue;
       }
@@ -2744,10 +2747,8 @@ export function startBackground(adapter) {
       shortcut.imageAssetId = "";
       shortcut.imageSyncKind = "device";
       shortcut.imageIsFallback = nextFallback;
-      if (!customUploadFallback) {
-        shortcut.imageSourceKind = "favicon";
-        shortcut.imageSourceUrl = result.sourceUrl;
-      }
+      shortcut.imageSourceKind = disposition.imageSourceKind;
+      shortcut.imageSourceUrl = disposition.imageSourceUrl;
       appliedIds.add(result.id);
     }
     if (!appliedIds.size) return { appliedIds, unchangedIds };
@@ -3296,26 +3297,22 @@ export function startBackground(adapter) {
     const writeBaseline = loaded.compactBaseline;
     let changed = false;
     for (const shortcut of targets) {
-      const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
-      const nextSourceKind = customUploadFallback ? shortcut.imageSourceKind : sourceKind;
-      const nextSourceUrl = customUploadFallback ? shortcut.imageSourceUrl : sourceUrl;
-      const nextFallback = customUploadFallback;
+      if (!learnedArtworkMayReplace(shortcut, { sourceKind })) continue;
+      const disposition = learnedArtworkDisposition(shortcut, { sourceKind, sourceUrl });
       if (shortcut.image === image &&
           shortcut.imageAssetId === "" &&
           shortcut.imageSyncKind === "device" &&
-          shortcut.imageIsFallback === nextFallback &&
-          shortcut.imageSourceKind === nextSourceKind &&
-          shortcut.imageSourceUrl === nextSourceUrl) continue;
+          shortcut.imageIsFallback === disposition.imageIsFallback &&
+          shortcut.imageSourceKind === disposition.imageSourceKind &&
+          shortcut.imageSourceUrl === disposition.imageSourceUrl) continue;
 
       shortcut.image = image;
       shortcut.imageSyncData = "";
       shortcut.imageAssetId = "";
       shortcut.imageSyncKind = "device";
-      shortcut.imageIsFallback = nextFallback;
-      if (!customUploadFallback) {
-        shortcut.imageSourceKind = nextSourceKind;
-        shortcut.imageSourceUrl = nextSourceUrl;
-      }
+      shortcut.imageIsFallback = disposition.imageIsFallback;
+      shortcut.imageSourceKind = disposition.imageSourceKind;
+      shortcut.imageSourceUrl = disposition.imageSourceUrl;
       changed = true;
     }
     if (changed) await writeLocalState(loaded.state, { baseState: writeBaseline, baseStateIsCompact: Boolean(writeBaseline) });
@@ -3331,7 +3328,7 @@ export function startBackground(adapter) {
       const requestedShortcut = shortcutId && shortcut.id === shortcutId;
       const sameSiteFallback = !shortcutId &&
         (shortcutOrigin(shortcut.url) === pageOrigin || shortcutHostKey(shortcut.url) === pageHostKey);
-      const refreshableSiteArtwork = ["favicon", "firefox"].includes(shortcut.imageSourceKind || "none");
+      const refreshableSiteArtwork = isAutomaticArtworkSourceKind(shortcut.imageSourceKind);
       const missingNormalArtwork = !shortcut.image && (shortcut.imageSourceKind || "none") === "none";
       const missingCustomFallback = !shortcut.image && shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
       return (requestedShortcut || sameSiteFallback) && (refreshableSiteArtwork || missingNormalArtwork || missingCustomFallback);

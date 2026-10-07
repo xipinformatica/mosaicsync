@@ -23,6 +23,7 @@ import {
   SYNC_SCHEMA_VERSION
 } from "./constants.js";
 import { canonicalizeImageDataUrl, imageDataUrlByteLength, MAX_IMAGE_DATA_URL_CHARS, parseImageDataUrl } from "./image-data.js";
+import { isAutomaticArtworkSourceKind } from "./artwork-policy.js";
 import "./http-url-safety.js";
 
 // Generic validation / identifiers ------------------------------------------------
@@ -1602,7 +1603,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     const localFaviconPreference = normalizeFaviconPreference(localItem?.faviconPreference);
     const preferenceCompatible = !remoteFaviconPreference || remoteFaviconPreference === localFaviconPreference;
     const localAutoArtwork = Boolean(
-      preferenceCompatible && localItem?.image && localItem?.url === url && ["favicon", "firefox"].includes(localSourceKind)
+      preferenceCompatible && localItem?.image && localItem?.url === url && isAutomaticArtworkSourceKind(localSourceKind)
     );
     if (record.imageKind === "sync" || record.imageKind === "local") {
       imageSyncData = assets.get(record.imageAssetId) || "";
@@ -1649,7 +1650,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     let reconstructedSourceUrl = normalizeImageSourceUrl(record.imageSourceUrl);
     // Treat favicon/firefox metadata from older Sync records as local-cache data.
     // Never copy another device's learned favicon URL into the new core record.
-    if (["favicon", "firefox"].includes(remoteSourceKind)) {
+    if (isAutomaticArtworkSourceKind(remoteSourceKind)) {
       reconstructedSourceKind = localAutoArtwork ? localSourceKind : "none";
       reconstructedSourceUrl = localAutoArtwork && localSourceKind === "favicon"
         ? normalizeImageSourceUrl(localItem?.imageSourceUrl)

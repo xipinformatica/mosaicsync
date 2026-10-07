@@ -8,6 +8,7 @@
  * Decoding, downscaling, and WebP encoding happen off the New Tab/UI thread.
  */
 import { decodeImageDataUrlBytes, imageDataUrlByteLength } from "./image-data.js";
+import { rasterDimensionsFromBytes } from "./raster-validation.js";
 import {
   MAX_DECODED_PIXELS,
   MAX_IMAGE_INPUT_BYTES,
@@ -22,12 +23,38 @@ function unsupported(message) {
   return error;
 }
 
-function dataUrlToBlob(source) {
+function dataUrlToBlobSource(source) {
   const { bytes, mimeType } = decodeImageDataUrlBytes(source);
-  return new Blob([bytes], { type: mimeType });
+  return { blob: new Blob([bytes], { type: mimeType }), bytes };
 }
 
-async function optimizeBlob(sourceBlob, options = {}) {
+function dimensionsTooLarge(dimensions) {
+  const width = Math.max(0, Number(dimensions?.width) || 0);
+  const height = Math.max(0, Number(dimensions?.height) || 0);
+  if (!width || !height) return false;
+  return width > MAX_SOURCE_DIMENSION || height > MAX_SOURCE_DIMENSION ||
+    width * height > MAX_DECODED_PIXELS;
+}
+
+async function rejectOversizedGeometryBeforeDecode(sourceBlob, knownBytes = null) {
+  let bytes = knownBytes;
+  if (!bytes) {
+    try {
+      bytes = new Uint8Array(await sourceBlob.arrayBuffer());
+    } catch {
+      // Preflight is an optimization/safety guard, not a new compatibility
+      // boundary. If compressed bytes cannot be inspected here, preserve the
+      // established browser-decoder path and its post-decode dimension check.
+      return;
+    }
+  }
+  const dimensions = rasterDimensionsFromBytes(bytes, sourceBlob.type);
+  if (dimensionsTooLarge(dimensions)) {
+    throw new Error("That image is too large to process safely.");
+  }
+}
+
+async function optimizeBlob(sourceBlob, options = {}, knownBytes = null) {
   if (typeof OffscreenCanvas !== "function" || typeof createImageBitmap !== "function") {
     throw unsupported("This Firefox build cannot optimize images in a worker.");
   }
@@ -37,6 +64,8 @@ async function optimizeBlob(sourceBlob, options = {}) {
 
   const { maxWidth, maxHeight, targetBytes, minWidth, minHeight, initialQuality } =
     normalizeImageOptimizationOptions(options);
+
+  await rejectOversizedGeometryBeforeDecode(sourceBlob, knownBytes);
 
   let bitmap;
   let canvas;
@@ -153,10 +182,14 @@ self.addEventListener("message", event => {
 
   void (async () => {
     try {
-      const blob = request.sourceKind === "data-url"
-        ? dataUrlToBlob(request.source)
-        : request.source;
-      const result = await optimizeBlob(blob, request.options);
+      let blob = request.source;
+      let knownBytes = null;
+      if (request.sourceKind === "data-url") {
+        const decoded = dataUrlToBlobSource(request.source);
+        blob = decoded.blob;
+        knownBytes = decoded.bytes;
+      }
+      const result = await optimizeBlob(blob, request.options, knownBytes);
       self.postMessage({ id: request.id, ok: true, blob: result });
     } catch (error) {
       self.postMessage({

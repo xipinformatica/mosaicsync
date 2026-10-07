@@ -1,6 +1,32 @@
 # MosaicSync development
 
-Current release: 1.33.0.33
+Current release: 1.33.0.38
+
+## 1.33.0.38 — shared artwork policy and byte-signature image preflight
+
+1.33.0.38 is a narrow artwork-policy/robustness refinement over 1.33.0.37. Browser-native raster acceptance, automatic-artwork classification, browser-fallback eligibility, proactive favicon eligibility, user-provenance preservation and browser-fallback no-downgrade decisions now live in the pure shared `core/artwork-policy.js` boundary consumed by New Tab, background favicon recovery and browser adapters. The shared policy prevents tab/native fallback from downgrading site-discovered artwork, keeps built-in glyphs protected, rechecks ownership after asynchronous native-history lookup, rejects unsupported Firefox top-sites SVG favicons at the raster boundary, and still allows browser-native artwork to refresh older browser-native artwork. The image-worker preflight now recognizes PNG/JPEG/GIF/WebP/ICO from leading bytes before consulting a declared MIME hint, so a mislabeled oversized raster is still rejected before `createImageBitmap()`. Unknown signatures remain fail-open to the established decoder path. Permanent hardening directly exercises the independent 32 MP limit, VP8X geometry, PNG-backed ICO geometry, built-in-artwork protection, stale async native lookup protection and browser-native refresh semantics. No Sync/Recovery, persisted schema, permission, privacy or product-feature changes. Permanent protection: `tests/optimization-133038.test.mjs`.
+
+## 1.33.0.37 — pre-decode raster-dimension guard
+
+1.33.0.37 is a narrow image-worker robustness refinement over 1.33.0.36. Before `createImageBitmap()` is allowed to allocate decoded raster pixels, the worker now performs a best-effort geometry preflight from the compressed PNG/JPEG/WebP/GIF/ICO bytes. Recognized geometry above the existing `MAX_SOURCE_DIMENSION` / `MAX_DECODED_PIXELS` bounds is rejected before browser decode. Data-URL jobs reuse the bytes already decoded from base64; Blob/file jobs inspect their compressed bytes in the worker. Unknown or unusual metadata deliberately remains fail-open to the established browser-decoder compatibility path, and the existing post-decode geometry guard remains authoritative defense in depth. No accepted format, image limit, persisted format, Sync/Recovery behavior or UI behavior changes. Permanent protection: `tests/optimization-133037.test.mjs`.
+
+## 1.33.0.36 — Bookmarks search-path optimization
+
+1.33.0.36 is a narrow Bookmarks-reader performance refinement over 1.33.0.35. Searchable bookmark text is normalized once when the browser-owned bookmark tree is loaded rather than reconstructed on every input. HTTP(S) transport prefixes are excluded symmetrically from the derived index and typed/pasted query so common scheme characters do not cause near-universal matches while complete bookmark URLs remain searchable. Incremental query narrowing filters the previous match set only when the new query truly extends it; shortening or editing safely returns to the full index. Search typing leaves the unchanged folder sidebar alone, and an unchanged ordered result set keeps its existing bookmark-link DOM instead of rebuilding it. The browser-owned bookmark data model, optional permission, drag-to-shortcut bridge and device-local boundaries are unchanged. Permanent protection: `tests/optimization-133036.test.mjs`.
+
+The same regression file also hardens the already-correct whole-profile verified-artwork pruning rule from the previous release: adopting Personal while Work is not loaded must still retain verified Work assets referenced by the incoming complete profile.
+
+## 1.33.0.35 — verified-asset retention and native-favicon format refinement
+
+1.33.0.35 is the second narrow asset-pipeline refinement after 1.33.0.34. When a complete persisted profile is hydrated, the per-tab verified local-asset cache now retains only asset IDs still referenced anywhere in that incoming profile, so long-lived reader tabs do not keep superseded wallpapers or favicons indefinitely. Partial Space/folder hydration deliberately does not prune the cache because those helpers do not own a complete profile view.
+
+Browser-native/Firefox-history favicon hydration now admits only raster data URLs accepted by the shared image-data parser. Unsupported formats such as SVG are ignored before they can enter device-local shortcut state, be stripped by normalization, and repeat the same no-progress save on a later New Tab. Supported PNG/JPEG/WebP/GIF/ICO native fallbacks retain the existing device-local behavior and quality-upgrade request. Permanent protection: `tests/optimization-133035.test.mjs`.
+
+## 1.33.0.34 — verified local-asset read reuse
+
+1.33.0.34 is a narrow performance refinement over 1.33.0.33. Repeated New Tab state hydration now reuses exact content-addressed image bytes that the same JavaScript context already read and fully validated, so unchanged favicons and wallpapers are not copied from `storage.local`, decoded and hashed again after every state event. First encounters and genuinely new asset IDs still cross the complete storage/validation boundary, and existing write-path collision/corruption protections remain unchanged. Permanent protection: `tests/optimization-133034.test.mjs`.
+
+The Developer Guide was also returned to its intended evergreen role: release-labelled tutorial history was removed from the guide, while durable onboarding and local-asset trust invariants were retained as architecture rules. Release chronology remains in this file and `CHANGELOG.md`.
 
 ## 1.33.0.33 — folder tutorial timing and placement corrective
 

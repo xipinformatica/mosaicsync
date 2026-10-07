@@ -4,6 +4,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { normalizeFaviconPreference } from "../src/shared/core/model.js";
+import {
+  automaticFaviconArtwork as automaticFaviconArtworkPolicy,
+  isAutomaticArtworkSourceKind,
+  learnedArtworkDisposition,
+  learnedArtworkMayReplace,
+  shortcutNeedsProactiveFavicon as shortcutNeedsProactiveFaviconPolicy
+} from "../src/shared/core/artwork-policy.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}(`);
@@ -56,7 +63,7 @@ function installQueueMutationStub(ctx) {
 }
 
 function runFunctions(src, names, context, prelude = "") {
-  const ctx = { console, normalizeFaviconPreference, ...context };
+  const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy, ...context };
   installQueueMutationStub(ctx);
   vm.createContext(ctx);
   const helperNames = ["manualFaviconPreferencePending", "shortcutAllowsFaviconRecovery"];
@@ -192,7 +199,7 @@ for (const browser of ["firefox", "chrome"]) {
     let finalQueue = null;
     let status = null;
     let metaWrites = 0;
-    const ctx = { console, normalizeFaviconPreference };
+    const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -232,7 +239,7 @@ for (const browser of ["firefox", "chrome"]) {
     const src = readBackgroundSource(browser);
     const queue = { version: 2, items: [{ id: "same", url: "https://same.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: true }] };
     let finalQueue = null;
-    const ctx = { console, normalizeFaviconPreference };
+    const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -302,7 +309,7 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
   const src = readBackgroundSource("chrome");
   const queue = { version: 2, items: [{ id: "store", url: "https://chromewebstore.google.com/detail/x", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let finalQueue = null;
-  const ctx = { console, normalizeFaviconPreference };
+  const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
   vm.createContext(ctx);
   Object.assign(ctx, {
     ICON_RECOVERY_CONCURRENCY: 3,

@@ -69,7 +69,7 @@ function stateWith(items) {
 }
 
 test("1.30 release identity and additive shortcut schemas are unified", () => {
-  assert.equal(VERSION, "1.33.0.33");
+  assert.equal(VERSION, "1.33.0.38");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
   assert.ok(BUILTIN_SHORTCUT_ICON_KEYS.includes("code"));
@@ -198,12 +198,13 @@ test("recent ordering is local presentation only, stable, and scores folders by 
 
 for (const browser of ["firefox", "chrome"]) {
   test(`1.27.0 ${browser} UI wires Open all, close folder anchoring, local recency view, built-in icons and color tags`, async () => {
-    const [js, html, css, background, icons] = await Promise.all([
+    const [js, html, css, background, icons, artworkPolicy] = await Promise.all([
       readFile(`dist/${browser}/newtab/newtab.js`, "utf8"),
       readFile(`dist/${browser}/newtab/newtab.html`, "utf8"),
       Promise.all([readFile("src/shared/newtab/newtab-critical.css", "utf8"), readFile("src/shared/newtab/newtab-secondary.css", "utf8")]).then(parts => parts.join("\n")),
       Promise.resolve(readBackgroundSource(browser)),
-      readFile(`dist/${browser}/newtab/builtin-icons.js`, "utf8")
+      readFile(`dist/${browser}/newtab/builtin-icons.js`, "utf8"),
+      readFile(`dist/${browser}/core/artwork-policy.js`, "utf8")
     ]);
 
     assert.match(js, /openAllFolderButton\?\.addEventListener\("click"[\s\S]*?shortcutNavigationUrl\(item\)[\s\S]*?recordShortcutsOpened\(eligible\.map\(item => item\.id\)\)[\s\S]*?openShortcutInNewTab\(item, \{ recordUsage: false \}\)/,
@@ -218,7 +219,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(js, /localStorage\.setItem\(SHORTCUT_ORDER_PREF_KEY/, `${browser}: order mode must be local-only`);
     assert.match(js, /localStorage\.setItem\(SHORTCUT_USAGE_PREF_KEY/, `${browser}: usage metadata must be local-only`);
     assert.match(js, /window\.addEventListener\("storage"[\s\S]*?SHORTCUT_ORDER_PREF_KEY[\s\S]*?SHORTCUT_USAGE_PREF_KEY/, `${browser}: local presentation state should reconcile across already-open MosaicSync tabs`);
-    assert.match(background, /shortcut\.builtinIcon[\s\S]*?return false/, `${browser}: built-in icons must not trigger automatic favicon recovery`);
+    assert.match(artworkPolicy, /shortcut\.builtinIcon[\s\S]*?return false/, `${browser}: built-in icons must not trigger automatic favicon recovery`);
 
     assert.ok(html.includes('<script src="builtin-icons.js"></script>'), `${browser}: bundled icon helper must be packaged`);
     assert.ok(html.indexOf('<script src="builtin-icons.js"></script>') < html.indexOf('<script src="render-bootstrap.js"></script>'), `${browser}: built-in helper must exist before first paint`);

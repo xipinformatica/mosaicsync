@@ -8,6 +8,7 @@ import {
   permissionChangeAffectsTopSites
 } from "../core/permissions.js";
 import { platformHasPermissionFreeFaviconSource } from "../core/platform.js";
+import { isAcceptedRasterArtworkDataUrl } from "../core/artwork-policy.js";
 
 async function resolveBrowserCachedFavicon(pageUrl, {
   signal = null,
@@ -32,7 +33,7 @@ async function resolveBrowserCachedFavicon(pageUrl, {
     for (const tab of tabs || []) {
       if (signal?.aborted) return null;
       const favicon = String(tab?.favIconUrl || "");
-      if (/^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/i.test(favicon)) {
+      if (isAcceptedRasterArtworkDataUrl(favicon)) {
         const image = await normalizeLocalFaviconDataUrl(favicon);
         if (image) return { image, sourceUrl: "", reason: "", width: 0, height: 0, qualitySide: 0, declared: false, sourceKind: "browser", native: true };
       }
@@ -49,7 +50,7 @@ async function resolveTabNativeFavicon(tab, { fetchImageDataUrl } = {}) {
   // Firefox's tab favicon is an excellent instant fallback, but it can be only
   // 16x16 or 32x32. Resolve/fetch it outside the serialized state queue.
   const sourceUrl = /^https?:/i.test(tab?.favIconUrl || "") ? tab.favIconUrl : "";
-  let image = /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/i.test(tab?.favIconUrl || "")
+  let image = isAcceptedRasterArtworkDataUrl(tab?.favIconUrl || "")
     ? tab.favIconUrl
     : "";
   if (!image && sourceUrl) {

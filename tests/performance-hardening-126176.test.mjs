@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { normalizeFaviconPreference } from "../src/shared/core/model.js";
+import { learnedArtworkDisposition } from "../src/shared/core/artwork-policy.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { webcrypto } from "node:crypto";
@@ -182,7 +183,7 @@ for (const browser of ["firefox", "chrome"]) {
     let resolverCalls = 0;
     let writeCalls = 0;
     let finalQueue = null;
-    const ctx = { console, structuredClone, normalizeFaviconPreference };
+    const ctx = { console, structuredClone, normalizeFaviconPreference, learnedArtworkDisposition };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,

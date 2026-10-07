@@ -8,6 +8,7 @@
  * Import is replacement-only to avoid mixing stale MosaicSync and native shortcut sets.
  */
 import { DEFAULT_SETTINGS } from "./constants.js";
+import { isAcceptedRasterArtworkDataUrl } from "./artwork-policy.js";
 import "./http-url-safety.js";
 import { hostLabel, now, uid } from "./model.js";
 import { optimizeImageDataUrl } from "./image-optimizer.js";
@@ -35,9 +36,9 @@ export async function fetchFirefoxShortcuts(limit = FIREFOX_NATIVE_MAX_SHORTCUTS
       // Firefox already owns this favicon cache. Preserve the exact bytes it
       // returns instead of recompressing them and degrading small logos. These
       // pixels are device-local and never enter MosaicSync's Sync asset budget.
-      image: site.favicon?.startsWith("data:image/") ? site.favicon : "",
-      imageSyncKind: site.favicon?.startsWith("data:image/") ? "device" : "none",
-      imageSourceKind: site.favicon?.startsWith("data:image/") ? "firefox" : "none",
+      image: isAcceptedRasterArtworkDataUrl(site.favicon) ? site.favicon : "",
+      imageSyncKind: isAcceptedRasterArtworkDataUrl(site.favicon) ? "device" : "none",
+      imageSourceKind: isAcceptedRasterArtworkDataUrl(site.favicon) ? "firefox" : "none",
       imageSourceUrl: "",
       imageStyle: "contain",
       position: index,
@@ -63,7 +64,8 @@ export function replaceWithFirefoxShortcuts(state, imported) {
 }
 
 async function normalizeImportedFavicon(image) {
-  if (typeof image !== "string" || !image.startsWith("data:image/") || image.length <= 22_000) return image || "";
+  if (!isAcceptedRasterArtworkDataUrl(image)) return "";
+  if (image.length <= 22_000) return image;
   try {
     return await optimizeImageDataUrl(image, {
       maxWidth: 192, maxHeight: 192, minWidth: 64, minHeight: 64,

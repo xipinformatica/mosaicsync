@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { automaticFaviconArtwork as automaticFaviconArtworkPolicy } from "../src/shared/core/artwork-policy.js";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
@@ -155,7 +156,7 @@ test("1.30.2 Settings refresh-domain regression uses the production key definiti
 test("1.30.2 older installations with no quality ledger reopen automatic favicons for the one-time audit", () => {
   for (const browser of ["firefox","chrome"]) {
     const src=readBackgroundSource(browser);
-    const ctx={URL,Date,FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256,FAVICON_QUALITY_AUDIT_POLICY_VERSION:1,FAVICON_QUALITY_AUDIT_TTL_MS:30*24*60*60*1000};
+    const ctx={URL,Date,automaticFaviconArtworkPolicy,FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256,FAVICON_QUALITY_AUDIT_POLICY_VERSION:1,FAVICON_QUALITY_AUDIT_TTL_MS:30*24*60*60*1000};
     vm.createContext(ctx);
     vm.runInContext(`${extract(src,"normalizeFaviconQualityAuditLedger")}\n${extract(src,"faviconQualityAuditNeeded")}\n${extract(src,"automaticFaviconArtwork")}`,ctx);
     const ledger=ctx.normalizeFaviconQualityAuditLedger(null);

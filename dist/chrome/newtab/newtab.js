@@ -77,6 +77,12 @@ import {
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
+import {
+  browserNativeFaviconFallbackNeeded,
+  isAcceptedRasterArtworkDataUrl,
+  learnedArtworkDisposition,
+  learnedArtworkMayReplace
+} from "../core/artwork-policy.js";
 import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createPersistedWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
@@ -5247,21 +5253,12 @@ ${site.url}`;
 
   async function hydrateDeviceFavicons() {
     const deviceShortcuts = [];
-    const needsFirefoxFaviconFallback = shortcut => {
-      if (!shortcut) return false;
-      const sourceKind = shortcut.imageSourceKind || "none";
-      if (sourceKind === "favicon" && shortcut.image) return false; // never downgrade a site-discovered icon
-      if (sourceKind === "firefox") return !shortcut.image;
-      if (sourceKind === "none") return !shortcut.image;
-      return !shortcut.image && sourceKind === "upload" && shortcut.imageSyncKind === "device";
-    };
-
     for (const item of state.shortcuts) {
       if (item.type === "folder") {
         for (const child of item.items) {
-          if (needsFirefoxFaviconFallback(child)) deviceShortcuts.push(child);
+          if (browserNativeFaviconFallbackNeeded(child)) deviceShortcuts.push(child);
         }
-      } else if (needsFirefoxFaviconFallback(item)) {
+      } else if (browserNativeFaviconFallbackNeeded(item)) {
         deviceShortcuts.push(item);
       }
     }
@@ -5271,7 +5268,11 @@ ${site.url}`;
     const sites = await getNativeTopSites({ limit: 100 });
     if (!Array.isArray(sites) || !sites.length) return;
 
-    const faviconSites = sites.filter(site => site?.url && site?.favicon?.startsWith("data:image/"));
+    // Native/browser-history favicons must pass the same raster data-URL
+    // acceptance boundary as persisted MosaicSync artwork. Unsupported formats
+    // (notably SVG) are ignored before they can trigger a save that normalization
+    // would immediately strip again on the next New Tab startup.
+    const faviconSites = sites.filter(site => site?.url && isAcceptedRasterArtworkDataUrl(site?.favicon));
     const faviconsByUrl = new Map(faviconSites.map(site => [site.url, site.favicon]));
     const faviconsByHost = new Map();
     for (const site of faviconSites) {
@@ -5290,25 +5291,25 @@ ${site.url}`;
         try { favicon = faviconsByHost.get(new URL(shortcut.url).hostname.toLowerCase().replace(/^www\./, "")); } catch {}
       }
       if (!favicon) continue;
-      // Network discovery may have completed while native-cache reads were in
-      // flight. Never let a late browser fallback downgrade a site-discovered icon.
-      if (shortcut.imageSourceKind === "favicon" && shortcut.image) continue;
+      // The shortcut may have changed while browser-native cache reads were in
+      // flight. Re-evaluate the shared source-ranking policy at commit time so a
+      // late fallback cannot downgrade site-discovered or newly supplied artwork.
+      if (!learnedArtworkMayReplace(shortcut, { sourceKind: "firefox" })) continue;
       favicon = await normalizeDeviceFavicon(favicon);
-      const customUploadFallback = shortcut.imageSourceKind === "upload" && shortcut.imageSyncKind === "device";
-      const nextSourceKind = customUploadFallback ? shortcut.imageSourceKind : "firefox";
-      const nextFallback = customUploadFallback;
+      const disposition = learnedArtworkDisposition(shortcut, { sourceKind: "firefox", sourceUrl: "" });
       if (shortcut.image === favicon &&
           shortcut.imageSyncKind === "device" &&
           !shortcut.imageAssetId &&
-          shortcut.imageIsFallback === nextFallback &&
-          shortcut.imageSourceKind === nextSourceKind) continue;
+          shortcut.imageIsFallback === disposition.imageIsFallback &&
+          shortcut.imageSourceKind === disposition.imageSourceKind &&
+          shortcut.imageSourceUrl === disposition.imageSourceUrl) continue;
       shortcut.image = favicon;
       shortcut.imageSyncData = "";
       shortcut.imageAssetId = "";
       shortcut.imageSyncKind = "device";
-      shortcut.imageIsFallback = nextFallback;
-      shortcut.imageSourceKind = nextSourceKind;
-      if (!customUploadFallback) shortcut.imageSourceUrl = "";
+      shortcut.imageIsFallback = disposition.imageIsFallback;
+      shortcut.imageSourceKind = disposition.imageSourceKind;
+      shortcut.imageSourceUrl = disposition.imageSourceUrl;
       const record = findShortcutRecord(shortcut.id);
       if (record?.parentFolder) changedFolderIds.add(record.parentFolder.id);
       else changedShortcutIds.add(shortcut.id);

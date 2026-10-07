@@ -19,6 +19,142 @@ function u24le(b, o) { return b[o] | (b[o + 1] << 8) | (b[o + 2] << 16); }
 function u32le(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
 function u32be(b, o) { return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0; }
 
+/**
+ * Read advertised raster geometry without asking the browser to decode pixels.
+ *
+ * This is intentionally a best-effort preflight rather than an acceptance
+ * boundary. Unknown/unusual-but-browser-decodable input returns 0×0 so callers
+ * can preserve their existing decoder fallback. Full persisted-asset trust still
+ * belongs to validateRasterDataUrl().
+ */
+function rasterMimeTypeFromBytes(bytes, mimeType = "") {
+  if (bytes.length >= 8 &&
+      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+      bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) return "image/png";
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
+  if (bytes.length >= 6) {
+    const header = String.fromCharCode(...bytes.subarray(0, 6));
+    if (header === "GIF87a" || header === "GIF89a") return "image/gif";
+  }
+  if (bytes.length >= 12 &&
+      String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+      String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP") return "image/webp";
+  if (bytes.length >= 6 && u16le(bytes, 0) === 0 && u16le(bytes, 2) === 1 && u16le(bytes, 4) > 0) {
+    return "image/x-icon";
+  }
+
+  // The declared type remains a hint for unusual/truncated-but-decodable input.
+  // A parser miss returns 0×0, preserving the established browser-decoder path.
+  const hint = String(mimeType || "").toLowerCase().split(";")[0].trim();
+  return ["image/png", "image/jpeg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"].includes(hint)
+    ? hint
+    : "";
+}
+
+export function rasterDimensionsFromBytes(input, mimeType) {
+  const bytes = input instanceof Uint8Array
+    ? input
+    : (ArrayBuffer.isView(input)
+      ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+      : (input instanceof ArrayBuffer ? new Uint8Array(input) : null));
+  if (!bytes?.length) return { width: 0, height: 0 };
+  const type = rasterMimeTypeFromBytes(bytes, mimeType);
+
+  if (type === "image/png" && bytes.length >= 24) {
+    const sig = [137,80,78,71,13,10,26,10];
+    if (!sig.every((value, index) => bytes[index] === value)) return { width: 0, height: 0 };
+    if (u32be(bytes, 8) !== 13 || String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR") {
+      return { width: 0, height: 0 };
+    }
+    return { width: u32be(bytes, 16), height: u32be(bytes, 20) };
+  }
+
+  if (type === "image/gif" && bytes.length >= 10) {
+    const header = String.fromCharCode(...bytes.subarray(0, 6));
+    if (header !== "GIF87a" && header !== "GIF89a") return { width: 0, height: 0 };
+    return { width: u16le(bytes, 6), height: u16le(bytes, 8) };
+  }
+
+  if (type === "image/jpeg" && bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    let offset = 2;
+    while (offset < bytes.length) {
+      if (bytes[offset] !== 0xff) { offset += 1; continue; }
+      while (offset < bytes.length && bytes[offset] === 0xff) offset += 1;
+      if (offset >= bytes.length) break;
+      const marker = bytes[offset++];
+      if (marker === 0xd9 || marker === 0xda) break;
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue;
+      if (offset + 2 > bytes.length) break;
+      const length = u16be(bytes, offset);
+      if (length < 2 || offset + length > bytes.length) break;
+      const sof = (marker >= 0xc0 && marker <= 0xc3) || (marker >= 0xc5 && marker <= 0xc7) ||
+        (marker >= 0xc9 && marker <= 0xcb) || (marker >= 0xcd && marker <= 0xcf);
+      if (sof && length >= 7) {
+        return { height: u16be(bytes, offset + 3), width: u16be(bytes, offset + 5) };
+      }
+      offset += length;
+    }
+    return { width: 0, height: 0 };
+  }
+
+  if (type === "image/webp" && bytes.length >= 20 &&
+      String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF" &&
+      String.fromCharCode(...bytes.subarray(8, 12)) === "WEBP") {
+    const chunk = String.fromCharCode(...bytes.subarray(12, 16));
+    if (chunk === "VP8X" && bytes.length >= 30) {
+      return { width: 1 + u24le(bytes, 24), height: 1 + u24le(bytes, 27) };
+    }
+    if (chunk === "VP8L" && bytes.length >= 25 && bytes[20] === 0x2f) {
+      const bits = u32le(bytes, 21);
+      return { width: 1 + (bits & 0x3fff), height: 1 + ((bits >>> 14) & 0x3fff) };
+    }
+    if (chunk === "VP8 " && bytes.length >= 30 && bytes[23] === 0x9d && bytes[24] === 0x01 && bytes[25] === 0x2a) {
+      return { width: u16le(bytes, 26) & 0x3fff, height: u16le(bytes, 28) & 0x3fff };
+    }
+    return { width: 0, height: 0 };
+  }
+
+  if ((type === "image/x-icon" || type === "image/vnd.microsoft.icon") && bytes.length >= 22 &&
+      u16le(bytes, 0) === 0 && u16le(bytes, 2) === 1) {
+    const count = u16le(bytes, 4);
+    if (!count || count > 256 || bytes.length < 6 + count * 16) return { width: 0, height: 0 };
+    let maxWidth = 0;
+    let maxHeight = 0;
+    for (let index = 0; index < count; index += 1) {
+      const offset = 6 + index * 16;
+      let width = bytes[offset] || 256;
+      let height = bytes[offset + 1] || 256;
+      const payloadSize = u32le(bytes, offset + 8);
+      const payloadOffset = u32le(bytes, offset + 12);
+      if (payloadSize && payloadOffset < bytes.length && payloadOffset + Math.min(payloadSize, 24) <= bytes.length) {
+        if (payloadOffset + 24 <= bytes.length &&
+            bytes[payloadOffset] === 0x89 && bytes[payloadOffset + 1] === 0x50 &&
+            bytes[payloadOffset + 2] === 0x4e && bytes[payloadOffset + 3] === 0x47 &&
+            bytes[payloadOffset + 4] === 0x0d && bytes[payloadOffset + 5] === 0x0a &&
+            bytes[payloadOffset + 6] === 0x1a && bytes[payloadOffset + 7] === 0x0a) {
+          width = Math.max(width, u32be(bytes, payloadOffset + 16));
+          height = Math.max(height, u32be(bytes, payloadOffset + 20));
+        } else if (payloadOffset + 12 <= bytes.length) {
+          const dibHeaderSize = u32le(bytes, payloadOffset);
+          const dibWidth = dibHeaderSize === 12
+            ? u16le(bytes, payloadOffset + 4)
+            : (dibHeaderSize >= 40 ? u32le(bytes, payloadOffset + 4) : 0);
+          const dibStoredHeight = dibHeaderSize === 12
+            ? u16le(bytes, payloadOffset + 6)
+            : (dibHeaderSize >= 40 ? u32le(bytes, payloadOffset + 8) : 0);
+          if (dibWidth) width = Math.max(width, dibWidth);
+          if (dibStoredHeight) height = Math.max(height, Math.ceil(dibStoredHeight / 2));
+        }
+      }
+      maxWidth = Math.max(maxWidth, width);
+      maxHeight = Math.max(maxHeight, height);
+    }
+    return { width: maxWidth, height: maxHeight };
+  }
+
+  return { width: 0, height: 0 };
+}
+
 function validPng(bytes) {
   if (bytes.length < 33) return null;
   const sig = [137,80,78,71,13,10,26,10];

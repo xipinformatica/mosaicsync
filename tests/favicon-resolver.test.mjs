@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { automaticFaviconArtwork as automaticFaviconArtworkPolicy } from "../src/shared/core/artwork-policy.js";
 
 function extract(src,name){let start=src.indexOf(`async function ${name}`);if(start<0)start=src.indexOf(`function ${name}`);assert.ok(start>=0,`missing ${name}`);const brace=src.indexOf("{\n",start);let depth=0,quote="",esc=false,lineComment=false,blockComment=false;for(let i=brace;i<src.length;i++){const c=src[i],n=src[i+1];if(lineComment){if(c==="\n")lineComment=false;continue;}if(blockComment){if(c==="*"&&n==="/"){blockComment=false;i++;}continue;}if(quote){if(esc){esc=false;continue;}if(c==="\\"){esc=true;continue;}if(c===quote)quote="";continue;}if(c==="/"&&n==="/"){lineComment=true;i++;continue;}if(c==="/"&&n==="*"){blockComment=true;i++;continue;}if(c==='"'||c==="'"||c==='`'){quote=c;continue;}if(c==='{')depth++;else if(c==='}'&&--depth===0)return src.slice(start,i+1);}throw Error(`unterminated ${name}`);}
 
@@ -188,9 +189,9 @@ test("chrome: local _favicon remains available without Website Access, but unkno
 
 test("chrome: quality-upgrade queue accepts browser-native artwork as replaceable", ()=>{
   const src=readBackgroundSource("chrome");
-  const helper = extract(src,"automaticFaviconArtwork");
-  assert.match(helper,/\["favicon", "firefox"\]\.includes\(shortcut\.imageSourceKind(?: \|\| "none")?\)/,
+  assert.equal(automaticFaviconArtworkPolicy({ image: "data:x", imageSyncKind: "device", imageSourceKind: "firefox", url: "https://native.test/" }), true,
     "Chrome-native legacy source kind must be eligible for a direct quality upgrade");
+  assert.match(src,/automaticFaviconArtworkPolicy/, "background core must delegate automatic-artwork classification to the shared policy");
   assert.match(src,/qualitySide: 0, declared: false, sourceKind: "browser", native: true/,
     "Chrome native cache must remain provisional quality metadata");
 });

@@ -200,12 +200,33 @@ async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS, includeSho
     ? [...new Set([...explicitIds].filter(isLocalAssetId))]
     : [...collectStateLocalAssetIds(rawState, { spaceIds, includeShortcuts, includeBackground, folderChildLimit })];
   if (!ids.length) return { assets: new Map(), storageMs: 0, assetIdMemo };
-  const keys = ids.map(localAssetStorageKey);
+
+  // Content-addressed asset keys are immutable within MosaicSync's storage
+  // boundary. Once this JS context has read and fully validated an exact
+  // ID/value pair, later state events may hydrate that same ID directly from the
+  // verified bytes instead of copying, decoding and hashing it again. First
+  // encounters still cross the full storage + validation boundary below.
+  const assets = new Map();
+  const idsToRead = [];
+  for (const id of ids) {
+    const verifiedValue = verifiedLocalAssetValues.get(id);
+    if (typeof verifiedValue === "string") {
+      assets.set(id, verifiedValue);
+      // normalizeState() uses the same memo later in startup/materialization.
+      // Carry the already-proven content identity forward so the cached fast
+      // path also avoids re-hashing the same image bytes.
+      assetIdMemo.set(verifiedValue, id);
+    } else {
+      idsToRead.push(id);
+    }
+  }
+
+  if (!idsToRead.length) return { assets, storageMs: 0, assetIdMemo };
+  const keys = idsToRead.map(localAssetStorageKey);
   const startedAt = perfNow();
   const result = await browser.storage.local.get(keys);
   const storageMs = perfNow() - startedAt;
-  const assets = new Map();
-  for (const id of ids) {
+  for (const id of idsToRead) {
     const value = result[localAssetStorageKey(id)];
     if (validateLocalAsset(id, value, assetIdMemo)) {
       assets.set(id, value);
@@ -217,9 +238,21 @@ async function readAssetMapForState(rawState, { spaceIds = SPACE_IDS, includeSho
   return { assets, storageMs, assetIdMemo };
 }
 
+function pruneVerifiedLocalAssetValuesForState(rawState) {
+  const referencedIds = collectStateLocalAssetIds(rawState && typeof rawState === "object" ? rawState : DEFAULT_STATE);
+  for (const assetId of [...verifiedLocalAssetValues.keys()]) {
+    if (!referencedIds.has(assetId)) verifiedLocalAssetValues.delete(assetId);
+  }
+}
+
 export async function hydratePersistedState(rawState, { spaceIds = SPACE_IDS } = {}) {
   const source = rawState && typeof rawState === "object" ? rawState : DEFAULT_STATE;
   const { assets } = await readAssetMapForState(source, { spaceIds });
+  // A complete persisted-state adoption is the read-side ownership boundary for
+  // the verified-value cache. Keep only IDs still referenced anywhere in the
+  // incoming profile; narrower folder/Space hydration helpers intentionally do
+  // not prune because they may operate on only a partial visible projection.
+  pruneVerifiedLocalAssetValuesForState(source);
   return hydrateStateLocalAssets(source, assets, { spaceIds });
 }
 

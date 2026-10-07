@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { automaticFaviconArtwork as automaticFaviconArtworkPolicy } from "../src/shared/core/artwork-policy.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}`);
@@ -113,7 +114,7 @@ test("1.30.1 permission classification isolates Website Access from Frequently V
 
 test("1.30.1 automatic favicon upgrade remains device-local and never targets explicit user artwork", () => {
   for (const browser of ["firefox","chrome"]) {
-    const src=readBackgroundSource(browser); const ctx={}; vm.createContext(ctx); vm.runInContext(extract(src,"automaticFaviconArtwork"),ctx);
+    const src=readBackgroundSource(browser); const ctx={ automaticFaviconArtworkPolicy }; vm.createContext(ctx); vm.runInContext(extract(src,"automaticFaviconArtwork"),ctx);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"device",imageSourceKind:"favicon",url:"https://a.test/"}),true);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"sync",imageSourceKind:"upload",url:"https://a.test/"}),false);
     assert.equal(ctx.automaticFaviconArtwork({image:"data:x",imageSyncKind:"device",imageSourceKind:"builtin",url:"https://a.test/"}),false);

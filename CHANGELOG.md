@@ -1,5 +1,34 @@
 # Changelog
 
+## 1.33.0.38
+
+- Makes image safety more reliable when a file's declared type does not match its actual raster data, while keeping the existing compatibility fallback for unknown images.
+- Unifies MosaicSync's device-local artwork rules so browser and New Tab favicon handling use the same acceptance and no-downgrade decisions.
+- Prevents a browser/tab favicon from temporarily downgrading a stronger site-discovered icon when a shortcut is opened.
+- Built-in shortcut glyphs are now explicitly excluded from browser/history fallback eligibility.
+- Rechecks artwork ownership after asynchronous native-history lookup so artwork that appeared while the lookup was waiting cannot be overwritten by a stale fallback.
+- Rejects unsupported Firefox top-sites SVG favicons at the shared raster boundary before they can enter shortcut state.
+- Preserves Firefox's existing ability to refresh an older browser-native learned favicon with a newer browser-native favicon.
+
+## 1.33.0.37
+
+- Rejects clearly oversized image geometry before asking the browser to fully decode the image, reducing unnecessary work and memory pressure on unsafe inputs.
+- Keeps the existing decoder fallback for image metadata MosaicSync cannot recognize in advance.
+
+## 1.33.0.36
+
+- Makes bookmark searching lighter by avoiding repeated text processing and unnecessary sidebar/result rebuilding while you type.
+- Search ignores the common `http://` / `https://` prefix without breaking pasted full-URL searches.
+
+## 1.33.0.35
+
+- Keeps long-lived New Tabs lighter by dropping verified artwork that the current profile no longer references.
+- Prevents unsupported browser-cached image formats from causing repeated no-progress favicon work on later New Tabs.
+
+## 1.33.0.34
+
+- Reduces repeated image work when multiple New Tabs react to the same saved-state change by reusing artwork that this tab has already verified.
+
 ## 1.33.0.33
 
 - Corrects the one-time folder tutorial so each step plays in the intended order and the guidance no longer covers the choice menu or opened folder.

@@ -48,6 +48,11 @@ export function createBookmarksController({
   let bookmarkTree = [];
   let bookmarkFolders = [];
   let bookmarkAllItems = [];
+  let bookmarkSearchTexts = [];
+  let bookmarkSearchAllIndexes = [];
+  let bookmarkSearchQuery = "";
+  let bookmarkSearchMatchIndexes = [];
+  let renderedBookmarkSearchMatchIndexes = null;
   let activeBookmarkFolderId = "all";
   let bookmarkFolderColors = {};
   let bookmarkColorMenu = null;
@@ -110,6 +115,41 @@ export function createBookmarksController({
     } catch {
       return url;
     }
+  }
+
+  function bookmarkSearchText(item) {
+    // Browser bookmarks are already restricted to http(s). The transport
+    // prefix carries no useful distinguishing information and makes queries
+    // such as "h", "t", "p", "s" or ":" match nearly every bookmark.
+    const searchableUrl = String(item?.url || "").replace(/^https?:\/\//i, "");
+    return `${String(item?.title || "")} ${searchableUrl} ${(item?.path || []).join(" ")}`.toLocaleLowerCase();
+  }
+
+  function rebuildBookmarkSearchIndex() {
+    bookmarkSearchTexts = bookmarkAllItems.map(bookmarkSearchText);
+    bookmarkSearchAllIndexes = bookmarkAllItems.map((_item, index) => index);
+    bookmarkSearchQuery = "";
+    bookmarkSearchMatchIndexes = bookmarkSearchAllIndexes;
+    renderedBookmarkSearchMatchIndexes = null;
+  }
+
+  function searchBookmarkIndexes(query) {
+    if (query === bookmarkSearchQuery) return bookmarkSearchMatchIndexes;
+    const sourceIndexes = bookmarkSearchQuery && query.startsWith(bookmarkSearchQuery)
+      ? bookmarkSearchMatchIndexes
+      : bookmarkSearchAllIndexes;
+    const nextIndexes = sourceIndexes.filter(index => bookmarkSearchTexts[index]?.includes(query));
+    bookmarkSearchQuery = query;
+    bookmarkSearchMatchIndexes = nextIndexes;
+    return nextIndexes;
+  }
+
+  function sameBookmarkIndexList(left, right) {
+    if (!left || !right || left.length !== right.length) return false;
+    for (let index = 0; index < left.length; index += 1) {
+      if (left[index] !== right[index]) return false;
+    }
+    return true;
   }
 
   function bookmarkInitial(item) {
@@ -276,31 +316,36 @@ export function createBookmarksController({
     }
   }
 
-  function renderBookmarkBrowser() {
+  function renderBookmarkBrowser({ renderSidebar = true, skipUnchangedSearchResults = false } = {}) {
     if (!bookmarksBrowser || !bookmarkItems || !bookmarkFolderCards || !bookmarksEmpty) return;
-    renderBookmarkSidebar();
-    bookmarkItems.replaceChildren();
-    bookmarkFolderCards.replaceChildren();
+    if (renderSidebar) renderBookmarkSidebar();
 
-    const query = String(bookmarksSearch?.value || "").trim().toLocaleLowerCase();
+    const query = String(bookmarksSearch?.value || "").trim().toLocaleLowerCase().replace(/^https?:\/\//, "");
     let items = [];
     let childFolders = [];
     let breadcrumb = "";
     let showPath = false;
+    let searchMatchIndexes = null;
 
     if (query) {
-      items = bookmarkAllItems.filter(item =>
-        `${item.title} ${item.url} ${(item.path || []).join(" ")}`.toLocaleLowerCase().includes(query)
-      );
+      searchMatchIndexes = searchBookmarkIndexes(query);
+      if (skipUnchangedSearchResults && sameBookmarkIndexList(searchMatchIndexes, renderedBookmarkSearchMatchIndexes)) return;
+      items = searchMatchIndexes.map(index => bookmarkAllItems[index]).filter(Boolean);
       breadcrumb = t("searchBookmarks");
       showPath = true;
     } else if (activeBookmarkFolderId === "all") {
+      bookmarkSearchQuery = "";
+      bookmarkSearchMatchIndexes = bookmarkSearchAllIndexes;
+      renderedBookmarkSearchMatchIndexes = null;
       items = bookmarkAllItems;
       const rootNode = bookmarkTree[0] || null;
       childFolders = bookmarksApi.directChildFolders(rootNode).map(folder => ({ ...folder, depth: 1, parentId: String(rootNode?.id || "") }));
       breadcrumb = t("allBookmarks");
       showPath = true;
     } else {
+      bookmarkSearchQuery = "";
+      bookmarkSearchMatchIndexes = bookmarkSearchAllIndexes;
+      renderedBookmarkSearchMatchIndexes = null;
       const folder = bookmarkFolderRecord(activeBookmarkFolderId);
       if (folder) {
         const folderNode = bookmarkNodeRecord(folder.id);
@@ -309,6 +354,10 @@ export function createBookmarksController({
         breadcrumb = bookmarkFolderPath(folder.id).join(" › ") || folder.title;
       }
     }
+
+    bookmarkItems.replaceChildren();
+    bookmarkFolderCards.replaceChildren();
+    renderedBookmarkSearchMatchIndexes = query ? searchMatchIndexes : null;
 
     if (bookmarkBreadcrumbs) bookmarkBreadcrumbs.textContent = breadcrumb;
     if (bookmarksCount) bookmarksCount.textContent = t("bookmarksCount", { count: items.length });
@@ -355,6 +404,7 @@ export function createBookmarksController({
       bookmarkTree = nextBookmarkTree;
       bookmarkFolders = api.flattenBookmarkFolders(bookmarkTree);
       bookmarkAllItems = api.flattenBookmarks(bookmarkTree);
+      rebuildBookmarkSearchIndex();
       bookmarkFolderColors = readBookmarkFolderColors();
       const validFolderIds = new Set(bookmarkFolders.map(folder => String(folder.id || "")).filter(Boolean));
       let prunedFolderColors = false;
@@ -421,6 +471,11 @@ export function createBookmarksController({
     bookmarkTree = [];
     bookmarkFolders = [];
     bookmarkAllItems = [];
+    bookmarkSearchTexts = [];
+    bookmarkSearchAllIndexes = [];
+    bookmarkSearchQuery = "";
+    bookmarkSearchMatchIndexes = [];
+    renderedBookmarkSearchMatchIndexes = null;
     activeBookmarkFolderId = "all";
     if (bookmarksSearch) bookmarksSearch.value = "";
     bookmarkFolderTree?.replaceChildren();
@@ -434,10 +489,14 @@ export function createBookmarksController({
     renderBookmarkBrowser();
   }
 
+  function renderBookmarkSearchInput() {
+    renderBookmarkBrowser({ renderSidebar: false, skipUnchangedSearchResults: true });
+  }
+
   function bind() {
     bookmarksButton?.addEventListener("click", () => { void open(); });
     bookmarksPermissionButton?.addEventListener("click", () => { void requestPermissionFromGesture(); });
-    bookmarksSearch?.addEventListener("input", renderBookmarkBrowser);
+    bookmarksSearch?.addEventListener("input", renderBookmarkSearchInput);
     bookmarksDialog?.addEventListener("close", reset);
     bookmarksDialog?.addEventListener("click", event => {
       if (event.target === bookmarksDialog) closeDialog(bookmarksDialog);

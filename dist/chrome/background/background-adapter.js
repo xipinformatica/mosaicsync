@@ -13,6 +13,7 @@ import {
   platformHasPermissionFreeFaviconSource,
   readNativeFaviconDataUrl
 } from "../core/platform.js";
+import { isAcceptedRasterArtworkDataUrl } from "../core/artwork-policy.js";
 
 async function resolveBrowserCachedFavicon(pageUrl, { signal = null } = {}) {
   // Chrome exposes its own favicon cache through the private _favicon endpoint.
@@ -35,7 +36,7 @@ async function resolveTabNativeFavicon(tab, { fetchImageDataUrl } = {}) {
   // The legacy `firefox` source-kind name remains for profile interoperability.
   const protectedStore = isProtectedChromeStoreUrl(tab?.url || "");
   const sourceUrl = /^https?:/i.test(tab?.favIconUrl || "") ? tab.favIconUrl : "";
-  let image = /^data:image\/(?:png|jpeg|webp|gif|x-icon|vnd\.microsoft\.icon);base64,/i.test(tab?.favIconUrl || "")
+  let image = isAcceptedRasterArtworkDataUrl(tab?.favIconUrl || "")
     ? tab.favIconUrl
     : "";
   if (!image) {
