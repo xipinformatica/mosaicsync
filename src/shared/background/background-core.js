@@ -86,6 +86,7 @@ import {
   mergeRecordMaps,
   newestRecordTimestamp,
   nextMutationTime,
+  nextProfileImportMutationTime,
   normalizeDeviceName,
   normalizeFaviconPreference,
   normalizeState,
@@ -3505,7 +3506,7 @@ export function startBackground(adapter) {
       case "mosaicsync:set-sync-enabled":
         return enqueue(() => setSyncEnabled(message.enabled === true));
       case "mosaicsync:bootstrap-local":
-        return enqueue(bootstrapLocal);
+        return enqueue(() => bootstrapLocal({ profileImport: message.profileImport === true }));
       case "mosaicsync:bootstrap-remote":
         return enqueue(() => bootstrapRemote({ waitIfMissing: false }));
       case "mosaicsync:wait-for-remote":
@@ -4440,13 +4441,13 @@ export function startBackground(adapter) {
     };
   }
 
-  async function publishWorkspaceAuthoritative(fullState, meta, spaceId, { retainedTombstones = [] } = {}) {
+  async function publishWorkspaceAuthoritative(fullState, meta, spaceId, { retainedTombstones = [], profileImport = false } = {}) {
     const namespace = syncNamespace(spaceId);
     const localState = workspaceStateNormalized(fullState, spaceId);
     let snapshot = await prepareSyncSnapshot(spaceId);
     const records = flattenStateNormalized(localState, meta.deviceId);
     const settings = makeSettingsRecordNormalized(localState, meta.deviceId);
-    const timestamp = nextMutationTime(
+    const timestamp = (profileImport ? nextProfileImportMutationTime : nextMutationTime)(
       localState.updatedAt, localState.settingsModifiedAt, newestRecordTimestamp(records),
       snapshot.dataset?.updatedAt, snapshot.settings?.modifiedAt, newestRecordTimestamp(snapshot.records)
     );
@@ -4478,7 +4479,7 @@ export function startBackground(adapter) {
     return { dataset, timestamp, assetResult };
   }
 
-  async function bootstrapLocal({ recovery = false, markContinuity = true, preservePendingSyncRecovery = false, retainedPersonalTombstones = [], retainedWorkTombstones = [] } = {}) {
+  async function bootstrapLocal({ recovery = false, markContinuity = true, preservePendingSyncRecovery = false, profileImport = false, retainedPersonalTombstones = [], retainedWorkTombstones = [] } = {}) {
     const { state, meta } = await ensureLocalStorage();
     const personalState = workspaceStateNormalized(state, PERSONAL_SPACE_ID);
     if (!meta.syncEnabled) {
@@ -4504,7 +4505,7 @@ export function startBackground(adapter) {
     let snapshot = await prepareSyncSnapshot();
     const records = flattenStateNormalized(personalState, meta.deviceId);
     const settings = makeSettingsRecordNormalized(personalState, meta.deviceId);
-    const timestamp = nextMutationTime(
+    const timestamp = (profileImport ? nextProfileImportMutationTime : nextMutationTime)(
       personalState.updatedAt, personalState.settingsModifiedAt, newestRecordTimestamp(records),
       snapshot.dataset?.updatedAt, snapshot.settings?.modifiedAt, newestRecordTimestamp(snapshot.records)
     );
@@ -4556,7 +4557,7 @@ export function startBackground(adapter) {
     if (staleAssetKeys.length) await removeSyncItems([...new Set(staleAssetKeys)]);
     await clearAssetGcLedger();
 
-    const workPublish = await publishWorkspaceAuthoritative(state, meta, WORK_SPACE_ID, { retainedTombstones: retainedWorkTombstones });
+    const workPublish = await publishWorkspaceAuthoritative(state, meta, WORK_SPACE_ID, { retainedTombstones: retainedWorkTombstones, profileImport });
     const workRevision = datasetRevision(workPublish.dataset);
     const profilePublishMeta = { ...meta, syncInitialized: true, lastAppliedWorkSyncRevision: workRevision };
     const profilePublish = await publishProfileDeviceSnapshot(state, profilePublishMeta, { force: true });

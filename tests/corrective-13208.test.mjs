@@ -20,7 +20,7 @@ test("1.32.0.8 Welcome stages all local starting-source candidates instead of ma
   assert.match(src, /async function commitPendingSourceCandidate\(/);
 
   const firefoxImport = section(src, "async function importThisFirefox()", "async function startEmpty()");
-  const empty = section(src, "async function startEmpty()", "function stampImportedProfileState");
+  const empty = section(src, "async function startEmpty()", "async function importMosaicSyncProfile(file)");
   const profile = section(src, "async function importMosaicSyncProfile(file)", "async function completeOnboarding");
 
   for (const [name, body] of [["Firefox import", firefoxImport], ["empty", empty], ["profile import", profile]]) {
@@ -54,7 +54,8 @@ test("1.32.0.8 Welcome keeps profile-import device preferences provisional with 
   assert.doesNotMatch(profile, /localStorage\.setItem\(/);
 
   const commit = section(src, "async function commitPendingSourceCandidate", "function discardPendingSourceCandidate");
-  assert.match(commit, /await writeLocalState\(candidate\.state\)/);
+  assert.match(commit, /await writeLocalState\(candidate\.state, candidate\.source === "profile"/);
+  assert.match(commit, /requireUnchangedCompactState:\s*candidate\.compactBaseline/, "a staged profile must validate its examined durable baseline");
   assert.match(commit, /await setLocalePreference\(/);
   assert.match(commit, /FREQUENTLY_VISITED_PREF_KEY/);
 });

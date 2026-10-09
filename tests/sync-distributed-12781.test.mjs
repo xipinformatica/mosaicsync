@@ -194,3 +194,51 @@ for(const browser of ['firefox','chrome']){
       'authoritative republish tombstones a newer delivered remote record absent from the chosen local source');
   },{timeout:30000});
 }
+
+// .41 corrective: integration coverage for a real second-device clock skew.
+// The remote store, browser background, and Sync reconciliation are all real
+// project code; unlike model-only clock tests, this catches mixed-state merges.
+for (const browser of ['firefox', 'chrome']) {
+  test(`1.33.0.41 ${browser} explicit restore converges across devices when the other clock is 400 days ahead`, async t => {
+    const remote=new RemoteSync();
+    const a=spawnDevice(browser,`skew-restore-a-${browser}`,'a',remote);
+    const b=spawnDevice(browser,`skew-restore-b-${browser}`,'b',remote);
+    t.after(()=>{a.close();b.close();});
+    await Promise.all([a.ready,b.ready]);
+
+    await a.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    assert.equal((await a.command('call',{message:{type:'mosaicsync:bootstrap-local'}}))?.ok,true);
+    await b.command('call',{message:{type:'mosaicsync:set-sync-enabled',enabled:true}});
+    await b.command('call',{message:{type:'mosaicsync:wait-for-remote'}});
+    remote.deliver(`skew-restore-b-${browser}`,remote.keys());
+    await b.command('alarm',{name:'mosaicsync-sync-watch-v1'});
+    assert.equal((await b.command('snapshot')).meta.syncInitialized,true,'B first imports A normally');
+
+    const skew=await b.command('advance-time',{ms:400*24*60*60*1000});
+    await b.command('add-work-shortcut',{
+      id:'old-skewed-edit',url:'https://old-skewed-edit.test/',modifiedAt:skew.now+10
+    });
+    assert.ok(remote.keys().some(k=>k.includes(encodeURIComponent('old-skewed-edit'))),
+      'the genuinely skewed B edit must first reach the shared Sync cloud');
+
+    remote.deliver(`skew-restore-a-${browser}`,remote.keys());
+    const aBefore=await a.command('snapshot');
+    const backup=structuredClone(aBefore.state);
+    backup.spaces.personal.shortcuts.push({
+      ...backup.spaces.personal.shortcuts[0],id:'restored-only',title:'Restored only',
+      url:'https://restored-only.test/',position:2,modifiedAt:15
+    });
+    const restore=await a.command('restore-profile',{state:backup});
+    assert.equal(restore.published?.ok,true,'explicit restore must publish over the skewed cloud');
+
+    remote.deliver(`skew-restore-b-${browser}`,remote.keys());
+    await b.command('alarm',{name:'mosaicsync-sync-watch-v1'});
+    const bAfter=await b.command('snapshot');
+    const aAfter=await a.command('snapshot');
+    assert.deepEqual(bAfter.ids,aAfter.ids,'B must receive exactly the restored profile, not a mixture');
+    assert.ok(bAfter.ids.includes('personal:restored-only'),'new shortcut must reach B');
+    assert.ok(bAfter.ids.includes('personal:home-b'),'existing Personal shortcut must be preserved');
+    assert.equal(bAfter.ids.includes('work:old-skewed-edit'),false,'skewed B edit must not resurrect');
+    assert.equal(bAfter.meta.syncStatus,'ready');
+  },{timeout:45000});
+}

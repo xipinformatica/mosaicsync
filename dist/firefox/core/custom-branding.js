@@ -127,9 +127,10 @@ export async function beginCustomBrandingImport(value) {
   const branding = normalizeCustomBranding(value, { strict: true });
   return withCustomBrandingWriteLock(async () => {
     const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
+    const hadPrevious = Object.hasOwn(result || {}, LOCAL_CUSTOM_BRANDING_KEY);
     const previous = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
     await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: branding });
-    return { previous, written: branding };
+    return { previous, written: branding, hadPrevious };
   });
 }
 
@@ -140,7 +141,10 @@ export async function rollbackCustomBrandingImport(transaction) {
     const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
     const current = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
     if (!brandingEqual(current, written)) return { rolledBack: false, current };
-    await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: previous });
+    // Rollback must preserve absence too: a rejected import cannot create an
+    // otherwise nonexistent branding record merely by restoring its defaults.
+    if (transaction?.hadPrevious === false) await browser.storage.local.remove(LOCAL_CUSTOM_BRANDING_KEY);
+    else await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: previous });
     return { rolledBack: true, current: previous };
   });
 }

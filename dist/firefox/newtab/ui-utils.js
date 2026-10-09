@@ -123,6 +123,11 @@ export function normalizeShortcutUrl(raw) {
   }
   const safeUrl = safeShortcutNavigationUrl(value);
   if (!safeUrl) throw new Error("MosaicSync supports http:// and https:// shortcuts.");
+  if (!globalThis.__mosaicsyncSafeShortcutCreationUrl?.(safeUrl)) {
+    const error = new Error("URLs containing a username or password cannot be saved.");
+    error.code = "SHORTCUT_URL_CREDENTIALS";
+    throw error;
+  }
   return safeUrl;
 }
 

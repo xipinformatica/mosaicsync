@@ -28,7 +28,25 @@
     }
   }
 
+  // A separate authoring boundary prevents new embedded secrets from entering
+  // Sync, while the original navigation validator still recognizes existing
+  // shortcuts saved by older releases. Never silently delete those records.
+  function safeShortcutCreationUrl(value) {
+    const href = safeShortcutNavigationUrl(value);
+    if (!href) return "";
+    try {
+      const parsed = new URL(href);
+      return parsed.username || parsed.password ? "" : href;
+    } catch { return ""; }
+  }
+
   try {
+    Object.defineProperty(globalThis, "__mosaicsyncSafeShortcutCreationUrl", {
+      value: safeShortcutCreationUrl,
+      configurable: false,
+      enumerable: false,
+      writable: false
+    });
     Object.defineProperty(globalThis, GLOBAL_KEY, {
       value: safeShortcutNavigationUrl,
       configurable: false,

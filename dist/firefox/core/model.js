@@ -76,6 +76,115 @@ export function nextMutationTime(...values) {
   return next;
 }
 
+// Profile files are untrusted input. Their logical clocks preserve useful causal
+// ordering when they are plausibly close to wall time, but an imported file must
+// never be able to choose a value near Number.MAX_SAFE_INTEGER and permanently
+// exhaust later local edits. One leap-year of future skew is deliberately
+// generous for exported profiles from machines with a badly configured clock.
+const IMPORTED_PROFILE_MAX_FUTURE_SKEW_MS = 366 * 24 * 60 * 60 * 1000;
+
+// A JavaScript Date cannot represent a millisecond timestamp beyond this
+// bound. Existing local/cloud clocks can legitimately be years ahead because
+// a real device clock was misconfigured. Unlike untrusted backup-file clocks,
+// they retain causal authority even beyond the 366-day import-file limit.
+const MAX_REAL_CLOCK_MS = 8_640_000_000_000_000;
+
+// Only an explicit user-authoritative profile replacement may disregard
+// mathematically impossible pre-existing cloud/local clocks. Routine mutation
+// and Sync merge MUST continue using nextMutationTime() without this exception.
+export function nextProfileImportMutationTime(...observed) {
+  return nextMutationTime(observed.flat(Infinity).filter(value => {
+    const clock = parseLogicalTime(value);
+    return clock !== null && clock <= MAX_REAL_CLOCK_MS;
+  }));
+}
+
+function profileLogicalTimes(normalized) {
+  const clocks = [];
+  for (const spaceId of SPACE_IDS) {
+    const workspace = normalized.spaces[spaceId];
+    clocks.push(workspace.updatedAt, workspace.settingsModifiedAt);
+    for (const stamp of Object.values(workspace.settingsClock || {})) clocks.push(stamp?.[0]);
+    for (const item of workspace.shortcuts || []) {
+      clocks.push(item.modifiedAt);
+      if (item.type === "folder") {
+        for (const child of item.items || []) clocks.push(child.modifiedAt, child.spaceMoveAt);
+      } else {
+        clocks.push(item.spaceMoveAt);
+      }
+    }
+  }
+  return clocks.map(value => parseLogicalTime(value)).filter(value => value !== null);
+}
+
+function shortcutMoveClocks(normalized) {
+  const clocks = new Map();
+  const remember = item => {
+    if (!item || item.type !== "shortcut" || !item.id) return;
+    clocks.set(item.id, Math.max(clocks.get(item.id) || 0, normalizeLogicalTime(item.spaceMoveAt, 0)));
+  };
+  for (const spaceId of SPACE_IDS) {
+    for (const item of normalized.spaces[spaceId].shortcuts || []) {
+      if (item.type === "folder") for (const child of item.items || []) remember(child);
+      else remember(item);
+    }
+  }
+  return clocks;
+}
+
+/**
+ * Re-stamp an imported whole profile as one explicit local replacement.
+ *
+ * Backup-file clocks are advisory only inside a bounded future-skew window.
+ * Already-stored local clocks have stronger authority and remain observed even
+ * if a real device's clock was skewed by years. Only stored clocks beyond what
+ * a JavaScript Date can represent are discarded to recover an exhausted profile.
+ * Current Settings/namespace clocks retain ordering; imported/current spaceMoveAt
+ * values are rebased
+ * only when a namespace generation already exists, avoiding gratuitous Sync
+ * bytes for shortcuts that have never crossed Spaces.
+ */
+export function stampImportedProfileState(importedState, currentState = null) {
+  const imported = normalizeState(importedState);
+  const current = currentState ? normalizeState(currentState) : null;
+  const wallTime = normalizeLogicalTime(now(), 0);
+  const importedClockCeiling = Math.min(MAX_LOGICAL_TIME - 1, wallTime + IMPORTED_PROFILE_MAX_FUTURE_SKEW_MS);
+  const timestamp = nextProfileImportMutationTime(
+    current ? profileLogicalTimes(current) : [],
+    profileLogicalTimes(imported).filter(clock => clock <= importedClockCeiling)
+  );
+  const currentMoveClocks = current ? shortcutMoveClocks(current) : new Map();
+
+  const spaces = {};
+  for (const spaceId of SPACE_IDS) {
+    const workspace = imported.spaces[spaceId];
+    const stampShortcut = item => {
+      const importedMoveAt = normalizeLogicalTime(item.spaceMoveAt, 0);
+      const currentMoveAt = currentMoveClocks.get(item.id) || 0;
+      return {
+        ...item,
+        modifiedAt: timestamp,
+        spaceMoveAt: (importedMoveAt > 0 || currentMoveAt > 0) ? timestamp : 0
+      };
+    };
+    const stampItem = item => item.type === "folder"
+      ? { ...item, modifiedAt: timestamp, items: (item.items || []).map(stampShortcut) }
+      : stampShortcut(item);
+    spaces[spaceId] = {
+      ...workspace,
+      shortcuts: workspace.shortcuts.map(stampItem),
+      settingsClock: Object.fromEntries(SETTINGS_SYNC_CLOCK_KEYS.map(key => [key, [timestamp, ""]])),
+      settingsModifiedAt: timestamp,
+      updatedAt: timestamp
+    };
+  }
+  return normalizeState({
+    schemaVersion: imported.schemaVersion,
+    activeSpaceId: imported.activeSpaceId,
+    spaces
+  });
+}
+
 // Fine-grained Settings clocks -----------------------------------------------------
 // A whole Settings record contains many independent user decisions. 1.30.15
 // keeps one compact logical clock per decision so an unrelated edit on a stale

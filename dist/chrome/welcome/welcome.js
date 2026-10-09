@@ -12,13 +12,12 @@ import {
   DONATE_URL,
   FREQUENTLY_VISITED_PREF_KEY,
   FREQUENTLY_VISITED_PERMISSION_PROMPTED_KEY,
-  SPACE_IDS,
-  SETTINGS_SYNC_CLOCK_KEYS,
   SUPPORT_URL,
   VERSION
 } from "../core/constants.js";
 import { fetchFirefoxShortcuts, prepareFirefoxShortcutFavicons, replaceWithFirefoxShortcuts } from "../core/importer.js";
-import { defaultDeviceName, nextMutationTime, normalizeDeviceName, normalizeState, now, stableStringify } from "../core/model.js";
+import { defaultDeviceName, nextMutationTime, normalizeDeviceName, now, stableStringify, stampImportedProfileState } from "../core/model.js";
+import { ERROR_CODES, isQuotaExceededError } from "../core/errors.js";
 import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/storage.js";
 import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
 import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
@@ -140,10 +139,13 @@ async function sendSyncMessage(type, payload = {}) {
   return response;
 }
 
-function stageStartingSourceCandidate(source, state, preferences = null, branding = null) {
+function stageStartingSourceCandidate(source, state, preferences = null, branding = null, compactBaseline = null) {
   pendingSourceCandidate = {
     source,
     state,
+    // A profile staged before Sync resolution must not overwrite a later
+    // local change made by another New Tab or the background worker.
+    compactBaseline: source === "profile" ? compactBaseline : null,
     preferences: preferences && typeof preferences === "object" ? { ...preferences } : null,
     // Profile branding remains memory-only until source resolution chooses this
     // candidate. Firefox/empty candidates intentionally never touch branding.
@@ -168,7 +170,9 @@ async function commitPendingSourceCandidate(expectedSource = "") {
     brandingTransaction = await beginCustomBrandingImport(candidate.branding);
   }
   try {
-    await writeLocalState(candidate.state);
+    await writeLocalState(candidate.state, candidate.source === "profile"
+      ? { requireUnchangedCompactState: candidate.compactBaseline }
+      : {});
   } catch (error) {
     if (brandingTransaction) {
       try { await rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
@@ -226,45 +230,15 @@ async function startEmpty() {
   stageStartingSourceCandidate("empty", state);
 }
 
-function stampImportedProfileState(importedState) {
-  const normalized = normalizeState(importedState);
-  const observedClocks = [];
-  for (const spaceId of SPACE_IDS) {
-    const workspace = normalized.spaces[spaceId];
-    observedClocks.push(workspace.updatedAt, workspace.settingsModifiedAt);
-    for (const item of workspace.shortcuts || []) {
-      observedClocks.push(item.modifiedAt, item.spaceMoveAt);
-      if (item.type === "folder") {
-        for (const child of item.items || []) observedClocks.push(child.modifiedAt, child.spaceMoveAt);
-      }
-    }
-  }
-  const timestamp = nextMutationTime(observedClocks);
-  const spaces = {};
-  for (const spaceId of SPACE_IDS) {
-    const workspace = normalized.spaces[spaceId];
-    const stampItem = item => item.type === "folder"
-      ? { ...item, modifiedAt: timestamp, items: (item.items || []).map(child => ({ ...child, modifiedAt: timestamp })) }
-      : { ...item, modifiedAt: timestamp };
-    spaces[spaceId] = {
-      ...workspace,
-      shortcuts: workspace.shortcuts.map(stampItem),
-      settingsClock: Object.fromEntries(SETTINGS_SYNC_CLOCK_KEYS.map(key => [key, [timestamp, ""]])),
-      settingsModifiedAt: timestamp,
-      updatedAt: timestamp
-    };
-  }
-  return normalizeState({
-    schemaVersion: normalized.schemaVersion,
-    activeSpaceId: normalized.activeSpaceId,
-    spaces
-  });
-}
 
 async function importMosaicSyncProfile(file) {
   const parsed = await parseProfilePackage(await readProfileImportText(file));
-  const importedState = stampImportedProfileState(parsed.state);
-  stageStartingSourceCandidate("profile", importedState, parsed.preferences, parsed.branding);
+  // Import is explicit whole-profile authority. Re-read the local profile after
+  // file parsing so the replacement clock outranks the newest state this setup
+  // page can replace, including clocks that are legitimately ahead of wall time.
+  const loaded = await ensureLocalStorage();
+  const importedState = stampImportedProfileState(parsed.state, loaded.state);
+  stageStartingSourceCandidate("profile", importedState, parsed.preferences, parsed.branding, loaded.compactBaseline);
 }
 
 async function completeOnboarding(message = t("setupComplete")) {
@@ -551,7 +525,11 @@ welcomeProfileFile?.addEventListener("change", () => {
       await importMosaicSyncProfile(file);
     } catch (error) {
       console.error(error);
-      setStatus(error?.code === "PROFILE_TOO_LARGE" ? t("profileImportTooLarge") : t("profileImportFailed"), "error");
+      setStatus(error?.code === "PROFILE_TOO_LARGE"
+        ? t("profileImportTooLarge")
+        : error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED || isQuotaExceededError(error)
+          ? t("profileImportStorageFull")
+          : t("profileImportFailed"), "error");
       sourceFinishButton.disabled = false;
       return;
     }
@@ -560,7 +538,17 @@ welcomeProfileFile?.addEventListener("change", () => {
       await continueAfterStartingSource("profile");
     } catch (error) {
       console.error(error);
-      setStatus(t("couldNotContinue"), "error");
+      if (error?.code === "PROFILE_IMPORT_STALE_BASELINE") {
+        // A staged backup has become invalid. Return to the source chooser so
+        // the user can select the profile file again with a fresh baseline.
+        discardPendingSourceCandidate();
+        configureSourceStep(latestSyncStatus);
+      }
+      setStatus(error?.code === "PROFILE_IMPORT_STALE_BASELINE"
+        ? t("profileImportChangedRetry")
+        : error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED || isQuotaExceededError(error)
+          ? t("profileImportStorageFull")
+          : t("couldNotContinue"), "error");
       sourceFinishButton.disabled = false;
     }
   })();
@@ -575,7 +563,17 @@ chooseLocalButton.addEventListener("click", async () => {
     const response = await sendSyncMessage("mosaicsync:bootstrap-local");
     await completeOnboarding(response.meta?.lastSyncWarning || t("computerSource"));
   } catch (error) {
-    setStatus(error.message || t("firefoxSyncError"), "error");
+    if (error?.code === "PROFILE_IMPORT_STALE_BASELINE") {
+      // This candidate is no longer safe to commit. Do not keep the user in
+      // the resolution panel with an unusable "Use this computer" action.
+      discardPendingSourceCandidate();
+      configureSourceStep(latestSyncStatus);
+    }
+    setStatus(error?.code === "PROFILE_IMPORT_STALE_BASELINE"
+      ? t("profileImportChangedRetry")
+      : pendingSourceCandidate?.source === "profile" && (error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED || isQuotaExceededError(error))
+        ? t("profileImportStorageFull")
+        : error.message || t("firefoxSyncError"), "error");
     chooseLocalButton.disabled = false;
     chooseCloudButton.disabled = false;
   }

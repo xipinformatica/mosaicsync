@@ -69,9 +69,15 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
   const runtimeVersion = fs.readFileSync("src/shared/core/constants.js", "utf8").match(/export const VERSION\s*=\s*"([^"]+)"/)?.[1];
   assert.equal(frozen.version, VERSION, "the canonical Step-5A snapshot stays pinned to its originating release");
   assert.equal(live.version, runtimeVersion, "live census must identify the current runtime rather than impersonating 1.33.0.10");
-  const expectedOperations = { ...frozen.directStorageCallSites.byOperation, "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 3 };
+  const expectedOperations = {
+    ...frozen.directStorageCallSites.byOperation,
+    "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 3,
+    // .42 adds one narrow branding rollback removal to preserve absent-vs-default
+    // storage state after a rejected profile import; no routine read/write grows.
+    "local.remove": frozen.directStorageCallSites.byOperation["local.remove"] + 1
+  };
   assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
-    "1.33.0.23 adds one targeted Sync-read call site and 1.33.0.27 adds two fresh emergency-quota revalidation reads while preserving every other frozen storage operation count");
+    "Historical Sync reads are unchanged; .42 adds one explicit branding-import rollback removal, while preserving every other frozen storage operation count");
   for (const browser of ["firefox", "chrome"]) {
     for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
       const liveResult = live.runtimeCensus[browser][scenario];

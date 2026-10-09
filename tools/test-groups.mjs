@@ -40,7 +40,9 @@ const GROUPS = Object.freeze({
       /corrective-133022\.test\.mjs$/i,
       /corrective-133023\.test\.mjs$/i,
       /corrective-133024\.test\.mjs$/i,
-      /corrective-133025\.test\.mjs$/i
+      /corrective-133025\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   newtab: {
@@ -109,7 +111,14 @@ const GROUPS = Object.freeze({
       /corrective-133030\.test\.mjs$/i,
       /feature-133031\.test\.mjs$/i,
       /feature-133032\.test\.mjs$/i,
-      /feature-133033\.test\.mjs$/i
+      /feature-133033\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i,
+      /trust-boundary-133042\.test\.mjs$/i,
+      /trust-boundary-133043\.test\.mjs$/i,
+      /trust-boundary-133044\.test\.mjs$/i,
+      /trust-boundary-133040\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   sync: {
@@ -149,7 +158,9 @@ const GROUPS = Object.freeze({
       /corrective-133023\.test\.mjs$/i,
       /corrective-133027\.test\.mjs$/i,
       /corrective-133028\.test\.mjs$/i,
-      /corrective-133030\.test\.mjs$/i
+      /corrective-133030\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   recovery: {
@@ -198,9 +209,17 @@ const GROUPS = Object.freeze({
       /corrective-133026\.test\.mjs$/i,
       /corrective-133027\.test\.mjs$/i,
       /corrective-133028\.test\.mjs$/i,
+      /trust-boundary-133044\.test\.mjs$/i,
       /corrective-133030\.test\.mjs$/i,
       /optimization-133037\.test\.mjs$/i,
-      /optimization-133038\.test\.mjs$/i
+      /optimization-133038\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i,
+      /trust-boundary-133042\.test\.mjs$/i,
+      /trust-boundary-133043\.test\.mjs$/i,
+      /trust-boundary-133044\.test\.mjs$/i,
+      /trust-boundary-133040\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   browser: {
@@ -233,7 +252,9 @@ const GROUPS = Object.freeze({
       /feature-133033\.test\.mjs$/i,
       /optimization-133035\.test\.mjs$/i,
       /optimization-133037\.test\.mjs$/i,
-      /optimization-133038\.test\.mjs$/i
+      /optimization-133038\.test\.mjs$/i,
+      /trust-boundary-133040\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   core: {
@@ -260,7 +281,14 @@ const GROUPS = Object.freeze({
       /corrective-133020\.test\.mjs$/i,
       /corrective-133021\.test\.mjs$/i,
       /corrective-133022\.test\.mjs$/i,
-      /corrective-133023\.test\.mjs$/i
+      /corrective-133023\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i,
+      /trust-boundary-133042\.test\.mjs$/i,
+      /trust-boundary-133043\.test\.mjs$/i,
+      /trust-boundary-133044\.test\.mjs$/i,
+      /trust-boundary-133040\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   },
   release: {
@@ -316,7 +344,14 @@ const GROUPS = Object.freeze({
       /corrective-133030\.test\.mjs$/i,
       /feature-133031\.test\.mjs$/i,
       /feature-133032\.test\.mjs$/i,
-      /feature-133033\.test\.mjs$/i
+      /feature-133033\.test\.mjs$/i,
+      /trust-boundary-133039\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i,
+      /trust-boundary-133042\.test\.mjs$/i,
+      /trust-boundary-133043\.test\.mjs$/i,
+      /trust-boundary-133044\.test\.mjs$/i,
+      /trust-boundary-133040\.test\.mjs$/i,
+      /trust-boundary-133041\.test\.mjs$/i
     ]
   }
 });

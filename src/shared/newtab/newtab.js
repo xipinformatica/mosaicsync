@@ -24,7 +24,6 @@ import {
   FREQUENT_CANDIDATE_CACHE_MS,
   BACKGROUND_PRELOAD_CACHE_MAX,
   SPACE_IDS,
-  SETTINGS_SYNC_CLOCK_KEYS,
   DONATE_URL,
   LOCAL_META_KEY,
   LOCAL_STATE_KEY,
@@ -73,10 +72,12 @@ import {
   repairTopLevelPositionsWithinCapacity,
   visibleTopLevelCapacity,
   stableStringify,
+  stampImportedProfileState,
   uid,
   validHex
 } from "../core/model.js";
 import { imageDataUrlByteLength as dataUrlByteLength } from "../core/image-data.js";
+import { ERROR_CODES, isQuotaExceededError } from "../core/errors.js";
 import {
   browserNativeFaviconFallbackNeeded,
   isAcceptedRasterArtworkDataUrl,
@@ -2142,40 +2143,6 @@ ${site.url}`;
     return settings ? preloadEffectiveBackgroundForSettings(settings) : Promise.resolve();
   }
 
-  function stampImportedProfileState(importedState) {
-    const normalized = normalizeState(importedState);
-    const observedClocks = [];
-    for (const spaceId of SPACE_IDS) {
-      const workspace = normalized.spaces[spaceId];
-      observedClocks.push(workspace.updatedAt, workspace.settingsModifiedAt);
-      for (const item of workspace.shortcuts || []) {
-        observedClocks.push(item.modifiedAt, item.spaceMoveAt);
-        if (item.type === "folder") {
-          for (const child of item.items || []) observedClocks.push(child.modifiedAt, child.spaceMoveAt);
-        }
-      }
-    }
-    const timestamp = nextMutationTime(observedClocks);
-    const spaces = {};
-    for (const spaceId of SPACE_IDS) {
-      const workspace = normalized.spaces[spaceId];
-      const stampItem = item => item.type === "folder"
-        ? { ...item, modifiedAt: timestamp, items: (item.items || []).map(child => ({ ...child, modifiedAt: timestamp })) }
-        : { ...item, modifiedAt: timestamp };
-      spaces[spaceId] = {
-        ...workspace,
-        shortcuts: workspace.shortcuts.map(stampItem),
-        settingsClock: Object.fromEntries(SETTINGS_SYNC_CLOCK_KEYS.map(key => [key, [timestamp, ""]])),
-        settingsModifiedAt: timestamp,
-        updatedAt: timestamp
-      };
-    }
-    return normalizeState({
-      schemaVersion: normalized.schemaVersion,
-      activeSpaceId: normalized.activeSpaceId,
-      spaces
-    });
-  }
 
   function paintBrandIdentity(branding) {
     customBranding = branding;
@@ -2829,11 +2796,18 @@ ${site.url}`;
     const updatedWorkspace = { ...workspace, settings: { ...workspace.settings, [key]: value }, settingsModifiedAt: timestamp, updatedAt: Math.max(Number(workspace.updatedAt) || 0, timestamp) };
     state = replaceWorkspaceTrustedNormalized(normalized, spaceId, updatedWorkspace);
     stateMutationGeneration += 1;
-    const persisted = await writeLocalStateWithBaseline(state, {
-      baseState,
-      baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: true
-    });
+    let persisted;
+    try {
+      persisted = await writeLocalStateWithBaseline(state, {
+        baseState,
+        baseStateIsCompact: Boolean(baseState),
+        recordSyncMutation: true
+      });
+    } catch (error) {
+      // Workspace-name/Space-toggle commits bypass saveState(); keep the same
+      // localized unsaved-edit warning and leave the pending intention live.
+      throw presentLocalPersistenceError(error);
+    }
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
     updateSpaceSwitcher();
@@ -2853,11 +2827,18 @@ ${site.url}`;
       await writeActiveSpace("personal");
     }
     stateMutationGeneration += 1;
-    const persisted = await writeLocalStateWithBaseline(state, {
-      baseState,
-      baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: true
-    });
+    let persisted;
+    try {
+      persisted = await writeLocalStateWithBaseline(state, {
+        baseState,
+        baseStateIsCompact: Boolean(baseState),
+        recordSyncMutation: true
+      });
+    } catch (error) {
+      // Workspace-name/Space-toggle commits bypass saveState(); keep the same
+      // localized unsaved-edit warning and leave the pending intention live.
+      throw presentLocalPersistenceError(error);
+    }
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
     applySettings();
@@ -2927,6 +2908,25 @@ ${site.url}`;
     void activeSpacePersistQueue.catch(error => console.warn(`${PRODUCT_NAME}: could not persist active Space`, error));
   }
 
+  function presentLocalPersistenceError(error) {
+    const key = error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED
+      ? "localStorageFullUnsaved"
+      : error?.code === ERROR_CODES.STORAGE_LOCAL_WRITE_FAILED
+        ? "localSaveFailedUnsaved"
+        : "";
+    if (!key) return error;
+    const message = t(key);
+    try {
+      error.message = message;
+      return error;
+    } catch {
+      const presented = new Error(message);
+      presented.code = error?.code;
+      try { presented.cause = error; } catch {}
+      return presented;
+    }
+  }
+
   async function saveState({ localCacheOnly = false, crossSpaceSyncIntent = null, artworkChanged = false } = {}) {
     const baseState = writeBaseline;
     state.schemaVersion = DEFAULT_STATE.schemaVersion;
@@ -2938,12 +2938,17 @@ ${site.url}`;
       state.shortcuts = repairTopLevelPositionsWithinCapacity(state.shortcuts, visibleTopLevelCapacity(state.settings));
     }
     stateMutationGeneration += 1;
-    const persisted = await writeLocalStateWithBaseline(state, {
-      baseState,
-      baseStateIsCompact: Boolean(baseState),
-      crossSpaceSyncIntent,
-      recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent
-    });
+    let persisted;
+    try {
+      persisted = await writeLocalStateWithBaseline(state, {
+        baseState,
+        baseStateIsCompact: Boolean(baseState),
+        crossSpaceSyncIntent,
+        recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent
+      });
+    } catch (error) {
+      throw presentLocalPersistenceError(error);
+    }
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
     settlePersistedSettingsDraft();
@@ -3548,7 +3553,7 @@ ${site.url}`;
     card.addEventListener("click", event => {
       event.stopPropagation();
       if (activeFolderId === folder.id && !folderPopover.hidden) {
-        commitFolderTitle().catch(console.error);
+        commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
         closeFolder();
         return;
       }
@@ -4383,9 +4388,9 @@ ${site.url}`;
       closeFolder();
     }
   });
-  folderTitleInput.addEventListener("blur", () => commitFolderTitle().catch(console.error));
+  folderTitleInput.addEventListener("blur", () => commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed"))));
   closeFolderButton.addEventListener("click", () => {
-    commitFolderTitle().catch(console.error);
+    commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
     closeFolder();
   });
 
@@ -4736,7 +4741,7 @@ ${site.url}`;
   chooseDetectedFavicon?.addEventListener("click", () => {
     let sourceUrl = "";
     try { sourceUrl = normalizeShortcutUrl(shortcutUrl.value); }
-    catch (error) { showToast(error.message || t("operationFailed")); return; }
+    catch (error) { showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : error.message || t("operationFailed")); return; }
 
     // Permission request remains directly in the user's click. Candidate discovery
     // then runs in the background using the exact same bounded image/SVG fetch
@@ -5146,7 +5151,7 @@ ${site.url}`;
       // maintenance pass continues to repair any other missing icons.
       if (!image && !pendingShortcutBuiltinIcon && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
     } catch (error) {
-      showToast(error.message || t("operationFailed"));
+      showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : error.message || t("operationFailed"));
     }
   });
 
@@ -6040,12 +6045,12 @@ ${site.url}`;
     clearTimeout(backgroundPersistTimer);
     backgroundPersistTimer = null;
     if (delay <= 0) {
-      void saveSettingsState().catch(console.error);
+      void saveSettingsState().catch(error => showToast(error?.message || t("operationFailed")));
       return;
     }
     backgroundPersistTimer = setTimeout(() => {
       backgroundPersistTimer = null;
-      saveSettingsState().catch(console.error);
+      void saveSettingsState().catch(error => showToast(error?.message || t("operationFailed")));
     }, delay);
   }
 
@@ -6116,7 +6121,7 @@ ${site.url}`;
     }).catch(error => {
       frequentlyVisitedCount = previous;
       settingsFrequentlyVisitedCount.value = String(previous);
-      showToast(error.message || t("operationFailed"));
+      showToast(presentLocalPersistenceError(error)?.message || t("operationFailed"));
     });
   });
   settingsThemeWallpapers?.addEventListener("change", persistThemeWallpaperControls);
@@ -6483,7 +6488,11 @@ ${site.url}`;
       markSettingsChanged();
       rememberPendingSettings(["theme"]);
       applyThemeTransition();
-      await saveSettingsState();
+      try {
+        await saveSettingsState();
+      } catch (error) {
+        showToast(error?.message || t("operationFailed"));
+      }
     });
   });
 
@@ -7537,7 +7546,7 @@ ${t("clearSyncWarning")}`);
         setFrequentlyVisitedPermissionActionVisible(frequentlyVisitedEnabled);
         updateFrequentRenderSnapshot([]);
         setFrequentlyVisitedStatus("frequentEnableFailed");
-        showToast(error.message || t("operationFailed"));
+        showToast(presentLocalPersistenceError(error)?.message || t("operationFailed"));
       }
     })();
   });
@@ -7645,6 +7654,17 @@ ${t("clearSyncWarning")}`);
     }
   });
 
+  // Profile import is an explicit replacement: its clock authority must come
+  // from the latest persisted profile, never a possibly stale painted New Tab.
+  // Return the exact compact snapshot for the transaction-time race guard.
+  async function prepareProfileImportAgainstLocalAuthority(parsedState) {
+    const loaded = await ensureLocalStorage({ hydrateAssets: "all" });
+    return {
+      importedState: stampImportedProfileState(parsedState, loaded.state),
+      compactBaseline: loaded.compactBaseline
+    };
+  }
+
   importProfileButton?.addEventListener("click", () => importProfileFile?.click());
   importProfileFile?.addEventListener("change", async () => {
     const file = importProfileFile.files?.[0];
@@ -7657,7 +7677,8 @@ ${t("clearSyncWarning")}`);
         `${t("profileImportConfirm")}\n\n${meta?.syncEnabled && meta?.syncInitialized ? t("profileImportConfirmSync") : t("profileImportConfirmLocal")}`
       );
       if (!confirmed) return;
-      let importedState = stampImportedProfileState(parsed.state);
+      const preparedImport = await prepareProfileImportAgainstLocalAuthority(parsed.state);
+      let importedState = preparedImport.importedState;
       initializeThemeWallpaperDimsForState(importedState);
       importedState = normalizeState(importedState);
       const importedFrequentEnabled = parsed.preferences.frequentlyVisitedEnabled === true;
@@ -7682,7 +7703,8 @@ ${t("clearSyncWarning")}`);
       let persisted;
       try {
         persisted = await writeLocalStateWithBaseline(importedState, {
-          recordSyncMutation: true
+          recordSyncMutation: true,
+          requireUnchangedCompactState: preparedImport.compactBaseline
         });
       } catch (error) {
         try { await brandingModule.rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
@@ -7709,7 +7731,7 @@ ${t("clearSyncWarning")}`);
       scheduleAppearanceHintRefresh(state.settings);
       refreshFirstPaintCaches(state, meta);
       if (meta?.syncEnabled && meta?.syncInitialized) {
-        const published = await sendSyncMessage("mosaicsync:bootstrap-local");
+        const published = await sendSyncMessage("mosaicsync:bootstrap-local", { profileImport: true });
         if (!published?.ok) throw new Error("PROFILE_SYNC_PUBLISH_FAILED");
         meta = published.meta || meta;
         updateSyncUi(meta);
@@ -7719,11 +7741,15 @@ ${t("clearSyncWarning")}`);
     } catch (error) {
       console.error(error);
       showToast(
-        error?.message === "PROFILE_SYNC_PUBLISH_FAILED"
+        error?.code === "PROFILE_IMPORT_STALE_BASELINE"
+          ? t("profileImportChangedRetry")
+          : error?.message === "PROFILE_SYNC_PUBLISH_FAILED"
           ? t("profilePublishFailed")
           : error?.code === "PROFILE_TOO_LARGE"
             ? t("profileImportTooLarge")
-            : t("profileImportFailed")
+            : error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED || isQuotaExceededError(error)
+              ? t("profileImportStorageFull")
+              : t("profileImportFailed")
       );
     }
   });
@@ -7774,7 +7800,7 @@ ${t("clearSyncWarning")}`);
     if (!folderPopover.hidden && !shortcutDialog?.open && !folderPopover.contains(event.target)) {
       const anchor = activeFolderAnchorId ? document.querySelector(`.shortcut-slot[data-id="${CSS.escape(activeFolderAnchorId)}"]`) : null;
       if (!anchor?.contains(event.target)) {
-        commitFolderTitle().catch(console.error);
+        commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
         closeFolder();
       }
     }

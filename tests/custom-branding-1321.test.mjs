@@ -39,7 +39,7 @@ async function recomputeIntegrity(pkg) {
 }
 
 test("1.32.1.1 Custom Branding is a separate versioned storage.local domain", () => {
-  assert.equal(constants.VERSION, "1.33.0.38");
+  assert.equal(constants.VERSION, "1.33.0.44");
   assert.equal(constants.LOCAL_CUSTOM_BRANDING_KEY, "mosaicsync.custom-branding.v1");
   assert.equal(branding.CUSTOM_BRANDING_SCHEMA_VERSION, 1);
   assert.deepEqual(branding.DEFAULT_CUSTOM_BRANDING, { schemaVersion: 1, enabled: false, text: "", logo: "" });
@@ -142,7 +142,7 @@ test("1.32.1.1 source ownership keeps branding outside Sync/Recovery and transac
   assert.equal(backgroundSource.includes("custom-branding.js"), false, "Sync/Recovery background must not import branding");
   assert.match(newtab, /beginCustomBrandingImport\(parsed\.branding\)/);
   assert.match(newtab, /could not roll back imported Custom Branding/);
-  assert.match(welcome, /stageStartingSourceCandidate\("profile", importedState, parsed\.preferences, parsed\.branding\)/);
+  assert.match(welcome, /stageStartingSourceCandidate\("profile", importedState, parsed\.preferences, parsed\.branding, loaded\.compactBaseline\)/);
   assert.match(welcome, /branding: source === "profile"/);
   assert.match(welcome, /rollbackCustomBrandingImport\(brandingTransaction\)/);
   assert.match(welcome, /function discardPendingSourceCandidate\(\) \{\s*pendingSourceCandidate = null;/);

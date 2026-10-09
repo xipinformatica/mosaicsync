@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.33.0.44
+
+- **More helpful save errors:** If there isn't enough storage space when you turn Frequently Visited on or off or change the number of sites, MosaicSync tells you what happened in your language instead of showing a technical error.
+- **Clear backup-import advice:** If your device runs out of space while importing a profile, MosaicSync asks you to free space and try again, including during first-time setup.
+- **Journey 4 reliability review:** All earlier import, bookmark, timestamp and save-failure protections remain in place. No new permissions or changes to how Sync and Recovery store data.
+
+## 1.33.0.43
+
+- Makes saving a folder name, wallpaper or theme choice more reliable to understand: if saving fails, MosaicSync now shows the same clear warning used for other unsaved edits instead of silently logging the failure.
+- Space names and the multiple-Spaces setting now show the correct save-failure guidance when browser storage is full or unavailable.
+- Carries forward the previous release's safer imports, protected shortcut addresses and bookmark compatibility. No new permissions or changes to Sync/Recovery formats.
+
+## 1.33.0.42
+
+- Restoring a backup during setup no longer overwrites changes another tab saved while you were choosing which copy to use. If that happens, MosaicSync returns to the starting-layout choices so you can try again.
+- New shortcuts cannot contain usernames or passwords in their addresses. Existing shortcuts and browser bookmarks remain visible and intact.
+- Import and address warnings now appear in all 33 supported languages, including when adding a shortcut from Frequently Visited. No new permissions.
+
+## 1.33.0.41
+
+- Allows a healthy profile backup to restore normal editing even when the existing profile already contains damaged internal timestamps.
+- Protects profile import from replacing newer changes saved by another MosaicSync tab while the import was being prepared.
+- No new permissions or changes to Sync/Recovery storage formats.
+
+## 1.33.0.40
+
+- Protects profile import from deliberately extreme internal logical timestamps that could otherwise make later edits impossible.
+- Ensures an explicit whole-profile import reliably outranks the profile it replaces, including fine-grained Settings and existing cross-Space ordering state.
+- Distinguishes device-local storage quota exhaustion from other local save failures while keeping raw browser diagnostics out of user-facing text.
+- Keeps failed edits live in the current New Tab and retries that same intention on the next successful save instead of pretending the failed write committed.
+- Adds clear localized save-failure guidance in all 33 MosaicSync UI languages. When device storage is full, MosaicSync now tells the user to remove the image/wallpaper just added or free space from another MosaicSync tab before retrying; generic failures warn that the unsaved change may be lost if this tab closes or another tab/device updates first.
+- Keeps browser permissions unchanged: this release deliberately does not add `unlimitedStorage`.
+
 ## 1.33.0.38
 
 - Makes image safety more reliable when a file's declared type does not match its actual raster data, while keeping the existing compatibility fallback for unknown images.

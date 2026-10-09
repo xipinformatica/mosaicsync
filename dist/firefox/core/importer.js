@@ -25,7 +25,7 @@ export async function fetchFirefoxShortcuts(limit = FIREFOX_NATIVE_MAX_SHORTCUTS
   if (!Array.isArray(sites)) return [];
   const timestamp = now();
   return sites
-    .map(site => ({ site, safeUrl: globalThis.__mosaicsyncSafeShortcutNavigationUrl?.(site?.url) || "" }))
+    .map(site => ({ site, safeUrl: globalThis.__mosaicsyncSafeShortcutCreationUrl?.(site?.url) || "" }))
     .filter(entry => entry.safeUrl)
     .slice(0, requested)
     .map(({ site, safeUrl }, index) => ({

@@ -146,6 +146,16 @@ async function handleCommand(message){
       await send({type:'mosaicsync:get-sync-status'});
       result={ok:true};
     }
+    else if(command==='restore-profile'){
+      // Simulate the profile state that New Tab persists after its confirmed
+      // whole-profile import, then exercise the REAL production background
+      // publication path with the import-only authority flag.
+      const current=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+      const stamped=model.stampImportedProfileState(args.state,current);
+      await local.set({[constants.LOCAL_STATE_KEY]:stamped});
+      const published=await send({type:'mosaicsync:bootstrap-local',profileImport:true});
+      result={published,ids:idsInState(stamped)};
+    }
     else if(command==='sync-changed'){
       for(const listener of events.onStorageChanged.listeners) listener(args.changes||{},'sync');
       // Barrier after the Sync event enqueue.

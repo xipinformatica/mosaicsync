@@ -114,6 +114,8 @@ test("1.30.18 profile import remains disclosed whole-profile authority", () => {
   const english = fs.readFileSync("src/shared/core/i18n-locales/en.js", "utf8");
   assert.match(english, /This replaces both Spaces, folders, settings, icons and wallpapers on this browser\./);
   assert.match(english, /the imported profile will also become the synchronized MosaicSync profile on your other computers/);
-  assert.match(source, /function stampImportedProfileState\(importedState\)[\s\S]*?for \(const spaceId of SPACE_IDS\)[\s\S]*?settingsClock: Object\.fromEntries\(SETTINGS_SYNC_CLOCK_KEYS\.map/s);
-  assert.match(source, /let importedState = stampImportedProfileState\(parsed\.state\);/);
+  const modelSource = fs.readFileSync("src/shared/core/model.js", "utf8");
+  assert.match(modelSource, /export function stampImportedProfileState\(importedState, currentState = null\)[\s\S]*?settingsClock: Object\.fromEntries\(SETTINGS_SYNC_CLOCK_KEYS\.map/s);
+  assert.match(source, /const preparedImport = await prepareProfileImportAgainstLocalAuthority\(parsed\.state\);/);
+  assert.match(source, /let importedState = preparedImport\.importedState;/);
 });

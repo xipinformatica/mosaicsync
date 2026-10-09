@@ -232,7 +232,7 @@ test("failed atomic local-state writes preserve the previous compact state and a
   browser.storage.local.failNextSet = true;
   await assert.rejects(
     () => storage.writeLocalState(intended, { baseState: storage.createWriteBaseline(persistedInitial) }),
-    error => error?.code === "STORAGE_LOCAL_WRITE_FAILED" && error?.cause?.name === "QuotaExceededError"
+    error => error?.code === "STORAGE_LOCAL_QUOTA_EXCEEDED" && error?.cause?.name === "QuotaExceededError"
   );
 
   assert.deepEqual(browser.storage.local.data, beforeFailure);

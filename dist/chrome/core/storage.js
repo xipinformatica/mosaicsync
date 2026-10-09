@@ -55,7 +55,7 @@ import {
   validateLocalAsset,
   LOCAL_ASSET_COLLISION_ERROR_CODE
 } from "./local-assets.js";
-import { ERROR_CODES, codedError } from "./errors.js";
+import { localStorageWriteError } from "./errors.js";
 import {
   createFirstPaintContract,
   createFirstPaintFrequentProjection,
@@ -643,7 +643,8 @@ async function persistNormalizedState(normalized, {
   knownIndex = null,
   baseState = null,
   beforeWrite = null,
-  assetIdMemo = null
+  assetIdMemo = null,
+  requireUnchangedCompactState = null
 } = {}) {
   return withPersistenceWriteLock(async canCollectStale => {
     let finalState = normalized;
@@ -660,6 +661,15 @@ async function persistNormalizedState(normalized, {
     if (recordSyncMutation || effectiveCrossSpaceSyncIntent) transactionKeys.push(LOCAL_META_KEY);
     const transactionRead = await browser.storage.local.get(transactionKeys);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
+    // Explicit whole-profile imports are replacements, not concurrent field
+    // edits. Never merge them with (or silently erase) an update committed by a
+    // second tab after import authority was read. Validate inside the existing
+    // persistence transaction, before any asset/journal/structural write.
+    if (requireUnchangedCompactState && !persistedWorkspacePayloadEqual(requireUnchangedCompactState, latestRaw)) {
+      const stale = new Error("Profile changed on this device during import. Please retry the import.");
+      stale.code = "PROFILE_IMPORT_STALE_BASELINE";
+      throw stale;
+    }
     // Callers identify whether an edit is semantically eligible for Normal Sync;
     // they must not decide whether durable Sync authority is active from cached UI
     // metadata. Recheck durable meta inside this persistence lock/read so authority
@@ -801,12 +811,7 @@ async function persistNormalizedState(normalized, {
       // Never fall back to a compact-state-only write here: that could publish
       // references to asset pixels that were not committed. Preserve the entire
       // previous transaction and surface one stable diagnostic category instead.
-      const wrapped = codedError(
-        ERROR_CODES.STORAGE_LOCAL_WRITE_FAILED,
-        String(error?.message || "Local storage write failed.")
-      );
-      try { wrapped.cause = error; } catch {}
-      throw wrapped;
+      throw localStorageWriteError(error);
     }
 
     // Structural session publication is part of the same cross-context write
@@ -845,7 +850,8 @@ async function writeLocalStateResult(state, {
   crossSpaceSyncIntent = null,
   recordSyncMutation = false,
   baseState = null,
-  baseStateIsCompact = false
+  baseStateIsCompact = false,
+  requireUnchangedCompactState = null
 } = {}) {
   // One short-lived memo spans validation and local-asset projection for this
   // transaction only. It never survives the write or weakens content identity:
@@ -861,6 +867,7 @@ async function writeLocalStateResult(state, {
       crossSpaceSyncIntent,
       recordSyncMutation,
       baseState: baseline,
+      requireUnchangedCompactState,
       beforeWrite,
       assetIdMemo
     });

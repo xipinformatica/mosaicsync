@@ -245,7 +245,7 @@ test("1.30.18.10 FV session ownership is a generated canonical bootstrap key", (
 test("1.30.18.10 cold-start FV live acquisition no longer adds the generic 250ms delay", () => {
   const src = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
   const start = src.indexOf("function schedulePostPaintMaintenance");
-  const end = src.indexOf("function stampImportedProfileState", start);
+  const end = src.indexOf("function paintBrandIdentity", start);
   const block = src.slice(start, end > start ? end : start + 6000);
   assert.match(block, /hasWarmFrequentSites/);
   assert.match(block, /scheduleFrequentlyVisitedRefresh\(frequentlyVisitedEnabled && !hasWarmFrequentSites \? 0 : 250\)/);

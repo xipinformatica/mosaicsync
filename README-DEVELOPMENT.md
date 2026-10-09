@@ -1,6 +1,45 @@
 # MosaicSync development
 
-Current release: 1.33.0.38
+Current release: 1.33.0.44
+
+## 1.33.0.44 — Journey 4 closure (local failure feedback)
+
+- Two deferred 1.33.0.43 issues are closed: Frequently Visited's preference controls no longer leak the raw stable storage diagnostic, and an out-of-space profile import shows actionable advice in New Tab and Welcome (both initial parsing/staging and deferred commit/source resolution).
+- Error detection continues to use existing `ERROR_CODES`/`isQuotaExceededError()` classification. There are no new persistence locks or Sync/Recovery protocol edits. The 33 source UI locale catalogs each include `profileImportStorageFull`.
+- `tests/trust-boundary-133044.test.mjs` checks the live New Tab and Welcome handlers, both storage failure kinds, both toggle directions, error precedence, retry semantics, and all catalogs. Its failure scenarios fail on 1.33.0.43 and pass on 1.33.0.44. All prior Journey 4 regression suites remain unchanged.
+- **Closure decision:** The scoped Journey 4 import/URL/persistence presentation backlog is complete; the intentionally separate distributed recovery design for remote peers with historically poisoned Sync clocks is **not resolved** or implicitly covered by the tests. Legacy URL credentials stay readable and don't silently disappear. Real-browser installation smoke testing remains an external release gate.
+- See `docs/QA-1.33.0.44.md`, `docs/RELEASE-1.33.0.44.md` and `docs/JOURNEY-4-CLOSURE.md`.
+
+## 1.33.0.43 — save-failure UI coverage and inherited .42 audit corrections
+
+- Based directly on the corrected 1.33.0.42 GitHub source (`c656ea0a…`), already containing the B-1 browser-bookmark visibility, B-2 Frequently Visited localization and B-3 actionable Welcome retry fixes. Their existing behavioral regressions remain intact.
+- The four outstanding New Tab save-feedback areas are now classified at their exact ownership points: Space-name / multiple-Space direct storage commits use the same localized quota/generic persistence mapping as `saveState()`; immediate or scheduled wallpaper/appearance persistence reports failures instead of logging only; failed folder-name saves from each exit path now display an error; and theme-choice save errors are caught and shown instead of producing unhandled async rejections.
+- The live unsaved intention and durable write baseline retain their prior failure semantics; no blanket `error.message` replacement was introduced. The new regressions fail 5/6 against the approved .42 source (the sixth verifies the B-1/B-2/B-3 inheritance) and pass on .43.
+- Deliberately **not** included: distributed repair of historically poisoned Sync peers, migration/scrubbing of legacy credential URLs, language-style harmonization, architectural refactors without demonstrated benefit, or changes to storage/Sync/Recovery formats.
+- See `tests/trust-boundary-133043.test.mjs`, `docs/QA-1.33.0.43.md` and `docs/RELEASE-1.33.0.43.md`.
+
+## 1.33.0.42 — Welcome import conflict safety and new-shortcut credentials
+
+Claude GO follow-up (same release version, documentation-only scope expansion plus narrow corrective): browser bookmarks containing HTTP(S) URL credentials are still displayed and can be saved as normal browser bookmarks; the editor, bookmark drag-to-shortcut, Firefox shortcut import, and Frequently Visited add-to-shortcut boundaries still reject credential-bearing URLs. Frequently Visited errors reuse the exact English i18n catalog text, allowing the existing toast translator to display the 33 localized messages. A staged profile whose compact snapshot is no longer current is discarded at the Welcome conflict screen and the user is returned to source selection for an actionable file re-import; stale commits still perform no partial storage/branding/journal writes. The three new regression cases were verified failing before the corrective and passing afterward.
+
+- Welcome/setup keeps the exact locally persisted compact baseline when staging a backup; its eventual source-resolution commit uses the existing persistence transaction guard. A new local edit made in another tab while a backup is staged stops the replacement, rolls back staged branding (including preserving previously absent branding), and leaves the newer profile intact.
+- Welcome and New Tab show a specific localized retry message on this conflict, translated across all 33 UI languages.
+- Only newly authored shortcut URLs and newly imported Firefox native/bookmark URLs are rejected when they embed a username or password. **Existing shortcuts remain readable and navigable:** changing the legacy normalization path would silently remove user data. A comprehensive migration policy for existing credential-containing shortcuts remains out of scope.
+- This release does not change Normal Sync/Recovery clocks, wire formats, permissions, CSP or persistence schemas. Previously poisoned *other devices* are not automatically repaired. The four remaining non-import save-error presentation paths need separate exact-path classification and are deferred rather than mass-replaced.
+
+## 1.33.0.41 — importing from already-poisoned authority and stale New Tabs
+
+1.33.0.41 corrects two import follow-ups identified after 1.33.0.40. An explicit profile restore can recover normal editing when the current device has previously stored impossible near-`Number.MAX_SAFE_INTEGER` clocks. The imported *backup file* is untrusted beyond the 366-day future-skew limit, while *already-stored local or cloud* clocks preserve causal authority even when a real device clock was set years ahead: only values exceeding JavaScript Date's maximum representable millisecond timestamp (`8_640_000_000_000_000`) are discarded on an explicit restore. This closes an independently reproduced two-device regression where a device 400 days ahead could keep deleted shortcuts or reject a restore. Normal edits and Sync reconciliation continue using strict `nextMutationTime()` without any exception. The special import rule applies to both Personal and Work explicit authoritative publication only. The recovery guarantee is for this device: other devices that already accepted impossible clocks, and pre-existing poisoned cloud snapshots, may still fail to converge through normal Sync without further recovery work.
+
+New Tab now reads the authoritative persisted profile after file parsing and user confirmation, before import stamping. The imported profile carries the exact compact persistent snapshot to `storage.js`; a second tab's update landing before commit causes `PROFILE_IMPORT_STALE_BASELINE` *inside the existing write transaction*, before changing profile, assets, pending Sync journal, or branding. It cannot be silently overwritten or rebased into a supposedly whole-profile replacement. Welcome already re-read persisted state before stamping; its behavior is unchanged. Permanent protection: `tests/trust-boundary-133041.test.mjs`. No persisted schema, wire format, browser permission or privacy changes.
+
+## 1.33.0.40 — local persistence failure and quota resilience
+
+1.33.0.40 keeps failed user edits live in the New Tab while making local persistence failures explicit and stable. `core/storage.js` now distinguishes local quota exhaustion from a generic `storage.local` write failure without exposing raw browser diagnostics to UI; the original platform error remains attached as the diagnostic cause. `newtab.js` owns the localized presentation boundary, warning that the change is not yet saved and that the tab should remain open while the user frees space or retries. A later successful save carries the same still-live intention and advances the durable baseline only after persistence actually succeeds. All 33 UI catalogs include the two failure messages. No `unlimitedStorage` permission is added. Permanent protection: `tests/trust-boundary-133040.test.mjs`.
+
+## 1.33.0.39 — imported logical-clock trust boundary
+
+1.33.0.39 hardens whole-profile import against hostile logical clocks. Imported record/workspace/Settings clocks may influence the replacement stamp only when they remain within a bounded future-skew window; absurd near-ceiling values cannot exhaust later edits. The current authoritative profile's clocks are always observed so an explicit import outranks what it replaces, including fine-grained Settings clocks and existing cross-Space namespace generations. Existing namespace markers are rebased only when needed, avoiding gratuitous Sync bytes for shortcuts that have never crossed Spaces. New Tab and Welcome/setup now share the same model-owned import stamping primitive. No Sync/Recovery format, persisted schema, permission or feature change. Permanent protection: `tests/trust-boundary-133039.test.mjs`.
 
 ## 1.33.0.38 — shared artwork policy and byte-signature image preflight
 
