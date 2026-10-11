@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
-    "test": "node tools/build.mjs && node --test tests/*.test.mjs",
+    "test": "node tools/build.mjs && node tools/test-inventory.mjs --check && node --test tests/*.test.mjs",
     "test:groups": "node tools/run-test-group.mjs --list",
     "test:startup": "node tools/run-test-group.mjs startup",
     "test:newtab": "node tools/run-test-group.mjs newtab",
@@ -29,6 +29,9 @@
     "certify:mechanical": "node tools/certify-release.mjs --skip-browser-smoke",
     "perf:baseline": "node tools/build.mjs && node tools/performance-baseline.mjs",
     "perf:critical-path": "node tools/build.mjs && node tools/critical-path-census.mjs",
-    "perf:storage-background": "node tools/build.mjs && node tools/storage-background-census.mjs"
+    "perf:storage-background": "node tools/build.mjs && node tools/storage-background-census.mjs",
+    "test:inventory": "node tools/test-inventory.mjs --check",
+    "test:inventory:update": "node tools/test-inventory.mjs --write",
+    "smoke:release": "python tools/package.py --firefox-dev && node tools/browser-smoke.mjs --browser=all"
   }
 }

@@ -3474,7 +3474,20 @@ export function startBackground(adapter) {
     void clearSessionFrequentlyVisitedSnapshot();
   });
 
-  browser.runtime.onMessage.addListener((message, sender) => {
+  // Chrome <148 (and Chromium forks) require the callback response protocol.
+  // Returning a Promise directly leaves the receiver hanging on those engines.
+  // Keep the existing dispatcher intact and adapt replies at the listener edge.
+  browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    const result = handleRuntimeMessage(message, sender);
+    if (result === undefined) return undefined; // Ignored/foreign message: no reply.
+    Promise.resolve(result).then(
+      value => sendResponse(value),
+      error => sendResponse({ ok: false, error: String(error?.message || error) })
+    );
+    return true; // Keep the callback channel open through asynchronous work.
+  });
+
+  function handleRuntimeMessage(message, sender) {
     // runtime.onMessage is intended for our own extension contexts; external
     // extensions use onMessageExternal. Keep an explicit sender assertion anyway
     // so a future manifest/API change cannot accidentally widen this privileged
@@ -3526,7 +3539,7 @@ export function startBackground(adapter) {
       default:
         return Promise.resolve({ ok: false, error: "Unknown MosaicSync message." });
     }
-  });
+  }
 
   // -----------------------------------------------------------------------------
   // Sync bootstrap and reconciliation

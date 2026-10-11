@@ -1,3 +1,4 @@
+// @kind browser
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -74,7 +75,7 @@ class FakeRealBrowserClient {
 
 test("1.30.18.33 browser-smoke CLI and capabilities keep the production extension runtime external", () => {
   assert.deepEqual(parseBrowserSmokeArgs(["--browser=firefox", "--probe"]), {
-    browser: "firefox", probe: true, keepProfile: false
+    browser: "firefox", probe: true, keepProfile: false, artifactsDir: ""
   });
   assert.throws(() => parseBrowserSmokeArgs(["--browser=safari"]), /Unsupported browser-smoke target/);
 
@@ -123,7 +124,7 @@ test("1.30.18.33 browser-smoke environment discovery honors explicit browser/dri
 for (const kind of ["firefox", "chrome"]) {
   test(`1.30.18.33 real-${kind} smoke contract exercises startup, Settings, Spaces, FV state and shortcut navigation`, async () => {
     const client = new FakeRealBrowserClient(kind);
-    const result = await exerciseRealBrowserSession(client, kind);
+    const result = await exerciseRealBrowserSession(client, kind, { freshSetup: false });
     assert.equal(result.kind, kind);
     assert.equal(result.finalUrl, "https://example.com/");
     assert.ok(client.calls.some(([name, value]) => name === "find" && value === "#settingsButton"));
@@ -134,5 +135,5 @@ for (const kind of ["firefox", "chrome"]) {
 
 test("1.30.18.33 real-browser smoke fails closed when Frequently Visited startup state is inconsistent", async () => {
   const client = new FakeRealBrowserClient("firefox", { brokenFrequentlyVisited: true });
-  await assert.rejects(() => exerciseRealBrowserSession(client, "firefox"), /Frequently Visited disabled-state wiring is inconsistent/);
+  await assert.rejects(() => exerciseRealBrowserSession(client, "firefox", { freshSetup: false }), /Frequently Visited disabled-state wiring is inconsistent/);
 });

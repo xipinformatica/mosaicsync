@@ -1,7 +1,9 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createNewTabPersistenceGateway } from "../src/shared/newtab/persistence-gateway.js";
 import { webcrypto } from "node:crypto";
 import { readdir } from "node:fs/promises";
 
@@ -187,6 +189,7 @@ test("1.33.0.40 a failed user save keeps the live edit and the next successful s
     settlePersistedSettingsDraft() {}, scheduleAppearanceHintRefresh() {}, refreshRenderManifestAfterArtworkChange() {}, refreshFirstPaintCaches() {},
     meta: {}, Object, Number, Boolean, structuredClone
   });
+  context.persistenceGateway = createNewTabPersistenceGateway(context.writeLocalStateWithBaseline);
   vm.runInContext(extractFunction(source, "saveState"), context);
 
   await assert.rejects(() => context.saveState(), error => error?.message === "friendly-quota");

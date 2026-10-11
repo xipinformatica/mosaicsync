@@ -1,3 +1,4 @@
+// @kind behavioral
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
@@ -20,7 +21,7 @@ test("1.30.18.36 targeted test groups are deterministic, non-empty and cover eve
 
 test("1.30.18.36 package commands expose focused groups without weakening the authoritative full suite", () => {
   const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-  assert.equal(pkg.scripts.test, "node tools/build.mjs && node --test tests/*.test.mjs");
+  assert.equal(pkg.scripts.test, "node tools/build.mjs && node tools/test-inventory.mjs --check && node --test tests/*.test.mjs");
   assert.equal(pkg.scripts["test:groups"], "node tools/run-test-group.mjs --list");
   for (const name of EXPECTED_GROUPS) {
     assert.equal(pkg.scripts[`test:${name}`], `node tools/run-test-group.mjs ${name}`);

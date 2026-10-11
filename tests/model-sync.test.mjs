@@ -1,3 +1,4 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DEFAULT_SETTINGS } from "../dist/firefox/core/constants.js";

@@ -1,3 +1,4 @@
+// @kind static
 import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +35,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.33.0.44");
+  assert.equal(VERSION, "1.33.0.48");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });

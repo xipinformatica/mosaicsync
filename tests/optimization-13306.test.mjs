@@ -1,3 +1,4 @@
+// @kind static
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -44,11 +45,13 @@ test("1.33.0.6 lazy Bookmarks opening hands first use back to the existing contr
 test("1.33.0.6 critical-path census proves Bookmarks left initial DOM and static module closure", () => {
   const raw = execFileSync(process.execPath, ["tools/critical-path-census.mjs", "--json"], { encoding: "utf8" });
   const parsed = JSON.parse(raw);
-  assert.ok(parsed.initialDom.elementCount <= 598, `expected <=598 initial elements, got ${parsed.initialDom.elementCount}`);
-  assert.ok(parsed.initialDom.secondaryElementCount <= 490, `expected <=490 secondary elements, got ${parsed.initialDom.secondaryElementCount}`);
+  // Neofix 3: the three fixed theme SVGs add exactly 12 settings-only elements; no primary first-paint or JS bindings added.
+  assert.ok(parsed.initialDom.elementCount <= 610, `expected <=610 initial elements, got ${parsed.initialDom.elementCount}`);
+  assert.ok(parsed.initialDom.secondaryElementCount <= 502, `expected <=502 secondary elements, got ${parsed.initialDom.secondaryElementCount}`);
   assert.ok(parsed.eagerDomBindings.total <= 186, `expected <=186 eager bindings, got ${parsed.eagerDomBindings.total}`);
   assert.ok(parsed.eagerDomBindings.secondary <= 151, `expected <=151 secondary eager bindings, got ${parsed.eagerDomBindings.secondary}`);
-  assert.ok(parsed.moduleEvaluation.staticGraph.moduleCount <= 23, `expected <=23 static modules, got ${parsed.moduleEvaluation.staticGraph.moduleCount}`);
+  // Neofix 4: one small statically imported persistence gateway; no extra first-frame UI or storage reads.
+  assert.ok(parsed.moduleEvaluation.staticGraph.moduleCount <= 24, `expected <=24 static modules, got ${parsed.moduleEvaluation.staticGraph.moduleCount}`);
   assert.ok(parsed.deferredModules.roots.some(entry => entry.root === "newtab/bookmarks-controller.js"), "Bookmarks controller must be deferred");
   assert.ok(parsed.deferredModules.roots.some(entry => entry.root === "newtab/bookmarks-shell.js"), "Bookmarks shell must be deferred");
 });

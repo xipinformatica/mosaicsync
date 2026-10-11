@@ -70,7 +70,7 @@ const api={
     id:runtimeId,
     getURL:path=>`${browserName==='chrome'?'chrome-extension':'moz-extension'}://${runtimeId}/${path}`,
     onInstalled:events.onInstalled,onStartup:events.onStartup,onMessage:events.onMessage,
-    async sendMessage(message){ const fn=events.onMessage.listeners[0]; return fn?fn(message,{id:runtimeId}):undefined; }
+    async sendMessage(message){ return send(message); }
   },
   action:{onClicked:events.onActionClicked},
   storage:{local,sync,session,onChanged:events.onStorageChanged},
@@ -109,7 +109,10 @@ await local.set({
 
 await import(`${pathToFileURL(resolve(root,`dist/${browserName}/background/background.js`)).href}?device=${deviceId}-${Date.now()}`);
 if(events.onMessage.listeners.length!==1) throw new Error('production background did not install runtime message listener');
-const send=message=>events.onMessage.listeners[0](message,{id:runtimeId});
+const send=message=>new Promise((resolve,reject)=>{
+  const response=events.onMessage.listeners[0](message,{id:runtimeId},resolve);
+  if(response!==true) reject(new Error(`Runtime callback channel closed: ${message?.type}`));
+});
 
 function idsInState(raw){
   const out=[];

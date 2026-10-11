@@ -1,9 +1,10 @@
+// @kind static
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
-const CURRENT_VERSION = "1.33.0.44";
+const CURRENT_VERSION = "1.33.0.48";
 const STEP1_VERSION = "1.33.0.2";
 async function read(path) { return readFile(path, "utf8"); }
 

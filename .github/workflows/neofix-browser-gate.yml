@@ -1,0 +1,124 @@
+name: MosaicSync release browser gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main, 'release/**']
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-browser-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mechanical:
+    name: Regression and package contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test inventory and full regression suite
+        run: |
+          npm run build
+          npm run test:inventory
+          node --test --test-concurrency=4 tests/*.test.mjs
+      - name: Runtime and release checks
+        run: |
+          npm run reachability
+          python3 tools/release_contract.py
+          python3 tools/package.py
+      - name: Upload reproducible source and store ZIPs
+        uses: actions/upload-artifact@v4
+        with:
+          name: mosaicsync-mechanical-candidate
+          path: |
+            artifacts/mosaicsync-*-firefox.zip
+            artifacts/mosaicsync-*-chrome.zip
+            artifacts/mosaicsync-*-github-ready.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  browser-smoke:
+    name: Real browser / ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: 'Chromium 141 (pre-Promise listeners)', kind: chrome, version: '141' }
+          - { name: 'Chromium stable', kind: chrome, version: stable }
+          - { name: 'Firefox 140 baseline', kind: firefox, version: '140.0' }
+          - { name: 'Firefox current', kind: firefox, version: latest }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install browser display dependencies
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Install Chrome for Testing and matching ChromeDriver
+        if: matrix.kind == 'chrome'
+        id: chrome
+        uses: browser-actions/setup-chrome@v2
+        with:
+          chrome-version: ${{ matrix.version }}
+          install-chromedriver: true
+      - name: Install Firefox
+        if: matrix.kind == 'firefox'
+        id: firefox
+        uses: browser-actions/setup-firefox@v1
+        with:
+          firefox-version: ${{ matrix.version }}
+      - name: Install pinned GeckoDriver
+        if: matrix.kind == 'firefox'
+        run: |
+          curl --fail --location --retry 3 --silent --show-error \
+            https://github.com/mozilla/geckodriver/releases/download/v0.36.0/geckodriver-v0.36.0-linux64.tar.gz \
+            -o /tmp/geckodriver.tar.gz
+          mkdir -p "$HOME/bin"
+          tar -xzf /tmp/geckodriver.tar.gz -C "$HOME/bin"
+          chmod +x "$HOME/bin/geckodriver"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: Build production packages and test-only Firefox addon
+        run: |
+          node tools/build.mjs
+          python3 tools/package.py
+          python3 tools/package.py --firefox-dev
+      - name: Real fresh-profile setup and background/shortcut smoke
+        env:
+          MOSAICSYNC_CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
+          MOSAICSYNC_CHROMEDRIVER_BIN: ${{ steps.chrome.outputs.chromedriver-path }}
+          MOSAICSYNC_FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
+        run: node tools/browser-smoke.mjs --browser=${{ matrix.kind }} --artifacts-dir=smoke-evidence
+      - name: Upload pass/fail evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ matrix.kind }}-${{ matrix.version }}
+          path: smoke-evidence/
+          if-no-files-found: warn
+
+  release-gate:
+    name: RELEASE GATE — mechanical and all real browsers
+    needs: [mechanical, browser-smoke]
+    runs-on: ubuntu-24.04
+    if: always()
+    steps:
+      - name: Block release if any browser or mechanical check failed
+        env:
+          MECHANICAL: ${{ needs.mechanical.result }}
+          BROWSERS: ${{ needs.browser-smoke.result }}
+        run: |
+          if [ "$MECHANICAL" != success ] || [ "$BROWSERS" != success ]; then
+            echo "HOLD: mechanical=$MECHANICAL browser-matrix=$BROWSERS" >&2
+            exit 1
+          fi
+          echo 'GO: mechanical suite and all required real browsers succeeded.'

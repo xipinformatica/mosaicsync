@@ -4,6 +4,7 @@ import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import net from "node:net";
+import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -21,11 +22,12 @@ export function isKnownBrandedChromeBinary(candidate) {
 }
 
 export function parseBrowserSmokeArgs(argv = process.argv.slice(2)) {
-  const out = { browser: "all", probe: false, keepProfile: false };
+  const out = { browser: "all", probe: false, keepProfile: false, artifactsDir: "" };
   for (const arg of argv) {
     if (arg === "--probe") out.probe = true;
     else if (arg === "--keep-profile") out.keepProfile = true;
     else if (arg.startsWith("--browser=")) out.browser = arg.slice("--browser=".length);
+    else if (arg.startsWith("--artifacts-dir=")) out.artifactsDir = arg.slice("--artifacts-dir=".length);
     else throw new Error(`Unknown browser-smoke option: ${arg}`);
   }
   if (!new Set(["all", "firefox", "chrome"]).has(out.browser)) {
@@ -175,6 +177,8 @@ export class WebDriverClient {
   refresh() { return this.request("POST", this.endpoint("/refresh"), {}); }
   execute(script, args = []) { return this.request("POST", this.endpoint("/execute/sync"), { script, args }); }
   executeAsync(script, args = []) { return this.request("POST", this.endpoint("/execute/async"), { script, args }); }
+  // ChromeDriver's supported pass-through to the active Chrome DevTools target.
+  cdp(cmd, params = {}) { return this.request("POST", this.endpoint("/goog/cdp/execute"), { cmd, params }); }
   async find(css) {
     const value = await this.request("POST", this.endpoint("/element"), { using: "css selector", value: css });
     return value?.[ELEMENT_KEY] || value?.ELEMENT || "";
@@ -183,6 +187,7 @@ export class WebDriverClient {
   installFirefoxAddon(addonPath) {
     return this.request("POST", this.endpoint("/moz/addon/install"), { path: addonPath, temporary: true });
   }
+  screenshot() { return this.request("GET", this.endpoint("/screenshot")); }
   async deleteSession() {
     if (!this.sessionId) return;
     try { await this.request("DELETE", this.endpoint("")); } catch {}
@@ -203,7 +208,10 @@ export function browserCapabilities(kind, { browserBinary, chromeExtensionPath, 
           "browser.startup.homepage_override.mstone": "ignore",
           "startup.homepage_welcome_url": "",
           "startup.homepage_welcome_url.additional": "",
-          "datareporting.policy.dataSubmissionEnabled": false
+          "datareporting.policy.dataSubmissionEnabled": false,
+          // CI explicitly suppresses the native optional-website-permission dialog;
+          // its outcome is not a production permission-flow test.
+          "extensions.webextOptionalPermissionPrompts": false
         }
       }
     };
@@ -231,6 +239,34 @@ export function browserCapabilities(kind, { browserBinary, chromeExtensionPath, 
       args
     }
   };
+}
+
+// Smoke navigation must never depend on public DNS/TLS or outside websites.
+// The target is a short-lived local endpoint reachable only from this runner.
+export async function startLocalNavigationTarget() {
+  const server = createServer((request, response) => {
+    response.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+    response.end("<!doctype html><title>MosaicSync browser smoke navigation</title><p>Navigation reached local smoke target.</p>");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  return {
+    url: `http://127.0.0.1:${server.address().port}/mosaicsync-smoke`,
+    close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+  };
+}
+
+// Only the automated Chromium session declines optional website access. This
+// is injected before extension pages load, avoiding an unanswerable native
+// browser permission dialog while keeping the real Welcome/UI path intact.
+export async function configureChromeSmokePermissionDecision(client) {
+  await client.cdp("Page.enable");
+  await client.cdp("Page.addScriptToEvaluateOnNewDocument", {
+    source: "if (globalThis.chrome?.permissions?.request) chrome.permissions.request = async () => false;"
+  });
+  return "website-access: simulated decline (Chrome DevTools pre-document injection)";
 }
 
 const SEED_SCRIPT = String.raw`
@@ -317,12 +353,82 @@ async function waitForReadySnapshot(client, timeoutMs = 12000) {
   throw new Error(`MosaicSync did not reach interactionReady in the real browser. Last snapshot: ${JSON.stringify(last)}`);
 }
 
-export async function exerciseRealBrowserSession(client, kind) {
+const MESSAGE_ROUNDTRIP_SCRIPT = String.raw`
+const done = arguments[arguments.length - 1];
+(async () => {
+  const api = globalThis.browser || globalThis.chrome;
+  if (!api?.runtime?.sendMessage) throw new Error("runtime.sendMessage missing");
+  const answer = await api.runtime.sendMessage({ type: "mosaicsync:get-sync-status" });
+  if (api.runtime.lastError) throw new Error(api.runtime.lastError.message);
+  done({ ok: answer?.ok === true, response: answer });
+})().catch(error => done({ ok: false, error: String(error?.message || error) }));
+`;
+
+async function waitForCondition(client, description, script, timeoutMs = 14000) {
+  const deadline = Date.now() + timeoutMs;
+  let last = null;
+  while (Date.now() < deadline) {
+    try { last = await client.execute(script); } catch (error) { last = String(error.message || error); }
+    if (last === true) return;
+    await sleep(160);
+  }
+  throw new Error(`${description} timed out; last result: ${JSON.stringify(last)}`);
+}
+
+async function exerciseFreshSetup(client, kind, { capture = async () => {}, navigationUrl = "https://example.com/" } = {}) {
   const newtab = kind === "firefox" ? "about:newtab" : "chrome://newtab/";
   const scheme = kind === "firefox" ? "moz-extension://" : "chrome-extension://";
   await client.navigate(newtab);
+  const extensionUrl = await waitForExtensionPage(client, scheme, 20000);
+  await waitForCondition(client, "first-run Welcome", `return !!document.getElementById('introContinueButton') && !document.getElementById('introStep').hidden;`);
+  await capture("welcome-intro");
+  await client.click(await client.find("#introContinueButton"));
+  await waitForCondition(client, "Sync-choice step", `return document.getElementById('syncStep')?.hidden === false;`, 25000);
+  await capture("welcome-sync-choice");
+  await client.click(await client.find('label.choice-card:has(input[name="syncChoice"][value="no"])'));
+  await client.click(await client.find("#syncContinueButton"));
+  await waitForCondition(client, "source-choice step", `return document.getElementById('sourceStep')?.hidden === false;`, 20000);
+  await client.click(await client.find('label.choice-card:has(input[name="sourceChoice"][value="empty"])'));
+  await client.click(await client.find("#sourceFinishButton"));
+  await waitForCondition(client, "fresh setup completion", `return location.pathname.endsWith('/newtab/newtab.html') && !!document.getElementById('settingsButton');`, 25000);
+  await capture("newtab-after-setup");
+  const response = await client.executeAsync(MESSAGE_ROUNDTRIP_SCRIPT);
+  if (!response?.ok) throw new Error(`Background status round-trip failed after fresh setup: ${JSON.stringify(response)}`);
+  const completion = await client.executeAsync(`const done = arguments[arguments.length - 1]; (async () => {
+    const api = globalThis.browser || globalThis.chrome;
+    const { LOCAL_META_KEY } = await import(api.runtime.getURL('core/constants.js'));
+    const meta = (await api.storage.local.get(LOCAL_META_KEY))[LOCAL_META_KEY];
+    done({ onboardingCompleted: meta?.onboardingCompleted, syncEnabled: meta?.syncEnabled });
+  })().catch(error => done({error:String(error)}));`);
+  if (!completion?.onboardingCompleted || completion.syncEnabled !== false) throw new Error(`Local setup did not persist its choice: ${JSON.stringify(completion)}`);
+  // Exercise an actual user-created shortcut and its persistence, before the
+  // historical seeded-view smoke. This MUST use the real UI, not storage seeding.
+  await waitForCondition(client, "empty New Tab add control", `return !!document.getElementById('addFirstButton') && !document.getElementById('addFirstButton').hidden;`);
+  await client.click(await client.find('#addFirstButton'));
+  await waitForCondition(client, "shortcut editor", `return !!document.getElementById('shortcutDialog')?.open;`);
+  const submitted = await client.execute(`
+    const title = document.getElementById('shortcutTitle');
+    const url = document.getElementById('shortcutUrl');
+    title.value = 'Neofix Browser Smoke'; url.value = ${JSON.stringify(navigationUrl)};
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+    url.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('shortcutForm').requestSubmit();
+    return true;
+  `);
+  if (submitted !== true) throw new Error('Shortcut submit was not dispatched');
+  await waitForCondition(client, "created shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes('Neofix Browser Smoke'));`, 20000);
+  await client.refresh();
+  await waitForCondition(client, "persisted shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes('Neofix Browser Smoke'));`, 20000);
+  return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true };
+}
+
+export async function exerciseRealBrowserSession(client, kind, { freshSetup = true, capture = async () => {}, navigationUrl = "https://example.com/", permissionDecision = "not-simulated" } = {}) {
+  const newtab = kind === "firefox" ? "about:newtab" : "chrome://newtab/";
+  const scheme = kind === "firefox" ? "moz-extension://" : "chrome-extension://";
+  const setupResult = freshSetup ? await exerciseFreshSetup(client, kind, { capture, navigationUrl }) : null;
+  await client.navigate(newtab);
   const extensionUrl = await waitForExtensionPage(client, scheme);
-  const seeded = await client.executeAsync(SEED_SCRIPT);
+  const seeded = await client.executeAsync(SEED_SCRIPT.replaceAll("https://example.com/", navigationUrl));
   if (!seeded?.ok) throw new Error(`Could not seed real-browser smoke profile: ${seeded?.error || "unknown error"}`);
   // A fresh profile may initially redirect New Tab to the onboarding page.
   // After seeding the completed-onboarding state, navigate through the browser's real New Tab override again rather than merely refreshing onboarding.
@@ -340,6 +446,7 @@ export async function exerciseRealBrowserSession(client, kind) {
   if (!snapshot.settingsDialogVisible || !snapshot.settingsExpanded) {
     throw new Error(`Settings did not open in the real browser: ${JSON.stringify(snapshot)}`);
   }
+  await capture("settings");
 
   await client.execute(`document.querySelector('[data-close-dialog="settingsDialog"]')?.click(); return true;`);
   const workId = await client.find('.space-button[data-space-id="work"]');
@@ -351,18 +458,19 @@ export async function exerciseRealBrowserSession(client, kind) {
   const personalId = await client.find('.space-button[data-space-id="personal"]');
   await client.click(personalId);
   await sleep(120);
+  await capture("newtab-verified");
   const shortcutId = await client.find('.shortcut-slot[data-id="mosaicsync-real-smoke-shortcut"] > .shortcut-card');
   await client.click(shortcutId);
   await sleep(200);
   const navigatedUrl = String(await client.currentUrl());
-  if (!navigatedUrl.startsWith("https://example.com/")) {
+  if (!navigatedUrl.startsWith(navigationUrl)) {
     throw new Error(`Shortcut click did not navigate in the real browser; got ${navigatedUrl}`);
   }
 
-  return { kind, extensionUrl, finalUrl: navigatedUrl, startup: snapshot };
+  return { kind, extensionUrl, freshSetup: setupResult, finalUrl: navigatedUrl, startup: snapshot, permissionDecision, navigationTarget: "local-http" };
 }
 
-export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProfile = false } = {}) {
+export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProfile = false, artifactsDir = "" } = {}) {
   if (kind === "firefox" && (!environment.firefox || !environment.geckodriver)) {
     throw new Error("Firefox smoke requires Firefox and geckodriver. Set MOSAICSYNC_FIREFOX_BIN and MOSAICSYNC_GECKODRIVER_BIN if they are not on PATH.");
   }
@@ -375,7 +483,16 @@ export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProf
   let display = null;
   let driver = null;
   let client = null;
+  let navigationTarget = null;
   try {
+    navigationTarget = await startLocalNavigationTarget();
+    let chromeExtensionPath = path.join(root, "dist", "chrome");
+    if (kind === "chrome") {
+      chromeExtensionPath = path.join(profileRoot, "release-package");
+      const archive = path.join(root, "artifacts", `mosaicsync-${await canonicalVersion(root)}-chrome.zip`);
+      const { execFileSync } = await import("node:child_process");
+      execFileSync("python3", ["-c", "import sys,zipfile;zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2])", archive, chromeExtensionPath]);
+    }
     if (kind === "chrome") display = await startVirtualDisplay(environment.xvfb);
     const driverEnv = { ...process.env };
     if (display?.display) driverEnv.DISPLAY = display.display;
@@ -383,23 +500,48 @@ export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProf
     client = new WebDriverClient(driver.baseUrl);
     const capabilities = browserCapabilities(kind, {
       browserBinary: kind === "firefox" ? environment.firefox : environment.chrome,
-      chromeExtensionPath: path.join(root, "dist", "chrome"),
+      chromeExtensionPath,
       display: display?.display || process.env.DISPLAY || ""
     });
     // Give each real-browser session an isolated browser profile.
     if (kind === "chrome") capabilities["goog:chromeOptions"].args.push(`--user-data-dir=${path.join(profileRoot, "profile")}`);
     await client.newSession(capabilities);
+    const permissionDecision = kind === "chrome"
+      ? await configureChromeSmokePermissionDecision(client)
+      : "website-access: native optional-permission prompts suppressed (Firefox test preference)";
     if (kind === "firefox") {
       const devPackage = path.join(root, "dev-artifacts", `mosaicsync-${await canonicalVersion(root)}-firefox-dev-temporary.zip`);
       try { await fs.access(devPackage); }
       catch { throw new Error(`Firefox development package is missing: ${devPackage}. Run npm run smoke:prepare first.`); }
       await client.installFirefoxAddon(devPackage);
     }
-    return await exerciseRealBrowserSession(client, kind);
+    try {
+      const capture = async name => {
+        if (!artifactsDir) return;
+        await fs.mkdir(artifactsDir, { recursive: true });
+        const screenshot = await client.screenshot();
+        await fs.writeFile(path.join(artifactsDir, `${kind}-${name}.png`), Buffer.from(screenshot, "base64"));
+      };
+      const result = await exerciseRealBrowserSession(client, kind, {
+        capture, navigationUrl: navigationTarget.url, permissionDecision
+      });
+      if (artifactsDir) {
+        await fs.writeFile(path.join(artifactsDir, `${kind}-result.json`), JSON.stringify(result, null, 2) + "\n");
+      }
+      return result;
+    } catch (error) {
+      if (artifactsDir) {
+        await fs.mkdir(artifactsDir, { recursive: true });
+        try { await fs.writeFile(path.join(artifactsDir, `${kind}-failure.png`), Buffer.from(await client.screenshot(), "base64")); } catch {}
+        await fs.writeFile(path.join(artifactsDir, `${kind}-failure.txt`), String(error?.stack || error));
+      }
+      throw error;
+    }
   } finally {
     await client?.deleteSession();
     await driver?.stop();
     if (display?.child?.exitCode == null) display.child.kill("SIGTERM");
+    if (navigationTarget) await navigationTarget.close();
     if (!keepProfile) await fs.rm(profileRoot, { recursive: true, force: true });
   }
 }
@@ -422,7 +564,7 @@ async function main() {
   const results = [];
   for (const kind of targets) {
     process.stdout.write(`Real-browser smoke: ${kind} ... `);
-    const result = await runBrowserSmoke(kind, environment, { keepProfile: options.keepProfile });
+    const result = await runBrowserSmoke(kind, environment, { keepProfile: options.keepProfile, artifactsDir: options.artifactsDir });
     results.push(result);
     console.log("PASS");
   }

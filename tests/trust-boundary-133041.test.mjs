@@ -1,3 +1,4 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -130,8 +131,11 @@ test("1.33.0.41 import commits use the examined durable snapshot guard, without 
   const newtab = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
   const background = fs.readFileSync("src/shared/background/background-core.js", "utf8");
   assert.match(newtab, /const preparedImport = await prepareProfileImportAgainstLocalAuthority\(parsed\.state\)/);
-  assert.match(newtab, /writeLocalStateWithBaseline\(importedState,\s*\{\s*recordSyncMutation:\s*true,\s*requireUnchangedCompactState:\s*preparedImport\.compactBaseline/,
+  assert.match(newtab, /persistenceGateway\.commitImportedProfile\(importedState, preparedImport\.compactBaseline\)/,
     "New Tab must pass the examined snapshot into the committing storage transaction");
+  const gateway = fs.readFileSync("src/shared/newtab/persistence-gateway.js", "utf8");
+  assert.match(gateway, /recordSyncMutation: true,\s*requireUnchangedCompactState: requiredCompactBaseline/,
+    "gateway must forward the guarded import atomically, without relaxing protection");
   assert.match(newtab, /sendSyncMessage\("mosaicsync:bootstrap-local", \{ profileImport: true \}\)/,
     "only confirmed imports opt into the special Sync publication rule");
   assert.match(newtab, /sendSyncMessage\("mosaicsync:bootstrap-local"\)/,

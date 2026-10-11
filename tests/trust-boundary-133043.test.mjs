@@ -1,7 +1,9 @@
+// @kind static
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { createNewTabPersistenceGateway } from "../src/shared/newtab/persistence-gateway.js";
 
 const source = fs.readFileSync('src/shared/newtab/newtab.js', 'utf8');
 
@@ -45,6 +47,7 @@ function workspaceCtx(failingCode) {
     applySettings() {}, render() {}, scheduleAppearanceHintRefresh() {},
     Boolean, Number, Object
   });
+  ctx.persistenceGateway = createNewTabPersistenceGateway(ctx.writeLocalStateWithBaseline);
   vm.runInContext(functionBody('persistWorkspaceSetting') + '\n' + functionBody('setMultipleSpacesEnabled'), ctx);
   return {ctx, trace};
 }

@@ -1,7 +1,9 @@
+// @kind static
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createNewTabPersistenceGateway } from "../src/shared/newtab/persistence-gateway.js";
 
 const source = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
 
@@ -150,7 +152,8 @@ function baseContext(state, hydrator) {
     repairTopLevelPositionsWithinCapacity: shortcuts => shortcuts,
     visibleTopLevelCapacity: () => 999,
     settlePersistedSettingsDraft() {},
-    t: key => key
+    t: key => key,
+    persistenceGateway: null
   };
 }
 
@@ -192,6 +195,7 @@ test("1.32.1.6 Space switch retries hydration after newer authoritative state an
     persistedBase = options.baseState;
     return { state: clone(candidate), compactBaseline: options.baseState };
   };
+  context.persistenceGateway = createNewTabPersistenceGateway(context.writeLocalStateWithBaseline);
   context.state.spaces.work.shortcuts[0].title = "Local edit after switch";
   await context.saveState();
 

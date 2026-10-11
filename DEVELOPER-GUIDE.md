@@ -40,6 +40,10 @@ Useful companion documents:
 
 If you only have 30 minutes before touching code, read this guide, then `docs/ARCHITECTURE.md`, then the ADR that covers the subsystem you intend to change.
 
+### New Tab persistence gateway (Neofix 4)
+
+`src/shared/newtab/persistence-gateway.js` owns **only the low-level call routing** for six New Tab commits. `commitWithBaseline()` reconstructs the pre-existing exact compact-baseline option pair and forwards caller-owned intent flags; `commitImportedProfile()` preserves the complete examined-snapshot guard and the explicit Sync mutation. It must not introduce queues, storage reads, retries or implicit error localization. The New Tab still owns state revisions, pending Settings drafts, current visible unsaved edits, branding rollback, durable-baseline adoption and UI projection. Preserve this separation in maintenance work. Any behavioral change requires a separate behavioral release and an explicit audit.
+
 ### Core correctness invariants
 
 Future changes must preserve these core correctness invariants:
@@ -1566,3 +1570,13 @@ Browser bookmark display, search, and explicit native bookmark creation use `isW
 `writeLocalStateWithBaseline()` is the durable profile boundary. Do not replace its compact-state guard, pending-journal semantics, or underlying Sync ordering with UI-only checks. The New Tab and Welcome profile-import error surfaces must distinguish stale-baseline retry, malformed/oversize file, and storage-local quota failure without exposing raw browser diagnostics; quota failures should advise freeing device storage and retrying. Welcome resolves staged profiles only after the source is chosen, and may write branding provisionally; a failed state commit must roll it back while preserving whether the prior branding record existed.
 
 Frequently Visited display preferences are normal synchronized settings, but derived browser history remains installation-local. Their toggle/count save paths use `presentLocalPersistenceError()` for typed local storage failures; do not expose stable diagnostic strings or falsely mark a failed write as durable. The browser-owned bookmark viewer may show credential-bearing HTTP(S) bookmark URLs, while MosaicSync shortcut authoring must reject embedding usernames/passwords. Existing stored shortcuts must remain readable. This does not authorize changes to the ordinary Normal Sync/Recovery protocol or automatic repair of previously poisoned remote peers.
+
+
+## Neofix release browser gate
+
+A green Node suite and reproducible packages establish mechanical correctness only.
+Before store publication, `.github/workflows/neofix-browser-gate.yml` must succeed with its real-browser matrix (Chromium 141 and current, Firefox 140 and current), including real Welcome setup, a background response, shortcut creation/persistence and the inherited New Tab checks. The workflow's `release-gate` job is the required status check; enable it in the repository's branch protection/rulesets. A workflow file that has never executed does not count as a passing gate.
+
+Run `npm run test:inventory` before tests. Every `tests/*.test.mjs` file must declare exactly one `// @kind behavioral|integration|static|browser` at the top. Regenerate `tests/INVENTORY.json` with `npm run test:inventory:update` after adding or reclassifying files. Labels are file-level primary categories and may conceal mixed assertions. Do not misrepresent them as measured assertion-level behavioral coverage.
+
+The browser smoke test must not skip setup by inserting `onboardingCompleted` before testing the first-run flow. Firefox temporary addon packages use their distinct development Gecko ID; Chromium smoke loads the extracted actual Chrome store ZIP. If smoke testing cannot run, certification is HOLD, not an implied pass.

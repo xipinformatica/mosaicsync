@@ -1,3 +1,4 @@
+// @kind static
 import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";

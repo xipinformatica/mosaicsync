@@ -1,3 +1,4 @@
+// @kind behavioral
 import { readBackgroundSource } from "./harness/background-source.mjs";
 import { createTestRecoveryLifecycle } from "./harness/recovery-lifecycle.mjs";
 import test from "node:test";

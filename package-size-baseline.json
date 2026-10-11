@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.44",
-      "rawBytes": 2533976,
-      "deflatedBytes": 736650,
+      "version": "1.33.0.48",
+      "rawBytes": 2541621,
+      "deflatedBytes": 739496,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,13 +13,13 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 393802,
-          "deflatedBytes": 93345
+          "rawBytes": 394493,
+          "deflatedBytes": 93590
         },
         "localization": {
           "files": 34,
-          "rawBytes": 821660,
-          "deflatedBytes": 244315
+          "rawBytes": 825661,
+          "deflatedBytes": 245887
         },
         "manifest": {
           "files": 1,
@@ -33,18 +33,18 @@
         },
         "newtab-css": {
           "files": 3,
-          "rawBytes": 143132,
-          "deflatedBytes": 26217
+          "rawBytes": 143522,
+          "deflatedBytes": 26358
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 49544,
-          "deflatedBytes": 10614
+          "rawBytes": 50613,
+          "deflatedBytes": 10797
         },
         "newtab-js": {
-          "files": 17,
-          "rawBytes": 481579,
-          "deflatedBytes": 115609
+          "files": 18,
+          "rawBytes": 483072,
+          "deflatedBytes": 116316
         },
         "other": {
           "files": 1,
@@ -68,16 +68,16 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 56663,
-          "deflatedBytes": 14669
+          "rawBytes": 56664,
+          "deflatedBytes": 14667
         }
       },
       "largestFiles": [
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 372511,
-          "deflatedBytes": 81498
+          "rawBytes": 372396,
+          "deflatedBytes": 81534
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 311029,
-          "deflatedBytes": 69127
+          "rawBytes": 311720,
+          "deflatedBytes": 69372
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -106,8 +106,8 @@
         {
           "path": "newtab/newtab-secondary.css",
           "category": "newtab-css",
-          "rawBytes": 100063,
-          "deflatedBytes": 17082
+          "rawBytes": 100453,
+          "deflatedBytes": 17223
         },
         {
           "path": "core/storage.js",
@@ -118,44 +118,56 @@
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 49544,
-          "deflatedBytes": 10614
+          "rawBytes": 50613,
+          "deflatedBytes": 10797
         },
         {
           "path": "core/i18n-locales/el.js",
           "category": "localization",
-          "rawBytes": 44016,
-          "deflatedBytes": 9321
+          "rawBytes": 44237,
+          "deflatedBytes": 9389
         },
         {
           "path": "core/i18n-locales/bg.js",
           "category": "localization",
-          "rawBytes": 40598,
-          "deflatedBytes": 8549
+          "rawBytes": 40805,
+          "deflatedBytes": 8602
         },
         {
           "path": "core/i18n-locales/hu.js",
           "category": "localization",
-          "rawBytes": 26084,
-          "deflatedBytes": 7866
+          "rawBytes": 26246,
+          "deflatedBytes": 7923
         },
         {
           "path": "core/i18n-locales/sk.js",
           "category": "localization",
-          "rawBytes": 24049,
-          "deflatedBytes": 7724
+          "rawBytes": 24176,
+          "deflatedBytes": 7784
         },
         {
           "path": "core/i18n-locales/cs.js",
           "category": "localization",
-          "rawBytes": 23100,
-          "deflatedBytes": 7580
+          "rawBytes": 23221,
+          "deflatedBytes": 7641
         },
         {
           "path": "core/i18n-locales/pl.js",
           "category": "localization",
-          "rawBytes": 23090,
-          "deflatedBytes": 7578
+          "rawBytes": 23211,
+          "deflatedBytes": 7636
+        },
+        {
+          "path": "core/i18n-locales/lt.js",
+          "category": "localization",
+          "rawBytes": 23738,
+          "deflatedBytes": 7556
+        },
+        {
+          "path": "core/i18n-locales/ja.js",
+          "category": "localization",
+          "rawBytes": 29621,
+          "deflatedBytes": 7552
         },
         {
           "path": "newtab/newtab-critical.css",
@@ -164,101 +176,89 @@
           "deflatedBytes": 7532
         },
         {
-          "path": "core/i18n-locales/ja.js",
-          "category": "localization",
-          "rawBytes": 29530,
-          "deflatedBytes": 7505
-        },
-        {
-          "path": "core/i18n-locales/lt.js",
-          "category": "localization",
-          "rawBytes": 23617,
-          "deflatedBytes": 7503
-        },
-        {
           "path": "core/i18n-locales/fr.js",
           "category": "localization",
-          "rawBytes": 25175,
-          "deflatedBytes": 7450
+          "rawBytes": 25289,
+          "deflatedBytes": 7501
         },
         {
           "path": "core/i18n-locales/de.js",
           "category": "localization",
-          "rawBytes": 24624,
-          "deflatedBytes": 7434
+          "rawBytes": 24741,
+          "deflatedBytes": 7494
         },
         {
           "path": "core/i18n-locales/mt.js",
           "category": "localization",
-          "rawBytes": 23867,
-          "deflatedBytes": 7433
+          "rawBytes": 23971,
+          "deflatedBytes": 7479
         },
         {
           "path": "core/i18n-locales/ga.js",
           "category": "localization",
-          "rawBytes": 24797,
-          "deflatedBytes": 7397
+          "rawBytes": 24924,
+          "deflatedBytes": 7445
         },
         {
           "path": "core/i18n-locales/ro.js",
           "category": "localization",
-          "rawBytes": 24503,
-          "deflatedBytes": 7376
+          "rawBytes": 24621,
+          "deflatedBytes": 7426
         },
         {
           "path": "core/i18n-locales/nap.js",
           "category": "localization",
-          "rawBytes": 24151,
-          "deflatedBytes": 7358
+          "rawBytes": 24238,
+          "deflatedBytes": 7389
         },
         {
           "path": "core/i18n-locales/lv.js",
           "category": "localization",
-          "rawBytes": 23251,
-          "deflatedBytes": 7321
+          "rawBytes": 23365,
+          "deflatedBytes": 7362
         },
         {
           "path": "core/i18n-locales/ca.js",
           "category": "localization",
-          "rawBytes": 24286,
-          "deflatedBytes": 7215
+          "rawBytes": 24397,
+          "deflatedBytes": 7260
         },
         {
           "path": "core/i18n-locales/sl.js",
           "category": "localization",
-          "rawBytes": 22637,
-          "deflatedBytes": 7184
+          "rawBytes": 22750,
+          "deflatedBytes": 7232
         },
         {
           "path": "core/i18n-locales/hr.js",
           "category": "localization",
-          "rawBytes": 22625,
-          "deflatedBytes": 7178
+          "rawBytes": 22765,
+          "deflatedBytes": 7219
         },
         {
           "path": "core/i18n-locales/es.js",
           "category": "localization",
-          "rawBytes": 24236,
-          "deflatedBytes": 7155
+          "rawBytes": 24344,
+          "deflatedBytes": 7199
         },
         {
           "path": "core/i18n-locales/fi.js",
           "category": "localization",
-          "rawBytes": 23068,
-          "deflatedBytes": 7113
+          "rawBytes": 23180,
+          "deflatedBytes": 7169
         },
         {
           "path": "core/i18n-locales/it.js",
           "category": "localization",
-          "rawBytes": 23848,
-          "deflatedBytes": 7105
+          "rawBytes": 23968,
+          "deflatedBytes": 7147
         }
       ]
     },
     "chrome": {
-      "version": "1.33.0.44",
-      "rawBytes": 2555667,
-      "deflatedBytes": 751166,
+      "version": "1.33.0.48",
+      "rawBytes": 2563312,
+      "deflatedBytes": 754014,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,18 +267,18 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 393179,
-          "deflatedBytes": 93096
+          "rawBytes": 393870,
+          "deflatedBytes": 93341
         },
         "localization": {
           "files": 34,
-          "rawBytes": 821660,
-          "deflatedBytes": 244315
+          "rawBytes": 825661,
+          "deflatedBytes": 245887
         },
         "manifest": {
           "files": 1,
           "rawBytes": 1368,
-          "deflatedBytes": 554
+          "deflatedBytes": 555
         },
         "manifest-localization": {
           "files": 33,
@@ -287,18 +287,18 @@
         },
         "newtab-css": {
           "files": 3,
-          "rawBytes": 143132,
-          "deflatedBytes": 26217
+          "rawBytes": 143522,
+          "deflatedBytes": 26358
         },
         "newtab-html": {
           "files": 1,
-          "rawBytes": 49594,
-          "deflatedBytes": 10627
+          "rawBytes": 50663,
+          "deflatedBytes": 10811
         },
         "newtab-js": {
-          "files": 17,
-          "rawBytes": 481579,
-          "deflatedBytes": 115609
+          "files": 18,
+          "rawBytes": 483072,
+          "deflatedBytes": 116316
         },
         "other": {
           "files": 1,
@@ -322,16 +322,16 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 56663,
-          "deflatedBytes": 14669
+          "rawBytes": 56664,
+          "deflatedBytes": 14667
         }
       },
       "largestFiles": [
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 372511,
-          "deflatedBytes": 81498
+          "rawBytes": 372396,
+          "deflatedBytes": 81534
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 311029,
-          "deflatedBytes": 69127
+          "rawBytes": 311720,
+          "deflatedBytes": 69372
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -360,8 +360,8 @@
         {
           "path": "newtab/newtab-secondary.css",
           "category": "newtab-css",
-          "rawBytes": 100063,
-          "deflatedBytes": 17082
+          "rawBytes": 100453,
+          "deflatedBytes": 17223
         },
         {
           "path": "core/storage.js",
@@ -372,44 +372,56 @@
         {
           "path": "newtab/newtab.html",
           "category": "newtab-html",
-          "rawBytes": 49594,
-          "deflatedBytes": 10627
+          "rawBytes": 50663,
+          "deflatedBytes": 10811
         },
         {
           "path": "core/i18n-locales/el.js",
           "category": "localization",
-          "rawBytes": 44016,
-          "deflatedBytes": 9321
+          "rawBytes": 44237,
+          "deflatedBytes": 9389
         },
         {
           "path": "core/i18n-locales/bg.js",
           "category": "localization",
-          "rawBytes": 40598,
-          "deflatedBytes": 8549
+          "rawBytes": 40805,
+          "deflatedBytes": 8602
         },
         {
           "path": "core/i18n-locales/hu.js",
           "category": "localization",
-          "rawBytes": 26084,
-          "deflatedBytes": 7866
+          "rawBytes": 26246,
+          "deflatedBytes": 7923
         },
         {
           "path": "core/i18n-locales/sk.js",
           "category": "localization",
-          "rawBytes": 24049,
-          "deflatedBytes": 7724
+          "rawBytes": 24176,
+          "deflatedBytes": 7784
         },
         {
           "path": "core/i18n-locales/cs.js",
           "category": "localization",
-          "rawBytes": 23100,
-          "deflatedBytes": 7580
+          "rawBytes": 23221,
+          "deflatedBytes": 7641
         },
         {
           "path": "core/i18n-locales/pl.js",
           "category": "localization",
-          "rawBytes": 23090,
-          "deflatedBytes": 7578
+          "rawBytes": 23211,
+          "deflatedBytes": 7636
+        },
+        {
+          "path": "core/i18n-locales/lt.js",
+          "category": "localization",
+          "rawBytes": 23738,
+          "deflatedBytes": 7556
+        },
+        {
+          "path": "core/i18n-locales/ja.js",
+          "category": "localization",
+          "rawBytes": 29621,
+          "deflatedBytes": 7552
         },
         {
           "path": "newtab/newtab-critical.css",
@@ -418,94 +430,82 @@
           "deflatedBytes": 7532
         },
         {
-          "path": "core/i18n-locales/ja.js",
-          "category": "localization",
-          "rawBytes": 29530,
-          "deflatedBytes": 7505
-        },
-        {
-          "path": "core/i18n-locales/lt.js",
-          "category": "localization",
-          "rawBytes": 23617,
-          "deflatedBytes": 7503
-        },
-        {
           "path": "core/i18n-locales/fr.js",
           "category": "localization",
-          "rawBytes": 25175,
-          "deflatedBytes": 7450
+          "rawBytes": 25289,
+          "deflatedBytes": 7501
         },
         {
           "path": "core/i18n-locales/de.js",
           "category": "localization",
-          "rawBytes": 24624,
-          "deflatedBytes": 7434
+          "rawBytes": 24741,
+          "deflatedBytes": 7494
         },
         {
           "path": "core/i18n-locales/mt.js",
           "category": "localization",
-          "rawBytes": 23867,
-          "deflatedBytes": 7433
+          "rawBytes": 23971,
+          "deflatedBytes": 7479
         },
         {
           "path": "core/i18n-locales/ga.js",
           "category": "localization",
-          "rawBytes": 24797,
-          "deflatedBytes": 7397
+          "rawBytes": 24924,
+          "deflatedBytes": 7445
         },
         {
           "path": "core/i18n-locales/ro.js",
           "category": "localization",
-          "rawBytes": 24503,
-          "deflatedBytes": 7376
+          "rawBytes": 24621,
+          "deflatedBytes": 7426
         },
         {
           "path": "core/i18n-locales/nap.js",
           "category": "localization",
-          "rawBytes": 24151,
-          "deflatedBytes": 7358
+          "rawBytes": 24238,
+          "deflatedBytes": 7389
         },
         {
           "path": "core/i18n-locales/lv.js",
           "category": "localization",
-          "rawBytes": 23251,
-          "deflatedBytes": 7321
+          "rawBytes": 23365,
+          "deflatedBytes": 7362
         },
         {
           "path": "core/i18n-locales/ca.js",
           "category": "localization",
-          "rawBytes": 24286,
-          "deflatedBytes": 7215
+          "rawBytes": 24397,
+          "deflatedBytes": 7260
         },
         {
           "path": "core/i18n-locales/sl.js",
           "category": "localization",
-          "rawBytes": 22637,
-          "deflatedBytes": 7184
+          "rawBytes": 22750,
+          "deflatedBytes": 7232
         },
         {
           "path": "core/i18n-locales/hr.js",
           "category": "localization",
-          "rawBytes": 22625,
-          "deflatedBytes": 7178
+          "rawBytes": 22765,
+          "deflatedBytes": 7219
         },
         {
           "path": "core/i18n-locales/es.js",
           "category": "localization",
-          "rawBytes": 24236,
-          "deflatedBytes": 7155
+          "rawBytes": 24344,
+          "deflatedBytes": 7199
         },
         {
           "path": "core/i18n-locales/fi.js",
           "category": "localization",
-          "rawBytes": 23068,
-          "deflatedBytes": 7113
+          "rawBytes": 23180,
+          "deflatedBytes": 7169
         },
         {
           "path": "core/i18n-locales/it.js",
           "category": "localization",
-          "rawBytes": 23848,
-          "deflatedBytes": 7105
+          "rawBytes": 23968,
+          "deflatedBytes": 7147
         }
       ]
     }

@@ -7,6 +7,9 @@ const GROUPS = Object.freeze({
   startup: {
     description: "Startup, first-paint, generated New Tab readiness and appearance lifecycle",
     patterns: [
+      /neofix-133047\.test\.mjs$/i,
+      /neofix-133046\.test\.mjs$/i,
+      /neofix-133046-smoke-corrective\.test\.mjs$/i,
       /startup/i,
       /snow-leopard-ii/i,
       /appearance-lifecycle/i,
@@ -14,6 +17,7 @@ const GROUPS = Object.freeze({
       /test-architecture/i,
       /newtab-appearance-color/i,
       /browser-smoke/i,
+      /neofix-133045\.test\.mjs$/i,
       /corrective-13018(?:1[0489]?|9)?\.test\.mjs$/i,
       /corrective-130181[0148]\.test\.mjs$/i,
       /corrective-1301841\.test\.mjs$/i,
@@ -48,6 +52,8 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /neofix-133048\.test\.mjs$/i,
+      /neofix-133047\.test\.mjs$/i,
       /accessibility/i,
       /appearance/i,
       /features/i,
@@ -124,6 +130,9 @@ const GROUPS = Object.freeze({
   sync: {
     description: "Normal Sync, concurrent writes, profile state, distributed merge and journals",
     patterns: [
+      /neofix-133046\.test\.mjs$/i,
+      /neofix-133046-smoke-corrective\.test\.mjs$/i,
+      /neofix-133045\.test\.mjs$/i,
       /concurrent-writes/i,
       /model-sync/i,
       /profile-assets/i,
@@ -225,6 +234,9 @@ const GROUPS = Object.freeze({
   browser: {
     description: "Generated Firefox/Chromium parity, adapters, permissions and browser-native favicon behavior",
     patterns: [
+      /neofix-133046\.test\.mjs$/i,
+      /neofix-133046-smoke-corrective\.test\.mjs$/i,
+      /neofix-133045\.test\.mjs$/i,
       /parity/i,
       /browser-smoke/i,
       /production-background-e2e/i,
@@ -260,6 +272,7 @@ const GROUPS = Object.freeze({
   core: {
     description: "Core state/storage utilities and cross-cutting model invariants",
     patterns: [
+      /neofix-133048\.test\.mjs$/i,
       /storage-registry/i,
       /custom-branding/i,
       /utils\.test/i,
@@ -294,6 +307,9 @@ const GROUPS = Object.freeze({
   release: {
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
+      /neofix-133048\.test\.mjs$/i,
+      /neofix-133046\.test\.mjs$/i,
+      /neofix-133046-smoke-corrective\.test\.mjs$/i,
       /build-/i,
       /custom-branding/i,
       /complexity-inventory/i,

@@ -1,7 +1,9 @@
+// @kind static
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import { createNewTabPersistenceGateway } from "../src/shared/newtab/persistence-gateway.js";
 
 import { DEFAULT_SETTINGS, DEFAULT_STATE } from "../dist/firefox/core/constants.js";
 import { createRenderSnapshot } from "../dist/firefox/core/storage.js";
@@ -135,6 +137,7 @@ test("1.33.0.21 artwork-aware save chooses one preview-aware manifest refresh in
     refreshFirstPaintCaches() { calls.ordinary += 1; },
     refreshRenderManifestAfterArtworkChange() { calls.artwork += 1; }
   };
+  context.persistenceGateway = createNewTabPersistenceGateway(context.writeLocalStateWithBaseline);
   vm.createContext(context);
   vm.runInContext(`${fn}; this.save = saveState;`, context);
   await context.save({ localCacheOnly: true, artworkChanged: true });

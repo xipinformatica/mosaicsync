@@ -1,3 +1,4 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -126,7 +127,7 @@ test("1.32.1.3 branding rollback restores prior value when no newer writer exist
 test("1.32.1.3 Settings import does not install candidate state before durable commit", () => {
   const source=fs.readFileSync("src/shared/newtab/newtab.js","utf8");
   const start=source.indexOf("const brandingTransaction = await brandingModule.beginCustomBrandingImport(parsed.branding)");
-  const write=source.indexOf("persisted = await writeLocalStateWithBaseline(importedState",start);
+  const write=source.indexOf("persisted = await persistenceGateway.commitImportedProfile(importedState",start);
   const install=source.indexOf("state = persisted.state",write);
   assert.ok(start>=0 && write>start && install>write);
   const between=source.slice(start,write);

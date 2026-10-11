@@ -1,3 +1,4 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import { canonicalSiteHost, clearCanonicalHostCacheForTests, getCanonicalHostCacheSizeForTests } from "../dist/firefox/newtab/ui-utils.js";

@@ -197,7 +197,10 @@ const api = {
     onMessage: events.onMessage,
     async sendMessage(message) {
       const listener = events.onMessage.listeners[0];
-      return listener ? listener(message, { id: runtimeId }) : undefined;
+      if (!listener) return undefined;
+      return new Promise((resolve, reject) => {
+        if (listener(message, { id: runtimeId }, resolve) !== true) reject(new Error('Runtime callback channel closed'));
+      });
     }
   },
   action: { onClicked: events.onActionClicked },
@@ -300,7 +303,10 @@ function responseBytes(bytes, type='image/png', url='') {
 // Import the unmodified production background after every browser API/storage fixture is installed.
 await import(`${pathToFileURL(resolve(root, `dist/${browserName}/background/background.js`)).href}?scenario=${encodeURIComponent(scenario)}-${Date.now()}`);
 assert.equal(events.onMessage.listeners.length, 1, 'production background should install one runtime message listener');
-const send = message => events.onMessage.listeners[0](message, { id: runtimeId });
+const send = (message, sender = { id: runtimeId }) => new Promise((resolve, reject) => {
+  const returned = events.onMessage.listeners[0](message, sender, resolve);
+  if (returned !== true) reject(new Error(`Runtime callback channel closed for ${message?.type}`));
+});
 
 function remotePersonalEntries(remoteState, commitId, originDeviceId = "remote-device") {
   const personal = model.workspaceStateNormalized(remoteState, "personal");
@@ -577,7 +583,63 @@ async function restartBackgroundForStep5Measurement(label) {
 }
 
 
-if (scenario === 'snow-step5a-startup-sync-off') {
+if (scenario === 'neofix-133045-legacy-message-callback') {
+  // Simulate Chromium's callback-only MV3 messaging API (versions before
+  // Promise-returning listeners were supported). The real background listener
+  // must return literal true and deliver exactly one callback reply.
+  const listener = events.onMessage.listeners[0];
+  async function oldChromiumMessage(message, sender = { id: runtimeId }) {
+    let responses = 0;
+    let deliver;
+    const received = new Promise(resolve => { deliver = resolve; });
+    const returnValue = listener(message, sender, value => { responses++; deliver(value); });
+    assert.equal(returnValue, true, 'callback-based Chrome requires literal true to keep channel alive');
+    const result = await Promise.race([received, new Promise((_, reject) => setTimeout(() => reject(new Error('background did not respond')), 1500))]);
+    assert.equal(responses, 1, 'each runtime command receives exactly one reply');
+    return result;
+  }
+  await seedLocalState(stateWith({personal:[],work:[]}), {
+    syncEnabled:false,syncInitialized:false,syncBootstrapMode:'none',syncStatus:'off',deviceId:'neofix-legacy'
+  });
+  const status = await oldChromiumMessage({type:'mosaicsync:get-sync-status'});
+  assert.equal(status?.ok,true, 'setup background round-trip must succeed');
+  const enable = await oldChromiumMessage({type:'mosaicsync:set-sync-enabled',enabled:true});
+  assert.equal(enable?.ok,true, 'enabling Sync also requires a callback reply');
+  const bootstrap = await oldChromiumMessage({type:'mosaicsync:bootstrap-local'});
+  assert.equal(bootstrap?.ok,true, 'Keep it on this computer must finish background bootstrap');
+  const unknown = await oldChromiumMessage({type:'mosaicsync:not-a-command'});
+  assert.equal(unknown?.ok,false, 'unknown extension commands receive an explicit error');
+  let invalidResponded = false;
+  assert.equal(listener({type:'mosaicsync:get-sync-status'}, {id:'foreign-extension'}, () => {invalidResponded=true;}), undefined,
+    'foreign sender cannot keep a response channel open');
+  assert.equal(listener({type:'not-mosaicsync'}, {id:runtimeId}, () => {invalidResponded=true;}), undefined,
+    'foreign message namespace cannot keep a response channel open');
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(invalidResponded,false, 'ignored commands must not receive callbacks');
+  console.log(JSON.stringify({ok:true,oldChromiumCallback:true,status:true,setup:true,ignored:true}));
+}
+
+else if (scenario === 'neofix-133046-rejected-message-callback') {
+  const listener = events.onMessage.listeners[0];
+  let replies = 0;
+  const originalGet = local.get.bind(local);
+  local.get = async () => { throw new Error('neofix-injected-read-failure'); };
+  try {
+    let reply;
+    const received = new Promise(resolve => { reply = resolve; });
+    const returned = listener({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: ['neofix-id'] }, { id: runtimeId }, value => {
+      replies++; reply(value);
+    });
+    assert.equal(returned, true);
+    const result = await Promise.race([received, new Promise((_, reject) => setTimeout(() => reject(new Error('error reply timed out')), 1500))]);
+    assert.equal(replies, 1, 'rejected message must reply once');
+    assert.equal(result?.ok, false);
+    assert.match(String(result?.error || ''), /neofix-injected-read-failure/);
+    console.log(JSON.stringify({ ok: true, rejectedCallback: true, exactlyOnce: true }));
+  } finally { local.get = originalGet; }
+}
+
+else if (scenario === 'snow-step5a-startup-sync-off') {
   const base = stateWith({ personal: [], work: [], autoPersonal: false, autoWork: false });
   await seedLocalState(base, { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off' });
   await storageCore.ensureLocalStorage();
@@ -769,7 +831,7 @@ else if (scenario === 'firefox-tab-updated-learning-1301816') {
   let raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
   assert.equal(findCompactShortcut(raw,'learned').localImageAssetId, '', 'unrelated tab updates must be gated by expected-navigation state');
 
-  const expected = await events.onMessage.listeners[0]({ type:'mosaicsync:expect-shortcut-navigation', shortcutId:'learned' }, { id: runtimeId, tab: { id: tabId } });
+  const expected = await send({ type:'mosaicsync:expect-shortcut-navigation', shortcutId:'learned' }, { id: runtimeId, tab: { id: tabId } });
   assert.equal(expected?.ok, true);
   let pending=(await session.get(constants.SESSION_PENDING_NAVIGATIONS_KEY))[constants.SESSION_PENDING_NAVIGATIONS_KEY];
   assert.equal(pending?.[String(tabId)]?.shortcutId, 'learned', 'expected navigation must be durably/session marked before learning');

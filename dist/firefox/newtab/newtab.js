@@ -4,6 +4,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 import { getNativeTopSites, PLATFORM_ID } from "../core/platform.js";
+import { createNewTabPersistenceGateway } from "./persistence-gateway.js";
 import {
   APPEARANCE_HINT_KEY,
   BACKGROUND_PRESETS,
@@ -112,6 +113,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 (() => {
   "use strict";
+
+  // One low-level commit owner; live state and visible side-effects stay with callers.
+  const persistenceGateway = createNewTabPersistenceGateway(writeLocalStateWithBaseline);
 
   const startupTiming = globalThis.__mosaicsyncStartupTiming ||= { version: 1, phases: Object.create(null) };
   startupTiming.version = 1;
@@ -1308,11 +1312,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     }
     state = next;
     stateMutationGeneration += 1;
-    const persisted = await writeLocalStateWithBaseline(state, {
-      baseState,
-      baseStateIsCompact: Boolean(baseState),
-      recordSyncMutation: true
-    });
+    const persisted = await persistenceGateway.commitWithBaseline(state, baseState, { recordSyncMutation: true });
     state = persisted.state;
     writeBaseline = persisted.compactBaseline;
     syncFrequentlyVisitedLocalsFromState(state);
@@ -1353,11 +1353,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       });
     }
     migrated = selectActiveSpaceNormalized(migrated, normalized.activeSpaceId);
-    const persisted = await writeLocalStateWithBaseline(migrated, {
-      baseState: loaded.compactBaseline,
-      baseStateIsCompact: Boolean(loaded.compactBaseline),
-      recordSyncMutation: publishLegacyIntent
-    });
+    const persisted = await persistenceGateway.commitWithBaseline(migrated, loaded.compactBaseline, { recordSyncMutation: publishLegacyIntent });
     const written = persisted.state;
     const compactBaseline = persisted.compactBaseline;
     syncFrequentlyVisitedLocalsFromState(written);
@@ -2798,11 +2794,7 @@ ${site.url}`;
     stateMutationGeneration += 1;
     let persisted;
     try {
-      persisted = await writeLocalStateWithBaseline(state, {
-        baseState,
-        baseStateIsCompact: Boolean(baseState),
-        recordSyncMutation: true
-      });
+      persisted = await persistenceGateway.commitWithBaseline(state, baseState, { recordSyncMutation: true });
     } catch (error) {
       // Workspace-name/Space-toggle commits bypass saveState(); keep the same
       // localized unsaved-edit warning and leave the pending intention live.
@@ -2829,11 +2821,7 @@ ${site.url}`;
     stateMutationGeneration += 1;
     let persisted;
     try {
-      persisted = await writeLocalStateWithBaseline(state, {
-        baseState,
-        baseStateIsCompact: Boolean(baseState),
-        recordSyncMutation: true
-      });
+      persisted = await persistenceGateway.commitWithBaseline(state, baseState, { recordSyncMutation: true });
     } catch (error) {
       // Workspace-name/Space-toggle commits bypass saveState(); keep the same
       // localized unsaved-edit warning and leave the pending intention live.
@@ -2940,9 +2928,7 @@ ${site.url}`;
     stateMutationGeneration += 1;
     let persisted;
     try {
-      persisted = await writeLocalStateWithBaseline(state, {
-        baseState,
-        baseStateIsCompact: Boolean(baseState),
+      persisted = await persistenceGateway.commitWithBaseline(state, baseState, {
         crossSpaceSyncIntent,
         recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent
       });
@@ -7702,10 +7688,7 @@ ${t("clearSyncWarning")}`);
       const importedBranding = brandingTransaction.written;
       let persisted;
       try {
-        persisted = await writeLocalStateWithBaseline(importedState, {
-          recordSyncMutation: true,
-          requireUnchangedCompactState: preparedImport.compactBaseline
-        });
+        persisted = await persistenceGateway.commitImportedProfile(importedState, preparedImport.compactBaseline);
       } catch (error) {
         try { await brandingModule.rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
           console.error(`${PRODUCT_NAME}: could not roll back imported Custom Branding`, rollbackError);

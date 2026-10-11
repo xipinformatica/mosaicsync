@@ -242,7 +242,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.33.0.44</p>
+          <p class="eyebrow">MosaicSync · 1.33.0.48</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -252,9 +252,9 @@
       <div class="settings-section compact-controls-section">
         <div class="compact-settings-bar">
           <div id="themeToggle" class="compact-theme-toggle" role="group" aria-label="Appearance">
-            <button class="theme-icon-choice" type="button" data-theme-choice="dark" aria-label="Dark appearance" title="Dark">☾</button>
-            <button class="theme-icon-choice" type="button" data-theme-choice="system" aria-label="Follow system appearance" title="System">▣</button>
-            <button class="theme-icon-choice" type="button" data-theme-choice="light" aria-label="Light appearance" title="Light">☀</button>
+            <button class="theme-icon-choice" type="button" data-theme-choice="dark" aria-label="Dark appearance" title="Dark"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19.3 15.1A8 8 0 0 1 8.9 4.7a8 8 0 1 0 10.4 10.4Z"/></svg></button>
+            <button class="theme-icon-choice" type="button" data-theme-choice="system" aria-label="Follow system appearance" title="System"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="13" rx="2"/><path d="M8.5 20h7M12 17.5V20M12 4.5v13"/></svg></button>
+            <button class="theme-icon-choice" type="button" data-theme-choice="light" aria-label="Light appearance" title="Light"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.5"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/></svg></button>
           </div>
 
           <div class="compact-layout-controls" aria-label="Grid layout">
@@ -362,29 +362,10 @@
         </div>
       </div>
 
-      <div class="settings-section backup-transfer-section">
-        <div class="section-heading-row">
-          <div>
-            <h3>Backup &amp; transfer</h3>
-            <p class="section-subtitle">Save your complete MosaicSync setup or move it to another browser or computer.</p>
-          </div>
-        </div>
-        <div class="advanced-tool-row">
-          <span><strong>Export MosaicSync profile</strong><small>Save a complete local backup with both Spaces, folders, settings, custom artwork, learned favicons and wallpapers. The file is independent of browser Sync limits.</small></span>
-          <button id="exportProfileButton" class="secondary-button" type="button">Export profile</button>
-        </div>
-        <div class="advanced-tool-row">
-          <span><strong>Import MosaicSync profile</strong><small>Restore a .mosaicsync backup. The format is browser-neutral so it can move your setup between MosaicSync browser editions.</small></span>
-          <button id="importProfileButton" class="secondary-button" type="button">Import profile</button>
-          <input id="importProfileFile" class="visually-hidden" type="file" accept=".mosaicsync,application/json">
-        </div>
-      </div>
-
       <div class="settings-section compact-background-section">
         <div class="section-heading-row">
           <h3>Background</h3>
           <div class="background-heading-actions">
-            <button id="customBrandingButton" class="secondary-button compact-branding-button" type="button" aria-haspopup="dialog" aria-controls="customBrandingDialog">Custom branding</button>
             <div class="background-color-control">
               <button id="settingsBackgroundColorButton" class="background-color-chip" type="button" title="Background color" aria-label="Choose background color" aria-haspopup="dialog" aria-expanded="false">
                 <span id="settingsBackgroundColorSwatch" class="background-color-swatch" aria-hidden="true"></span>
@@ -477,6 +458,34 @@
             <input id="settingsBackgroundDim" type="range" min="0" max="100" step="1" value="0" aria-label="Background darkness">
             <output id="settingsBackgroundDimValue">0%</output>
           </label>
+        </div>
+      </div>
+
+      <div class="settings-section branding-settings-section">
+        <div class="section-heading-row">
+          <div>
+            <h3>New Tab identity</h3>
+            <p class="section-subtitle">Device-local only</p>
+          </div>
+          <button id="customBrandingButton" class="secondary-button compact-branding-button" type="button" aria-haspopup="dialog" aria-controls="customBrandingDialog">Custom branding</button>
+        </div>
+      </div>
+
+      <div class="settings-section backup-transfer-section">
+        <div class="section-heading-row">
+          <div>
+            <h3>Backup &amp; transfer</h3>
+            <p class="section-subtitle">Save your complete MosaicSync setup or move it to another browser or computer.</p>
+          </div>
+        </div>
+        <div class="advanced-tool-row">
+          <span><strong>Export MosaicSync profile</strong><small>Save a complete local backup with both Spaces, folders, settings, custom artwork, learned favicons and wallpapers. The file is independent of browser Sync limits.</small></span>
+          <button id="exportProfileButton" class="secondary-button" type="button">Export profile</button>
+        </div>
+        <div class="advanced-tool-row">
+          <span><strong>Import MosaicSync profile</strong><small>Restore a .mosaicsync backup. The format is browser-neutral so it can move your setup between MosaicSync browser editions.</small></span>
+          <button id="importProfileButton" class="secondary-button" type="button">Import profile</button>
+          <input id="importProfileFile" class="visually-hidden" type="file" accept=".mosaicsync,application/json">
         </div>
       </div>
 

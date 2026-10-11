@@ -1,3 +1,4 @@
+// @kind integration
 import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -81,7 +82,9 @@ test("1.30.7 New Tab uses normalized cross-Space paths and exact compact write b
   const source = fs.readFileSync(resolve(root, "src/shared/newtab/newtab.js"), "utf8");
   assert.match(source, /moveShortcutBetweenSpacesNormalized\(beforeMove/);
   assert.match(source, /createCrossSpaceSyncIntentNormalized\(beforeMove/);
-  assert.match(source, /writeLocalStateWithBaseline\(state, \{[\s\S]*?baseStateIsCompact: Boolean\(baseState\)/);
+  assert.match(source, /persistenceGateway\.commitWithBaseline\(state, baseState/);
+  const gateway = fs.readFileSync(resolve(root, "src/shared/newtab/persistence-gateway.js"), "utf8");
+  assert.match(gateway, /baseStateIsCompact: Boolean\(baseState\)/);
   assert.match(source, /writeBaseline\s*=\s*persisted\.compactBaseline/);
 });
 

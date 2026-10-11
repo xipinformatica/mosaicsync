@@ -1,3 +1,4 @@
+// @kind static
 import { readBackgroundSource } from "./harness/background-source.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -69,7 +70,7 @@ function stateWith(items) {
 }
 
 test("1.30 release identity and additive shortcut schemas are unified", () => {
-  assert.equal(VERSION, "1.33.0.44");
+  assert.equal(VERSION, "1.33.0.48");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
   assert.ok(BUILTIN_SHORTCUT_ICON_KEYS.includes("code"));

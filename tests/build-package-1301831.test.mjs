@@ -1,3 +1,4 @@
+// @kind behavioral
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -88,7 +89,7 @@ test("1.30.18.31 release packaging rebuilds before reading dist and drops stale 
     assert.match(result.stdout, /Built dist\/firefox and dist\/chrome/,
       "package.py must run the canonical build before packaging");
 
-    const version = "1.33.0.44";
+    const version = "1.33.0.48";
     for (const browser of ["firefox", "chrome"]) {
       const zip = join(temp, `artifacts/mosaicsync-${version}-${browser}.zip`);
       assert.equal(fs.existsSync(zip), true);

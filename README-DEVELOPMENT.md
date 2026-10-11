@@ -1,6 +1,41 @@
 # MosaicSync development
 
-Current release: 1.33.0.44
+Current release: 1.33.0.48
+
+## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
+
+- Extracts the shared New Tab storage commit routing into `src/shared/newtab/persistence-gateway.js`. Six existing writers now delegate unchanged storage options through one boundary; live state clocks, compact baseline adoption, retries, unsaved Settings drafts, UI feedback, imports and branding rollback remain owned by their original callers.
+- Permanent equivalence regressions verify the exact writer arguments and return/error identities for user edits, cache-only hydration, cross-Space intent, legacy preference migration and guarded profile replacement; no second write, new serialization or hidden reads.
+- This is a restructuring-only release. No new features, permissions, persistence schema or Sync/Recovery wire format changes. Real-browser GitHub Actions certification and independent audit remain mandatory prior to publication.
+- See `docs/QA-1.33.0.48.md` and `docs/RELEASE-1.33.0.48.md`.
+
+## 1.33.0.47 — Neofix 3: icon geometry and New Tab/Welcome polish
+
+- Six bounded bundled icon refinements; no changed icon keys, shortcut storage or user-provided image handling. Fixed symbols remain owned by the bundled `builtin-icons.js` primitive catalogue.
+- Settings appearance choices use vector symbols, wallpaper dim sliders follow theme accents, and Background/New Tab identity sit ahead of Backup & Transfer. Welcome status now appears adjacent to the wizard controls, ahead of donation.
+- Eight fail-first permanent tests in `tests/neofix-133047.test.mjs` cover the six icon changes, appearance controls, section order and Welcome status. Icons must remain legible at 21, 30, 48 and 120 px in both appearances.
+- Browser CI still requires a real GitHub Actions green RELEASE GATE; local mechanical verification alone is not enough. No intentional Sync/Recovery or browser permission changes.
+- See `docs/QA-1.33.0.47.md` and `docs/RELEASE-1.33.0.47.md`.
+
+## 1.33.0.47 — Neofix 2: real-browser release gate and test inventory
+
+- **Post-audit CI corrective:** first run would otherwise block on a native website-access permission prompt. Smoke-only Chrome DevTools injection declines that optional access; Firefox test sessions suppress the optional prompt with the browser test preference. Each result records the test-only permission decision. Shortcut navigation now uses a local HTTP target to avoid dependence on external internet availability, and Chrome ZIP extraction uses `python3`. No extension runtime changes; a real four-browser GitHub Actions run is still the required gate.
+
+- Adds `.github/workflows/neofix-browser-gate.yml`: a mechanical suite and required browser matrix (Chromium 141 and current, Firefox 140 and current), followed by a blocking combined release gate. The workflow can be run for pull requests, releases and manually, but must be enabled and actually pass in GitHub Actions before a release can be called fully certified.
+- `tools/browser-smoke.mjs` now exercises genuine first-run Welcome setup, a real extension background `get-sync-status` round trip, local-only onboarding persistence, a user-created shortcut that survives reload, and the existing Settings/Spaces/navigation checks. Chromium runs the extracted production Chrome package; Firefox uses a separately identified development package for temporary installation. Screenshots and machine-readable results are retained on passing and failing runs.
+- Introduces `tests/INVENTORY.json` and `tools/test-inventory.mjs` with an enforced file-level primary kind for each test file (behavioral/integration/static/browser). A file can contain mixed testing methods; these labels do **not** measure assertion-level or line/branch coverage.
+- The Node background harness and two-device harness now model callback replies directly, allowing removal of the test-only `typeof sendResponse` branch. A dedicated rejection scenario verifies exactly one structured failure reply. The production command dispatcher, Sync/Recovery rules, permissions and storage formats are untouched.
+- The browser CI must be validated on a real GitHub runner before it may be designated a verified gate; a checked-in workflow alone is not evidence of browser success. Neofix 3 (icon/UX polishing) and Neofix 4 (behavior-preserving persistence extraction) remain separate.
+- See `docs/QA-1.33.0.47.md` and `docs/RELEASE-1.33.0.47.md`.
+
+
+## 1.33.0.45 — Neofix 1: Chromium messaging compatibility
+
+- Corrects the production background `runtime.onMessage` listener to reply through `sendResponse` and `return true`, preserving the synchronous ignored-message boundary and the original command dispatcher. Chromium before Promise-response support could otherwise leave the setup wizard unable to continue despite a successfully installed extension. The Node harness still supports its old direct listener invocations without altering protocol behavior in real browsers.
+- `tests/neofix-133045.test.mjs` exercises the production background worker in both Chrome- and Firefox-shaped runtimes, requiring callback responses for Sync status, enabling Sync, and local bootstrap; foreign senders and unsupported messages remain ignored. All three tests were red on the .44 implementation, green on this release.
+- Updates `profileImportStorageFull` in all 33 catalogs to explain the browser-allocated storage limit; backups with too many images cannot always fit, and users are warned to back up their existing layout before removing imagery.
+- No new permissions or changes to Sync/Recovery wire formats, storage schema, or icon assets. Neofix 2 (browser smoke CI and test inventory), Neofix 3 (icon/UX polish) and Neofix 4 (behavior-preserving persistence extraction) remain separate.
+- See `docs/QA-1.33.0.45.md` and `docs/RELEASE-1.33.0.45.md`.
 
 ## 1.33.0.44 — Journey 4 closure (local failure feedback)
 

@@ -1,5 +1,32 @@
 # Changelog
 
+## 1.33.0.48
+
+- **Internal maintainability only:** Groups New Tab storage commits behind one small persistence gateway while preserving the same save behavior, including pending edits, backup-import safeguards, cross-Space moves, Sync intent and error feedback.
+- Adds dedicated transaction-equivalence regressions; no intended visual or functional changes, new permissions or Sync/Recovery format modifications.
+- Firefox/Chrome browser certification and independent auditing remain mandatory release gates.
+
+## 1.33.0.47
+
+- Refines six built-in shortcut icons (Game, Finance, Code, Shopping, Music and News) for cleaner stroke spacing, optical balance and legibility on light/dark tiles at small sizes. The other seven built-in icons and all user artwork remain unchanged.
+- Replaces the three Settings appearance emoji/text glyphs with fixed accessible SVG symbols, makes wallpaper darkness sliders use the MosaicSync theme accent, and moves Background before Backup & Transfer with Custom Branding in a separate New Tab identity section.
+- Places Welcome setup status and error messages before the donation panel, closer to the associated controls, with improved contrast.
+- Neofix 3 visual/UX release only: no intentional Sync, Recovery, persistence, schema or browser-permission changes. Neofix 2's four-browser CI release gate must still run successfully on GitHub before publication.
+
+## 1.33.0.46
+
+- Corrects the new real-browser certification harness before its first CI run: the test explicitly handles optional website-access permission prompts in Chrome/Firefox and records that test-only handling in its evidence; real first-run UI and background messaging are still exercised.
+- Makes browser-smoke shortcut navigation self-contained with a local HTTP endpoint and uses Python 3 explicitly for ZIP extraction. No production extension code changes from the previously approved .46 candidate.
+- Makes real-browser compatibility tests a required release gate in GitHub Actions: older Chromium, current Chromium, Firefox 140 and current Firefox must finish genuine first-run setup and answer background requests. The smoke tool also checks shortcut creation/persistence and the existing Settings/Spaces/navigation path against the packaged extension.
+- Classifies the automated test files as behavioral, integration, static or browser, with a generated inventory that must stay current; classifications are file-level, not code-coverage claims.
+- Strengthens background messaging failure regressions so rejected work must return one structured error response. Updates test harnesses to use real callback semantics and removes a test-only listener fallback. No intended application behavior changes, permissions, storage schema or Sync/Recovery protocol changes.
+
+## 1.33.0.45
+
+- Fixes initial setup and background communication on older Chrome/Chromium and browsers that do not support Promise-returning extension message listeners. Messages now use the widely supported asynchronous callback response protocol.
+- Explains browser-imposed MosaicSync storage limits when a backup cannot be imported, instead of incorrectly suggesting that freeing disk space will always help. Advises saving the current layout before removing custom imagery; translated into all 33 supported languages.
+- Adds behavioral regression coverage for callback-only message delivery, setup/bootstrap replies, sender filtering and the updated storage guidance. No new permissions, persisted schema changes or Sync/Recovery format changes.
+
 ## 1.33.0.44
 
 - **More helpful save errors:** If there isn't enough storage space when you turn Frequently Visited on or off or change the number of sites, MosaicSync tells you what happened in your language instead of showing a technical error.

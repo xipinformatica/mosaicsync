@@ -1,0 +1,850 @@
+{
+  "schemaVersion": 1,
+  "scope": "primary-file-classification",
+  "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
+  "totalFiles": 209,
+  "counts": {
+    "behavioral": 98,
+    "integration": 33,
+    "static": 77,
+    "browser": 1
+  },
+  "files": [
+    {
+      "file": "tests/accessibility.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/appearance-lifecycle-12610.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/audit-132010-recovery-manager.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/bookmarks-controller-132003.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/browser-smoke-1301833.test.mjs",
+      "kind": "browser"
+    },
+    {
+      "file": "tests/build-manifest.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/build-package-1301831.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/cache-bounds.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/complexity-inventory-1301825.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/concurrent-writes.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/contract-simplification-13205.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-12789.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-13010.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13012.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13013.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13014.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13015.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13018.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-130181.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301810.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301811.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301812.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301813.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301814.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301815.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1301816.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1301817.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301818.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301819.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-130183.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1301838.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1301839.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-130184.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301840.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301841.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301842.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301843.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1301844.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301845.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1301846.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-130185.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-130186.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-130187.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-130188.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-130189.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1302.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1303.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1304.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1305.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-1306.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1307.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1308.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1309.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1310.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1311.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-1313.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1314.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-1315.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-132010.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-13204.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13206.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13207.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-13208.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-13209.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13213.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13214.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13215.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-13216.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-13217.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-13218.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133019.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-133020.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-133021.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133022.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133023.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/corrective-133024.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-133025.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133026.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133027.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133028.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133030.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/custom-branding-1321.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/custom-branding-corrective-13211.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/dead-code-retirement-1301829.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/fault-injection-12414l.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-batch-12414i.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-compat-12614.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-consistency-1277.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-e2e-12617.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-pipeline-12615.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/favicon-queue-12414h.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/favicon-resolver.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/feature-133029.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/feature-133031.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/feature-133032.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/feature-133033.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/features-1260.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/features-12613.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/features-1270.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/folder-drag-1266.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/folder-positioning-1271.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/frequent-firefox-12613b.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/frequently-visited-cross-space-126171.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/frequently-visited-ui-12611.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/hardcoded-ui.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-12414g.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-12414k.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-12414m.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-12612.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-12617.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/hardening-126174.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-126175.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/hardening-1272.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/imports.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/improvements-1273.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/legal-links-12414m3.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/localization-integrity-13212.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/localization.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/maintenance-certification-1301834.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/maintenance-freeze-1301837.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/maintenance-knowledge-1301835.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/maintenance-test-groups-1301836.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/model-sync.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/neofix-133045.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/neofix-133046-smoke-corrective.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/neofix-133046.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/neofix-133047.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/neofix-133048.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/newtab-appearance-color-1301828.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-12414.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-1249.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-1274.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-1275.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/optimization-1276.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-133010.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-133011.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/optimization-133012.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/optimization-133013.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-133014.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133015.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133016.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133017.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-133018.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-13303.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133034.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133035.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133036.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133037.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-133038.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/optimization-13304.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-13306.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-13307.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-13308.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/optimization-13309.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/parity.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/performance-hardening-126176.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/performance-startup-12782.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/performance-startup-12783.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/performance-startup-12784.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/performance-startup-12785.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/performance-startup-12786.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/permission-recovery-126177.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/permission-recovery-130182.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/process-13305.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/production-background-e2e-12617.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/profile-assets.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/profile-security-12412.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/property-fuzz-1301836.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/recovery-continuity-1301824.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/recovery-generation-format-1301820.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/recovery-generation-lifecycle-1301823.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/recovery-generation-store-1301821.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/recovery-retention-1301822.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/recovery-stress-13014.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/release-contract-13016.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/release-identity-130.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/secondary-styles-on-demand-12788.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/security-hardening-12412.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/settings-footer-localization-126173.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/snow-leopard-1279.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/snow-leopard-130.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/snow-leopard-ii-13301.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/snow-leopard-ii-13302.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/stabilization-1261.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/stabilization-1262.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/stabilization-1263.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/stabilization-1265.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/startup-12410.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/storage-registry.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/sync-distributed-12781.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/sync-pending-journal-13202.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/sync-remote-observation-13201.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/sync-safety-12788.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/test-architecture-1301830.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/theme-wallpaper-dim-126172.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/theme-wallpaper-ui-1267.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/trust-boundary-133039.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/trust-boundary-133040.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/trust-boundary-133041.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/trust-boundary-133042.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/trust-boundary-133043.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/trust-boundary-133044.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/ui-polish-12414f.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/ui-polish-12414m1.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/ui-polish-12414m2.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/upgrade-corruption.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/utils.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/validator-1260.test.mjs",
+      "kind": "static"
+    }
+  ]
+}

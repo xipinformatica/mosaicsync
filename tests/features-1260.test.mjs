@@ -1,3 +1,4 @@
+// @kind static
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -41,7 +42,7 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.33.0.44");
+  assert.equal(VERSION, "1.33.0.48");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
 });
