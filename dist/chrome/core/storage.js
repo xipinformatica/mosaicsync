@@ -38,6 +38,7 @@ import {
   createCrossSpaceSyncIntent,
   ensureDeviceId,
   normalizeState,
+  nextMutationTime,
   selectActiveSpaceNormalized,
   stampSettingsMutationClocksTrustedNormalized,
   uid
@@ -626,6 +627,53 @@ export async function clearSessionFrequentlyVisitedSuppression() {
   }
 }
 
+export function planShortcutNameEnrichment(latest, intent, clock = nextMutationTime) {
+  if (!latest?.spaces || !intent || typeof intent.id !== "string" || !intent.id ||
+      typeof intent.url !== "string" || !intent.url ||
+      typeof intent.title !== "string" || !intent.title ||
+      typeof intent.newTitle !== "string" || !intent.newTitle.trim() ||
+      intent.newTitle === intent.title || intent.newTitle.length > 52 ||
+      !Number.isSafeInteger(intent.modifiedAt) || !Number.isSafeInteger(intent.createdAt)) return null;
+  let match = null;
+  for (const spaceId of SPACE_IDS) {
+    const workspace = latest.spaces[spaceId];
+    for (let i = 0; i < (workspace?.shortcuts || []).length; i++) {
+      const item = workspace.shortcuts[i];
+      const candidates = item?.type === "folder" ? (item.items || []) : [item];
+      for (let j = 0; j < candidates.length; j++) {
+        const shortcut = candidates[j];
+        if (shortcut?.id !== intent.id) continue;
+        // Duplicate IDs make ownership ambiguous: never choose one arbitrarily.
+        if (match) return null;
+        match = { spaceId, workspace, item, shortcut, i, j };
+      }
+    }
+  }
+  if (!match || match.shortcut.type !== "shortcut" ||
+      match.shortcut.url !== intent.url || match.shortcut.title !== intent.title ||
+      match.shortcut.modifiedAt !== intent.modifiedAt ||
+      match.shortcut.createdAt !== intent.createdAt) return null;
+
+  // A legitimate move or favicon update may have changed unrelated fields.
+  // Clone only the modified shortcut's containing array, leaving everything
+  // else exactly as read from the authoritative state.
+  const {spaceId, workspace, item, shortcut, i, j} = match;
+  const modifiedAt = clock(workspace.updatedAt, shortcut.modifiedAt, item.type === "folder" ? item.modifiedAt : 0);
+  if (!Number.isSafeInteger(modifiedAt) || modifiedAt <= shortcut.modifiedAt) return null;
+  const updatedShortcut = { ...shortcut, title: intent.newTitle, modifiedAt };
+  const shortcuts = [...workspace.shortcuts];
+  if (item.type === "folder") {
+    const children = [...item.items];
+    children[j] = updatedShortcut;
+    shortcuts[i] = { ...item, items: children, modifiedAt };
+  } else shortcuts[i] = updatedShortcut;
+  const spaces = {
+    ...latest.spaces,
+    [spaceId]: { ...workspace, shortcuts, updatedAt: modifiedAt }
+  };
+  return selectActiveSpaceNormalized({ ...latest, spaces }, latest.activeSpaceId);
+}
+
 async function withPersistenceWriteLock(callback) {
   const locks = globalThis.navigator?.locks;
   if (locks?.request) {
@@ -644,7 +692,8 @@ async function persistNormalizedState(normalized, {
   baseState = null,
   beforeWrite = null,
   assetIdMemo = null,
-  requireUnchangedCompactState = null
+  requireUnchangedCompactState = null,
+  conditionalShortcutName = null
 } = {}) {
   return withPersistenceWriteLock(async canCollectStale => {
     let finalState = normalized;
@@ -661,6 +710,17 @@ async function persistNormalizedState(normalized, {
     if (recordSyncMutation || effectiveCrossSpaceSyncIntent) transactionKeys.push(LOCAL_META_KEY);
     const transactionRead = await browser.storage.local.get(transactionKeys);
     const latestRaw = transactionRead[LOCAL_STATE_KEY];
+    if (conditionalShortcutName) {
+      // Read, check and patch *inside* the existing persistence lock. Never
+      // rebase a stale complete New Tab state over newer favicon/Sync changes.
+      // A missing cross-context lock cannot certify this optional enrichment.
+      if (!canCollectStale || !latestRaw || typeof latestRaw !== "object") {
+        return { state: null, rebased: false, compactBaseline: null, applied: false };
+      }
+      const patched = planShortcutNameEnrichment(normalizeState(latestRaw, assetIdMemo), conditionalShortcutName);
+      if (!patched) return { state: null, rebased: false, compactBaseline: null, applied: false };
+      finalState = patched;
+    }
     // Explicit whole-profile imports are replacements, not concurrent field
     // edits. Never merge them with (or silently erase) an update committed by a
     // second tab after import authority was read. Validate inside the existing
@@ -691,7 +751,7 @@ async function persistNormalizedState(normalized, {
       finalState
     );
 
-    if (baseState) {
+    if (baseState && !conditionalShortcutName) {
       if (latestRaw && !persistedWorkspacePayloadEqual(baseState, latestRaw)) {
         finalState = rebaseConcurrentState(baseState, normalized, latestRaw);
         rebased = true;
@@ -841,7 +901,7 @@ async function persistNormalizedState(normalized, {
         // of silently leaking storage forever after one failed remove().
       }
     }
-    return { state: finalState, rebased, compactBaseline: cloneCompactJson(projection.state) };
+    return { state: finalState, rebased, compactBaseline: cloneCompactJson(projection.state), applied: Boolean(conditionalShortcutName) };
   });
 }
 
@@ -895,6 +955,16 @@ export async function writeLocalStateWithBaseline(state, options = {}) {
   return writeLocalStateResult(state, options);
 }
 
+
+export async function enrichShortcutNameIfUnchanged(intent) {
+  // This path never adopts New Tab's potentially stale in-memory profile.
+  // No authorized match => no write, no journal and no cache refresh.
+  const result = await persistNormalizedState(null, {
+    conditionalShortcutName: intent,
+    recordSyncMutation: true
+  });
+  return result.applied === true;
+}
 
 export async function readLocalMeta() {
   const result = await browser.storage.local.get(LOCAL_META_KEY);

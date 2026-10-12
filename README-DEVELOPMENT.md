@@ -1,5 +1,8 @@
 # MosaicSync development
 
+**1.33.0.55 post-save automatic name refinement:** New shortcuts save instantly with their offline hostname label. When Automatic naming was selected and website access was already granted, a separate one-shot title/OG-site-name lookup can refine that saved name. This is not the editor lookup; saving still cancels editor requests. The new core conditional name-only transaction reads and validates the latest compact profile *inside* the existing persistence write lock. It requires the record ID, URL, originally saved title, creation clock and mutation clock to match; a manual rename (even to the same spelling), deletion or changed URL makes it ineligible. Favicon, position, Space/folder membership and unrelated changes are never written from a stale snapshot. Missing Web Locks, permission, network failure or a failed write leave the original name. The title request retains redirect refusal, bounded HTML parsing, credential omission and four-second timeout. Validated `og:site_name` takes precedence over ordinary page titles; no speculative recurring scan, new permission, storage schema or Sync/Recovery protocol change. Previously reported LOW issues regarding shared-host suffixes and confusable IDNs remain deferred.
+
+
 **1.33.0.54 pre-publication corrective:** The optional webpage-title reader no longer trusts an apparent `</head>` before reading bounded script content, and incomplete `<script>`/other raw-text blocks are removed to end-of-input before name extraction. The favicon reader's early-head behavior is unchanged. The Settings child-dialog guard now includes the shared MosaicSync confirmation, so Cancel/Accept/Escape do not dismiss the underlying Settings panel. Dedicated real-loopback and event-order regressions are added. No new permissions, storage or Sync/Recovery changes.
 
 **1.33.0.53 URL-first editor and native-confirmation replacement:** URL is first and initially focused for new shortcuts. Automatic naming is selected and read-only in the new editor; manual naming is opt-in, and existing shortcut edits retain user names. Enter in URL submits through requestSubmit and is guarded against repeated pending saves. All ten browser-native JavaScript confirmations in the New Tab owner are replaced by one browser-neutral modal with escape/backdrop/cancel protection, localized actions, and fail-closed concurrent requests. Changes apply equally to Firefox and Chromium. New `tests/neofix-133053.test.mjs` and real-browser smoke exercise name checkbox/URL Enter and modal behavior; no Sync/Recovery authority changes.
@@ -14,7 +17,7 @@
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.54
+Current release: 1.33.0.55
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 

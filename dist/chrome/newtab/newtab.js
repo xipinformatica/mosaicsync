@@ -85,7 +85,7 @@ import {
   learnedArtworkDisposition,
   learnedArtworkMayReplace
 } from "../core/artwork-policy.js";
-import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createPersistedWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline } from "../core/storage.js";
+import { clearSessionFrequentlyVisitedSuppression, createRenderSnapshot, ensureLocalStorage, createPersistedWriteBaseline, getSessionRenderCacheStatus, hydrateBackgroundLocalAssetNormalized, hydrateDeferredFolderLocalAssetsNormalized, hydrateFolderLocalAssetsNormalized, hydrateLocalAssetsForSpaceNormalized, hydratePersistedState, materializeLocalStorage, rawStateMultipleSpacesEnabled, releaseLocalAssetsForSpaceNormalized, readLocalStorageRaw, readSessionRenderCache, updateSessionFrequentlyVisitedSnapshot, warmSessionRenderCache, writeActiveSpace, updateLocalMeta, writeLocalState, writeLocalStateWithBaseline, enrichShortcutNameIfUnchanged } from "../core/storage.js";
 import {
   cleanupLegacyWebOriginPermissions,
   hasTopSitesPermission,
@@ -4680,11 +4680,36 @@ ${site.url}`;
         let currentUrl;
         try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch { return; }
         if (currentUrl !== url || !result?.ok) return;
-        const title = cleanShortcutPageTitle(result.title, fallback, result.finalPageUrl);
+        const title = cleanShortcutPageTitle(result.siteName, fallback, result.finalPageUrl) ||
+          cleanShortcutPageTitle(result.title, fallback, result.finalPageUrl);
         if (title) { shortcutTitle.value = title; updateImagePreview(); }
       }).catch(() => {
         if (shortcutNameRequestId === requestId) shortcutNameRequestId = "";
       }); // A failed lookup never blocks shortcut creation.
+  }
+
+  // Separate one-shot request. Editor cancellation stays intact, but a newly
+  // persisted automatic shortcut can receive a better name asynchronously.
+  // Never update the in-memory profile here: storage owns a conditional, locked
+  // name-only transaction against the latest durable state (including Sync).
+  async function runPostSaveShortcutNameEnrichment(saved) {
+    if (!saved?.id || !saved.url || !saved.title || !saved.createdAt || !saved.modifiedAt) return;
+    const requestId = `post-name-${globalThis.crypto?.randomUUID?.() || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`}`;
+    try {
+      const result = await browser.runtime.sendMessage({
+        type: "mosaicsync:suggest-shortcut-title", pageUrl: saved.url, requestId
+      });
+      if (!result?.ok) return;
+      const title = cleanShortcutPageTitle(result.siteName, saved.title, result.finalPageUrl) ||
+        cleanShortcutPageTitle(result.title, saved.title, result.finalPageUrl);
+      if (!title) return;
+      // A deliberate manual name (even if identical to the offline fallback)
+      // changes the persisted revision and makes this operation ineligible.
+      // The storage transaction never writes a stale full shortcut copy.
+      await enrichShortcutNameIfUnchanged({ ...saved, newTitle: title });
+    } catch {
+      // Optional enrichment must not surface errors or affect saved shortcuts.
+    }
   }
 
   async function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
@@ -5151,6 +5176,9 @@ ${site.url}`;
       const image = pendingShortcutImage;
       const id = shortcutId.value;
       const record = id ? findShortcutRecord(id) : null;
+      // Snapshot the authorization now: a permission granted during this save
+      // is not permission for a speculative name lookup in the same operation.
+      const mayEnrichAfterSave = !record && !id && shortcutAutomaticName.checked && webAccessGranted;
       let savedShortcutId = id;
       const destinationSpaceId = isMultipleSpacesEnabled() && SPACE_IDS.includes(editingDestinationSpaceId)
         ? editingDestinationSpaceId
@@ -5290,9 +5318,22 @@ ${site.url}`;
         updateSpaceSwitcher();
         scheduleAppearanceHintRefresh(state.settings);
       }
+      // Capture only the newly persisted identity, not a stale profile copy.
+      // Only this explicitly auto-named creation authorizes one lookup.
+      const persistedNewShortcut = mayEnrichAfterSave && !movedAcrossSpaces && savedShortcutId
+        ? findShortcutRecord(savedShortcutId)?.item
+        : null;
+      const postSaveName = persistedNewShortcut?.type === "shortcut" && persistedNewShortcut.url === url
+        ? {
+            id: persistedNewShortcut.id, url: persistedNewShortcut.url,
+            title: persistedNewShortcut.title, createdAt: persistedNewShortcut.createdAt,
+            modifiedAt: persistedNewShortcut.modifiedAt
+          }
+        : null;
       render();
       shortcutSyncPrepareGeneration += 1;
       closeDialog(shortcutDialog);
+      if (postSaveName) void runPostSaveShortcutNameEnrichment(postSaveName);
       editingParentFolderId = null;
       editingPreferredPosition = null;
       showToast(movedAcrossSpaces

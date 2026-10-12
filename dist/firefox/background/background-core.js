@@ -1952,17 +1952,31 @@ export function startBackground(adapter) {
     const head = result.text
       .replace(/<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, "")
       .replace(/<!--[\s\S]*?(?:-->|$)/g, "");
-    const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
-    if (!match) return { ok: false, title: "" };
-    const raw = match[1].replace(/<[^>]*>/g, " ").replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp|eacute|egrave|agrave|ccedil|uuml|ouml|auml|ntilde|ndash|mdash|hellip|rsquo|lsquo|ldquo|rdquo|copy|reg);/gi, (whole, code) => {
-      const entities = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", eacute: "é", egrave: "è", agrave: "à", ccedil: "ç", uuml: "ü", ouml: "ö", auml: "ä", ntilde: "ñ", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", copy: "©", reg: "®" };
+    // Metadata is untrusted and optional. Only the explicit Open Graph site
+    // identity may outrank the page title; application-name can name an entire
+    // hosting platform instead of the user's site. Strip raw text/comments first.
+    const cleanedHead = head.split(/<\/head\s*>/i)[0];
+    const metaTags = cleanedHead.match(/<meta\b[^>]*>/gi) || [];
+    const siteNameRaw = metaTags
+      .filter(tag => htmlAttribute(tag, "property").toLowerCase().trim() === "og:site_name")
+      .map(tag => htmlAttribute(tag, "content").trim())
+      .find(value => value.length > 0 && value.length <= 512) || "";
+    const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(cleanedHead);
+    if (!match && !siteNameRaw) return { ok: false, title: "" };
+    const decodePageName = value => String(value || "").replace(/<[^>]*>/g, " ").replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp|aacute|eacute|iacute|oacute|uacute|agrave|egrave|igrave|ograve|ugrave|atilde|otilde|acirc|ecirc|icirc|ocirc|ucirc|ccedil|uuml|ouml|auml|ntilde|szlig|ndash|mdash|hellip|rsquo|lsquo|ldquo|rdquo|copy|reg);/gi, (whole, code) => {
+      const entities = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", agrave: "à", egrave: "è", igrave: "ì", ograve: "ò", ugrave: "ù", atilde: "ã", otilde: "õ", acirc: "â", ecirc: "ê", icirc: "î", ocirc: "ô", ucirc: "û", ccedil: "ç", uuml: "ü", ouml: "ö", auml: "ä", ntilde: "ñ", szlig: "ß", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", copy: "©", reg: "®" };
       if (code.startsWith("#")) {
         const number = code[1]?.toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
         return Number.isInteger(number) && number > 0 && number <= 0x10ffff && !(number >= 0xd800 && number <= 0xdfff) ? String.fromCodePoint(number) : " ";
       }
-      return entities[code.toLowerCase()] ?? whole;
+      const mapped = entities[code.toLowerCase()];
+      return mapped && /^[A-Z]/.test(code) ? mapped.toLocaleUpperCase() : mapped ?? whole;
     }).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
-    return raw && raw.length <= 512 ? { ok: true, title: raw, finalPageUrl: result.finalPageUrl } : { ok: false, title: "" };
+    const title = decodePageName(match?.[1] || "");
+    const siteName = decodePageName(siteNameRaw);
+    return (title || siteName) && title.length <= 512 && siteName.length <= 512
+      ? { ok: true, title, siteName, finalPageUrl: result.finalPageUrl }
+      : { ok: false, title: "" };
   }
 
   async function discoverManifestIconCandidates(manifestUrl, pageUrl, { deadlineAt, signal = null }) {

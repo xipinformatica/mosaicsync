@@ -219,6 +219,7 @@ test("1.33.0.30 blank shortcut name is behaviorally persisted as the normalized 
     invalidateShortcutNameSuggestion() {},
     hostLabel,
     shortcutUrl: { value: "https://www.youtube.com/watch?v=1" },
+    shortcutAutomaticName: { checked: false },
     shortcutTitle: { value: "   " },
     shortcutId: { value: "" },
     shortcutSyncImage: { checked: false },

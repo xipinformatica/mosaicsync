@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.33.0.55
+
+**One-shot automatic website-name refinement.**
+
+- New automatic shortcuts still save immediately using an offline hostname label. With previously granted website access, one separate bounded request may improve the name *after* saving, preferring validated Open Graph `og:site_name` and falling back to a safe page title. No extra permission prompt and no repeating background scan.
+- The new conditional write checks the latest persisted record inside the existing cross-context persistence lock. A manual rename, changed URL, deletion or uncertain ownership prevents the update; concurrent artwork/position/Space/folder changes are preserved. A failed enrichment request or write never undoes the initial shortcut save.
+- Editor request cancellation, four-second timeout, redirect refusal, privacy and favicon discovery are unchanged. Added permanent adversarial regressions. Remaining LOW shared-host/IDN naming limitations are deferred.
+
+
 ## 1.33.0.54
 
 - Fixes two pre-publication shortcut-name/confirmation issues: misleading page titles embedded in unusually long or unfinished scripts are ignored, and Settings stays open when you cancel or accept a MosaicSync confirmation.
