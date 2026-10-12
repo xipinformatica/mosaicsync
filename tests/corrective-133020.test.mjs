@@ -121,7 +121,7 @@ async function runShortcutRace(firstItem, secondItem) {
     ensureSecondaryStyles() { return styles.promise; },
     shortcutDialog: { open: false, showModal() { showCalls += 1; if (this.open) throw new Error("InvalidStateError"); this.open = true; } },
     localizeDocument() {}, closeDropChoice() {}, shortcutSyncPrepareGeneration: 0,
-    resetDetectedFaviconPicker() {}, shortcutForm: { reset() { resetCalls += 1; } },
+    resetDetectedFaviconPicker() {}, invalidateShortcutNameSuggestion() {}, shortcutForm: { reset() { resetCalls += 1; } },
     shortcutId: field(), editingParentFolderId: null, editingPreferredPosition: null,
     editingSourceSpaceId: "", editingDestinationSpaceId: "", state: { activeSpaceId: "personal" },
     shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle: field(), shortcutUrl: field(),

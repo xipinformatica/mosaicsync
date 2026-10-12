@@ -406,20 +406,22 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
   await waitForCondition(client, "empty New Tab add control", `return !!document.getElementById('addFirstButton') && !document.getElementById('addFirstButton').hidden;`);
   await client.click(await client.find('#addFirstButton'));
   await waitForCondition(client, "shortcut editor", `return !!document.getElementById('shortcutDialog')?.open;`);
-  const submitted = await client.execute(`
+  // Exercise the real automatic-name path. A manual name would bypass the
+  // feature introduced in .50 and leave this browser gate blind to it.
+  const suggestedName = await client.execute(`
     const title = document.getElementById('shortcutTitle');
     const url = document.getElementById('shortcutUrl');
-    title.value = 'Neofix Browser Smoke'; url.value = ${JSON.stringify(navigationUrl)};
-    title.dispatchEvent(new Event('input', { bubbles: true }));
+    url.value = ${JSON.stringify(navigationUrl)};
     url.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('shortcutForm').requestSubmit();
-    return true;
+    return title.value;
   `);
+  if (!suggestedName || typeof suggestedName !== 'string') throw new Error('Automatic offline shortcut naming did not populate the Name field');
+  const submitted = await client.execute(`document.getElementById('shortcutForm').requestSubmit(); return true;`);
   if (submitted !== true) throw new Error('Shortcut submit was not dispatched');
-  await waitForCondition(client, "created shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes('Neofix Browser Smoke'));`, 20000);
+  await waitForCondition(client, "created automatically named shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
   await client.refresh();
-  await waitForCondition(client, "persisted shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes('Neofix Browser Smoke'));`, 20000);
-  return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true };
+  await waitForCondition(client, "persisted shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
+  return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true, automaticShortcutName: suggestedName };
 }
 
 export async function exerciseRealBrowserSession(client, kind, { freshSetup = true, capture = async () => {}, navigationUrl = "https://example.com/", permissionDecision = "not-simulated" } = {}) {

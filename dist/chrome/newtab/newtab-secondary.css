@@ -308,3 +308,5 @@
 #settingsBackgroundDim{accent-color: var(--accent);}
 /* Keep all three theme pictograms aligned independent of system emoji fonts. */
 .theme-icon-choice svg{display:block;width:19px;height:19px;margin:auto;pointer-events:none;}
+
+/* Dialog actions are flex-centered. No font-dependent vertical offset. */

@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.33.0.52
+
+- Makes automatic shortcut names more reliable: avoids misleading names from unrelated domains, login and error pages, and deceptive webpage titles.
+- Prevents repeated or abandoned website-title requests when editing a shortcut. Improves recognition of webpage names while preserving manually chosen names.
+- No new permissions or changes to favicons, Sync, Recovery or saved shortcuts.
+
+## 1.33.0.51
+
+- Improved smart shortcut naming: multilingual login and temporary-page titles no longer replace a useful name; same-site authentication redirects are filtered without an additional network request.
+- Cancel, Escape and backdrop closure no longer trigger a URL-field-blur page-title request. Refined offline naming for Wikipedia, Spotify, WhatsApp and internationalized hostnames while preserving meaningful service distinctions.
+- Kept favicon discovery, manual names, permissions, Sync, Recovery and button alignment unchanged.
+
+## 1.33.0.50
+
+- New shortcuts immediately suggest a readable name based on their website address (e.g. google.com → Google). Typing stays strictly offline; only leaving the URL field or pressing Enter can initiate a bounded title lookup under previously granted website access. Names preserve meaningful service subdomains and shared-hosting identities. Broken encodings, login/bot-check titles, and unsuitable or generic titles are rejected. Typed names or already-saved shortcuts are never overwritten; no permission prompt is triggered.
+- The shortcut editor action buttons retain native flex centering. A proposed universal 1px optical offset was removed after independent testing showed it made Linux font alignment worse; no button dimensions or click behavior changed.
+- Adds behavioral regression coverage for fallback names, webpage titles, network/permission failures, redirects, stale responses and manual overrides. No favicon discovery changes, new permissions, schema changes, telemetry or Sync/Recovery protocol changes.
+
 ## 1.33.0.49
 
 **Independent audit corrective (same release version):** Restricts the new 128px favicon bonus to eligible source kinds: redirected login-provider icons, parent-host icons and legacy Windows tile artwork retain their prior weighting, preserving the site's own identity. Adds full-resolver negative controls in both browser builds while retaining the intended touch-icon improvement. Corrects Ukrainian account-transfer and Chrome Sync wording, refines several Ukrainian strings, repositions Ukrainian in the language menu, and shortens its new Chrome manifest description to fit the documented limit. No discovery-network, cache, timing, permissions, Sync, Recovery or storage changes.

@@ -56,6 +56,8 @@ MosaicSync can request optional access to HTTP(S) websites for automatic favicon
 
 When that permission is available, MosaicSync may make direct requests to the website associated with a shortcut, or to icon resources declared by that website, in order to discover artwork. Those requests go to the relevant website/resource host, not to a MosaicSync-operated favicon proxy or analytics service.
 
+When adding a new shortcut, MosaicSync creates an initial name from the address locally, without contacting the website. **Only after you leave the URL field or press Enter**, and only if optional website access was previously granted, it may request a bounded portion of that page to suggest its title. Typing into the URL field does not initiate website requests. The request is not sent to MosaicSync servers, never asks for additional permission, and is not used for tracking. A missing or unsuitable title leaves the local suggestion in place.
+
 Remote image and SVG handling is subject to validation and size/safety limits in the source code.
 
 Automatic favicon recovery may keep bounded device-local retry metadata, including the last local failure/capability reason and attempt time, so MosaicSync can distinguish a missing permission from a network or parser failure. This metadata is not synchronized, included in `.mosaicsync` profile exports, or transmitted to the developer.

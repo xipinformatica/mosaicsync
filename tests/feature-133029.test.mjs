@@ -44,7 +44,7 @@ async function openEditor(item = null) {
     ensureSecondaryStyles: async () => {},
     shortcutDialog: { open: false, showModal() { this.open = true; } },
     localizeDocument() {}, closeDropChoice() {}, shortcutSyncPrepareGeneration: 0,
-    resetDetectedFaviconPicker() {}, shortcutForm: { reset() {} }, shortcutId: field(),
+    resetDetectedFaviconPicker() {}, invalidateShortcutNameSuggestion() {}, shortcutForm: { reset() {} }, shortcutId: field(),
     editingParentFolderId: null, editingPreferredPosition: null,
     editingSourceSpaceId: "", editingDestinationSpaceId: "", state: { activeSpaceId: "personal" },
     shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle, shortcutUrl,

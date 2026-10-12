@@ -7,6 +7,9 @@ const GROUPS = Object.freeze({
   startup: {
     description: "Startup, first-paint, generated New Tab readiness and appearance lifecycle",
     patterns: [
+      /neofix-133052\.test\.mjs$/i,
+      /neofix-133051\.test\.mjs$/i,
+      /neofix-133050\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133047\.test\.mjs$/i,
       /neofix-133046\.test\.mjs$/i,
@@ -53,6 +56,9 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /neofix-133052\.test\.mjs$/i,
+      /neofix-133051\.test\.mjs$/i,
+      /neofix-133050\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133048\.test\.mjs$/i,
       /neofix-133047\.test\.mjs$/i,
@@ -237,6 +243,9 @@ const GROUPS = Object.freeze({
   browser: {
     description: "Generated Firefox/Chromium parity, adapters, permissions and browser-native favicon behavior",
     patterns: [
+      /neofix-133052\.test\.mjs$/i,
+      /neofix-133051\.test\.mjs$/i,
+      /neofix-133050\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133046\.test\.mjs$/i,
       /neofix-133046-smoke-corrective\.test\.mjs$/i,
@@ -312,6 +321,9 @@ const GROUPS = Object.freeze({
   release: {
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
+      /neofix-133052\.test\.mjs$/i,
+      /neofix-133051\.test\.mjs$/i,
+      /neofix-133050\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133048\.test\.mjs$/i,
       /neofix-133046\.test\.mjs$/i,

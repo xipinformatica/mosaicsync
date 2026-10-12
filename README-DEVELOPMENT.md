@@ -4,7 +4,13 @@
 
 **1.33.0.49 favicon/language maintenance:** Resolution-weighted favicon scoring now prefers suitable tile-ready 128px+ touch artwork over a 48px declared link where appropriate; large generic manifest artwork alone remains insufficient to displace clean conventional favicons. No resolver, queue, time-budget, choice preference, quality-audit, user-override or storage changes. Ukrainian is a 34th complete language with 480 UI messages, dynamic loader and manifest metadata. Keep visual/native linguistic review as separate QA gates.
 
-Current release: 1.33.0.49
+**1.33.0.52 publication corrective:** Independent adversarial findings closed: exact Google service-domain matching, bounded HTML title parsing that excludes comments and raw-text tags, additional transient/bidi rejection, one lookup per normalized URL/editor session, separate cancellable background title requests, and redirect-blocked title fetches. Real-browser smoke now exercises automatic offline naming rather than supplying a manual name. Cancellation cases run in independent contexts. Favicon, Sync/Recovery, storage and permissions remain unchanged.
+
+**1.33.0.51 naming corrective:** Anonymous title suggestions now reject common login, verification, redirect, loading and error pages across languages, also checking the final same-origin destination for authentication routes. Pointer, keyboard, and backdrop cancellation suppress the blur-triggered lookup before it starts. Offline labels preserve common service identities and decode valid international hostnames conservatively for display only. No changes to favicon discovery, Sync/Recovery, storage, browser permissions or button alignment.
+
+**1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
+
+Current release: 1.33.0.52
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 

@@ -1582,3 +1582,23 @@ Before store publication, `.github/workflows/neofix-browser-gate.yml` must succe
 Run `npm run test:inventory` before tests. Every `tests/*.test.mjs` file must declare exactly one `// @kind behavioral|integration|static|browser` at the top. Regenerate `tests/INVENTORY.json` with `npm run test:inventory:update` after adding or reclassifying files. Labels are file-level primary categories and may conceal mixed assertions. Do not misrepresent them as measured assertion-level behavioral coverage.
 
 The browser smoke test must not skip setup by inserting `onboardingCompleted` before testing the first-run flow. Firefox temporary addon packages use their distinct development Gecko ID; Chromium smoke loads the extracted actual Chrome store ZIP. If smoke testing cannot run, certification is HOLD, not an implied pass.
+
+## Shortcut editor auto-name suggestions (1.33.0.50)
+
+For a new shortcut, `friendlyShortcutName` in `src/shared/newtab/ui-utils.js` gives an immediate offline hostname-based suggestion. The editor remains **strictly offline while typing**. It requests an improved `<title>` only after the user leaves the URL field or presses Enter, and only when optional website access has **already** been granted and the host is complete. `suggestShortcutPageTitle` in `background-core.js` uses the existing bounded, credential-free HTML-head fetch and rejects unrelated redirected origins. It is a separate request from favicon discovery and does not change that pipeline.
+
+Keep generation/URL/editor-state checks before committing the title to the field. A manual user edit, an existing shortcut title, a URL change, a save, or dialog closure must never be overwritten by delayed lookup results. Never prompt for host access just to suggest a name; manual title entry and saved shortcut URLs must remain fully functional offline. Buttons keep their existing flex-centering; do not reintroduce a universal 1px optical shift without real Windows/Linux font verification. Reject title strings containing replacement characters, generic login headings or bot challenges, and preserve distinctive subdomain/tenant names.
+
+
+## Shortcut editor quality and abort invariants (1.33.0.51)
+
+- No title fetch while typing; on URL-field blur or Enter only, and only with preexisting website access. Cancel, Escape and backdrop close suppress the blur-triggered fetch *before* it starts.
+- The background's credential-free bounded HTML-head lookup reports its already-observed final same-origin page URL. New Tab screens out transient authentication destinations (including redirects within the same host) and multilingual login, verification, redirect, loading and error titles. Rejection preserves the offline suggestion and never prevents saving.
+- Offline fallback uses narrowly scoped service aliases and validated IDN label decoding for the display label only; it never modifies the stored URL or the Sync/Recovery identity. Manual names and existing shortcuts remain authoritative.
+- Preserve prior asynchronous generation guards and use real event-order tests for Cancel, Escape, and backdrop. Do not extend network budgets or permissions for this behavior.
+
+## Title-request lifecycle hardening (1.33.0.52)
+
+- The editor issues at most one optional title request for each normalized URL within an editor session. Repeated blur never replaces a successfully suggested title with a fallback or initiates duplicate traffic. URL edits, manual naming, saving and dialog closure invalidate the result and send a separate cancellation message.
+- Background title requests use request IDs and AbortControllers isolated from favicon-choice requests. The bounded title fetch disallows redirects and uses no credentials or referrer. HTML comment/script/style/textarea/template content is excluded before matching a title. Rejected titles leave the offline label in place.
+- The real-browser gate must create a new shortcut without manually entering a name. All closing gestures must be tested independently; shared abandoned state can mask a missing guard. Browser matrix success on the exact candidate commit remains a publication prerequisite.

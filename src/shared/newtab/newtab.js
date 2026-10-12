@@ -106,7 +106,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, cleanShortcutPageTitle, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -4613,6 +4613,64 @@ ${site.url}`;
     chooseDetectedFavicon?.setAttribute("aria-expanded", "true");
   }
 
+  // Typing is strictly offline. A website title is requested only when the
+  // user commits the URL by leaving its field or pressing Enter. Late results
+  // may never replace an explicitly typed name, changed URL, or closed editor.
+  let shortcutNameSuggestionGeneration = 0;
+  let shortcutNameManuallyEdited = false;
+  let shortcutNameLookupAbandoned = false;
+  let shortcutNameLastRequestedUrl = "";
+  let shortcutNameRequestId = "";
+  let shortcutNameRequestSequence = 0;
+  function cancelShortcutNameRequest() {
+    if (!shortcutNameRequestId) return;
+    const requestId = shortcutNameRequestId;
+    shortcutNameRequestId = "";
+    void browser.runtime.sendMessage({ type: "mosaicsync:cancel-shortcut-title", requestId }).catch(() => {});
+  }
+  function invalidateShortcutNameSuggestion() {
+    shortcutNameSuggestionGeneration += 1;
+    cancelShortcutNameRequest();
+  }
+  function suggestShortcutNameFromUrl(requestTitle = false) {
+    if (shortcutNameLookupAbandoned) return;
+    if (!shortcutDialog?.open || shortcutId.value || shortcutNameManuallyEdited) return;
+    let url;
+    try { url = normalizeShortcutUrl(shortcutUrl.value); } catch {
+      invalidateShortcutNameSuggestion();
+      shortcutNameLastRequestedUrl = "";
+      return;
+    }
+    // A second blur of the same URL must not contact the website again or
+    // overwrite a previously accepted page title with the offline fallback.
+    if (requestTitle && shortcutNameLastRequestedUrl === url) return;
+    invalidateShortcutNameSuggestion();
+    if (shortcutNameLastRequestedUrl !== url) shortcutNameLastRequestedUrl = "";
+    const fallback = friendlyShortcutName(url);
+    shortcutTitle.value = fallback;
+    updateImagePreview();
+    if (!requestTitle || !webAccessGranted) return; // Typing stays strictly offline.
+    const host = new URL(url).hostname;
+    if (!host || (host !== "localhost" && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(host) &&
+        (!host.includes(".") || host.split(".").at(-1).length < 2))) return;
+    shortcutNameLastRequestedUrl = url;
+    const generation = shortcutNameSuggestionGeneration;
+    const requestId = `name-${Date.now().toString(36)}-${(++shortcutNameRequestSequence).toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    shortcutNameRequestId = requestId;
+    void browser.runtime.sendMessage({ type: "mosaicsync:suggest-shortcut-title", pageUrl: url, requestId })
+      .then(result => {
+        if (shortcutNameRequestId === requestId) shortcutNameRequestId = "";
+        if (generation !== shortcutNameSuggestionGeneration || !shortcutDialog.open || shortcutId.value || shortcutNameManuallyEdited) return;
+        let currentUrl;
+        try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch { return; }
+        if (currentUrl !== url || !result?.ok) return;
+        const title = cleanShortcutPageTitle(result.title, fallback, result.finalPageUrl);
+        if (title) { shortcutTitle.value = title; updateImagePreview(); }
+      }).catch(() => {
+        if (shortcutNameRequestId === requestId) shortcutNameRequestId = "";
+      }); // A failed lookup never blocks shortcut creation.
+  }
+
   async function openShortcutEditor(item = null, parentFolderId = null, preferredPosition = null) {
     await ensureSecondaryStyles();
     if (shortcutDialog.open) return;
@@ -4621,6 +4679,10 @@ ${site.url}`;
     shortcutSyncPrepareGeneration += 1;
     resetDetectedFaviconPicker();
     shortcutForm.reset();
+    invalidateShortcutNameSuggestion();
+    shortcutNameManuallyEdited = Boolean(item);
+    shortcutNameLookupAbandoned = false;
+    shortcutNameLastRequestedUrl = "";
     shortcutId.value = item?.id || "";
     editingParentFolderId = parentFolderId;
     editingPreferredPosition = preferredPosition;
@@ -4691,6 +4753,7 @@ ${site.url}`;
   shortcutDialog?.addEventListener("close", () => {
     shortcutSyncPrepareGeneration += 1;
     resetDetectedFaviconPicker();
+    invalidateShortcutNameSuggestion();
   });
 
   function updateImagePreview() {
@@ -4721,7 +4784,11 @@ ${site.url}`;
     }
   }
 
-  shortcutTitle.addEventListener("input", updateImagePreview);
+  shortcutTitle.addEventListener("input", () => {
+    shortcutNameManuallyEdited = true;
+    invalidateShortcutNameSuggestion();
+    updateImagePreview();
+  });
   shortcutImageStyle.addEventListener("change", updateImagePreview);
 
   chooseDetectedFavicon?.addEventListener("click", () => {
@@ -4784,8 +4851,37 @@ ${site.url}`;
     })();
   });
 
+  // Pointerdown precedes the URL blur. Stop abandoned dialogs from contacting
+  // a site merely because Cancel/backdrop/Escape moved focus away from the URL.
+  shortcutDialog.addEventListener("pointerdown", event => {
+    if (event.target === shortcutDialog || event.target?.closest?.('[data-close-dialog="shortcutDialog"]')) {
+      shortcutNameLookupAbandoned = true;
+      invalidateShortcutNameSuggestion();
+    }
+  });
+  shortcutDialog.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      shortcutNameLookupAbandoned = true;
+      invalidateShortcutNameSuggestion();
+    }
+  }, true);
+  shortcutDialog.addEventListener("cancel", () => {
+    shortcutNameLookupAbandoned = true;
+    invalidateShortcutNameSuggestion();
+  });
+  shortcutUrl.addEventListener("blur", event => {
+    if (shortcutNameLookupAbandoned || event.relatedTarget?.closest?.('[data-close-dialog="shortcutDialog"]')) return;
+    suggestShortcutNameFromUrl(true);
+  });
+  shortcutUrl.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || event.isComposing) return;
+    event.preventDefault(); // Finalize the URL, don't submit the editor prematurely.
+    shortcutTitle.focus(); // Triggers the same blur-driven, optional title lookup.
+  });
+
   shortcutUrl.addEventListener("input", () => {
     if (detectedFaviconPickerUrl) resetDetectedFaviconPicker();
+    suggestShortcutNameFromUrl();
     // The compact preference identifies a candidate discovered for the previous
     // shortcut URL. Keep the already selected pixels as local custom artwork,
     // but never send a stale favicon locator for a different site.
@@ -4979,6 +5075,7 @@ ${site.url}`;
       // so the request still occurs in the original submit user gesture while an
       // invalid URL or impossible destination now causes zero permission prompts.
       const url = normalizeShortcutUrl(shortcutUrl.value);
+      invalidateShortcutNameSuggestion(); // Save abandons any outstanding optional title request.
       const title = shortcutTitle.value.trim() || hostLabel(url);
       const image = pendingShortcutImage;
       const id = shortcutId.value;

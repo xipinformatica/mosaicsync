@@ -1866,7 +1866,7 @@ export function startBackground(adapter) {
     return match ? (match[1] ?? match[2] ?? match[3] ?? "") : "";
   }
 
-  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null } = {}) {
+  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null, redirect = "follow" } = {}) {
     if (!(await canReadOrigin(pageUrl))) return { ok: false, reason: "permission", finalPageUrl: pageUrl, text: "" };
     const remaining = Math.max(0, Number(deadlineAt) - Date.now());
     if (remaining <= 0) return { ok: false, reason: "timeout", finalPageUrl: pageUrl, text: "" };
@@ -1876,6 +1876,7 @@ export function startBackground(adapter) {
         credentials: "omit",
         cache: "force-cache",
         referrerPolicy: "no-referrer",
+        redirect,
         signal: abort.signal
       });
       const finalPageUrl = response.url || pageUrl;
@@ -1928,6 +1929,38 @@ export function startBackground(adapter) {
     } finally {
       abort.cleanup();
     }
+  }
+
+  async function suggestShortcutPageTitle(pageUrl, signal = null) {
+    const source = httpOriginPattern(pageUrl);
+    if (!source) return { ok: false, title: "" };
+    if (signal?.aborted) return { ok: false, title: "" };
+    const result = await fetchHtmlHead(pageUrl, { deadlineAt: Date.now() + 4_000, signal, redirect: "manual" });
+    if (!result.ok) return { ok: false, title: "" };
+    try {
+      const requested = new URL(pageUrl);
+      const final = new URL(result.finalPageUrl);
+      // A login/SSO redirect must not rename the original shortcut after the
+      // redirect destination. Only equivalent www/non-www site hosts qualify.
+      const ownHost = host => host.toLowerCase().replace(/^www\./, "");
+      if (ownHost(requested.hostname) !== ownHost(final.hostname)) return { ok: false, title: "" };
+    } catch { return { ok: false, title: "" }; }
+    // HTML comments and raw-text elements can contain fake <title> strings.
+    // Remove them only in the bounded title-suggestion path (not favicon parsing).
+    const head = result.text
+      .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
+      .replace(/<(script|style|textarea|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+    const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
+    if (!match) return { ok: false, title: "" };
+    const raw = match[1].replace(/<[^>]*>/g, " ").replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp|eacute|egrave|agrave|ccedil|uuml|ouml|auml|ntilde|ndash|mdash|hellip|rsquo|lsquo|ldquo|rdquo|copy|reg);/gi, (whole, code) => {
+      const entities = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", eacute: "é", egrave: "è", agrave: "à", ccedil: "ç", uuml: "ü", ouml: "ö", auml: "ä", ntilde: "ñ", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", copy: "©", reg: "®" };
+      if (code.startsWith("#")) {
+        const number = code[1]?.toLowerCase() === "x" ? parseInt(code.slice(2), 16) : parseInt(code.slice(1), 10);
+        return Number.isInteger(number) && number > 0 && number <= 0x10ffff && !(number >= 0xd800 && number <= 0xdfff) ? String.fromCodePoint(number) : " ";
+      }
+      return entities[code.toLowerCase()] ?? whole;
+    }).replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    return raw && raw.length <= 512 ? { ok: true, title: raw, finalPageUrl: result.finalPageUrl } : { ok: false, title: "" };
   }
 
   async function discoverManifestIconCandidates(manifestUrl, pageUrl, { deadlineAt, signal = null }) {
@@ -2343,6 +2376,31 @@ export function startBackground(adapter) {
       return await discoverFaviconChoicesForUrl(pageUrl, { signal: controller.signal });
     } finally {
       if (faviconChoiceRequests.get(requestId) === controller) faviconChoiceRequests.delete(requestId);
+    }
+  }
+
+  // Title lookups have their own small cancellation registry. They never share
+  // request IDs, signals, or lifecycle with favicon discovery.
+  const shortcutTitleRequests = new Map();
+  function cancelShortcutTitleRequest(value) {
+    const requestId = normalizeFaviconChoiceRequestId(value);
+    if (!requestId) return false;
+    const controller = shortcutTitleRequests.get(requestId);
+    if (!controller) return false;
+    shortcutTitleRequests.delete(requestId);
+    controller.abort();
+    return true;
+  }
+  async function runShortcutTitleRequest(pageUrl, value) {
+    const requestId = normalizeFaviconChoiceRequestId(value);
+    if (!requestId) return { ok: false, title: "" };
+    cancelShortcutTitleRequest(requestId);
+    const controller = new AbortController();
+    shortcutTitleRequests.set(requestId, controller);
+    try {
+      return await suggestShortcutPageTitle(pageUrl, controller.signal);
+    } finally {
+      if (shortcutTitleRequests.get(requestId) === controller) shortcutTitleRequests.delete(requestId);
     }
   }
 
@@ -3510,6 +3568,10 @@ export function startBackground(adapter) {
         });
       case "mosaicsync:discover-favicon-choices":
         return runFaviconChoiceRequest(message.pageUrl, message.requestId);
+      case "mosaicsync:suggest-shortcut-title":
+        return runShortcutTitleRequest(message.pageUrl, message.requestId);
+      case "mosaicsync:cancel-shortcut-title":
+        return Promise.resolve({ ok: true, cancelled: cancelShortcutTitleRequest(message.requestId) });
       case "mosaicsync:cancel-favicon-choices":
         return Promise.resolve({ ok: true, cancelled: cancelFaviconChoiceRequest(message.requestId) });
       case "mosaicsync:get-sync-status":
