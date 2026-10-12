@@ -98,8 +98,15 @@ jobs:
           MOSAICSYNC_CHROMEDRIVER_BIN: ${{ steps.chrome.outputs.chromedriver-path }}
           MOSAICSYNC_FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
         run: |
-          node tools/browser-smoke.mjs --browser=${{ matrix.kind }} --artifacts-dir=smoke-evidence
-          node tools/title-redirect-smoke.mjs --browser=${{ matrix.kind }} > smoke-evidence/title-redirect-${{ matrix.kind }}.json
+          mkdir -p smoke-evidence
+          set -o pipefail
+          node tools/browser-smoke.mjs --browser=${{ matrix.kind }} --artifacts-dir=smoke-evidence 2>&1 | tee smoke-evidence/browser-smoke-${{ matrix.kind }}.log
+          if ! node tools/title-redirect-smoke.mjs --browser=${{ matrix.kind }} > smoke-evidence/title-redirect-${{ matrix.kind }}.json 2> smoke-evidence/title-redirect-${{ matrix.kind }}.stderr.log; then
+            echo 'Title/redirect smoke failed; output below and in uploaded evidence files.' >&2
+            cat smoke-evidence/title-redirect-${{ matrix.kind }}.stderr.log >&2
+            cat smoke-evidence/title-redirect-${{ matrix.kind }}.json >&2
+            exit 1
+          fi
       - name: Upload pass/fail evidence
         if: always()
         uses: actions/upload-artifact@v5

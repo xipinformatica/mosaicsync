@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.33.0.60
+
+- Stabilizes Firefox's native title/redirect browser test in a fresh profile by waiting for MosaicSync's expected first-run Welcome navigation to finish before querying the page. Prevents transient `Document was unloaded` automation failures without bypassing the real New Tab override.
+- Records browser-smoke logs and title/redirect smoke stderr in GitHub Actions evidence ZIPs, including failures, for straightforward diagnosis of any remaining platform issues.
+- Preserves the Chromium browser-gate fixes, time-limited redirect observers, safe same-host title detection, permissions, Sync/Recovery, and all saved-data formats from .59. No unrelated features added.
+
 ## 1.33.0.59
 
 - Fixes unnecessary Chromium MV3 background-worker wakeups introduced by 1.33.0.58: redirect-header observers are attached only during optional website-title lookups and detached five seconds after the last lookup. Busy unrelated tabs no longer keep MosaicSync awake indefinitely.

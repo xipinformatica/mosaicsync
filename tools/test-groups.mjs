@@ -7,6 +7,7 @@ const GROUPS = Object.freeze({
   startup: {
     description: "Startup, first-paint, generated New Tab readiness and appearance lifecycle",
     patterns: [
+      /title-welcome-wait-133060\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
       /neofix-133058\.test\.mjs$/i,
       /neofix-133056\.test\.mjs$/i,

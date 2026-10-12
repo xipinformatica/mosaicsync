@@ -9,6 +9,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import assert from 'node:assert/strict';
 import { WebDriverClient, browserCapabilities, discoverBrowserSmokeEnvironment, openBrowserNewTab, waitForExtensionPage, stabilizeChromeSmokeTab } from './browser-smoke.mjs';
+import { waitForFreshProfileWelcome } from './title-welcome-wait.mjs';
 const kind=process.argv.find(x=>x.startsWith('--browser='))?.split('=')[1];
 if (!['firefox','chrome'].includes(kind)) throw Error('Use --browser=firefox or --browser=chrome');
 const environment=await discoverBrowserSmokeEnvironment();
@@ -51,6 +52,9 @@ try {
   await openBrowserNewTab(client,kind);
   await waitForExtensionPage(client,kind==='chrome'?'chrome-extension://':'moz-extension://',20000);
   if(kind==='chrome')await stabilizeChromeSmokeTab(client);
+  // The fresh-profile New Tab redirects to Welcome once onboarding state is loaded.
+  // Wait for that expected navigation to finish before issuing extension messages.
+  await waitForFreshProfileWelcome(client);
   const request=async(path,id)=>client.executeAsync(`const done=arguments[arguments.length-1]; (globalThis.browser||globalThis.chrome).runtime.sendMessage({type:'mosaicsync:suggest-shortcut-title',pageUrl:arguments[0],requestId:arguments[1]}).then(done,e=>done({error:String(e)}));`,[base+path,id]);
   // Direct document naming must always work even if the browser cannot
   // expose redirect response headers to its own MV3 service worker.

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.59",
+      "version": "1.33.0.60",
       "rawBytes": 2624932,
-      "deflatedBytes": 761901,
+      "deflatedBytes": 761900,
       "categories": {
         "assets": {
           "files": 2,
@@ -59,7 +59,7 @@
         "shared-core": {
           "files": 28,
           "rawBytes": 321387,
-          "deflatedBytes": 91099
+          "deflatedBytes": 91098
         },
         "wallpapers": {
           "files": 29,
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.59",
+      "version": "1.33.0.60",
       "rawBytes": 2646745,
-      "deflatedBytes": 776498,
+      "deflatedBytes": 776495,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1386,
-          "deflatedBytes": 564
+          "deflatedBytes": 562
         },
         "manifest-localization": {
           "files": 34,
@@ -313,7 +313,7 @@
         "shared-core": {
           "files": 29,
           "rawBytes": 332524,
-          "deflatedBytes": 94615
+          "deflatedBytes": 94614
         },
         "wallpapers": {
           "files": 29,

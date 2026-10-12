@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 219,
+  "totalFiles": 220,
   "counts": {
     "behavioral": 108,
-    "integration": 33,
+    "integration": 34,
     "static": 77,
     "browser": 1
   },
@@ -837,6 +837,10 @@
     {
       "file": "tests/theme-wallpaper-ui-1267.test.mjs",
       "kind": "static"
+    },
+    {
+      "file": "tests/title-welcome-wait-133060.test.mjs",
+      "kind": "integration"
     },
     {
       "file": "tests/trust-boundary-133039.test.mjs",
