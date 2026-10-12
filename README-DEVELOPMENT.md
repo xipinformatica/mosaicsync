@@ -1,6 +1,10 @@
 # MosaicSync development
 
-Current release: 1.33.0.48
+**1.33.0.49 independently audited corrective:** The 128px favicon resolution tier excludes cross-origin redirect candidates, parent-host fallbacks and Windows tile art so larger images cannot override the originating site solely by size; existing Apple touch improvements remain. Three permanent end-to-end/branding regressions were red against the initial .49 package and green after the correction. Ukrainian account-transfer and Chrome Sync terminology, minor phrasing, language-menu placement and the new Chrome manifest description are corrected. Browser CI and native-speaker review remain release gates.
+
+**1.33.0.49 favicon/language maintenance:** Resolution-weighted favicon scoring now prefers suitable tile-ready 128px+ touch artwork over a 48px declared link where appropriate; large generic manifest artwork alone remains insufficient to displace clean conventional favicons. No resolver, queue, time-budget, choice preference, quality-audit, user-override or storage changes. Ukrainian is a 34th complete language with 480 UI messages, dynamic loader and manifest metadata. Keep visual/native linguistic review as separate QA gates.
+
+Current release: 1.33.0.49
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 
@@ -17,7 +21,7 @@ Current release: 1.33.0.48
 - Browser CI still requires a real GitHub Actions green RELEASE GATE; local mechanical verification alone is not enough. No intentional Sync/Recovery or browser permission changes.
 - See `docs/QA-1.33.0.47.md` and `docs/RELEASE-1.33.0.47.md`.
 
-## 1.33.0.47 — Neofix 2: real-browser release gate and test inventory
+## 1.33.0.46 — Neofix 2: real-browser release gate and test inventory
 
 - **Post-audit CI corrective:** first run would otherwise block on a native website-access permission prompt. Smoke-only Chrome DevTools injection declines that optional access; Firefox test sessions suppress the optional prompt with the browser test preference. Each result records the test-only permission decision. Shortcut navigation now uses a local HTTP target to avoid dependence on external internet availability, and Chrome ZIP extraction uses `python3`. No extension runtime changes; a real four-browser GitHub Actions run is still the required gate.
 
@@ -26,7 +30,7 @@ Current release: 1.33.0.48
 - Introduces `tests/INVENTORY.json` and `tools/test-inventory.mjs` with an enforced file-level primary kind for each test file (behavioral/integration/static/browser). A file can contain mixed testing methods; these labels do **not** measure assertion-level or line/branch coverage.
 - The Node background harness and two-device harness now model callback replies directly, allowing removal of the test-only `typeof sendResponse` branch. A dedicated rejection scenario verifies exactly one structured failure reply. The production command dispatcher, Sync/Recovery rules, permissions and storage formats are untouched.
 - The browser CI must be validated on a real GitHub runner before it may be designated a verified gate; a checked-in workflow alone is not evidence of browser success. Neofix 3 (icon/UX polishing) and Neofix 4 (behavior-preserving persistence extraction) remain separate.
-- See `docs/QA-1.33.0.47.md` and `docs/RELEASE-1.33.0.47.md`.
+- See `docs/QA-1.33.0.46.md` and `docs/RELEASE-1.33.0.46.md`.
 
 
 ## 1.33.0.45 — Neofix 1: Chromium messaging compatibility

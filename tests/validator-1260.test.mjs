@@ -10,7 +10,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.doesNotMatch(source, /import\s*\(\s*[^\"\'`\s]/, "dynamic imports must begin with a literal string");
     assert.doesNotMatch(source, /LOCALE_MODULES|modulePath/, "retired variable-path locale loader must not return");
     const literalLocaleImports = source.match(/import\("\.\/i18n-locales\/[^"]+\.js"\)/g) || [];
-    assert.equal(literalLocaleImports.length, 32, "all 32 non-English locale modules must remain lazy-loaded through literal imports");
+    assert.equal(literalLocaleImports.length, 33, "all 33 non-English locale modules must remain lazy-loaded through literal imports");
   });
 }
 
@@ -20,10 +20,10 @@ for (const browser of ["firefox", "chrome"]) {
     const versionMatch = constants.match(/export const VERSION = "([^"]+)";/);
     assert.ok(versionMatch, "runtime VERSION constant must be present");
     const runtimeVersion = versionMatch[1];
-    assert.equal(runtimeVersion, "1.33.0.48");
+    assert.equal(runtimeVersion, "1.33.0.49");
 
     const manifest = JSON.parse(await readFile(`dist/${browser}/manifest.json`, "utf8"));
-    assert.equal(manifest.version, "1.33.0.48", "technical manifest version must match 1.30");
+    assert.equal(manifest.version, "1.33.0.49", "technical manifest version must match 1.30");
     if (browser === "chrome") assert.equal(manifest.version_name, runtimeVersion, "Chrome version_name must match public VERSION");
     else assert.equal(Object.hasOwn(manifest, "version_name"), false, "Firefox must not receive Chrome-only version_name");
 

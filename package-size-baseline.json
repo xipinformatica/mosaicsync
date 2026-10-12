@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.48",
-      "rawBytes": 2541621,
-      "deflatedBytes": 739496,
+      "version": "1.33.0.49",
+      "rawBytes": 2582409,
+      "deflatedBytes": 748559,
       "categories": {
         "assets": {
           "files": 2,
@@ -13,13 +13,13 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 394493,
-          "deflatedBytes": 93590
+          "rawBytes": 394483,
+          "deflatedBytes": 93585
         },
         "localization": {
-          "files": 34,
-          "rawBytes": 825661,
-          "deflatedBytes": 245887
+          "files": 35,
+          "rawBytes": 865910,
+          "deflatedBytes": 254632
         },
         "manifest": {
           "files": 1,
@@ -27,9 +27,9 @@
           "deflatedBytes": 657
         },
         "manifest-localization": {
-          "files": 33,
-          "rawBytes": 8619,
-          "deflatedBytes": 6132
+          "files": 34,
+          "rawBytes": 9001,
+          "deflatedBytes": 6400
         },
         "newtab-css": {
           "files": 3,
@@ -58,8 +58,8 @@
         },
         "shared-core": {
           "files": 28,
-          "rawBytes": 317677,
-          "deflatedBytes": 90041
+          "rawBytes": 317770,
+          "deflatedBytes": 90078
         },
         "wallpapers": {
           "files": 29,
@@ -68,8 +68,8 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 56664,
-          "deflatedBytes": 14667
+          "rawBytes": 56738,
+          "deflatedBytes": 14685
         }
       },
       "largestFiles": [
@@ -88,8 +88,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 311720,
-          "deflatedBytes": 69372
+          "rawBytes": 311710,
+          "deflatedBytes": 69367
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -128,6 +128,12 @@
           "deflatedBytes": 9389
         },
         {
+          "path": "core/i18n-locales/uk.js",
+          "category": "localization",
+          "rawBytes": 40249,
+          "deflatedBytes": 8745
+        },
+        {
           "path": "core/i18n-locales/bg.js",
           "category": "localization",
           "rawBytes": 40805,
@@ -246,19 +252,13 @@
           "category": "localization",
           "rawBytes": 23180,
           "deflatedBytes": 7169
-        },
-        {
-          "path": "core/i18n-locales/it.js",
-          "category": "localization",
-          "rawBytes": 23968,
-          "deflatedBytes": 7147
         }
       ]
     },
     "chrome": {
-      "version": "1.33.0.48",
-      "rawBytes": 2563312,
-      "deflatedBytes": 754014,
+      "version": "1.33.0.49",
+      "rawBytes": 2604098,
+      "deflatedBytes": 763077,
       "categories": {
         "assets": {
           "files": 6,
@@ -267,13 +267,13 @@
         },
         "background": {
           "files": 12,
-          "rawBytes": 393870,
-          "deflatedBytes": 93341
+          "rawBytes": 393860,
+          "deflatedBytes": 93336
         },
         "localization": {
-          "files": 34,
-          "rawBytes": 825661,
-          "deflatedBytes": 245887
+          "files": 35,
+          "rawBytes": 865910,
+          "deflatedBytes": 254632
         },
         "manifest": {
           "files": 1,
@@ -281,9 +281,9 @@
           "deflatedBytes": 555
         },
         "manifest-localization": {
-          "files": 33,
-          "rawBytes": 8582,
-          "deflatedBytes": 6127
+          "files": 34,
+          "rawBytes": 8962,
+          "deflatedBytes": 6394
         },
         "newtab-css": {
           "files": 3,
@@ -312,8 +312,8 @@
         },
         "shared-core": {
           "files": 29,
-          "rawBytes": 328648,
-          "deflatedBytes": 93458
+          "rawBytes": 328741,
+          "deflatedBytes": 93496
         },
         "wallpapers": {
           "files": 29,
@@ -322,8 +322,8 @@
         },
         "welcome": {
           "files": 3,
-          "rawBytes": 56664,
-          "deflatedBytes": 14667
+          "rawBytes": 56738,
+          "deflatedBytes": 14685
         }
       },
       "largestFiles": [
@@ -342,8 +342,8 @@
         {
           "path": "background/background-core.js",
           "category": "background",
-          "rawBytes": 311720,
-          "deflatedBytes": 69372
+          "rawBytes": 311710,
+          "deflatedBytes": 69367
         },
         {
           "path": "core/public_suffix_list.dat",
@@ -382,6 +382,12 @@
           "deflatedBytes": 9389
         },
         {
+          "path": "core/i18n-locales/uk.js",
+          "category": "localization",
+          "rawBytes": 40249,
+          "deflatedBytes": 8745
+        },
+        {
           "path": "core/i18n-locales/bg.js",
           "category": "localization",
           "rawBytes": 40805,
@@ -500,12 +506,6 @@
           "category": "localization",
           "rawBytes": 23180,
           "deflatedBytes": 7169
-        },
-        {
-          "path": "core/i18n-locales/it.js",
-          "category": "localization",
-          "rawBytes": 23968,
-          "deflatedBytes": 7147
         }
       ]
     }

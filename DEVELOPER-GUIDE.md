@@ -930,6 +930,8 @@ Runtime UI localization source catalogs live under:
 src/shared/core/i18n-locales/
 ```
 
+As of 1.33.0.49, there are **34 complete UI catalogs**, including Ukrainian (`uk.js`). Ukrainian must work through the dynamic loader, browser-language auto-selection, language menu, Chrome branding adapter and generated manifest `_locales/uk/` on both browsers. Each catalog has 480 English-aligned keys and identical placeholders.
+
 The English catalog defines the expected key set. `tools/build.mjs` validates that all source locale catalogs have matching keys and generates compact runtime catalogs.
 
 Manifest locale strings are separately sourced from:

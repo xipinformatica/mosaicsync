@@ -154,6 +154,11 @@
     "firefoxDescription": "Integritetsfokuserad Firefox Ny flik med mappar, anpassning och valfri Firefox Sync. Ingen MosaicSync-telemetri.",
     "chromeDescription": "Integritetsfokuserad ny flik i Chrome med mappar, anpassning och valfri Chrome Sync. Ingen MosaicSync-telemetri."
   },
+  "uk": {
+    "actionOpenHome": "Відкрити MosaicSync",
+    "firefoxDescription": "Нова вкладка Firefox із захистом приватності, теками, власним оформленням і необов’язковою синхронізацією Firefox Sync. MosaicSync не збирає телеметрії.",
+    "chromeDescription": "MosaicSync: нова вкладка Chrome з теками, власним оформленням і необов’язковою синхронізацією. Приватність без телеметрії."
+  },
   "zh_CN": {
     "actionOpenHome": "打开 MosaicSync",
     "firefoxDescription": "注重隐私的 Firefox 新标签页，支持文件夹、自定义和可选 Firefox Sync。MosaicSync 零遥测。",

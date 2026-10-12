@@ -73,7 +73,7 @@ test("1.30.18.17 generated browser shells preserve the exact Chrome shim boundar
 test("1.30.18.17 manifest localization has one reviewed source registry and preserves browser branding", async () => {
   const registry = JSON.parse(await read("src/shared/manifest-locales.json"));
   const localeIds = Object.keys(registry).sort();
-  assert.equal(localeIds.length, 33);
+  assert.equal(localeIds.length, 34);
 
   for (const browser of ["firefox", "chrome"]) {
     const generated = (await readdir(resolve(root, `dist/${browser}/_locales`), { withFileTypes: true }))

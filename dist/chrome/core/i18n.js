@@ -39,6 +39,7 @@ export const SUPPORTED_LOCALES = Object.freeze([
   { id: "sl", label: "Slovenščina" },
   { id: "fi", label: "Suomi" },
   { id: "sv", label: "Svenska" },
+  { id: "uk", label: "Українська" },
   { id: "ja", label: "日本語" },
   { id: "zh-CN", label: "简体中文" },
   { id: "zh-TW", label: "繁體中文" },
@@ -79,6 +80,7 @@ const LOCALE_LOADERS = Object.freeze({
   "ro": () => import("./i18n-locales/ro.js"),
   "sk": () => import("./i18n-locales/sk.js"),
   "sl": () => import("./i18n-locales/sl.js"),
+  "uk": () => import("./i18n-locales/uk.js"),
 });
 const SOURCE_KEYS = Object.freeze(Object.fromEntries(
   Object.entries(EN_MESSAGES).map(([key, value]) => [value, key])
@@ -89,7 +91,7 @@ function rememberLoadedMessages(locale, catalog) {
   if (locale === "en") return;
   // Map insertion order doubles as a tiny LRU. Keep English plus only a few
   // recently selected catalogs; switching through every language in one tab
-  // must not retain all 33 dictionaries indefinitely.
+  // must not retain all 34 dictionaries indefinitely.
   loadedMessages.delete(locale);
   loadedMessages.set(locale, catalog);
   while (loadedMessages.size > LOADED_LOCALE_CATALOG_MAX) {

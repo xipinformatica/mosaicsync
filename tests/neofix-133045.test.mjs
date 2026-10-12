@@ -17,7 +17,7 @@ for (const browser of ['chrome','firefox']) {
 
 test('.45 profile import storage guidance describes browser quota and preserves existing layouts', async () => {
   const files=readdirSync('src/shared/core/i18n-locales').filter(name=>name.endsWith('.js'));
-  assert.equal(files.length,33);
+  assert.equal(files.length,34);
   const english=(await import('../src/shared/core/i18n-locales/en.js')).MESSAGES.profileImportStorageFull;
   assert.match(english,/browser/i);
   assert.match(english,/backup/i);

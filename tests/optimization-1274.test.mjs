@@ -115,10 +115,10 @@ test("1.27.4 runtime PSL removes non-semantic bulk while preserving every rule e
   }
 });
 
-test("1.27.4 compact runtime locales are bit-for-text equivalent to all 33 reviewed source catalogs", async () => {
+test("1.27.4 compact runtime locales are bit-for-text equivalent to all 34 reviewed source catalogs", async () => {
   const sourceDir = resolve("src/shared/core/i18n-locales");
   const files = (await readdir(sourceDir)).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   let sourceBytes = 0;
   for (const file of files) sourceBytes += fs.statSync(resolve(sourceDir, file)).size;
 

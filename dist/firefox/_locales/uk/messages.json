@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "Нова вкладка Firefox із захистом приватності, теками, власним оформленням і необов’язковою синхронізацією Firefox Sync. MosaicSync не збирає телеметрії."
+  },
+  "actionOpenHome": {
+    "message": "Відкрити MosaicSync"
+  }
+}

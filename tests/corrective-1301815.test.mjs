@@ -164,7 +164,7 @@ test("1.30.18.15 receipt attribution uses the named device and has an ID fallbac
 test("1.30.18.15 receipt-source translation exists in every locale with the name placeholder", () => {
   const localeDir = "src/shared/core/i18n-locales";
   const files = fs.readdirSync(localeDir).filter(name => name.endsWith(".js"));
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   for (const file of files) {
     const source = fs.readFileSync(`${localeDir}/${file}`, "utf8");
     assert.match(source, /"receivedFromDevice":"[^"]*\{name\}[^"]*"/, `${file} must localize receivedFromDevice with {name}`);

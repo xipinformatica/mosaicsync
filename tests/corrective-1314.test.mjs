@@ -36,7 +36,7 @@ test("1.31.4 separate Light/Dark wallpaper darkness controls reserve a full-widt
 test("1.31.4 wallpaper darkness layout remains localization-safe for every shipped runtime language", async () => {
   const localeDir = path.join(root, "src/shared/core/i18n-locales");
   const files = fs.readdirSync(localeDir).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
 
   const translations = [];
   for (const file of files) {

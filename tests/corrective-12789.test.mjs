@@ -205,7 +205,7 @@ for (const browser of ["firefox", "chrome"]) {
 test("1.27.8.9 every supported locale defines the complete drag-choice text set", async () => {
   const { readdir } = await import("node:fs/promises");
   const files = (await readdir("src/shared/core/i18n-locales")).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 33, "all supported UI locale catalogs must be present");
+  assert.equal(files.length, 34, "all supported UI locale catalogs must be present");
   for (const file of files) {
     const { MESSAGES } = await import(`../src/shared/core/i18n-locales/${file}?drag12789=${Date.now()}-${file}`);
     for (const key of ["moveHere", "switchPositions", "createFolder", "putTogether"]) {

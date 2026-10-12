@@ -1633,17 +1633,21 @@ export function startBackground(adapter) {
   function faviconCandidateSuitability(candidate) {
     if (!candidate?.image) return -1;
     const side = faviconQualitySide(candidate);
-    // Resolution is valuable only until it is comfortably tile-ready. A 512px
-    // manifest/touch asset must not beat a crisp conventional favicon merely
-    // because it is larger; provenance and geometry matter once quality is enough.
-    const resolutionScore = side >= 128 ? 230 : side >= 64 ? 220 : side >= 32 ? 200 : side >= 16 ? 150 : Math.min(120, side * 6);
+    // Prefer genuinely tile-ready art over small declared favicons, while
+    // saturating the resolution bonus at 128px. A large generic manifest
+    // asset must still not displace a crisp conventional favicon by size alone.
     const sourceKind = String(candidate.sourceKind || (candidate.native ? "browser" : ""));
+    // Large icons from redirects, parent hosts and Windows tiles must not
+    // replace a site's own conventional favicon solely due to the new size tier.
+    // Keep their pre-.49 resolution weight; touch icons retain the quality bonus.
+    const preserveLegacyResolution = sourceKind === "redirect" || sourceKind === "parent" || sourceKind === "tile";
+    const resolutionScore = side >= 128 && !preserveLegacyResolution ? 250 : side >= 64 ? 220 : side >= 32 ? 200 : side >= 16 ? 150 : Math.min(120, side * 6);
     const sourceScore = ({
       link: 130,
       favicon: 120,
       browser: 115,
-      touch: 65,
-      manifest: 60,
+      touch: 100,
+      manifest: 45,
       conventional: 55,
       tile: 40,
       parent: 30,

@@ -1,0 +1,8 @@
+{
+  "extensionDescription": {
+    "message": "MosaicSync: нова вкладка Chrome з теками, власним оформленням і необов’язковою синхронізацією. Приватність без телеметрії."
+  },
+  "actionOpenHome": {
+    "message": "Відкрити MosaicSync"
+  }
+}

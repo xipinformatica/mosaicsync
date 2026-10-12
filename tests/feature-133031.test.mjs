@@ -75,7 +75,7 @@ test("1.33.0.31 New Tab integration lazy-loads the hint and does not advertise i
 test("1.33.0.31 folder discovery copy exists in every reviewed locale", async () => {
   const dir = "src/shared/core/i18n-locales";
   const files = fs.readdirSync(dir).filter(name => name.endsWith(".js"));
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   for (const file of files) {
     const module = await import(`../${dir}/${file}?133031=${Date.now()}-${file}`);
     assert.ok(String(module.MESSAGES.folderDiscoveryTitle || "").trim(), `${file} title`);

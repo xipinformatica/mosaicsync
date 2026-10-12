@@ -136,7 +136,7 @@ test('.44 Welcome import rejects storage-full errors with the same specific advi
 
 test('.44 every supported UI locale has a non-placeholder storage-full import message', async () => {
   const files = fs.readdirSync('src/shared/core/i18n-locales').filter(name => name.endsWith('.js'));
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   for (const file of files) {
     const { MESSAGES } = await import(`../src/shared/core/i18n-locales/${file}`);
     const value = MESSAGES.profileImportStorageFull;

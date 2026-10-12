@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.33.0.49
+
+**Independent audit corrective (same release version):** Restricts the new 128px favicon bonus to eligible source kinds: redirected login-provider icons, parent-host icons and legacy Windows tile artwork retain their prior weighting, preserving the site's own identity. Adds full-resolver negative controls in both browser builds while retaining the intended touch-icon improvement. Corrects Ukrainian account-transfer and Chrome Sync wording, refines several Ukrainian strings, repositions Ukrainian in the language menu, and shortens its new Chrome manifest description to fit the documented limit. No discovery-network, cache, timing, permissions, Sync, Recovery or storage changes.
+
+- Improves automatic favicon selection by modestly favoring suitable higher-resolution site icons (including Apple touch artwork) over smaller website icons, while keeping low-quality oversized manifest artwork from winning by raw size alone. The fast-first discovery, background search, quality-audit timing, manual icon chooser and user-selected artwork protection remain unchanged.
+- Adds **Ukrainian (Українська)** throughout MosaicSync: all 480 UI strings, automatic browser-language detection, manual language selection, and localized Firefox/Chrome extension metadata. The 24 official EU languages and 33 previous languages remain available.
+- Adds focused favicon ranking and Ukrainian completeness, placeholder and browser-branding regressions. No new permissions, storage format, Sync/Recovery protocol, telemetry or networking behavior changes.
+- Browser CI on the exact published commit and an independent quality/language review remain release gates.
+
 ## 1.33.0.48
 
 - **Internal maintainability only:** Groups New Tab storage commits behind one small persistence gateway while preserving the same save behavior, including pending edits, backup-import safeguards, cross-Space moves, Sync intent and error feedback.

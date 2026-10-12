@@ -46,7 +46,7 @@ test("1.32.1.5 collaborative Sync receipt wording does not invent a single sendi
 
 test("1.32.1.5 every locale has deliberate collaborative receipt wording", () => {
   const files = fs.readdirSync("src/shared/core/i18n-locales").filter(name => name.endsWith(".js"));
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   for (const file of files) {
     const source = fs.readFileSync(`src/shared/core/i18n-locales/${file}`, "utf8");
     const match = source.match(/"received":"([^"]+)"/);

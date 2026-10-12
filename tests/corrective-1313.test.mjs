@@ -65,7 +65,7 @@ test("1.31.3 late synchronized Frequently Visited ON gets a translated one-click
 test("1.31.3 every shipped locale contains all text used by the new Frequently Visited permission step", async () => {
   const localeDir = path.join(root, "src/shared/core/i18n-locales");
   const files = fs.readdirSync(localeDir).filter(name => name.endsWith(".js")).sort();
-  assert.equal(files.length, 33);
+  assert.equal(files.length, 34);
   const keys = [
     "frequentlyVisited",
     "frequentPermissionRequired",
