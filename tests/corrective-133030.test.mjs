@@ -183,7 +183,7 @@ test("1.33.0.30 invalid shortcut URL performs no website-access permission reque
     console
   };
   vm.createContext(context);
-  vm.runInContext(`${fn}; this.submitShortcutForTest = submitShortcutForTest;`, context);
+  vm.runInContext(`let shortcutSavePending = false; ${fn}; this.submitShortcutForTest = submitShortcutForTest;`, context);
   await context.submitShortcutForTest({ preventDefault() {} });
   assert.equal(permissionRequests, 0, "invalid URL must fail before asking for optional all-sites access");
   assert.equal(toast, "invalid-url");
@@ -244,7 +244,7 @@ test("1.33.0.30 blank shortcut name is behaviorally persisted as the normalized 
     console
   };
   vm.createContext(context);
-  vm.runInContext(`${fn}; this.submitShortcutForTest = submitShortcutForTest;`, context);
+  vm.runInContext(`let shortcutSavePending = false; ${fn}; this.submitShortcutForTest = submitShortcutForTest;`, context);
   await context.submitShortcutForTest({ preventDefault() {} });
   assert.equal(state.shortcuts.length, 1);
   assert.equal(state.shortcuts[0].title, "youtube.com");

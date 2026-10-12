@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.33.0.54
+
+- Fixes two pre-publication shortcut-name/confirmation issues: misleading page titles embedded in unusually long or unfinished scripts are ignored, and Settings stays open when you cancel or accept a MosaicSync confirmation.
+- Tightens bounded title parsing only for optional name suggestions; favicon discovery retains its original request and head-reading behavior. Adds real HTTP loopback and Settings interaction regression tests.
+- Carries forward URL-first shortcut creation, automatic naming and the same localized confirmation experience for Firefox and Chromium. No new permissions or Sync/Recovery data changes.
+
+## 1.33.0.53
+
+- Create shortcuts faster: paste or type a website address first and press Enter to save. A suggested name appears automatically; uncheck **Automatic naming** to enter your own name. Existing shortcut names are preserved when editing.
+- Confirmation prompts now appear inside MosaicSync instead of as browser pop-ups, so Firefox and Chrome cannot suppress shortcut-deletion confirmations. The same localized, keyboard-accessible confirmation is used for imports, Recovery cleanup and other protected actions.
+- Shared interface across Firefox and Chromium, translated into all 34 supported languages. No new permissions, storage changes, favicon discovery changes, or Sync/Recovery protocol changes.
+
 ## 1.33.0.52
 
 - Makes automatic shortcut names more reliable: avoids misleading names from unrelated domains, login and error pages, and deceptive webpage titles.

@@ -77,7 +77,7 @@ test("1.33.0.19 rapid Add/Edit Shortcut opens serialize before editor state muta
   const styles = deferred();
   let showCalls = 0;
   let resetCalls = 0;
-  const field = () => ({ value: "", hidden: false, disabled: false, checked: false, focus() {} });
+  const field = () => ({ value: "", hidden: false, disabled: false, checked: false, setAttribute() {}, focus() {} });
   const context = {
     ensureSecondaryStyles() { return styles.promise; },
     shortcutDialog: {
@@ -92,7 +92,7 @@ test("1.33.0.19 rapid Add/Edit Shortcut opens serialize before editor state muta
     resetDetectedFaviconPicker() {}, invalidateShortcutNameSuggestion() {}, shortcutForm: { reset() { resetCalls += 1; } },
     shortcutId: field(), editingParentFolderId: null, editingPreferredPosition: null,
     editingSourceSpaceId: "", editingDestinationSpaceId: "", state: { activeSpaceId: "personal" },
-    shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle: field(), shortcutUrl: field(),
+    shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle: field(), shortcutUrl: field(), shortcutAutomaticName: field(), shortcutSavePending: false,
     shortcutImageStyle: field(), pendingShortcutImage: "", pendingShortcutSyncData: "", pendingShortcutImageKind: "",
     pendingShortcutImageSourceKind: "", pendingShortcutImageSourceUrl: "", pendingShortcutFaviconPreference: "",
     pendingShortcutImageIsFallback: false, pendingShortcutBuiltinIcon: "", pendingShortcutColorTag: "",

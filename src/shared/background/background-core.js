@@ -1866,7 +1866,7 @@ export function startBackground(adapter) {
     return match ? (match[1] ?? match[2] ?? match[3] ?? "") : "";
   }
 
-  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null, redirect = "follow" } = {}) {
+  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null, redirect = "follow", stopAtHeadEnd = true } = {}) {
     if (!(await canReadOrigin(pageUrl))) return { ok: false, reason: "permission", finalPageUrl: pageUrl, text: "" };
     const remaining = Math.max(0, Number(deadlineAt) - Date.now());
     if (remaining <= 0) return { ok: false, reason: "timeout", finalPageUrl: pageUrl, text: "" };
@@ -1892,7 +1892,7 @@ export function startBackground(adapter) {
         if (bytes.length > REMOTE_HTML_HEAD_MAX_BYTES) return { ok: false, reason: "too-large", finalPageUrl, text: "" };
         const text = textDecoder.decode(bytes);
         const headEnd = text.search(/<\/head\s*>/i);
-        return { ok: true, reason: "", finalPageUrl, text: headEnd >= 0 ? text.slice(0, headEnd + 7) : text };
+        return { ok: true, reason: "", finalPageUrl, text: stopAtHeadEnd && headEnd >= 0 ? text.slice(0, headEnd + 7) : text };
       }
 
       const reader = response.body.getReader();
@@ -1912,7 +1912,7 @@ export function startBackground(adapter) {
           }
           text += decoder.decode(value, { stream: true });
           const headEnd = text.search(/<\/head\s*>/i);
-          if (headEnd >= 0) {
+          if (stopAtHeadEnd && headEnd >= 0) {
             text = text.slice(0, headEnd + 7);
             break;
           }
@@ -1935,7 +1935,7 @@ export function startBackground(adapter) {
     const source = httpOriginPattern(pageUrl);
     if (!source) return { ok: false, title: "" };
     if (signal?.aborted) return { ok: false, title: "" };
-    const result = await fetchHtmlHead(pageUrl, { deadlineAt: Date.now() + 4_000, signal, redirect: "manual" });
+    const result = await fetchHtmlHead(pageUrl, { deadlineAt: Date.now() + 4_000, signal, redirect: "manual", stopAtHeadEnd: false });
     if (!result.ok) return { ok: false, title: "" };
     try {
       const requested = new URL(pageUrl);
@@ -1945,11 +1945,13 @@ export function startBackground(adapter) {
       const ownHost = host => host.toLowerCase().replace(/^www\./, "");
       if (ownHost(requested.hostname) !== ownHost(final.hostname)) return { ok: false, title: "" };
     } catch { return { ok: false, title: "" }; }
-    // HTML comments and raw-text elements can contain fake <title> strings.
-    // Remove them only in the bounded title-suggestion path (not favicon parsing).
+    // A script can contain </head> as ordinary text, so the title-only fetch
+    // reads the bounded response instead of stopping on the first apparent head
+    // close. Discard even unfinished raw-text regions through the cap/EOF.
+    // Favicon discovery continues using its original early-head reader.
     const head = result.text
-      .replace(/<!--[\s\S]*?(?:-->|$)/g, "")
-      .replace(/<(script|style|textarea|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "");
+      .replace(/<(script|style|textarea|template)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, "")
+      .replace(/<!--[\s\S]*?(?:-->|$)/g, "");
     const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
     if (!match) return { ok: false, title: "" };
     const raw = match[1].replace(/<[^>]*>/g, " ").replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp|eacute|egrave|agrave|ccedil|uuml|ouml|auml|ntilde|ndash|mdash|hellip|rsquo|lsquo|ldquo|rdquo|copy|reg);/gi, (whole, code) => {

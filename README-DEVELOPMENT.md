@@ -1,5 +1,9 @@
 # MosaicSync development
 
+**1.33.0.54 pre-publication corrective:** The optional webpage-title reader no longer trusts an apparent `</head>` before reading bounded script content, and incomplete `<script>`/other raw-text blocks are removed to end-of-input before name extraction. The favicon reader's early-head behavior is unchanged. The Settings child-dialog guard now includes the shared MosaicSync confirmation, so Cancel/Accept/Escape do not dismiss the underlying Settings panel. Dedicated real-loopback and event-order regressions are added. No new permissions, storage or Sync/Recovery changes.
+
+**1.33.0.53 URL-first editor and native-confirmation replacement:** URL is first and initially focused for new shortcuts. Automatic naming is selected and read-only in the new editor; manual naming is opt-in, and existing shortcut edits retain user names. Enter in URL submits through requestSubmit and is guarded against repeated pending saves. All ten browser-native JavaScript confirmations in the New Tab owner are replaced by one browser-neutral modal with escape/backdrop/cancel protection, localized actions, and fail-closed concurrent requests. Changes apply equally to Firefox and Chromium. New `tests/neofix-133053.test.mjs` and real-browser smoke exercise name checkbox/URL Enter and modal behavior; no Sync/Recovery authority changes.
+
 **1.33.0.49 independently audited corrective:** The 128px favicon resolution tier excludes cross-origin redirect candidates, parent-host fallbacks and Windows tile art so larger images cannot override the originating site solely by size; existing Apple touch improvements remain. Three permanent end-to-end/branding regressions were red against the initial .49 package and green after the correction. Ukrainian account-transfer and Chrome Sync terminology, minor phrasing, language-menu placement and the new Chrome manifest description are corrected. Browser CI and native-speaker review remain release gates.
 
 **1.33.0.49 favicon/language maintenance:** Resolution-weighted favicon scoring now prefers suitable tile-ready 128px+ touch artwork over a 48px declared link where appropriate; large generic manifest artwork alone remains insufficient to displace clean conventional favicons. No resolver, queue, time-budget, choice preference, quality-audit, user-override or storage changes. Ukrainian is a 34th complete language with 480 UI messages, dynamic loader and manifest metadata. Keep visual/native linguistic review as separate QA gates.
@@ -10,7 +14,7 @@
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.52
+Current release: 1.33.0.54
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 

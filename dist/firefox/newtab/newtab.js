@@ -405,6 +405,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const shortcutDialogTitle = document.getElementById("shortcutDialogTitle");
   const shortcutId = document.getElementById("shortcutId");
   const shortcutTitle = document.getElementById("shortcutTitle");
+  const shortcutAutomaticName = document.getElementById("shortcutAutomaticName");
   const shortcutUrl = document.getElementById("shortcutUrl");
   const shortcutImageFile = document.getElementById("shortcutImageFile");
   const chooseDetectedFavicon = document.getElementById("chooseDetectedFavicon");
@@ -4616,8 +4617,23 @@ ${site.url}`;
   // Typing is strictly offline. A website title is requested only when the
   // user commits the URL by leaving its field or pressing Enter. Late results
   // may never replace an explicitly typed name, changed URL, or closed editor.
+  let shortcutSavePending = false;
   let shortcutNameSuggestionGeneration = 0;
   let shortcutNameManuallyEdited = false;
+  function applyShortcutNamingMode() {
+    const automatic = shortcutAutomaticName.checked;
+    shortcutTitle.readOnly = automatic;
+    shortcutTitle.setAttribute("aria-readonly", automatic ? "true" : "false");
+    if (automatic) {
+      shortcutNameManuallyEdited = false;
+      shortcutNameLastRequestedUrl = "";
+      invalidateShortcutNameSuggestion();
+      suggestShortcutNameFromUrl(false); // No network activity on checkbox toggle.
+    } else {
+      shortcutNameManuallyEdited = true;
+      invalidateShortcutNameSuggestion();
+    }
+  }
   let shortcutNameLookupAbandoned = false;
   let shortcutNameLastRequestedUrl = "";
   let shortcutNameRequestId = "";
@@ -4679,8 +4695,12 @@ ${site.url}`;
     shortcutSyncPrepareGeneration += 1;
     resetDetectedFaviconPicker();
     shortcutForm.reset();
+    shortcutSavePending = false;
     invalidateShortcutNameSuggestion();
+    shortcutAutomaticName.checked = !item;
     shortcutNameManuallyEdited = Boolean(item);
+    shortcutTitle.readOnly = !item;
+    shortcutTitle.setAttribute("aria-readonly", item ? "false" : "true");
     shortcutNameLookupAbandoned = false;
     shortcutNameLastRequestedUrl = "";
     shortcutId.value = item?.id || "";
@@ -4750,6 +4770,52 @@ ${site.url}`;
     if (dialog?.open) dialog.close();
   }
 
+  // One in-page confirmation surface for Firefox and every Chromium browser.
+  // It avoids native JavaScript confirm dialogs, which users can permanently suppress.
+  // A second simultaneous confirmation fails closed instead of overwriting it.
+  const mosaicConfirmDialog = document.getElementById("mosaicConfirmDialog");
+  const mosaicConfirmTitle = document.getElementById("mosaicConfirmTitle");
+  const mosaicConfirmMessage = document.getElementById("mosaicConfirmMessage");
+  const mosaicConfirmCancel = document.getElementById("mosaicConfirmCancel");
+  const mosaicConfirmAccept = document.getElementById("mosaicConfirmAccept");
+  let resolveMosaicConfirmation = null;
+  mosaicConfirmDialog?.addEventListener("close", () => {
+    if (resolveMosaicConfirmation) {
+      const resolve = resolveMosaicConfirmation;
+      resolveMosaicConfirmation = null;
+      resolve(mosaicConfirmDialog.returnValue === "accepted");
+    }
+  });
+  mosaicConfirmDialog?.addEventListener("cancel", () => {
+    mosaicConfirmDialog.returnValue = "cancelled";
+  });
+  mosaicConfirmCancel?.addEventListener("click", () => mosaicConfirmDialog.close("cancelled"));
+  mosaicConfirmAccept?.addEventListener("click", () => mosaicConfirmDialog.close("accepted"));
+  mosaicConfirmDialog?.addEventListener("click", event => {
+    if (event.target === mosaicConfirmDialog) mosaicConfirmDialog.close("cancelled");
+  });
+  function confirmMosaic(message, { danger = false, actionKey = "continue" } = {}) {
+    if (!mosaicConfirmDialog || mosaicConfirmDialog.open || resolveMosaicConfirmation) return Promise.resolve(false);
+    const key = danger ? "delete" : actionKey;
+    mosaicConfirmTitle.textContent = t(key);
+    mosaicConfirmMessage.textContent = String(message ?? ""); // Never inject markup from user-controlled names.
+    mosaicConfirmAccept.textContent = t(key);
+    mosaicConfirmCancel.textContent = t("cancel");
+    mosaicConfirmAccept.classList.toggle("danger-button", danger);
+    mosaicConfirmAccept.classList.toggle("primary-button", !danger);
+    mosaicConfirmDialog.returnValue = "cancelled";
+    return new Promise(resolve => {
+      resolveMosaicConfirmation = resolve;
+      try {
+        mosaicConfirmDialog.showModal();
+        mosaicConfirmCancel.focus(); // Safe default, especially for destructive actions.
+      } catch {
+        resolveMosaicConfirmation = null;
+        resolve(false);
+      }
+    });
+  }
+
   shortcutDialog?.addEventListener("close", () => {
     shortcutSyncPrepareGeneration += 1;
     resetDetectedFaviconPicker();
@@ -4784,6 +4850,7 @@ ${site.url}`;
     }
   }
 
+  shortcutAutomaticName.addEventListener("change", applyShortcutNamingMode);
   shortcutTitle.addEventListener("input", () => {
     shortcutNameManuallyEdited = true;
     invalidateShortcutNameSuggestion();
@@ -4875,11 +4942,13 @@ ${site.url}`;
   });
   shortcutUrl.addEventListener("keydown", event => {
     if (event.key !== "Enter" || event.isComposing) return;
-    event.preventDefault(); // Finalize the URL, don't submit the editor prematurely.
-    shortcutTitle.focus(); // Triggers the same blur-driven, optional title lookup.
+    event.preventDefault(); // URL-first: Enter saves the shortcut, never moves focus to Name.
+    shortcutNameLookupAbandoned = true; // Do not issue a discarded page-title request on blur.
+    shortcutForm.requestSubmit();
   });
 
   shortcutUrl.addEventListener("input", () => {
+    shortcutNameLookupAbandoned = false; // Recover after an invalid Enter submission without a dialog close.
     if (detectedFaviconPickerUrl) resetDetectedFaviconPicker();
     suggestShortcutNameFromUrl();
     // The compact preference identifies a candidate discovered for the previous
@@ -5068,6 +5137,8 @@ ${site.url}`;
 
   shortcutForm.addEventListener("submit", async event => {
     event.preventDefault();
+    if (shortcutSavePending) return; // Enter repeat/double-submit must not create duplicates.
+    shortcutSavePending = true;
 
     try {
       // Validate every synchronous precondition before starting the optional
@@ -5235,15 +5306,22 @@ ${site.url}`;
       if (!image && !pendingShortcutBuiltinIcon && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
     } catch (error) {
       showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : error.message || t("operationFailed"));
+    } finally {
+      shortcutSavePending = false;
     }
   });
 
   deleteShortcutButton.addEventListener("click", async () => {
     const id = shortcutId.value;
     if (!id) return;
+    const beforeConfirmation = findShortcutRecord(id);
+    if (!beforeConfirmation) return;
+    const confirmedTitle = beforeConfirmation.item.title;
+    if (!await confirmMosaic(`${t("delete")} “${confirmedTitle}”?`, { danger: true })) return;
+    // Unlike blocking browser-native prompts, an in-page dialog yields to other
+    // asynchronous Sync activity. Re-read the record before mutating it.
     const record = findShortcutRecord(id);
-    if (!record) return;
-    if (!confirm(`${t("delete")} “${record.item.title}”?`)) return;
+    if (!record || record.item.title !== confirmedTitle || shortcutId.value !== id) return;
 
     record.array.splice(record.index, 1);
 
@@ -5299,7 +5377,7 @@ ${site.url}`;
     try {
       if (confirmReplace && state.shortcuts.length) {
         const syncNote = meta?.syncEnabled && meta?.syncInitialized ? `\n\n${t("changesPublishAuto")}` : "";
-        const confirmed = window.confirm(`${t("importFirefoxShortcuts")}?\n\n${t("importReplaceDescription")}${syncNote}`);
+        const confirmed = await confirmMosaic(`${t("importFirefoxShortcuts")}?\n\n${t("importReplaceDescription")}${syncNote}`);
         if (!confirmed) return;
       }
 
@@ -6711,12 +6789,12 @@ ${site.url}`;
         remove.className = "danger-button";
         remove.dataset.recoveryAction = "device";
         remove.textContent = t("recoveryRemoveDeviceCopies");
-        remove.addEventListener("click", () => {
+        remove.addEventListener("click", async () => {
           const label = recoveryDeviceDisplayName(device);
-          const confirmed = window.confirm(t("recoveryConfirmDevice", {
+          const confirmed = await confirmMosaic(t("recoveryConfirmDevice", {
             device: label,
             size: formatBytes(device.bytes || 0)
-          }));
+          }), { danger: true });
           if (confirmed) void performRecoveryCleanup({ mode: "device", deviceId: device.deviceId });
         });
         actions.append(remove);
@@ -6750,8 +6828,8 @@ ${site.url}`;
           remove.className = "danger-button";
           remove.dataset.recoveryAction = "generation";
           remove.textContent = t("recoveryDeletePrevious");
-          remove.addEventListener("click", () => {
-            const confirmed = window.confirm(t("recoveryConfirmGeneration", { size: formatBytes(generation.bytes || 0) }));
+          remove.addEventListener("click", async () => {
+            const confirmed = await confirmMosaic(t("recoveryConfirmGeneration", { size: formatBytes(generation.bytes || 0) }), { danger: true });
             if (confirmed) void performRecoveryCleanup({ mode: "generation", rootKey: generation.rootKey });
           });
           row.append(remove);
@@ -7089,7 +7167,7 @@ ${site.url}`;
     const status = await refreshSyncStatus();
     if (!status.hasRemoteSignal) return { confirmed: true, status };
     const warning = status.hasRemoteData ? t("completeCopyAvailable") : t("partialCopyWarning");
-    const confirmed = window.confirm(`${warning}\n\n${t("publishAutomaticallyTitle")}`);
+    const confirmed = await confirmMosaic(`${warning}\n\n${t("publishAutomaticallyTitle")}`);
     return { confirmed, status };
   }
 
@@ -7260,14 +7338,14 @@ ${site.url}`;
     void loadRecoveryCopies(recoveryCopiesSessionGeneration);
   });
 
-  recoverySafeCleanupButton?.addEventListener("click", () => {
+  recoverySafeCleanupButton?.addEventListener("click", async () => {
     const count = Number(recoverySafeCleanupButton.dataset.recoveryCount) || 0;
     const bytes = Number(recoverySafeCleanupButton.dataset.recoveryBytes) || 0;
     if (!count || !bytes) return;
-    const confirmed = window.confirm(t("recoveryConfirmSafeCleanup", {
+    const confirmed = await confirmMosaic(t("recoveryConfirmSafeCleanup", {
       count,
       size: formatBytes(bytes)
-    }));
+    }), { danger: true });
     if (confirmed) void performRecoveryCleanup({ mode: "superseded" });
   });
 
@@ -7370,7 +7448,7 @@ ${site.url}`;
       }
 
       const seenAt = statusBefore.remoteUpdatedAt ? formatSyncTime(statusBefore.remoteUpdatedAt) : t("unknownTime");
-      const confirmed = window.confirm(`${t("restoreSyncTitle")}\n\n${t("latestSyncTitle")}: ${seenAt}`);
+      const confirmed = await confirmMosaic(`${t("restoreSyncTitle")}\n\n${t("latestSyncTitle")}: ${seenAt}`);
       if (!confirmed) return;
 
       updateSyncUi({ ...meta, syncStatus: "syncing" }, statusBefore);
@@ -7385,9 +7463,9 @@ ${site.url}`;
   });
 
   clearSyncButton?.addEventListener("click", async () => {
-    const confirmed = window.confirm(`${t("deleteSyncTitle")}
+    const confirmed = await confirmMosaic(`${t("deleteSyncTitle")}
 
-${t("clearSyncWarning")}`);
+${t("clearSyncWarning")}`, { danger: true });
     if (!confirmed) return;
 
     try {
@@ -7756,7 +7834,7 @@ ${t("clearSyncWarning")}`);
     try {
       const { parseProfilePackage, readProfileImportText } = await loadProfileModule();
       const parsed = await parseProfilePackage(await readProfileImportText(file));
-      const confirmed = window.confirm(
+      const confirmed = await confirmMosaic(
         `${t("profileImportConfirm")}\n\n${meta?.syncEnabled && meta?.syncInitialized ? t("profileImportConfirmSync") : t("profileImportConfirmLocal")}`
       );
       if (!confirmed) return;
@@ -7835,7 +7913,7 @@ ${t("clearSyncWarning")}`);
   });
 
   settingsRunSetup?.addEventListener("click", async () => {
-    const confirmed = window.confirm(`${t("setupWizard")}?\n\n${t("setupWizardDescription")}`);
+    const confirmed = await confirmMosaic(`${t("setupWizard")}?\n\n${t("setupWizardDescription")}`);
     if (!confirmed) return;
     await ensureLocalStorage();
     meta = await updateLocalMeta(current => ({
@@ -7852,7 +7930,7 @@ ${t("clearSyncWarning")}`);
     if (event.target === shortcutDialog) closeDialog(shortcutDialog);
   });
   function isSettingsChildDialogOpen() {
-    return Boolean(wallpaperGalleryDialog?.open || customBrandingDialog?.open || recoveryCopiesDialog?.open);
+    return Boolean(wallpaperGalleryDialog?.open || customBrandingDialog?.open || recoveryCopiesDialog?.open || mosaicConfirmDialog?.open);
   }
 
   document.addEventListener("dragover", event => {

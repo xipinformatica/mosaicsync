@@ -416,12 +416,30 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
     return title.value;
   `);
   if (!suggestedName || typeof suggestedName !== 'string') throw new Error('Automatic offline shortcut naming did not populate the Name field');
-  const submitted = await client.execute(`document.getElementById('shortcutForm').requestSubmit(); return true;`);
-  if (submitted !== true) throw new Error('Shortcut submit was not dispatched');
+  const submitted = await client.execute(`
+    const name = document.getElementById('shortcutTitle');
+    const automatic = document.getElementById('shortcutAutomaticName');
+    const url = document.getElementById('shortcutUrl');
+    if (!automatic?.checked || !name?.readOnly || url.compareDocumentPosition(name) !== Node.DOCUMENT_POSITION_FOLLOWING) return false;
+    return !url.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  `);
+  if (submitted !== true) throw new Error('URL-first Enter submission or automatic naming was not exercised');
   await waitForCondition(client, "created automatically named shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
   await client.refresh();
   await waitForCondition(client, "persisted shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
-  return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true, automaticShortcutName: suggestedName };
+  // Confirmations must be owned by MosaicSync, never native browser alert dialogs.
+  // Exercise the same UI on Firefox and Chrome: first cancel, then accept.
+  await client.execute(`document.querySelector('.shortcut-slot .edit-chip')?.click(); return true;`);
+  await waitForCondition(client, "edit shortcut", `return document.getElementById('shortcutDialog')?.open && !document.getElementById('deleteShortcutButton')?.hidden;`, 20000);
+  await client.click(await client.find('#deleteShortcutButton'));
+  await waitForCondition(client, "custom confirmation", `return document.getElementById('mosaicConfirmDialog')?.open;`, 12000);
+  await client.click(await client.find('#mosaicConfirmCancel'));
+  await waitForCondition(client, "cancelled confirmation", `return !document.getElementById('mosaicConfirmDialog')?.open && document.getElementById('shortcutDialog')?.open;`, 12000);
+  await client.click(await client.find('#deleteShortcutButton'));
+  await waitForCondition(client, "reopened custom confirmation", `return document.getElementById('mosaicConfirmDialog')?.open;`, 12000);
+  await client.click(await client.find('#mosaicConfirmAccept'));
+  await waitForCondition(client, "confirmed shortcut deletion", `return !document.getElementById('shortcutDialog')?.open && ![...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
+  return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true, automaticShortcutName: suggestedName, customConfirmation: true };
 }
 
 export async function exerciseRealBrowserSession(client, kind, { freshSetup = true, capture = async () => {}, navigationUrl = "https://example.com/", permissionDecision = "not-simulated" } = {}) {

@@ -8,6 +8,14 @@
 
 ---
 
+## Shortcut editor and confirmation invariants
+
+New shortcuts use a URL-first editor: typing a URL generates a local name, and Enter submits immediately without navigating to the Name field or waiting for a network request. **Automatic naming** is on by default for new shortcuts, with a read-only (not disabled) suggested-name field; manual names are enabled only after opting out. Editing existing shortcuts defaults to manual mode so saved names never change unexpectedly. The optional webpage-title lookup still requires prior website access and must be invalidated on save or closure. The title-only bounded fetch must not trust an apparent `</head>` embedded inside script content, and unfinished raw-text elements must be excluded through the read cap; the favicon reader retains its original stop-at-head optimization.
+
+Every confirmation in the New Tab uses the single `confirmMosaic()` in-page dialog, never `window.confirm()`; that includes shortcuts, Recovery cleanup, imports and Sync. The Cancel button initially receives focus, Escape/backdrop dismiss without mutations, the prompt text must remain `textContent` (not HTML), and simultaneous prompts fail closed. Both Firefox and Chromium package the same shared dialog. The modal is also a Settings child dialog: `isSettingsChildDialogOpen()` must suppress outside-pointer and Escape dismissal of Settings while confirmation is active.
+
+---
+
 ## 1. What MosaicSync is
 
 MosaicSync is a Manifest V3 browser extension that replaces the browser New Tab page with a customizable start page. It supports Firefox and Chromium-based browsers from one mostly shared codebase.

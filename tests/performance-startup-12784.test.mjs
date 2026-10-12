@@ -116,7 +116,7 @@ for (const browser of ["firefox", "chrome"]) {
     const critical = fs.readFileSync(`dist/${browser}/newtab/newtab-critical.css`, "utf8");
     const secondary = fs.readFileSync(`dist/${browser}/newtab/newtab-secondary.css`, "utf8");
     assert.ok(Buffer.byteLength(critical) < 36_500, "blocking CSS should stay within the reviewed launcher-only budget including the 1.30.18.44 theme-aware scrollbar");
-    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < 137_000,
+    assert.ok(Buffer.byteLength(critical) + Buffer.byteLength(secondary) < 138_500,
       "runtime CSS must stay within the reviewed post-monolith budget, including the lazy Recovery manager and post-paint 1.32.1.1 Custom Branding UI");
     assert.equal(fs.existsSync("src/shared/newtab/newtab.css"), false,
       "the obsolete monolithic source sheet must stay deleted");

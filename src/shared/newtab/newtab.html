@@ -149,13 +149,17 @@
       <input id="shortcutId" type="hidden">
 
       <label class="field">
-        <span>Name</span>
-        <input id="shortcutTitle" type="text" maxlength="80" autocomplete="off" placeholder="Example: MacRumors">
-      </label>
-
-      <label class="field">
         <span>URL</span>
         <input id="shortcutUrl" type="text" inputmode="url" maxlength="2048" autocomplete="off" required placeholder="https://example.com">
+      </label>
+
+      <label class="shortcut-auto-name-toggle">
+        <input id="shortcutAutomaticName" type="checkbox" checked>
+        <span>Automatic naming</span>
+      </label>
+      <label class="field shortcut-name-field">
+        <span>Name</span>
+        <input id="shortcutTitle" type="text" maxlength="80" autocomplete="off" placeholder="Example: MacRumors" readonly aria-readonly="true">
       </label>
 
       <div id="shortcutSpaceField" class="field shortcut-space-field">
@@ -238,11 +242,22 @@
     </form>
   </dialog>
 
+  <dialog id="mosaicConfirmDialog" class="dialog mosaic-confirm-dialog" aria-labelledby="mosaicConfirmTitle" aria-describedby="mosaicConfirmMessage">
+    <div class="dialog-card" role="document">
+      <div class="dialog-heading"><h2 id="mosaicConfirmTitle">Continue</h2></div>
+      <p id="mosaicConfirmMessage" class="mosaic-confirm-message"></p>
+      <div class="dialog-actions">
+        <button id="mosaicConfirmCancel" class="secondary-button" type="button">Cancel</button>
+        <button id="mosaicConfirmAccept" class="primary-button" type="button">Continue</button>
+      </div>
+    </div>
+  </dialog>
+
   <aside id="settingsDialog" class="dialog settings-dialog" role="dialog" aria-modal="false" aria-labelledby="settingsDialogTitle" aria-hidden="true" hidden>
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.33.0.52</p>
+          <p class="eyebrow">MosaicSync · 1.33.0.54</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

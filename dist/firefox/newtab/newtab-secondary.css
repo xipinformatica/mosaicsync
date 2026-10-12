@@ -310,3 +310,14 @@
 .theme-icon-choice svg{display:block;width:19px;height:19px;margin:auto;pointer-events:none;}
 
 /* Dialog actions are flex-centered. No font-dependent vertical offset. */
+
+/* 1.33.0.53 — URL-first, privacy-conscious naming and shared confirmations. */
+.shortcut-auto-name-toggle{display:flex;align-items:center;gap:9px;margin:5px 0 1px;color:var(--text);font-size:var(--menu-font-label,12px);font-weight:var(--menu-weight-label,600);cursor:pointer;}
+.shortcut-auto-name-toggle input{accent-color:#9b78f6;width:16px;height:16px;margin:0;}
+.shortcut-name-field input[readonly]{cursor:default;opacity:.72;background:var(--field-bg,#21172e);filter:grayscale(.45);}
+:root[data-effective-theme="light"] .shortcut-name-field input[readonly]{background:#eeebf1;color:#58505e;}
+.mosaic-confirm-dialog{max-width:min(440px,calc(100vw - 28px));width:100%;}
+.mosaic-confirm-dialog .dialog-card{width:100%;box-sizing:border-box;}
+.mosaic-confirm-message{white-space:pre-line;overflow-wrap:anywhere;margin:6px 0 20px;color:var(--text);font-size:13px;line-height:1.55;max-height:min(55vh,440px);overflow-y:auto;}
+.mosaic-confirm-dialog .dialog-actions{justify-content:flex-end;}
+.mosaic-confirm-dialog .danger-button{min-width:78px;}

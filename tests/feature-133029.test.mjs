@@ -32,7 +32,7 @@ function extractFunction(source, name) {
 }
 
 function field() {
-  return { value: "", textContent: "", hidden: false, disabled: false, checked: false, focused: false, focus() { this.focused = true; } };
+  return { value: "", textContent: "", hidden: false, disabled: false, checked: false, focused: false, setAttribute() {}, focus() { this.focused = true; } };
 }
 
 async function openEditor(item = null) {
@@ -47,7 +47,7 @@ async function openEditor(item = null) {
     resetDetectedFaviconPicker() {}, invalidateShortcutNameSuggestion() {}, shortcutForm: { reset() {} }, shortcutId: field(),
     editingParentFolderId: null, editingPreferredPosition: null,
     editingSourceSpaceId: "", editingDestinationSpaceId: "", state: { activeSpaceId: "personal" },
-    shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle, shortcutUrl,
+    shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle, shortcutUrl, shortcutAutomaticName: field(), shortcutSavePending: false,
     shortcutImageStyle: field(), pendingShortcutImage: "", pendingShortcutSyncData: "", pendingShortcutImageKind: "",
     pendingShortcutImageSourceKind: "", pendingShortcutImageSourceUrl: "", pendingShortcutFaviconPreference: "",
     pendingShortcutImageIsFallback: false, pendingShortcutBuiltinIcon: "", pendingShortcutColorTag: "",

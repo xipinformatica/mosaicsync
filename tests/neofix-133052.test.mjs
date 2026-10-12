@@ -101,7 +101,7 @@ test('52: background title request cancellation aborts only its own signal',asyn
 });
 
 test('52: title fetch refuses redirects while favicon fetch retains default behavior',()=>{
-  assert.match(background,/fetchHtmlHead\(pageUrl, \{ deadlineAt: Date\.now\(\) \+ 4_000, signal, redirect: "manual" \}\)/);
+  assert.match(background,/fetchHtmlHead\(pageUrl, \{ deadlineAt: Date\.now\(\) \+ 4_000, signal, redirect: "manual", stopAtHeadEnd: false \}\)/);
   assert.match(background,/async function fetchHtmlHead\(pageUrl, \{[^\n]*redirect = "follow"/);
   assert.match(background,/referrerPolicy: "no-referrer",\s*redirect,\s*signal: abort\.signal/);
 });

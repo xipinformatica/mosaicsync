@@ -88,10 +88,10 @@ for (const browser of ['firefox','chrome']) {
 
 test('50 corrective: typing stays offline; lookup begins on URL blur or Enter', () => {
   assert.match(newtab,/shortcutNameManuallyEdited = true;\s*invalidateShortcutNameSuggestion\(\)/);
-  assert.match(newtab,/shortcutUrl\.addEventListener\("input", \(\) => \{\s*if \(detectedFaviconPickerUrl\) resetDetectedFaviconPicker\(\);\s*suggestShortcutNameFromUrl\(\)/);
+  assert.match(newtab,/shortcutUrl\.addEventListener\("input", \(\) => \{\s*shortcutNameLookupAbandoned = false;[^\n]*\n\s*if \(detectedFaviconPickerUrl\) resetDetectedFaviconPicker\(\);\s*suggestShortcutNameFromUrl\(\)/);
   assert.match(newtab,/shortcutUrl\.addEventListener\("blur", event => \{[\s\S]*?suggestShortcutNameFromUrl\(true\)/);
   assert.match(newtab,/shortcutUrl\.addEventListener\("keydown", event =>/);
-  assert.match(newtab,/event\.preventDefault\(\);[^\n]*\n\s*shortcutTitle\.focus\(\)/);
+  assert.match(newtab,/event\.preventDefault\(\);[^\n]*\n\s*shortcutNameLookupAbandoned = true;[^\n]*\n\s*shortcutForm\.requestSubmit\(\)/);
   assert.match(newtab,/if \(!requestTitle \|\| !webAccessGranted\) return/);
   assert.match(newtab,/generation !== shortcutNameSuggestionGeneration \|\| !shortcutDialog\.open \|\| shortcutId\.value \|\| shortcutNameManuallyEdited/);
   assert.match(newtab,/currentUrl !== url \|\| !result\?\.ok/);
