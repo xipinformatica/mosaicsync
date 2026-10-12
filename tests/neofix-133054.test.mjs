@@ -1,5 +1,6 @@
 // @kind behavioral
 import test from 'node:test';
+import { fetchShortcutTitleResponse } from '../src/shared/background/shortcut-title-redirects.js';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
@@ -14,7 +15,7 @@ function titleHarness() {
   const end = background.indexOf('  async function discoverManifestIconCandidates(', start);
   assert.ok(start >= 0 && end > start);
   const ctx = {
-    fetch, URL, Date, Math, TextDecoder, Uint8Array, Number, AbortController,
+    browser: {}, fetchShortcutTitleResponse, fetch, URL, Date, Math, TextDecoder, Uint8Array, Number, AbortController,
     REMOTE_HTML_HEAD_MAX_BYTES: 256_000,
     ICON_RECOVERY_FETCH_TIMEOUT_MS: 4_000,
     textDecoder: new TextDecoder(),

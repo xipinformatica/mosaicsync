@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "MosaicSync",
   "short_name": "MosaicSync",
-  "version": "1.33.0.55",
+  "version": "1.33.0.56",
   "description": "__MSG_extensionDescription__",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "webRequest"
   ],
   "background": {
     "scripts": [

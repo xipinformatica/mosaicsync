@@ -1,5 +1,7 @@
 # MosaicSync development
 
+**1.33.0.56 checked canonical redirects:** Automatic naming may follow at most three same-host/www redirects, refusing unrelated hosts, HTTPS downgrades, userinfo and port changes before contact. Browser manual responses hide Location, so the new required `webRequest` API permission reads headers only during extension-origin title requests; website host access remains optional. The shared four-second deadline, bounded final HTML reader and conditional name-only persistence remain. Memory-only reason counts are available through `mosaicsync:get-shortcut-title-diagnostics`. See docs/RELEASE-1.33.0.56.md.
+
 **1.33.0.55 post-save automatic name refinement:** New shortcuts save instantly with their offline hostname label. When Automatic naming was selected and website access was already granted, a separate one-shot title/OG-site-name lookup can refine that saved name. This is not the editor lookup; saving still cancels editor requests. The new core conditional name-only transaction reads and validates the latest compact profile *inside* the existing persistence write lock. It requires the record ID, URL, originally saved title, creation clock and mutation clock to match; a manual rename (even to the same spelling), deletion or changed URL makes it ineligible. Favicon, position, Space/folder membership and unrelated changes are never written from a stale snapshot. Missing Web Locks, permission, network failure or a failed write leave the original name. The title request retains redirect refusal, bounded HTML parsing, credential omission and four-second timeout. Validated `og:site_name` takes precedence over ordinary page titles; no speculative recurring scan, new permission, storage schema or Sync/Recovery protocol change. Previously reported LOW issues regarding shared-host suffixes and confusable IDNs remain deferred.
 
 
@@ -17,7 +19,7 @@
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.55
+Current release: 1.33.0.56
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 

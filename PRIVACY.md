@@ -1,6 +1,6 @@
 # MosaicSync Privacy
 
-Last updated: 1 September 2026
+Last updated: 12 October 2026
 
 MosaicSync is designed to work without a MosaicSync account, MosaicSync cloud service, advertising SDK, analytics service or telemetry backend.
 
@@ -56,7 +56,7 @@ MosaicSync can request optional access to HTTP(S) websites for automatic favicon
 
 When that permission is available, MosaicSync may make direct requests to the website associated with a shortcut, or to icon resources declared by that website, in order to discover artwork. Those requests go to the relevant website/resource host, not to a MosaicSync-operated favicon proxy or analytics service.
 
-When adding a new shortcut, MosaicSync creates an initial name from the address locally, without contacting the website. **Only after you leave the URL field or press Enter**, and only if optional website access was previously granted, it may request a bounded portion of that page to suggest its title. Typing into the URL field does not initiate website requests. The request is not sent to MosaicSync servers, never asks for additional permission, and is not used for tracking. A missing or unsuitable title leaves the local suggestion in place.
+When adding a new shortcut, MosaicSync creates an initial name from the address locally, without contacting the website. **Only after you leave the URL field or press Enter**, and only if optional website access was previously granted, it may request a bounded portion of that page to suggest its title. Typing into the URL field does not initiate website requests. The request is not sent to MosaicSync servers, never asks for additional permission, and is not used for tracking. A missing or unsuitable title leaves the local suggestion in place. A newly saved automatic shortcut can receive a one-shot improvement after saving; an intervening edit or deletion prevents that update.
 
 Remote image and SVG handling is subject to validation and size/safety limits in the source code.
 
@@ -85,7 +85,7 @@ The exact permissions are visible in the browser manifests under:
 - `src/firefox/manifest.json`
 - `src/chrome/manifest.json`
 
-Required permissions support core extension storage/background operation. Optional permissions support features such as bookmarks, Frequently Visited and website favicon discovery.
+Required permissions support core extension storage/background operation. The `webRequest` API permission additionally allows automatic naming to inspect redirect response headers for its own requests, only while those requests are active and when optional website access has already been granted. It does not install a general browsing listener. Names may follow up to three same-host/www redirects, with no HTTPS downgrade, credentials or referrer. Destinations are checked before contact. Local diagnostic counts contain only outcome reasons, not URLs or names, and disappear when the background context restarts. Optional permissions support features such as bookmarks, Frequently Visited and website favicon discovery.
 
 ## Contact
 

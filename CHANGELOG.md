@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.33.0.56
+
+- Automatic naming now follows bounded, checked same-host/www redirects, including canonical language paths, so more sites can replace a hostname fallback with their proper name.
+- Adds required `webRequest` API permission to inspect only the extension’s active naming response headers. Website access remains optional; unrelated destinations, HTTPS downgrades and changed ports are rejected before contact. No credentials or referrer are sent.
+- Adds memory-only diagnostic reason counts. Retains instant saving, manual-name protection, four-second timeout and bounded HTML processing. No favicon discovery, Sync/Recovery or storage-format change.
+- Real-browser redirect verification and the four-browser release gate are required before publication.
+
 ## 1.33.0.55
 
 **One-shot automatic website-name refinement.**

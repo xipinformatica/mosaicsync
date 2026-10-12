@@ -38,8 +38,8 @@ CHROME_TOP_LEVEL = frozenset({
     "default_locale",
 })
 
-FIREFOX_REQUIRED = ["storage", "alarms"]
-CHROME_REQUIRED = ["storage", "alarms", "favicon"]
+FIREFOX_REQUIRED = ["storage", "alarms", "webRequest"]
+CHROME_REQUIRED = ["storage", "alarms", "favicon", "webRequest"]
 OPTIONAL_PERMISSIONS = ["topSites", "bookmarks"]
 OPTIONAL_HOSTS = ["http://*/*", "https://*/*"]
 DATA_COLLECTION_REQUIRED = ["none"]

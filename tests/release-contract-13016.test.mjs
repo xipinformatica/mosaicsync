@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const VERSION = "1.33.0.55";
+const VERSION = "1.33.0.56";
 const FIREFOX_KEYS = [
   "action", "author", "background", "browser_specific_settings", "chrome_settings_overrides",
   "chrome_url_overrides", "content_security_policy", "default_locale", "description", "homepage_url",
@@ -30,8 +30,8 @@ test("1.30.18 production manifests match the approved browser/store capability c
   assert.equal(chrome.version_name, VERSION);
   assert.equal(chrome.minimum_chrome_version, "104", "MV3 _favicon API is available from Chrome 104");
 
-  assert.deepEqual(ff.permissions, ["storage", "alarms"]);
-  assert.deepEqual(chrome.permissions, ["storage", "alarms", "favicon"]);
+  assert.deepEqual(ff.permissions, ["storage", "alarms", "webRequest"]);
+  assert.deepEqual(chrome.permissions, ["storage", "alarms", "favicon", "webRequest"]);
   assert.deepEqual(ff.optional_permissions, ["topSites", "bookmarks"]);
   assert.deepEqual(chrome.optional_permissions, ["topSites", "bookmarks"]);
   assert.deepEqual(ff.optional_host_permissions, ["http://*/*", "https://*/*"]);

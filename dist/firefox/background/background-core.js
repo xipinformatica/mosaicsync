@@ -12,6 +12,7 @@
  * - keep layout records authoritative and artwork best-effort under browser Sync quota;
  * - never let a newly installed device publish until the user chooses a source.
  */
+import { fetchShortcutTitleResponse } from "./shortcut-title-redirects.js";
 import {
   ASSET_ORPHAN_GRACE_MS,
   DEVICE_SNAPSHOT_GC_INTERVAL_MS,
@@ -1866,20 +1867,24 @@ export function startBackground(adapter) {
     return match ? (match[1] ?? match[2] ?? match[3] ?? "") : "";
   }
 
-  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null, redirect = "follow", stopAtHeadEnd = true } = {}) {
+  async function fetchHtmlHead(pageUrl, { deadlineAt = Date.now() + ICON_RECOVERY_FETCH_TIMEOUT_MS, signal = null, redirect = "follow", stopAtHeadEnd = true, safeTitleRedirects = false } = {}) {
     if (!(await canReadOrigin(pageUrl))) return { ok: false, reason: "permission", finalPageUrl: pageUrl, text: "" };
     const remaining = Math.max(0, Number(deadlineAt) - Date.now());
     if (remaining <= 0) return { ok: false, reason: "timeout", finalPageUrl: pageUrl, text: "" };
-    const abort = linkedFetchAbortController(signal, Math.max(250, Math.min(4_000, remaining)));
+    const abort = linkedFetchAbortController(signal, Math.max(safeTitleRedirects ? 1 : 250, Math.min(4_000, remaining)));
     try {
-      const response = await fetch(pageUrl, {
+      const titleResponse = safeTitleRedirects ? await fetchShortcutTitleResponse(pageUrl, {
+        api: browser, signal: abort.signal, canReadOrigin
+      }) : null;
+      if (titleResponse?.reason) return { ok: false, reason: abort.signal.aborted ? (abort.callerAborted() ? "cancelled" : "timeout") : titleResponse.reason, finalPageUrl: pageUrl, text: "" };
+      const response = titleResponse?.response || await fetch(pageUrl, {
         credentials: "omit",
         cache: "force-cache",
         referrerPolicy: "no-referrer",
         redirect,
         signal: abort.signal
       });
-      const finalPageUrl = response.url || pageUrl;
+      const finalPageUrl = titleResponse?.finalPageUrl || response.url || pageUrl;
       if (!response.ok) return { ok: false, reason: `http-${response.status}`, finalPageUrl, text: "" };
       const type = String(response.headers.get("content-type") || "").toLowerCase().split(";")[0];
       if (type && !type.includes("text/html") && !type.includes("application/xhtml+xml")) {
@@ -1935,8 +1940,8 @@ export function startBackground(adapter) {
     const source = httpOriginPattern(pageUrl);
     if (!source) return { ok: false, title: "" };
     if (signal?.aborted) return { ok: false, title: "" };
-    const result = await fetchHtmlHead(pageUrl, { deadlineAt: Date.now() + 4_000, signal, redirect: "manual", stopAtHeadEnd: false });
-    if (!result.ok) return { ok: false, title: "" };
+    const result = await fetchHtmlHead(pageUrl, { deadlineAt: Date.now() + 4_000, signal, redirect: "manual", stopAtHeadEnd: false, safeTitleRedirects: true });
+    if (!result.ok) return { ok: false, title: "", reason: result.reason || "network" };
     try {
       const requested = new URL(pageUrl);
       const final = new URL(result.finalPageUrl);
@@ -1962,7 +1967,7 @@ export function startBackground(adapter) {
       .map(tag => htmlAttribute(tag, "content").trim())
       .find(value => value.length > 0 && value.length <= 512) || "";
     const match = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(cleanedHead);
-    if (!match && !siteNameRaw) return { ok: false, title: "" };
+    if (!match && !siteNameRaw) return { ok: false, title: "", reason: "no-metadata" };
     const decodePageName = value => String(value || "").replace(/<[^>]*>/g, " ").replace(/&(#(?:x[0-9a-f]+|\d+)|amp|lt|gt|quot|apos|nbsp|aacute|eacute|iacute|oacute|uacute|agrave|egrave|igrave|ograve|ugrave|atilde|otilde|acirc|ecirc|icirc|ocirc|ucirc|ccedil|uuml|ouml|auml|ntilde|szlig|ndash|mdash|hellip|rsquo|lsquo|ldquo|rdquo|copy|reg);/gi, (whole, code) => {
       const entities = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", aacute: "á", eacute: "é", iacute: "í", oacute: "ó", uacute: "ú", agrave: "à", egrave: "è", igrave: "ì", ograve: "ò", ugrave: "ù", atilde: "ã", otilde: "õ", acirc: "â", ecirc: "ê", icirc: "î", ocirc: "ô", ucirc: "û", ccedil: "ç", uuml: "ü", ouml: "ö", auml: "ä", ntilde: "ñ", szlig: "ß", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", ldquo: "“", rdquo: "”", copy: "©", reg: "®" };
       if (code.startsWith("#")) {
@@ -2398,6 +2403,8 @@ export function startBackground(adapter) {
   // Title lookups have their own small cancellation registry. They never share
   // request IDs, signals, or lifecycle with favicon discovery.
   const shortcutTitleRequests = new Map();
+  // Counts only: no URLs, names, request IDs, timestamps, persistence or telemetry.
+  const shortcutTitleDiagnostics = Object.create(null);
   function cancelShortcutTitleRequest(value) {
     const requestId = normalizeFaviconChoiceRequestId(value);
     if (!requestId) return false;
@@ -2414,7 +2421,10 @@ export function startBackground(adapter) {
     const controller = new AbortController();
     shortcutTitleRequests.set(requestId, controller);
     try {
-      return await suggestShortcutPageTitle(pageUrl, controller.signal);
+      const result = await suggestShortcutPageTitle(pageUrl, controller.signal);
+      const reason = result.ok ? "metadata-found" : (result.reason || "invalid-metadata");
+      shortcutTitleDiagnostics[reason] = Math.min(1_000_000, (shortcutTitleDiagnostics[reason] || 0) + 1);
+      return result;
     } finally {
       if (shortcutTitleRequests.get(requestId) === controller) shortcutTitleRequests.delete(requestId);
     }
@@ -3584,6 +3594,8 @@ export function startBackground(adapter) {
         });
       case "mosaicsync:discover-favicon-choices":
         return runFaviconChoiceRequest(message.pageUrl, message.requestId);
+      case "mosaicsync:get-shortcut-title-diagnostics":
+        return Promise.resolve({ ok: true, counts: { ...shortcutTitleDiagnostics } });
       case "mosaicsync:suggest-shortcut-title":
         return runShortcutTitleRequest(message.pageUrl, message.requestId);
       case "mosaicsync:cancel-shortcut-title":

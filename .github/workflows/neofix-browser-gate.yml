@@ -97,7 +97,9 @@ jobs:
           MOSAICSYNC_CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
           MOSAICSYNC_CHROMEDRIVER_BIN: ${{ steps.chrome.outputs.chromedriver-path }}
           MOSAICSYNC_FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
-        run: node tools/browser-smoke.mjs --browser=${{ matrix.kind }} --artifacts-dir=smoke-evidence
+        run: |
+          node tools/browser-smoke.mjs --browser=${{ matrix.kind }} --artifacts-dir=smoke-evidence
+          node tools/title-redirect-smoke.mjs --browser=${{ matrix.kind }} > smoke-evidence/title-redirect-${{ matrix.kind }}.json
       - name: Upload pass/fail evidence
         if: always()
         uses: actions/upload-artifact@v4

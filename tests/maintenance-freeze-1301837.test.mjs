@@ -23,20 +23,20 @@ test("1.33.0.2 compatibility floors and permission budget stay explicit and leas
   const firefox = json("src/firefox/manifest.json");
   const chrome = json("src/chrome/manifest.json");
 
-  assert.equal(firefox.version, "1.33.0.55");
-  assert.equal(chrome.version, "1.33.0.55");
-  assert.equal(chrome.version_name, "1.33.0.55");
+  assert.equal(firefox.version, "1.33.0.56");
+  assert.equal(chrome.version, "1.33.0.56");
+  assert.equal(chrome.version_name, "1.33.0.56");
   assert.equal(firefox.browser_specific_settings.gecko.strict_min_version, "140.0");
   assert.equal(chrome.minimum_chrome_version, "104");
 
-  assert.deepEqual(firefox.permissions, ["storage", "alarms"]);
-  assert.deepEqual(chrome.permissions, ["storage", "alarms", "favicon"]);
+  assert.deepEqual(firefox.permissions, ["storage", "alarms", "webRequest"]);
+  assert.deepEqual(chrome.permissions, ["storage", "alarms", "favicon", "webRequest"]);
   assert.deepEqual(firefox.optional_permissions, ["topSites", "bookmarks"]);
   assert.deepEqual(chrome.optional_permissions, ["topSites", "bookmarks"]);
   assert.deepEqual(firefox.optional_host_permissions, ["http://*/*", "https://*/*"]);
   assert.deepEqual(chrome.optional_host_permissions, ["http://*/*", "https://*/*"]);
 
-  const forbidden = new Set(["tabs", "history", "cookies", "webRequest", "scripting", "downloads", "management", "nativeMessaging", "unlimitedStorage"]);
+  const forbidden = new Set(["tabs", "history", "cookies", "webRequestBlocking", "scripting", "downloads", "management", "nativeMessaging", "unlimitedStorage"]);
   for (const manifest of [firefox, chrome]) {
     for (const permission of [...manifest.permissions, ...manifest.optional_permissions]) {
       assert.equal(forbidden.has(permission), false, `unexpected broad permission ${permission}`);

@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 216,
+  "totalFiles": 217,
   "counts": {
-    "behavioral": 105,
+    "behavioral": 106,
     "integration": 33,
     "static": 77,
     "browser": 1
@@ -552,6 +552,10 @@
     },
     {
       "file": "tests/neofix-133055.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/neofix-133056.test.mjs",
       "kind": "behavioral"
     },
     {

@@ -13,7 +13,7 @@ The production manifest intentionally sets `browser_specific_settings.gecko.stri
 Why 140 is the floor:
 
 - Firefox 140 added `browser_specific_settings.gecko.data_collection_permissions`, which MosaicSync declares for Mozilla's built-in data-collection consent model.
-- MosaicSync's Firefox manifest uses Manifest V3, a stable extension ID, `storage`, `alarms`, optional `topSites` / `bookmarks`, optional HTTP(S) hosts, the New Tab override, and the Firefox homepage override.
+- MosaicSync's Firefox manifest uses Manifest V3, a stable extension ID, `storage`, `alarms`, `webRequest`, optional `topSites` / `bookmarks`, optional HTTP(S) hosts, the New Tab override, and the Firefox homepage override.
 - Firefox-specific Top Sites options (`newtab`, `includeFavicon`, `limit`) remain behind `getNativeTopSites()`. Shared New Tab native-cache hydration uses that adapter; Chromium therefore calls `topSites.get()` with no Firefox-only options.
 - Firefox native open-tab favicon recovery reads `tabs.query({url: ...})` only after matching HTTP(S) host access is already granted; MosaicSync deliberately does not request the broad `tabs` permission.
 
@@ -53,12 +53,14 @@ MosaicSync follows a least-privilege split.
 
 - `storage` — local, session and synchronized extension state.
 - `alarms` — bounded background maintenance / retry scheduling.
+- `webRequest` — temporary observation of the extension’s own naming response headers for checked redirects (1.33.0.56).
 
 ### Required on Chromium
 
 - `storage`
 - `alarms`
 - `favicon` — browser-local Manifest V3 favicon endpoint.
+- `webRequest` — same restricted naming response-header observation as Firefox.
 
 ### Optional on both browsers
 
@@ -66,7 +68,7 @@ MosaicSync follows a least-privilege split.
 - `bookmarks` — bookmark integration only after user action/consent.
 - `http://*/*` and `https://*/*` optional host permissions — website favicon retrieval and matching-tab metadata only after the feature/user grants access.
 
-MosaicSync does **not** request `tabs`, `history`, `cookies`, `webRequest`, `scripting`, `downloads`, `management`, `nativeMessaging`, `unlimitedStorage`, or content-script access.
+MosaicSync does **not** request `tabs`, `history`, `cookies`, `webRequestBlocking`, `scripting`, `downloads`, `management`, `nativeMessaging`, `unlimitedStorage`, or content-script access.
 
 Firefox additionally declares Mozilla's data-collection contract as `required: ["none"]`, with the feature-specific optional categories already reviewed for Sync consent. Do not broaden these declarations without a separately reviewed privacy/product reason.
 
