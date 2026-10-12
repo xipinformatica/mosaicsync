@@ -481,9 +481,22 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
     return !url.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
   `);
   if (submitted !== true) throw new Error('URL-first Enter submission or automatic naming was not exercised');
-  await waitForCondition(client, "created automatically named shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
+  // Identify the created shortcut by URL. Its name may be the offline suggestion OR,
+  // when website access is granted (Firefox CI), the refined page title.
+  await waitForCondition(client, "created automatically named shortcut", `const target = new URL(${JSON.stringify(navigationUrl)}).href;
+    const names = [${JSON.stringify(suggestedName)}, "MosaicSync browser smoke navigation"];
+    return [...document.querySelectorAll('.shortcut-card')].some(card => {
+      try { return new URL(card.href).href === target && names.some(n => card.textContent.includes(n.slice(0, 16))); } catch { return false; }
+    });`, 20000);
   await client.refresh();
-  await waitForCondition(client, "persisted shortcut", `return [...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
+  await waitForCondition(client, "persisted shortcut", `const target = new URL(${JSON.stringify(navigationUrl)}).href;
+    const names = [${JSON.stringify(suggestedName)}, "MosaicSync browser smoke navigation"];
+    return [...document.querySelectorAll('.shortcut-card')].some(card => {
+      try { return new URL(card.href).href === target && names.some(n => card.textContent.includes(n.slice(0, 16))); } catch { return false; }
+    });`, 20000);
+  // Wait for the reloaded New Tab to finish installing its interaction handlers.
+  // This avoids a rare Chromium click race after refresh.
+  await waitForCondition(client, "interactive New Tab after shortcut reload", `return Number.isFinite(globalThis.__mosaicsyncStartupTiming?.phases?.interactionReady);`, 20000);
   // Confirmations must be owned by MosaicSync, never native browser alert dialogs.
   // Exercise the same UI on Firefox and Chrome: first cancel, then accept.
   await client.execute(`document.querySelector('.shortcut-slot .edit-chip')?.click(); return true;`);
@@ -501,7 +514,12 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
   await waitForCondition(client, "reopened custom confirmation", `return document.getElementById('mosaicConfirmDialog')?.open;`, 12000);
   await client.click(await client.find('#mosaicConfirmAccept'));
   await waitForCondition(client, "accepted confirmation close event", `return !document.getElementById('mosaicConfirmDialog')?.open && window.__mosaicSmokeCloseCount > ${closedBeforeCancel + 1} && document.getElementById('mosaicConfirmDialog').returnValue === 'accepted';`, 12000);
-  await waitForCondition(client, "confirmed shortcut deletion", `return !document.getElementById('shortcutDialog')?.open && ![...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
+  // The shortcut may have been renamed after creation; verify deletion by
+  // its stable URL rather than a title that might no longer be present.
+  await waitForCondition(client, "confirmed shortcut deletion", `const target = new URL(${JSON.stringify(navigationUrl)}).href;
+    return !document.getElementById('shortcutDialog')?.open && ![...document.querySelectorAll('.shortcut-card')].some(card => {
+      try { return new URL(card.href).href === target; } catch { return false; }
+    });`, 20000);
   return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true, automaticShortcutName: suggestedName, customConfirmation: true };
 }
 
