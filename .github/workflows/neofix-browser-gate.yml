@@ -20,8 +20,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Test inventory and full regression suite
@@ -35,7 +35,7 @@ jobs:
           python3 tools/release_contract.py
           python3 tools/package.py
       - name: Upload reproducible source and store ZIPs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mosaicsync-mechanical-candidate
           path: |
@@ -58,8 +58,8 @@ jobs:
           - { name: 'Firefox 140 baseline', kind: firefox, version: '140.0' }
           - { name: 'Firefox current', kind: firefox, version: latest }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
       - name: Install browser display dependencies
@@ -102,7 +102,7 @@ jobs:
           node tools/title-redirect-smoke.mjs --browser=${{ matrix.kind }} > smoke-evidence/title-redirect-${{ matrix.kind }}.json
       - name: Upload pass/fail evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: browser-evidence-${{ matrix.kind }}-${{ matrix.version }}
           path: smoke-evidence/

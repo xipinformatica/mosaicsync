@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.33.0.59
+
+- Fixes unnecessary Chromium MV3 background-worker wakeups introduced by 1.33.0.58: redirect-header observers are attached only during optional website-title lookups and detached five seconds after the last lookup. Busy unrelated tabs no longer keep MosaicSync awake indefinitely.
+- Retains the Chrome Welcome-tab stability improvements and reliable, bounded same-host redirect naming from .58, with safety rules unchanged (never follow unverified or cross-host redirects).
+- Adds regression checks for idle listener absence, correct attachment/re-attachment, concurrent requests, and no listener registration without website permission.
+- Corrects reviewer and privacy wording to describe the limited on-demand `webRequest` listener accurately. No new permissions, telemetry, saved-data migration, or Sync/Recovery format changes.
+
+## 1.33.0.58
+
+- Fixes the Chromium real-browser test race when the extension Welcome tab steals focus, preserving the intended full-size New Tab target.
+- Stabilizes automatic page-title naming through approved same-origin redirects: a persistent, extension-origin-filtered `webRequest` observer and bounded asynchronous header-event wait replace the per-request listener race, without weakening redirect validation or adding permissions.
+- Verifies cross-host redirects remain blocked and never contacted, loops terminate, and unavailable response headers fail closed.
+- Uses Firefox's privileged browser New Tab command in isolated CI instead of relying on WebDriver Ctrl+T keyboard shortcuts.
+- Corrects Firefox reviewer notes to disclose the `webRequest` API permission added since the last published version (.49).
+- Preserves user data, Sync/Recovery behavior, all translations, and the existing permission set.
+
+## 1.33.0.57
+
+**Browser-release gate reliability and security-preserving title-redirect diagnostics.**
+
+- Corrects Firefox browser-smoke cleanup when a virtual display was never started. Adds bounded WebDriver requests and guarded cleanup so failures no longer strand GitHub runners.
+- Exercises Firefox's New Tab override through an actual browser Ctrl+T shortcut instead of unsupported direct WebDriver navigation to `about:newtab`. Tests continue to require a real `moz-extension://` New Tab and full onboarding; they do not silently bypass it.
+- Fixes Chromium's intermittent in-page delete-confirmation race by waiting for the actual dialog `close` event, not just `dialog.open === false`.
+- Strengthens the native title/redirect browser test: verifies that direct website titles work, positively verifies canonical redirects *when browser header observation is available*, and otherwise explicitly records `unavailable-fail-closed`. Host-changing redirects must never be contacted; the four-second limit, same-host restrictions and manual-redirect fetch remain mandatory. Some Chromium versions cannot expose the response headers of their own MV3 worker requests, so safe hostname fallback remains preferable to following unknown redirects.
+- Moves GitHub-hosted Actions to Node 24-based action versions. No change to MosaicSync's stored data, browser permissions, Sync, Recovery, telemetry, UI translations or existing shortcut records.
+
 ## 1.33.0.56
 
 - Automatic naming now follows bounded, checked same-host/www redirects, including canonical language paths, so more sites can replace a hostname fallback with their proper name.

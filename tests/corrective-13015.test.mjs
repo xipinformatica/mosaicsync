@@ -68,7 +68,7 @@ function applyRecord(record, local = baseState()) {
 }
 
 test("1.30.15 release and Settings clock schemas are explicit", () => {
-  assert.equal(VERSION, "1.33.0.56");
+  assert.equal(VERSION, "1.33.0.59");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
   assert.equal(SETTINGS_SYNC_CLOCK_KEYS.length, 17);

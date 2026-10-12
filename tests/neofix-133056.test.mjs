@@ -47,7 +47,7 @@ test('56: canonical path redirects expose metadata using opaque browser response
   const html=await r.response.text();
   assert.equal(cleanShortcutPageTitle(/<title>(.*?)<\/title>/.exec(html)[1],'Elperiodico',r.finalPageUrl),'El Periódico');
   assert.deepEqual(h.calls,['https://www.elperiodico.com/','https://www.elperiodico.com/es/']);
-  assert.equal(h.listeners.size,0);
+  assert.equal(h.listeners.size,1);
 });
 
 test('56: HTTP upgrade and www canonicalization may precede a language path', async()=>{
@@ -60,7 +60,7 @@ test('56: cross-host, downgrade, userinfo and changed-port redirects are rejecte
   for (const location of ['https://accounts.example.com/','https://example.com.attacker.test/','https://evil.test/','http://example.com/','https://user:pass@example.com/','https://example.com:444/','javascript:alert(1)','data:text/html,foo']) {
     const h=harness({'https://example.com/':{location}});
     assert.equal((await h.run('https://example.com/')).reason,'redirect-blocked',location);
-    assert.equal(h.calls.length,1,location); assert.equal(h.listeners.size,0);
+    assert.equal(h.calls.length,1,location); assert.equal(h.listeners.size,1);
   }
 });
 
@@ -82,7 +82,7 @@ test('56: missing observation, foreign initiators and ambiguous requests fail cl
   for (const config of [{observer:false},{foreign:true},{duplicate:true}]) {
     const h=harness({'https://example.com/':{location:'/es/'}},config);
     assert.equal((await h.run('https://example.com/')).reason, config.duplicate?'redirect-ambiguous':'redirect-unavailable');
-    assert.equal(h.calls.length,1);assert.equal(h.listeners.size,0);
+    assert.equal(h.calls.length,1);assert.equal(h.listeners.size,config.observer===false?0:1);
   }
 });
 
@@ -98,9 +98,9 @@ test('56: no request without website permission or after cancellation',async()=>
   assert.equal((await h.run('https://example.com/',ctrl.signal)).reason,'cancelled');assert.equal(h.calls.length,0);
 });
 
-test('56: listener removed after network failure',async()=>{
+test('56: global observer remains installed after network failure, but does not retain a request',async()=>{
   const h=harness({'https://example.com/':{error:true}});
-  await assert.rejects(h.run('https://example.com/'),/network/);assert.equal(h.listeners.size,0);
+  await assert.rejects(h.run('https://example.com/'),/network/);assert.equal(h.listeners.size,1);
 });
 
 test('56: equivalent hosts preserve exact identity and reject deceptive Unicode',()=>{
@@ -124,19 +124,19 @@ test('56: production diagnostics count only outcomes, never URLs or shortcut tit
 test('56: permission loss between hops prevents the next request',async()=>{
   const h=harness({'https://example.com/':{location:'/next'}},{permitted:()=>h.calls.length===0});
   assert.equal((await h.run('https://example.com/')).reason,'permission');
-  assert.equal(h.calls.length,1);assert.equal(h.listeners.size,0);
+  assert.equal(h.calls.length,1);assert.equal(h.listeners.size,1);
 });
 
 test('56: cancellation after redirect headers prevents the next request',async()=>{
   const ctrl=new AbortController();
   const h=harness({'https://example.com/':{location:'/next',onReply:()=>ctrl.abort()}});
   assert.equal((await h.run('https://example.com/',ctrl.signal)).reason,'cancelled');
-  assert.equal(h.calls.length,1);assert.equal(h.listeners.size,0);
+  assert.equal(h.calls.length,1);assert.equal(h.listeners.size,1);
 });
 
 
 test('56: response from an already-running favicon request cannot contaminate the title redirect',async()=>{
   const h=harness({'https://example.com/':{location:'/es/'},'https://example.com/es/':{}},{existing:true});
   assert.ok((await h.run('https://example.com/')).response.ok);
-  assert.equal(h.calls.length,2);assert.equal(h.listeners.size,0);assert.equal(h.starts.size,0);
+  assert.equal(h.calls.length,2);assert.equal(h.listeners.size,1);assert.equal(h.starts.size,1);
 });

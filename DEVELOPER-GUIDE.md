@@ -1,5 +1,8 @@
 # MosaicSync Developer Guide
 
+> 1.33.0.59: On-demand redirect observers prevent unrelated background website traffic from keeping Chromium MV3 workers awake. The listener pair is installed only while the user-initiated title lookup is active, then removed after a five-second grace period. See `docs/QA-1.33.0.59.md`. Real-browser verification remains required.
+> 1.33.0.58: GitHub release matrix must pass the mechanical job AND Chromium 141/stable and Firefox 140/current browser lanes. Native redirect observation can be browser-dependent; see `docs/QA-1.33.0.58.md`. The title test accepts an explicit fail-closed `redirect-unavailable` only when a direct HTML title lookup succeeds and unsafe redirects are not contacted. A pass in this degraded case is **not** proof of canonical redirect title enrichment. Firefox New Tab must be opened through the privileged browser tab command in an isolated CI session, not WebDriver navigation to `about:newtab` or a non-deterministic keyboard gesture.
+
 > **Start here if you are new to the MosaicSync codebase.**
 >
 > This guide explains how the repository is organized, how the application starts, where authoritative data lives, how Sync and Recovery differ, which files own the major behaviors, how Firefox and Chromium are kept aligned, and how to make changes without accidentally removing protections that exist for real historical bugs.

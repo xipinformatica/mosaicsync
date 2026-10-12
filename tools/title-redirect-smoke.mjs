@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import assert from 'node:assert/strict';
-import { WebDriverClient, browserCapabilities, discoverBrowserSmokeEnvironment } from './browser-smoke.mjs';
+import { WebDriverClient, browserCapabilities, discoverBrowserSmokeEnvironment, openBrowserNewTab, waitForExtensionPage, stabilizeChromeSmokeTab } from './browser-smoke.mjs';
 const kind=process.argv.find(x=>x.startsWith('--browser='))?.split('=')[1];
 if (!['firefox','chrome'].includes(kind)) throw Error('Use --browser=firefox or --browser=chrome');
 const environment=await discoverBrowserSmokeEnvironment();
@@ -48,17 +48,48 @@ try {
     execFileSync('python3',['-c','import sys,zipfile,pathlib; r=pathlib.Path(sys.argv[1]); z=zipfile.ZipFile(sys.argv[2],"w"); [z.write(p,p.relative_to(r)) for p in r.rglob("*") if p.is_file()]; z.close()',extension,addon]);
     await client.installFirefoxAddon(addon);
   }
-  await client.navigate(kind==='chrome'?'chrome://newtab/':'about:newtab');
-  for(let i=0;i<100;i++){if((await client.currentUrl()).startsWith(kind==='chrome'?'chrome-extension://':'moz-extension://'))break;await new Promise(r=>setTimeout(r,100));}
+  await openBrowserNewTab(client,kind);
+  await waitForExtensionPage(client,kind==='chrome'?'chrome-extension://':'moz-extension://',20000);
+  if(kind==='chrome')await stabilizeChromeSmokeTab(client);
   const request=async(path,id)=>client.executeAsync(`const done=arguments[arguments.length-1]; (globalThis.browser||globalThis.chrome).runtime.sendMessage({type:'mosaicsync:suggest-shortcut-title',pageUrl:arguments[0],requestId:arguments[1]}).then(done,e=>done({error:String(e)}));`,[base+path,id]);
-  const canonical=await request('/canonical','smoke-canonical-56');
-  assert.equal(canonical.ok,true,JSON.stringify(canonical));assert.equal(canonical.title,'El Periódico - Noticias y última hora');assert.equal(canonical.finalPageUrl,base+'/es/');
-  const foreign=await request('/foreign','smoke-foreign-56');assert.equal(foreign.reason,'redirect-blocked',JSON.stringify(foreign));assert.equal(hits.includes('/forbidden'),false);
-  const loop=await request('/loop','smoke-loop-56');assert.equal(loop.reason,'redirect-loop');assert.equal(hits.filter(x=>x==='/loop').length,1);
-  const start=Date.now();const slow=await request('/slow','smoke-timeout-56');assert.equal(slow.reason,'timeout',JSON.stringify(slow));assert.ok(Date.now()-start<4800,'shared 4-second deadline');
+  // Direct document naming must always work even if the browser cannot
+  // expose redirect response headers to its own MV3 service worker.
+  const direct=await request('/es/','smoke-direct-58');
+  assert.equal(direct.ok,true,JSON.stringify(direct));
+  assert.equal(direct.title,'El Periódico - Noticias y última hora');
+  const canonical=await request('/canonical','smoke-canonical-58');
+  const redirectObservable=canonical.ok===true;
+  // Chromium should observe same-host redirects in this controlled local
+  // setup. A silent all-unavailable regression must not turn CI green.
+  if(kind==='chrome')assert.equal(canonical.ok,true,`Chrome redirect title unavailable: ${JSON.stringify(canonical)}`);
+
+  if(redirectObservable) {
+    assert.equal(canonical.title,direct.title);
+    assert.equal(canonical.finalPageUrl,base+'/es/');
+  } else {
+    // The safe fallback is an explicit refusal, NEVER fetch redirect:follow.
+    assert.equal(canonical.reason,'redirect-unavailable',JSON.stringify(canonical));
+    assert.equal(hits.filter(x=>x==='/canonical').length,1);
+  }
+  const foreign=await request('/foreign','smoke-foreign-58');
+  assert.ok(['redirect-blocked','redirect-unavailable'].includes(foreign.reason),JSON.stringify(foreign));
+  if(kind==='chrome')assert.equal(foreign.reason,'redirect-blocked','Chrome did not observe the unsafe redirect');
+
+  assert.equal(hits.includes('/forbidden'),false,'unsafe redirect contacted');
+  const loop=await request('/loop','smoke-loop-58');
+  assert.ok(['redirect-loop','redirect-unavailable'].includes(loop.reason),JSON.stringify(loop));
+  if(kind==='chrome')assert.equal(loop.reason,'redirect-loop','Chrome did not observe the redirect loop');
+  assert.equal(hits.filter(x=>x==='/loop').length,1);
+  const start=Date.now();const slow=await request('/slow','smoke-timeout-58');
+  assert.equal(slow.reason,'timeout',JSON.stringify(slow));
+  assert.ok(Date.now()-start<4800,'shared 4-second deadline');
   const diagnostics=await client.executeAsync(`const done=arguments[arguments.length-1]; (globalThis.browser||globalThis.chrome).runtime.sendMessage({type:'mosaicsync:get-shortcut-title-diagnostics'}).then(done);`);
-  assert.ok(diagnostics.counts['metadata-found']>=1);assert.ok(diagnostics.counts['redirect-blocked']>=1);
-  console.log(JSON.stringify({ok:true,browser:kind,permissionSetup:'test manifest pregrants website access; runtime unchanged',canonical,foreign,loop,slow,diagnostics,hits},null,2));
+  assert.ok(diagnostics.counts['metadata-found']>=1);
+  assert.ok((diagnostics.counts['redirect-blocked']||0)+(diagnostics.counts['redirect-unavailable']||0)>=1);
+  const report={ok:true,browser:kind,redirectCapability:{canonical:canonical.ok===true,foreign:foreign.reason,loop:loop.reason},permissionSetup:'test manifest pregrants website access; runtime unchanged',direct,canonical,foreign,loop,slow,diagnostics,hits};
+  await writeFile(join(scratch,'title-redirect-result.json'),JSON.stringify(report,null,2)+'\n');
+  console.log(JSON.stringify(report,null,2));
 } finally {
-  await client?.deleteSession();driver?.kill();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(scratch,{recursive:true,force:true});
+  try { await client?.deleteSession(); } catch(e) { console.error('Title-smoke session cleanup:',e.message); }
+  driver?.kill();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(scratch,{recursive:true,force:true});
 }

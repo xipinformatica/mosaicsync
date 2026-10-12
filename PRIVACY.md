@@ -85,7 +85,7 @@ The exact permissions are visible in the browser manifests under:
 - `src/firefox/manifest.json`
 - `src/chrome/manifest.json`
 
-Required permissions support core extension storage/background operation. The `webRequest` API permission additionally allows automatic naming to inspect redirect response headers for its own requests, only while those requests are active and when optional website access has already been granted. It does not install a general browsing listener. Names may follow up to three same-host/www redirects, with no HTTPS downgrade, credentials or referrer. Destinations are checked before contact. Local diagnostic counts contain only outcome reasons, not URLs or names, and disappear when the background context restarts. Optional permissions support features such as bookmarks, Frequently Visited and website favicon discovery.
+Required permissions support core extension storage/background operation. The `webRequest` API permission additionally allows automatic naming to inspect redirect response headers for its own requests, only while those requests are active (plus a five-second idle cleanup period) and when optional website access has already been granted. The listeners are removed when idle. While briefly registered, unrelated browser events are ignored without being recorded or transmitted. Names may follow up to three same-host/www redirects, with no HTTPS downgrade, credentials or referrer. Destinations are checked before contact. Local diagnostic counts contain only outcome reasons, not URLs or names, and disappear when the background context restarts. Optional permissions support features such as bookmarks, Frequently Visited and website favicon discovery.
 
 ## Contact
 

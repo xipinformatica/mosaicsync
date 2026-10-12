@@ -120,9 +120,10 @@ async function startVirtualDisplay(xvfb) {
 class DriverProcess {
   constructor(child, baseUrl, stderr) { this.child = child; this.baseUrl = baseUrl; this.stderr = stderr; }
   async stop() {
-    if (this.child.exitCode == null) this.child.kill("SIGTERM");
+    if (this.child.exitCode != null || this.child.signalCode != null) return;
+    this.child.kill("SIGTERM");
     await Promise.race([new Promise(resolve => this.child.once("exit", resolve)), sleep(1000)]);
-    if (this.child.exitCode == null) this.child.kill("SIGKILL");
+    if (this.child.exitCode == null && this.child.signalCode == null) this.child.kill("SIGKILL");
   }
 }
 
@@ -153,6 +154,8 @@ export class WebDriverClient {
   constructor(baseUrl) { this.baseUrl = baseUrl.replace(/\/$/, ""); this.sessionId = ""; }
   async request(method, endpoint, body = undefined) {
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      // A dead or blocked browser must not strand an entire CI worker.
+      signal: AbortSignal.timeout(20000),
       method,
       headers: body === undefined ? undefined : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body)
@@ -175,6 +178,10 @@ export class WebDriverClient {
   navigate(url) { return this.request("POST", this.endpoint("/url"), { url }); }
   currentUrl() { return this.request("GET", this.endpoint("/url")); }
   refresh() { return this.request("POST", this.endpoint("/refresh"), {}); }
+  windowHandles() { return this.request("GET", this.endpoint("/window/handles")); }
+  switchWindow(handle) { return this.request("POST", this.endpoint("/window"), { handle }); }
+  actions(actions) { return this.request("POST", this.endpoint("/actions"), { actions }); }
+  releaseActions() { return this.request("DELETE", this.endpoint("/actions"), {}); }
   execute(script, args = []) { return this.request("POST", this.endpoint("/execute/sync"), { script, args }); }
   executeAsync(script, args = []) { return this.request("POST", this.endpoint("/execute/async"), { script, args }); }
   // ChromeDriver's supported pass-through to the active Chrome DevTools target.
@@ -202,7 +209,7 @@ export function browserCapabilities(kind, { browserBinary, chromeExtensionPath, 
       acceptInsecureCerts: true,
       "moz:firefoxOptions": {
         ...(browserBinary ? { binary: browserBinary } : {}),
-        args: ["-headless"],
+        args: ["-headless", "-remote-allow-system-access"],
         prefs: {
           "browser.shell.checkDefaultBrowser": false,
           "browser.startup.homepage_override.mstone": "ignore",
@@ -332,7 +339,46 @@ return {
 };
 `;
 
-async function waitForExtensionPage(client, expectedScheme, timeoutMs = 12000) {
+// Firefox WebDriver blocks direct about:newtab navigation. Open a genuine
+// Firefox browser New Tab in its privileged browser-chrome context, then
+// switch back to content. System access is enabled ONLY in isolated CI.
+// No direct extension-file navigation can conceal a broken New Tab override.
+export async function openBrowserNewTab(client, kind) {
+  if (kind !== "firefox") return client.navigate("chrome://newtab/");
+  const previous = new Set(await client.windowHandles());
+  await client.request("POST", client.endpoint("/moz/context"), { context: "chrome" });
+  try {
+    await client.execute(`
+      const services = typeof Services === "undefined"
+        ? ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services
+        : Services;
+      const win = services.wm.getMostRecentWindow("navigator:browser");
+      if (!win?.gBrowser) throw new Error("Firefox browser window not found");
+      if (typeof win.BrowserCommands?.openTab === "function") {
+        win.BrowserCommands.openTab();
+      } else {
+        win.gBrowser.selectedTab = win.gBrowser.addTrustedTab("about:newtab");
+      }
+    `);
+  } finally {
+    await client.request("POST", client.endpoint("/moz/context"), { context: "content" });
+  }
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const handles = await client.windowHandles();
+    for (const handle of handles) {
+      if (previous.has(handle)) continue;
+      await client.switchWindow(handle);
+      const url = String(await client.currentUrl());
+      // A Welcome tab can appear during addon installation: only the real
+      // New Tab override is acceptable, never another extension page.
+      if (url.startsWith("moz-extension://") && url.includes("/newtab/newtab.html")) return;
+    }
+    await sleep(100);
+  }
+  throw new Error("Firefox browser New Tab did not resolve to MosaicSync's override.");
+}
+
+export async function waitForExtensionPage(client, expectedScheme, timeoutMs = 12000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const current = String(await client.currentUrl());
@@ -375,11 +421,22 @@ async function waitForCondition(client, description, script, timeoutMs = 14000) 
   throw new Error(`${description} timed out; last result: ${JSON.stringify(last)}`);
 }
 
+export async function stabilizeChromeSmokeTab(client) {
+  const own = await client.request("GET", client.endpoint("/window"));
+  await client.switchWindow(own);
+  await client.cdp("Emulation.setDeviceMetricsOverride", {
+    width: 1050, height: 684, deviceScaleFactor: 1, mobile: false
+  });
+}
+
 async function exerciseFreshSetup(client, kind, { capture = async () => {}, navigationUrl = "https://example.com/" } = {}) {
-  const newtab = kind === "firefox" ? "about:newtab" : "chrome://newtab/";
   const scheme = kind === "firefox" ? "moz-extension://" : "chrome-extension://";
-  await client.navigate(newtab);
+  await openBrowserNewTab(client, kind);
   const extensionUrl = await waitForExtensionPage(client, scheme, 20000);
+  // The installation Welcome tab can steal the foreground. Chrome gives a
+  // background target ~56 px of viewport, making UI elements unclickable.
+  // Keep our original WebDriver tab and give its CDP target a stable viewport.
+  if (kind === "chrome") await stabilizeChromeSmokeTab(client);
   await waitForCondition(client, "first-run Welcome", `return !!document.getElementById('introContinueButton') && !document.getElementById('introStep').hidden;`);
   await capture("welcome-intro");
   await client.click(await client.find("#introContinueButton"));
@@ -433,26 +490,31 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
   await waitForCondition(client, "edit shortcut", `return document.getElementById('shortcutDialog')?.open && !document.getElementById('deleteShortcutButton')?.hidden;`, 20000);
   await client.click(await client.find('#deleteShortcutButton'));
   await waitForCondition(client, "custom confirmation", `return document.getElementById('mosaicConfirmDialog')?.open;`, 12000);
+  const closedBeforeCancel = await client.execute(`
+    window.__mosaicSmokeCloseCount = window.__mosaicSmokeCloseCount || 0;
+    document.getElementById('mosaicConfirmDialog').addEventListener('close', () => { window.__mosaicSmokeCloseCount += 1; });
+    return window.__mosaicSmokeCloseCount;
+  `);
   await client.click(await client.find('#mosaicConfirmCancel'));
-  await waitForCondition(client, "cancelled confirmation", `return !document.getElementById('mosaicConfirmDialog')?.open && document.getElementById('shortcutDialog')?.open;`, 12000);
+  await waitForCondition(client, "cancelled confirmation close event", `return !document.getElementById('mosaicConfirmDialog')?.open && document.getElementById('shortcutDialog')?.open && window.__mosaicSmokeCloseCount > ${closedBeforeCancel} && document.getElementById('mosaicConfirmDialog').returnValue === 'cancelled';`, 12000);
   await client.click(await client.find('#deleteShortcutButton'));
   await waitForCondition(client, "reopened custom confirmation", `return document.getElementById('mosaicConfirmDialog')?.open;`, 12000);
   await client.click(await client.find('#mosaicConfirmAccept'));
+  await waitForCondition(client, "accepted confirmation close event", `return !document.getElementById('mosaicConfirmDialog')?.open && window.__mosaicSmokeCloseCount > ${closedBeforeCancel + 1} && document.getElementById('mosaicConfirmDialog').returnValue === 'accepted';`, 12000);
   await waitForCondition(client, "confirmed shortcut deletion", `return !document.getElementById('shortcutDialog')?.open && ![...document.querySelectorAll('.shortcut-card')].some(x => x.textContent.includes(${JSON.stringify(suggestedName)}));`, 20000);
   return { extensionUrl, response: "ok", onboardingCompleted: true, shortcutCreateAndReload: true, automaticShortcutName: suggestedName, customConfirmation: true };
 }
 
 export async function exerciseRealBrowserSession(client, kind, { freshSetup = true, capture = async () => {}, navigationUrl = "https://example.com/", permissionDecision = "not-simulated" } = {}) {
-  const newtab = kind === "firefox" ? "about:newtab" : "chrome://newtab/";
   const scheme = kind === "firefox" ? "moz-extension://" : "chrome-extension://";
   const setupResult = freshSetup ? await exerciseFreshSetup(client, kind, { capture, navigationUrl }) : null;
-  await client.navigate(newtab);
+  await openBrowserNewTab(client, kind);
   const extensionUrl = await waitForExtensionPage(client, scheme);
   const seeded = await client.executeAsync(SEED_SCRIPT.replaceAll("https://example.com/", navigationUrl));
   if (!seeded?.ok) throw new Error(`Could not seed real-browser smoke profile: ${seeded?.error || "unknown error"}`);
   // A fresh profile may initially redirect New Tab to the onboarding page.
   // After seeding the completed-onboarding state, navigate through the browser's real New Tab override again rather than merely refreshing onboarding.
-  await client.navigate(newtab);
+  await openBrowserNewTab(client, kind);
   await waitForExtensionPage(client, scheme);
   let snapshot = await waitForReadySnapshot(client);
   if (!snapshot.frequentTogglePresent || !snapshot.frequentDisabledConsistent) {
@@ -558,10 +620,12 @@ export async function runBrowserSmoke(kind, environment, { root = ROOT, keepProf
       throw error;
     }
   } finally {
-    await client?.deleteSession();
-    await driver?.stop();
-    if (display?.child?.exitCode == null) display.child.kill("SIGTERM");
-    if (navigationTarget) await navigationTarget.close();
+    try { await client?.deleteSession(); } catch (error) { console.error(`Browser session cleanup: ${error}`); }
+    try { await driver?.stop(); } catch (error) { console.error(`Driver cleanup: ${error}`); }
+    if (display?.child && display.child.exitCode == null) display.child.kill("SIGTERM");
+    if (navigationTarget) {
+      try { await navigationTarget.close(); } catch (error) { console.error(`HTTP target cleanup: ${error}`); }
+    }
     if (!keepProfile) await fs.rm(profileRoot, { recursive: true, force: true });
   }
 }

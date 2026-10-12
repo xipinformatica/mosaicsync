@@ -37,6 +37,7 @@ class FakeRealBrowserClient {
     this.workPressed = false;
     this.brokenFrequentlyVisited = brokenFrequentlyVisited;
     this.calls = [];
+    this.handles = ["existing-tab"];
   }
   async navigate(url) {
     this.calls.push(["navigate", url]);
@@ -44,7 +45,25 @@ class FakeRealBrowserClient {
       ? "moz-extension://smoke/newtab/newtab.html"
       : "chrome-extension://smoke/newtab/newtab.html";
   }
+  endpoint(path) { return `/session/mock${path}`; }
+  async request(method, endpoint, payload) {
+    this.calls.push(['request',method,endpoint,payload]);
+    if (endpoint.endsWith('/moz/context')) return null;
+    if (endpoint.endsWith('/window')) return 'existing-tab';
+    throw Error('unexpected request ' + endpoint);
+  }
+  async cdp(cmd, options) { this.calls.push(['cdp', cmd, options]); }
   async currentUrl() { return this.url; }
+  async windowHandles() { return this.handles; }
+  async actions(actions) {
+    this.calls.push(["actions", actions]);
+    if (actions[0]?.actions?.some(item => item.value === "t")) this.handles.push(`new-tab-${this.handles.length}`);
+  }
+  async releaseActions() { this.calls.push(["releaseActions"]); }
+  async switchWindow(handle) {
+    this.calls.push(["switchWindow", handle]);
+    this.url = "moz-extension://smoke/newtab/newtab.html";
+  }
   async executeAsync(script) {
     this.calls.push(["executeAsync", script.includes("LOCAL_STATE_KEY")]);
     return { ok: true };
@@ -54,6 +73,11 @@ class FakeRealBrowserClient {
     if (script.includes('data-close-dialog="settingsDialog"')) {
       this.settingsOpen = false;
       return true;
+    }
+    if (script.includes('BrowserCommands.openTab')) {
+      this.calls.push(['browserChromeOpenTab']);
+      this.handles.push(`new-tab-${this.handles.length}`);
+      return null;
     }
     return readySnapshot({
       href: this.url,
@@ -126,6 +150,11 @@ for (const kind of ["firefox", "chrome"]) {
     const client = new FakeRealBrowserClient(kind);
     const result = await exerciseRealBrowserSession(client, kind, { freshSetup: false });
     assert.equal(result.kind, kind);
+    if (kind === "firefox") {
+      assert.ok(client.calls.some(([name]) => name === "browserChromeOpenTab"), "Firefox opens a genuine New Tab in privileged browser context");
+      assert.ok(client.calls.some(([name]) => name === "switchWindow"), "Firefox switches to the newly opened tab");
+      assert.equal(client.calls.some(([name, url]) => name === "navigate" && url === "about:newtab"), false);
+    }
     assert.equal(result.finalUrl, "https://example.com/");
     assert.ok(client.calls.some(([name, value]) => name === "find" && value === "#settingsButton"));
     assert.ok(client.calls.some(([name, value]) => name === "find" && String(value).includes('data-space-id="work"')));
