@@ -460,7 +460,13 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
   if (!completion?.onboardingCompleted || completion.syncEnabled !== false) throw new Error(`Local setup did not persist its choice: ${JSON.stringify(completion)}`);
   // Exercise an actual user-created shortcut and its persistence, before the
   // historical seeded-view smoke. This MUST use the real UI, not storage seeding.
-  await waitForCondition(client, "empty New Tab add control", `return !!document.getElementById('addFirstButton') && !document.getElementById('addFirstButton').hidden;`);
+  // The button itself is never hidden: its #emptyState container is, and MosaicSync keeps
+  // it inert until saved data is verified. Wait until it is genuinely visible and clickable.
+  await waitForCondition(client, "empty New Tab add control", `
+    const button = document.getElementById('addFirstButton');
+    const box = document.getElementById('emptyState');
+    return !!button && !!box && !box.hidden && !box.inert && button.getClientRects().length > 0
+      && Number.isFinite(globalThis.__mosaicsyncStartupTiming?.phases?.interactionReady);`);
   await client.click(await client.find('#addFirstButton'));
   await waitForCondition(client, "shortcut editor", `return !!document.getElementById('shortcutDialog')?.open;`);
   // Exercise the real automatic-name path. A manual name would bypass the
@@ -499,6 +505,13 @@ async function exerciseFreshSetup(client, kind, { capture = async () => {}, navi
   await waitForCondition(client, "interactive New Tab after shortcut reload", `return Number.isFinite(globalThis.__mosaicsyncStartupTiming?.phases?.interactionReady);`, 20000);
   // Confirmations must be owned by MosaicSync, never native browser alert dialogs.
   // Exercise the same UI on Firefox and Chrome: first cancel, then accept.
+  // After a reload the grid paints from cache before UI bindings attach (and stays
+  // inert until verified). Click only once the page is genuinely interactive.
+  await waitForCondition(client, "interactive grid after reload", `
+    const chip = document.querySelector('.shortcut-slot .edit-chip');
+    const grid = document.getElementById('shortcutGrid');
+    return !!chip && !!grid && !grid.inert && chip.getClientRects().length > 0
+      && Number.isFinite(globalThis.__mosaicsyncStartupTiming?.phases?.interactionReady);`, 20000);
   await client.execute(`document.querySelector('.shortcut-slot .edit-chip')?.click(); return true;`);
   await waitForCondition(client, "edit shortcut", `return document.getElementById('shortcutDialog')?.open && !document.getElementById('deleteShortcutButton')?.hidden;`, 20000);
   await client.click(await client.find('#deleteShortcutButton'));
