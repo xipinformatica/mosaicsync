@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.33.0.61
+
+**ED-1: durable recovery for failed shortcut saves and cross-Space moves.**
+
+- Prevents failed shortcut additions and retries from creating duplicate records, including ambiguous writes that commit but report failure. The shortcut keeps a stable ID across retries.
+- Prevents cancelled failed additions, renames and Personal/Work moves from being silently committed by later actions or propagated through Sync.
+- Corrects failed deletions: shows a save error, preserves the record after a genuine write failure, and requires fresh confirmation on retry.
+- Restores the saved Space and visible grid after a failed move, including drag-and-drop; recalculates cross-Space Sync deletion/upsert instructions from the latest durable state to prevent one shortcut ID appearing live in both Spaces.
+- Preserves valid concurrent-tab changes by re-reading authoritative storage rather than restoring a stale whole-profile snapshot. If both the write and recovery read fail, later writes are temporarily refused until durable state can be re-adopted.
+- No new permissions, telemetry, network destinations, data migration, storage schema, Sync wire format, translations or unrelated features.
+- Independent Chromium fault-injection and Sync tests passed, and the unchanged candidate passed the GitHub four-browser release gate. Firefox-specific failed-write injection and receipt on a separate physical device remain untested; normal Firefox 140/current browser smoke passed.
+
 ## 1.33.0.60
 
 - Stabilizes Firefox's native title/redirect browser test in a fresh profile by waiting for MosaicSync's expected first-run Welcome navigation to finish before querying the page. Prevents transient `Document was unloaded` automation failures without bypassing the real New Tab override.

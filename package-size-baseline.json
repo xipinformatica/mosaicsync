@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.60",
-      "rawBytes": 2624932,
-      "deflatedBytes": 761900,
+      "version": "1.33.0.61",
+      "rawBytes": 2629527,
+      "deflatedBytes": 763136,
       "categories": {
         "assets": {
           "files": 2,
@@ -43,8 +43,8 @@
         },
         "newtab-js": {
           "files": 18,
-          "rawBytes": 504279,
-          "deflatedBytes": 123029
+          "rawBytes": 508789,
+          "deflatedBytes": 124206
         },
         "other": {
           "files": 1,
@@ -58,8 +58,8 @@
         },
         "shared-core": {
           "files": 28,
-          "rawBytes": 321387,
-          "deflatedBytes": 91098
+          "rawBytes": 321472,
+          "deflatedBytes": 91157
         },
         "wallpapers": {
           "files": 29,
@@ -76,8 +76,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 384062,
-          "deflatedBytes": 84423
+          "rawBytes": 388572,
+          "deflatedBytes": 85600
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -112,8 +112,8 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 57880,
-          "deflatedBytes": 14871
+          "rawBytes": 57965,
+          "deflatedBytes": 14930
         },
         {
           "path": "newtab/newtab.html",
@@ -256,9 +256,9 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.60",
-      "rawBytes": 2646745,
-      "deflatedBytes": 776495,
+      "version": "1.33.0.61",
+      "rawBytes": 2651340,
+      "deflatedBytes": 777732,
       "categories": {
         "assets": {
           "files": 6,
@@ -278,7 +278,7 @@
         "manifest": {
           "files": 1,
           "rawBytes": 1386,
-          "deflatedBytes": 562
+          "deflatedBytes": 563
         },
         "manifest-localization": {
           "files": 34,
@@ -297,8 +297,8 @@
         },
         "newtab-js": {
           "files": 18,
-          "rawBytes": 504279,
-          "deflatedBytes": 123029
+          "rawBytes": 508789,
+          "deflatedBytes": 124206
         },
         "other": {
           "files": 1,
@@ -312,8 +312,8 @@
         },
         "shared-core": {
           "files": 29,
-          "rawBytes": 332524,
-          "deflatedBytes": 94614
+          "rawBytes": 332609,
+          "deflatedBytes": 94673
         },
         "wallpapers": {
           "files": 29,
@@ -330,8 +330,8 @@
         {
           "path": "newtab/newtab.js",
           "category": "newtab-js",
-          "rawBytes": 384062,
-          "deflatedBytes": 84423
+          "rawBytes": 388572,
+          "deflatedBytes": 85600
         },
         {
           "path": "assets/backgrounds/aether-flow.webp",
@@ -366,8 +366,8 @@
         {
           "path": "core/storage.js",
           "category": "shared-core",
-          "rawBytes": 57880,
-          "deflatedBytes": 14871
+          "rawBytes": 57965,
+          "deflatedBytes": 14930
         },
         {
           "path": "newtab/newtab.html",
