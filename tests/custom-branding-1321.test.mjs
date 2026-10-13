@@ -40,7 +40,7 @@ async function recomputeIntegrity(pkg) {
 }
 
 test("1.32.1.1 Custom Branding is a separate versioned storage.local domain", () => {
-  assert.equal(constants.VERSION, "1.33.0.61");
+  assert.equal(constants.VERSION, "1.33.0.63");
   assert.equal(constants.LOCAL_CUSTOM_BRANDING_KEY, "mosaicsync.custom-branding.v1");
   assert.equal(branding.CUSTOM_BRANDING_SCHEMA_VERSION, 1);
   assert.deepEqual(branding.DEFAULT_CUSTOM_BRANDING, { schemaVersion: 1, enabled: false, text: "", logo: "" });
@@ -141,10 +141,12 @@ test("1.32.1.1 source ownership keeps branding outside Sync/Recovery and transac
   const backgroundSource = backgroundFiles.map(name => fs.readFileSync(`src/shared/background/${name}`, "utf8")).join("\n");
   assert.equal(backgroundSource.includes("LOCAL_CUSTOM_BRANDING_KEY"), false, "Sync/Recovery background must not own the branding key");
   assert.equal(backgroundSource.includes("custom-branding.js"), false, "Sync/Recovery background must not import branding");
-  assert.match(newtab, /beginCustomBrandingImport\(parsed\.branding\)/);
-  assert.match(newtab, /could not roll back imported Custom Branding/);
+  assert.match(newtab, /normalizeCustomBranding\(parsed\.branding, \{ strict: true \}\)/);
+  assert.match(newtab, /preparedImport\.compactBaseline, importedBranding/);
+  assert.doesNotMatch(newtab, /beginCustomBrandingImport\(parsed\.branding\)/);
   assert.match(welcome, /stageStartingSourceCandidate\("profile", importedState, parsed\.preferences, parsed\.branding, loaded\.compactBaseline\)/);
   assert.match(welcome, /branding: source === "profile"/);
-  assert.match(welcome, /rollbackCustomBrandingImport\(brandingTransaction\)/);
+  assert.match(welcome, /requireUnchangedCompactState: candidate\.compactBaseline, importedBranding/);
+  assert.doesNotMatch(welcome, /rollbackCustomBrandingImport\(brandingTransaction\)/);
   assert.match(welcome, /function discardPendingSourceCandidate\(\) \{\s*pendingSourceCandidate = null;/);
 });

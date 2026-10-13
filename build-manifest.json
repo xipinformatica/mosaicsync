@@ -3,7 +3,7 @@
   "generatedFrom": "canonical shared source + browser capability overlays + deterministic generated browser shells/locales/runtime data",
   "browsers": {
     "firefox": {
-      "version": "1.33.0.61",
+      "version": "1.33.0.63",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "2074c52fceddb2826159146f99ef32784be49aa053a490123d48fcf35f296e96",
@@ -88,8 +88,8 @@
         "core/bookmarks.js": "1cbb968a7a60031224a94d5d007aa1a27635e2c6058849dd654d0f961f8fee98",
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/concurrency.js": "edccbdcfd57c6fac80e49606ea0962809d4720ff0ddb132c10ca69677ab153dd",
-        "core/constants.js": "3ae32f49800d9a1d7271bbc55a2d2fa087a4b0b57df0326cd63a766d19b4916c",
-        "core/custom-branding.js": "552be1f866bb931574373fd96e94ee24adaaeac187eb86c9d7e0d701171bead7",
+        "core/constants.js": "9ca7489502e1180db9c3036947eda98c0a7e1300e7e942639f067e38eb6fe769",
+        "core/custom-branding.js": "5fa6916cced98d97f9ac9c7baed0365b6f36673253b6f2a724455f07ac71d7b8",
         "core/errors.js": "0c95986d06b22f3358533dc19be37b9fd8abd3cb726befce59de81823a9016df",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "87e1c84d6fa867ae70d4bc6a21afeff1eecd9865bf0e0826dd87f298cb95e262",
@@ -145,10 +145,10 @@
         "core/public_suffix_list.dat": "bd6af8ecb8847b3272c1ca4b414325069eca4f73072c3c137cb812937c47efdc",
         "core/raster-validation.js": "943a363158e648d8c5a9698a944c4d34578fad50da8a4472e1131dc9236dccb7",
         "core/registrable-domain.js": "205cb93081bcb3c631a4a052af098b2c91b3009dc18b5703f6b1974f19f93583",
-        "core/storage.js": "257a653aaeaa96467ee0eda879d56699d94335c6f9897562d5cc454bb4fbe3d2",
+        "core/storage.js": "541ee2fefb6e9d2b2c9fda88bb0ce0d0f7172eaa232bcfccbb163088ad0c6853",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "c7b91d134f0c50db28cd54ee1f24d2b38be34bd002b7e4fc8c49581afa308c1c",
+        "manifest.json": "8377ff5676e2599838a55dc2e54158803285c7e771759423498a0c0658ceab30",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bookmarks-controller.js": "d8198af193820704873768122465e67b17fa928fe8ec05e71839f1666ff94ebe",
@@ -161,9 +161,9 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "8708d49aa606052c3a34d72df3bd6f34ef95e5f8fbfc16534afc308579dc20db",
         "newtab/newtab-secondary.css": "803af45bb4003caafc98cd816461cd824433d06993e8b5106ca8ff01362a26f1",
-        "newtab/newtab.html": "b587570886240b86aa895bf8cbe6ade5b6908deeb6d339ada9238f7e027b321d",
-        "newtab/newtab.js": "ed1b516320bc598c3dcd7847b3a6a236e24238f23262185aba33784486ee9294",
-        "newtab/persistence-gateway.js": "845cdc696e2d55ce435dedbe5b8d7d7a06189995178a3bf162a38b71c5ccb600",
+        "newtab/newtab.html": "a69bc72e139606caf1b17af663f0a838ba13577a2ab65da56c890b9eb7093eb7",
+        "newtab/newtab.js": "ccfdd0f391dce4d85f1dd4dfacf551724ebb14452f0eb9f7516c918332d678f2",
+        "newtab/persistence-gateway.js": "934c49bf883333502781c74a2d4c3f4966234f03c25af516f318d2556561ca2c",
         "newtab/render-bootstrap.js": "cf17fa05791c14d70379431ffa49ae62c7b51cb1e4ab4beac0d5f508e5b421ce",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
         "newtab/secondary-style-bootstrap.js": "9403a2149c1073879f38ca90392d1fd4810970184aa747db60971fddce9d9435",
@@ -173,11 +173,11 @@
         "newtab/wallpaper-gallery-shell.js": "2485f22ceb518b7866dd124afc5a5692612db4cd0b5a9502a86801a43cfc1a09",
         "welcome/welcome.css": "22bfcbc998ef52f965915c0d57dd5c7e0fa466c429c0a96e05e9766c43878e6d",
         "welcome/welcome.html": "5507cdb666e1ec9b343ac34112d695924477a3aa3c0fdf1eb4af34063e57682e",
-        "welcome/welcome.js": "ddf33a83e504cfe43c1afc87d5b854140905aed934050cd7e9cd582e72aed75b"
+        "welcome/welcome.js": "a8890285431f944062793b3bb1adab7d91b2b6cf7d7bcc23960f633fe43a7662"
       }
     },
     "chrome": {
-      "version": "1.33.0.61",
+      "version": "1.33.0.63",
       "files": {
         "LICENSE": "fab3dd6bdab226f1c08630b1dd917e11fcb4ec5e1e020e2c16f83a0a13863e85",
         "_locales/bg/messages.json": "0426e35a30ece3fe6164f1408272aef0f62d08ca1a718763f8f8b41e3e3effff",
@@ -267,8 +267,8 @@
         "core/bounded-response.js": "b06f63d89f0bb3e73db89a30f4076a22eb5f74e22fc0bb04ddd2b5f8b314ac36",
         "core/browser-shim.js": "9538516c44f10cc0b76b2d40e948bd3fcd0928f67f82e07980f341485bf618c2",
         "core/concurrency.js": "edccbdcfd57c6fac80e49606ea0962809d4720ff0ddb132c10ca69677ab153dd",
-        "core/constants.js": "3ae32f49800d9a1d7271bbc55a2d2fa087a4b0b57df0326cd63a766d19b4916c",
-        "core/custom-branding.js": "552be1f866bb931574373fd96e94ee24adaaeac187eb86c9d7e0d701171bead7",
+        "core/constants.js": "9ca7489502e1180db9c3036947eda98c0a7e1300e7e942639f067e38eb6fe769",
+        "core/custom-branding.js": "5fa6916cced98d97f9ac9c7baed0365b6f36673253b6f2a724455f07ac71d7b8",
         "core/errors.js": "0c95986d06b22f3358533dc19be37b9fd8abd3cb726befce59de81823a9016df",
         "core/first-paint-contract.js": "efdf377bfe997e0fcb8e5b1530581de86f5c70bc3171bc5a7a2a8daa19f4a869",
         "core/http-url-safety.js": "87e1c84d6fa867ae70d4bc6a21afeff1eecd9865bf0e0826dd87f298cb95e262",
@@ -324,10 +324,10 @@
         "core/public_suffix_list.dat": "bd6af8ecb8847b3272c1ca4b414325069eca4f73072c3c137cb812937c47efdc",
         "core/raster-validation.js": "943a363158e648d8c5a9698a944c4d34578fad50da8a4472e1131dc9236dccb7",
         "core/registrable-domain.js": "205cb93081bcb3c631a4a052af098b2c91b3009dc18b5703f6b1974f19f93583",
-        "core/storage.js": "257a653aaeaa96467ee0eda879d56699d94335c6f9897562d5cc454bb4fbe3d2",
+        "core/storage.js": "541ee2fefb6e9d2b2c9fda88bb0ce0d0f7172eaa232bcfccbb163088ad0c6853",
         "core/svg-safety.js": "541c187221b1b64e4c202286d49bfe6daf5d41515733d564b7cc1ec297c6ec28",
         "core/viewport-tooltip.js": "4299d8dbe9c1934c8939f6924bd1edd63366f6e413f49c86c2cab11457fb8796",
-        "manifest.json": "da84251b2fd305b8f9ff144662afaa57676e68b8caaeb0f2abb7680bb646363c",
+        "manifest.json": "ee1a952ec7d47a1bd54e7a98f11a6a6fa6f6b5e14a7169e21f92ad700e588b51",
         "newtab/appearance-bootstrap.js": "5d9df65e289e21bbe9ff5dfbab9ae877b7f3fc9819abb0dbfe07feb6fc84a5bc",
         "newtab/appearance-color.js": "ef5f1589005533d9ac119565137145c0e02ba9cc4e0978929ec0a01db9ed175d",
         "newtab/bookmarks-controller.js": "d8198af193820704873768122465e67b17fa928fe8ec05e71839f1666ff94ebe",
@@ -340,9 +340,9 @@
         "newtab/local-storage-bootstrap.js": "f1fd2575d18131ea0a2e18e2907e61fab01adb6474cde81ffd753621a1f49e28",
         "newtab/newtab-critical.css": "8708d49aa606052c3a34d72df3bd6f34ef95e5f8fbfc16534afc308579dc20db",
         "newtab/newtab-secondary.css": "803af45bb4003caafc98cd816461cd824433d06993e8b5106ca8ff01362a26f1",
-        "newtab/newtab.html": "c4c05b0833b4086d8f3d7bec0a139bd7af37e3acc62a8b91ce14b6132ba59e44",
-        "newtab/newtab.js": "ed1b516320bc598c3dcd7847b3a6a236e24238f23262185aba33784486ee9294",
-        "newtab/persistence-gateway.js": "845cdc696e2d55ce435dedbe5b8d7d7a06189995178a3bf162a38b71c5ccb600",
+        "newtab/newtab.html": "ab304eac4e386b94d570ca4f8cc2b706a39789502f816b8fed8cb8659db11fdb",
+        "newtab/newtab.js": "ccfdd0f391dce4d85f1dd4dfacf551724ebb14452f0eb9f7516c918332d678f2",
+        "newtab/persistence-gateway.js": "934c49bf883333502781c74a2d4c3f4966234f03c25af516f318d2556561ca2c",
         "newtab/render-bootstrap.js": "cf17fa05791c14d70379431ffa49ae62c7b51cb1e4ab4beac0d5f508e5b421ce",
         "newtab/render-manifest.js": "e07964f1065865f08aca416e50ecd88de3dadcbe88968469af28bd01ca84af27",
         "newtab/secondary-style-bootstrap.js": "9403a2149c1073879f38ca90392d1fd4810970184aa747db60971fddce9d9435",
@@ -352,7 +352,7 @@
         "newtab/wallpaper-gallery-shell.js": "2485f22ceb518b7866dd124afc5a5692612db4cd0b5a9502a86801a43cfc1a09",
         "welcome/welcome.css": "22bfcbc998ef52f965915c0d57dd5c7e0fa466c429c0a96e05e9766c43878e6d",
         "welcome/welcome.html": "5507cdb666e1ec9b343ac34112d695924477a3aa3c0fdf1eb4af34063e57682e",
-        "welcome/welcome.js": "ddf33a83e504cfe43c1afc87d5b854140905aed934050cd7e9cd582e72aed75b"
+        "welcome/welcome.js": "a8890285431f944062793b3bb1adab7d91b2b6cf7d7bcc23960f633fe43a7662"
       }
     }
   }

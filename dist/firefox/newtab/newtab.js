@@ -1644,7 +1644,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       imageStyle: "contain", position: targetPosition, createdAt: timestamp, modifiedAt: timestamp, source: "manual"
     };
     state.shortcuts.push(shortcut);
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     render();
     const host = canonicalSiteHost(url);
     const remaining = (frequentRenderSnapshot?.sites || []).filter(candidate => canonicalSiteHost(candidate?.url) !== host);
@@ -3785,7 +3785,7 @@ ${site.url}`;
         }
       }
       if (moved) {
-        await saveState();
+        await saveState({ recoverOnFailure: true });
         render();
         showToast(t("movedEmpty"));
       }
@@ -3958,7 +3958,7 @@ ${site.url}`;
     // Folders never nest, so dropping a folder onto another occupied slot is unambiguous.
     if (source.type === "folder") {
       if (!swapTopLevelItems(sourceId, targetId)) return;
-      await saveState();
+      await saveState({ recoverOnFailure: true });
       render();
       showToast(t("folderMoved"));
       return;
@@ -4004,7 +4004,7 @@ ${site.url}`;
     const { sourceId, targetId } = pendingDrop;
     closeDropChoice();
     if (!swapTopLevelItems(sourceId, targetId)) return;
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     render();
     showToast(t("shortcutsMoved"));
   });
@@ -4049,7 +4049,7 @@ ${site.url}`;
       modifiedAt: timestamp
     };
     state.shortcuts.push(folder);
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     render();
 
     const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(folder.id)}"]`);
@@ -4069,7 +4069,7 @@ ${site.url}`;
     const timestamp = nextMutationTime(state.updatedAt, source.modifiedAt, folder.modifiedAt);
     folder.items.push({ ...source, position: folder.items.length, modifiedAt: timestamp });
     folder.modifiedAt = timestamp;
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     render();
 
     const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(folder.id)}"]`);
@@ -4126,7 +4126,7 @@ ${site.url}`;
           shortcut = bookmarkShortcutRecord(payload, target.items.length, timestamp);
           target.items.push(shortcut);
           target.modifiedAt = timestamp;
-          await saveState();
+          await saveState({ recoverOnFailure: true });
           render();
           const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(target.id)}"]`);
           if (slot) {
@@ -4152,7 +4152,7 @@ ${site.url}`;
           };
           state.shortcuts = state.shortcuts.filter(item => item.id !== target.id);
           state.shortcuts.push(folder);
-          await saveState();
+          await saveState({ recoverOnFailure: true });
           render();
           const slot = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(folder.id)}"]`);
           if (slot) {
@@ -4171,7 +4171,7 @@ ${site.url}`;
         const timestamp = nextMutationTime(state.updatedAt, state.shortcuts.map(item => item.modifiedAt));
         shortcut = bookmarkShortcutRecord(payload, position, timestamp);
         state.shortcuts.push(shortcut);
-        await saveState();
+        await saveState({ recoverOnFailure: true });
         render();
         showToast(t("shortcutAdded"));
         if (typeof rearmFolderDiscoveryHintAfterAdd === "function") rearmFolderDiscoveryHintAfterAdd();
@@ -4363,7 +4363,7 @@ ${site.url}`;
         folder.modifiedAt = timestamp;
         folderDragMoved = true;
         suppressFolderClickUntil = Date.now() + 300;
-        await saveState();
+        await saveState({ recoverOnFailure: true });
         renderFolderContents(folder);
       });
 
@@ -4401,7 +4401,7 @@ ${site.url}`;
     if (folder.title === title) return;
     folder.title = title;
     folder.modifiedAt = nextMutationTime(state.updatedAt, folder.modifiedAt);
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     const label = document.querySelector(`.shortcut-slot[data-id="${CSS.escape(folder.id)}"] .shortcut-label`);
     if (label) label.textContent = title || t("folder");
   }
@@ -4487,7 +4487,7 @@ ${site.url}`;
     state.shortcuts = repairTopLevelPositionsWithinCapacity(state.shortcuts, capacity);
 
     closeFolder();
-    await saveState();
+    await saveState({ recoverOnFailure: true });
     render();
     showToast(t("folderRemoved"));
   });
@@ -5514,7 +5514,7 @@ ${site.url}`;
       const count = replaceWithFirefoxShortcuts(state, imported);
       if (state.settings.columns !== previousColumns || state.settings.rows !== previousRows) markSettingsChanged();
       state.updatedAt = nextMutationTime(state.updatedAt);
-      await saveState();
+      await saveState({ recoverOnFailure: true });
       applySettings();
       render();
       showToast(t("loadedFirefoxShortcuts", { count }));
@@ -7980,17 +7980,12 @@ ${t("clearSyncWarning")}`, { danger: true });
       }
       importedState = selectActiveSpaceNormalized(importedState, importedState.activeSpaceId);
       const brandingModule = await loadCustomBrandingModule();
-      const brandingTransaction = await brandingModule.beginCustomBrandingImport(parsed.branding);
-      const importedBranding = brandingTransaction.written;
-      let persisted;
-      try {
-        persisted = await persistenceGateway.commitImportedProfile(importedState, preparedImport.compactBaseline);
-      } catch (error) {
-        try { await brandingModule.rollbackCustomBrandingImport(brandingTransaction); } catch (rollbackError) {
-          console.error(`${PRODUCT_NAME}: could not roll back imported Custom Branding`, rollbackError);
-        }
-        throw error;
-      }
+      const importedBranding = brandingModule.normalizeCustomBranding(parsed.branding, { strict: true });
+      // One durable storage batch owns both the imported layout and its branding.
+      // No speculative branding write or rollback can race a tab close.
+      const persisted = await persistenceGateway.commitImportedProfile(
+        importedState, preparedImport.compactBaseline, importedBranding
+      );
       stateMutationGeneration += 1;
       pendingSettingsDraft.clear();
       customBranding = importedBranding;

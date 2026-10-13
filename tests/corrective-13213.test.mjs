@@ -105,39 +105,36 @@ test("1.32.1.3 profile preflight rejects more than 96 top-level records", async 
   await assert.rejects(()=>profile.parseProfilePackage(JSON.stringify(raw)), e=>e?.code==="PROFILE_DAMAGED");
 });
 
-test("1.32.1.3 branding rollback restores previous value only while import still owns current value", async () => {
-  local.data={};
-  await branding.writeCustomBranding({enabled:true,text:"P",logo:TINY_PNG});
-  const tx=await branding.beginCustomBrandingImport({enabled:true,text:"I",logo:TINY_PNG});
-  await branding.writeCustomBranding({enabled:true,text:"N",logo:TINY_PNG});
-  const result=await branding.rollbackCustomBrandingImport(tx);
-  assert.equal(result.rolledBack,false);
-  assert.equal((await branding.readCustomBranding()).text,"N");
+test("1.33.0.62 obsolete speculative branding import and rollback helpers are retired", () => {
+  const source = fs.readFileSync("src/shared/core/custom-branding.js", "utf8");
+  assert.doesNotMatch(source, /beginCustomBrandingImport|rollbackCustomBrandingImport|brandingEqual/);
+  assert.match(source, /export async function writeCustomBranding/);
 });
 
-test("1.32.1.3 branding rollback restores prior value when no newer writer exists", async () => {
+test("1.33.0.62 standalone Custom Branding editing remains functional and device-local", async () => {
   local.data={};
-  await branding.writeCustomBranding({enabled:true,text:"P",logo:TINY_PNG});
-  const tx=await branding.beginCustomBrandingImport({enabled:true,text:"I",logo:TINY_PNG});
-  const result=await branding.rollbackCustomBrandingImport(tx);
-  assert.equal(result.rolledBack,true);
-  assert.equal((await branding.readCustomBranding()).text,"P");
+  await branding.writeCustomBranding({enabled:true,text:"Before",logo:TINY_PNG});
+  await branding.writeCustomBranding({enabled:true,text:"After",logo:TINY_PNG});
+  assert.equal((await branding.readCustomBranding()).text,"After");
+  assert.deepEqual(Object.keys(local.data),[constants.LOCAL_CUSTOM_BRANDING_KEY]);
 });
 
 test("1.32.1.3 Settings import does not install candidate state before durable commit", () => {
   const source=fs.readFileSync("src/shared/newtab/newtab.js","utf8");
-  const start=source.indexOf("const brandingTransaction = await brandingModule.beginCustomBrandingImport(parsed.branding)");
-  const write=source.indexOf("persisted = await persistenceGateway.commitImportedProfile(importedState",start);
+  const start=source.indexOf("const importedBranding = brandingModule.normalizeCustomBranding(parsed.branding");
+  const write=source.indexOf("const persisted = await persistenceGateway.commitImportedProfile(",start);
   const install=source.indexOf("state = persisted.state",write);
   assert.ok(start>=0 && write>start && install>write);
-  const between=source.slice(start,write);
-  assert.equal(/state\s*=\s*importedState/.test(between),false);
+  assert.match(source.slice(write,install),/preparedImport\.compactBaseline, importedBranding/);
+  assert.equal(/state\s*=\s*importedState/.test(source.slice(start,write)),false);
+  assert.doesNotMatch(source.slice(start,write),/storage\.local\.set|beginCustomBrandingImport/);
 });
 
-test("1.32.1.3 Welcome import uses conditional branding rollback", () => {
+test("1.33.0.62 Welcome import commits branding with the guarded profile", () => {
   const source=fs.readFileSync("src/shared/welcome/welcome.js","utf8");
-  assert.match(source,/beginCustomBrandingImport\(candidate\.branding\)/);
-  assert.match(source,/rollbackCustomBrandingImport\(brandingTransaction\)/);
+  assert.match(source,/normalizeCustomBranding\(candidate\.branding, \{ strict: true \}\)/);
+  assert.match(source,/requireUnchangedCompactState: candidate\.compactBaseline, importedBranding/);
+  assert.doesNotMatch(source,/beginCustomBrandingImport\(candidate\.branding\)|rollbackCustomBrandingImport\(brandingTransaction\)/);
 });
 
 test("1.32.1.3 New Tab adopts external Custom Branding storage changes", () => {

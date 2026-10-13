@@ -73,15 +73,17 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
   const expectedOperations = {
     ...frozen.directStorageCallSites.byOperation,
     "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 3,
-    // .42 adds one narrow branding rollback removal to preserve absent-vs-default
-    // storage state after a rejected profile import; no routine read/write grows.
-    "local.remove": frozen.directStorageCallSites.byOperation["local.remove"] + 1,
-    // ED-1 adds one conditional durable-state recovery read after a failed
-    // shortcut transaction; successful startup/save paths remain unchanged.
-    "local.get": frozen.directStorageCallSites.byOperation["local.get"] + 1
+    // .62 retires the old two-step branding import and its rollback helper:
+    // two local reads, two local writes, and the conditional rollback remove
+    // are gone. The single atomic profile write already existed.
+    "local.remove": frozen.directStorageCallSites.byOperation["local.remove"],
+    "local.set": frozen.directStorageCallSites.byOperation["local.set"] - 2,
+    // ED-1 adds one conditional durable recovery read, while .62 removes
+    // the two obsolete branding import/rollback reads.
+    "local.get": frozen.directStorageCallSites.byOperation["local.get"] - 1
   };
   assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
-    "Historical Sync reads remain unchanged; .42 branding rollback and ED-1 failed-save durable re-read are explicit conditional operations");
+    "Historical Sync reads remain unchanged; .62 removes speculative branding import/rollback operations and retains ED-1 recovery");
   for (const browser of ["firefox", "chrome"]) {
     for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
       const liveResult = live.runtimeCensus[browser][scenario];

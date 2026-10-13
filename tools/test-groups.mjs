@@ -63,6 +63,7 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /stage2b-atomic-import-133062\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
       /neofix-133058\.test\.mjs$/i,
@@ -199,6 +200,7 @@ const GROUPS = Object.freeze({
   recovery: {
     description: "Catastrophic Recovery, immutable generations, retention, restart and failure behavior",
     patterns: [
+      /stage2b-atomic-import-133062\.test\.mjs$/i,
       /recovery-/i,
       /corrective-13013\.test\.mjs$/i,
       /corrective-1301819\.test\.mjs$/i,
@@ -306,6 +308,7 @@ const GROUPS = Object.freeze({
   core: {
     description: "Core state/storage utilities and cross-cutting model invariants",
     patterns: [
+      /stage2b-atomic-import-133062\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133048\.test\.mjs$/i,
       /storage-registry/i,
@@ -342,6 +345,7 @@ const GROUPS = Object.freeze({
   release: {
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
+      /stage2b-atomic-import-133062\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
       /neofix-133058\.test\.mjs$/i,

@@ -6,7 +6,7 @@
 /*
  * New Tab persistence gateway. Only the actual storage write crosses this
  * boundary. The caller remains owner of mutation clocks, pending intentions,
- * UI reconciliation, branding rollback and durable-baseline adoption.
+ * UI reconciliation and durable-baseline adoption.
  *
  * No implicit serialization, retry, error presentation or extra reads.
  */
@@ -20,10 +20,11 @@ export function createNewTabPersistenceGateway(writeLocalStateWithBaseline) {
         ...extraOptions
       });
     },
-    commitImportedProfile(importedState, requiredCompactBaseline) {
+    commitImportedProfile(importedState, requiredCompactBaseline, importedBranding) {
       return writeLocalStateWithBaseline(importedState, {
         recordSyncMutation: true,
-        requireUnchangedCompactState: requiredCompactBaseline
+        requireUnchangedCompactState: requiredCompactBaseline,
+        importedBranding
       });
     }
   });

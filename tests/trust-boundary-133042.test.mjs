@@ -7,7 +7,7 @@ import vm from "node:vm";
 import { DEFAULT_STATE, LOCAL_STATE_KEY, LOCAL_CUSTOM_BRANDING_KEY } from "../src/shared/core/constants.js";
 import { normalizeState, stampImportedProfileState } from "../src/shared/core/model.js";
 import { writeLocalState, ensureLocalStorage } from "../src/shared/core/storage.js";
-import { beginCustomBrandingImport, rollbackCustomBrandingImport } from "../src/shared/core/custom-branding.js";
+import { normalizeCustomBranding } from "../src/shared/core/custom-branding.js";
 import { normalizeShortcutUrl } from "../src/shared/newtab/ui-utils.js";
 import { isWebBookmarkUrl } from "../src/shared/core/bookmarks.js";
 import { MESSAGES as EN } from "../src/shared/core/i18n-locales/en.js";
@@ -43,7 +43,7 @@ function freshWelcomeContext({ onPreferences = () => {} } = {}) {
   const trace = [];
   const ctx = vm.createContext({
     pendingSourceCandidate: null,
-    beginCustomBrandingImport, rollbackCustomBrandingImport,
+    normalizeCustomBranding,
     writeLocalState, ensureLocalStorage, stampImportedProfileState,
     parseProfilePackage: async () => ({ state: state("Backup", 25), branding: { text: "Imported", enabled: true }, preferences: { uiLocale: "en", frequentlyVisitedEnabled: true } }),
     readProfileImportText: async () => "backup",
@@ -61,7 +61,7 @@ function freshWelcomeContext({ onPreferences = () => {} } = {}) {
   return { ctx, trace };
 }
 
-test(".42 Welcome's real staged profile import fails closed against a concurrent durable edit, including branding rollback", async () => {
+test(".62 Welcome's real staged profile import fails closed against a concurrent durable edit, including branding", async () => {
   const previous = globalThis.browser;
   const local = new Area();
   globalThis.browser = { storage: { local, session: new Area() } };

@@ -35,11 +35,6 @@ async function withCustomBrandingWriteLock(callback) {
   return callback();
 }
 
-function brandingEqual(left, right) {
-  return left?.schemaVersion === right?.schemaVersion && left?.enabled === right?.enabled &&
-    left?.text === right?.text && left?.logo === right?.logo;
-}
-
 export const DEFAULT_CUSTOM_BRANDING = Object.freeze({
   schemaVersion: CUSTOM_BRANDING_SCHEMA_VERSION,
   enabled: false,
@@ -122,30 +117,3 @@ export async function writeCustomBranding(value) {
     return branding;
   });
 }
-
-export async function beginCustomBrandingImport(value) {
-  const branding = normalizeCustomBranding(value, { strict: true });
-  return withCustomBrandingWriteLock(async () => {
-    const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
-    const hadPrevious = Object.hasOwn(result || {}, LOCAL_CUSTOM_BRANDING_KEY);
-    const previous = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
-    await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: branding });
-    return { previous, written: branding, hadPrevious };
-  });
-}
-
-export async function rollbackCustomBrandingImport(transaction) {
-  const previous = normalizeCustomBranding(transaction?.previous, { strict: true });
-  const written = normalizeCustomBranding(transaction?.written, { strict: true });
-  return withCustomBrandingWriteLock(async () => {
-    const result = await browser.storage.local.get(LOCAL_CUSTOM_BRANDING_KEY);
-    const current = normalizeCustomBranding(result?.[LOCAL_CUSTOM_BRANDING_KEY]);
-    if (!brandingEqual(current, written)) return { rolledBack: false, current };
-    // Rollback must preserve absence too: a rejected import cannot create an
-    // otherwise nonexistent branding record merely by restoring its defaults.
-    if (transaction?.hadPrevious === false) await browser.storage.local.remove(LOCAL_CUSTOM_BRANDING_KEY);
-    else await browser.storage.local.set({ [LOCAL_CUSTOM_BRANDING_KEY]: previous });
-    return { rolledBack: true, current: previous };
-  });
-}
-

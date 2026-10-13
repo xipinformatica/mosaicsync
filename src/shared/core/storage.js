@@ -20,6 +20,7 @@ import {
   LOCAL_ASSET_PREFIX,
   LOCAL_ASSET_STORE_SCHEMA_VERSION,
   LOCAL_ASSET_WRITE_LOCK_NAME,
+  LOCAL_CUSTOM_BRANDING_KEY,
   LOCAL_META_KEY,
   LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX,
   LOCAL_PENDING_SYNC_MUTATION_KEY,
@@ -693,7 +694,8 @@ async function persistNormalizedState(normalized, {
   beforeWrite = null,
   assetIdMemo = null,
   requireUnchangedCompactState = null,
-  conditionalShortcutName = null
+  conditionalShortcutName = null,
+  importedBranding = null
 } = {}) {
   return withPersistenceWriteLock(async canCollectStale => {
     let finalState = normalized;
@@ -807,6 +809,11 @@ async function persistNormalizedState(normalized, {
       [LOCAL_STATE_KEY]: projection.state,
       [LOCAL_ASSET_INDEX_KEY]: assetIndexValue(currentIds, pendingGcIds)
     };
+    // Profile import must commit device-local branding with the imported layout,
+    // image assets and pending Sync journal in the SAME storage.local.set batch.
+    // A tab close, quota failure or rejected write must never publish branding
+    // alone. Normal shortcut/Settings saves do not touch the branding key.
+    if (importedBranding !== null) writes[LOCAL_CUSTOM_BRANDING_KEY] = importedBranding;
 
     // Content-addressed keys are immutable only when the stored bytes really match
     // the bytes this state expects. Most assets were already hydrated and verified
@@ -914,13 +921,18 @@ async function writeLocalStateResult(state, {
   recordSyncMutation = false,
   baseState = null,
   baseStateIsCompact = false,
-  requireUnchangedCompactState = null
+  requireUnchangedCompactState = null,
+  importedBranding = null
 } = {}) {
   // One short-lived memo spans validation and local-asset projection for this
   // transaction only. It never survives the write or weakens content identity:
   // identical bytes still resolve through assetIdForDataUrl's exact pure result.
   const assetIdMemo = new Map();
   const normalized = normalizeState(state || DEFAULT_STATE, assetIdMemo);
+  // Import-only dynamic validation keeps the New Tab's first-paint static module
+  // graph unchanged; normal saves never load Custom Branding through storage.
+  const validatedImportBranding = importedBranding === null ? null
+    : (await import("./custom-branding.js")).normalizeCustomBranding(importedBranding, { strict: true });
   const baseline = baseState
     ? (baseStateIsCompact ? cloneCompactJson(baseState) : createWriteBaseline(baseState, assetIdMemo))
     : null;
@@ -931,6 +943,7 @@ async function writeLocalStateResult(state, {
       recordSyncMutation,
       baseState: baseline,
       requireUnchangedCompactState,
+      importedBranding: validatedImportBranding,
       beforeWrite,
       assetIdMemo
     });

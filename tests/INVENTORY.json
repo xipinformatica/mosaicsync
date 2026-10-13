@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 221,
+  "totalFiles": 223,
   "counts": {
-    "behavioral": 109,
+    "behavioral": 111,
     "integration": 34,
     "static": 77,
     "browser": 1
@@ -805,6 +805,14 @@
     {
       "file": "tests/stabilization-1265.test.mjs",
       "kind": "static"
+    },
+    {
+      "file": "tests/stage2b-atomic-import-133062.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/stage2c-folder-recovery.test.mjs",
+      "kind": "behavioral"
     },
     {
       "file": "tests/startup-12410.test.mjs",

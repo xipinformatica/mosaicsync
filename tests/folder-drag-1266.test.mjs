@@ -116,7 +116,7 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(js, /moveShortcutOutOfFolder,/);
     const emptyDrop = js.match(/function createEmptySlot\(position\)[\s\S]*?slot\.addEventListener\("drop", async event => \{([\s\S]*?)\n    \}\);/);
     assert.ok(emptyDrop, `${browser}: empty-slot drop handler missing`);
-    assert.match(emptyDrop[1], /findShortcutRecord\(sourceId\)[\s\S]*?nested\?\.parentFolder[\s\S]*?moveShortcutOutOfFolder\(state,[\s\S]*?shortcutId: sourceId[\s\S]*?position[\s\S]*?state = next[\s\S]*?closeFolder\(\)[\s\S]*?await saveState\(\)[\s\S]*?render\(\)/,
+    assert.match(emptyDrop[1], /findShortcutRecord\(sourceId\)[\s\S]*?nested\?\.parentFolder[\s\S]*?moveShortcutOutOfFolder\(state,[\s\S]*?shortcutId: sourceId[\s\S]*?position[\s\S]*?state = next[\s\S]*?closeFolder\(\)[\s\S]*?await saveState\(\{ recoverOnFailure: true \}\)[\s\S]*?render\(\)/,
       `${browser}: nested child extraction must use one state transition, normal persistence and one render path`);
   });
 }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.33.0.63
+
+**Stage 2C: durable recovery for failed folder and grid saves.**
+
+- Prevents failed folder creation, renaming, shortcut grouping, ungrouping, reordering, and bookmark/frequent-shortcut drops from silently committing later through unrelated saves. After a failed write, the grid re-adopts the latest durable profile rather than retaining a hidden mutation.
+- Preserves concurrent-tab changes and fails closed when the recovery read also fails; reuses the ED-1 recovery boundary without changing Sync or Recovery formats.
+- Includes the independently Chromium-accepted but not separately published 1.33.0.62 fix: Settings and Welcome backup restores atomically commit imported branding and profile data in one storage write.
+- Adds focused failure, ambiguous-write, concurrent-tab, and recovery-read regression tests. No new permissions, telemetry, storage migrations, translations or network destinations.
+- GitHub's final versioned browser release gate, Firefox-specific storage-failure injection, and receiving-device Sync tests remain pending. This is a private release candidate until independently accepted and the GitHub gate passes.
+
+## 1.33.0.62
+
+**Stage 2B: atomic backup-import branding and profile persistence.**
+
+- Fixes an import interruption window: closing the New Tab shortly after confirming a backup could previously save the imported branding without saving its shortcut layout. The first-run Welcome profile import had the same two-write risk.
+- Both import paths now commit the imported layout, local image assets, device-local branding and any pending Sync journal in the same guarded `storage.local.set` operation, instead of writing branding first and attempting a rollback after a failed layout save.
+- A failed or quota-rejected import preserves the previous profile and branding together; ambiguous write completion cannot leave imported shortcuts paired with old branding.
+- Retains stale-profile protection against edits from another tab and existing quota, Recovery, asset cleanup and Sync publication behavior. No new permissions, telemetry, translations, migrations, data keys or Sync protocol changes.
+- Real-browser interruption/quota acceptance and the versioned GitHub release gate must pass before publication. Firefox-specific fault injection and second-device Sync convergence remain separate verification gaps.
+
 ## 1.33.0.61
 
 **ED-1: durable recovery for failed shortcut saves and cross-Space moves.**

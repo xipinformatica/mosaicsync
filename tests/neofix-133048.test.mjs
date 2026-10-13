@@ -51,9 +51,10 @@ test('.48 Frequently Visited migration retains its explicit publishLegacyIntent=
 test('.48 imported profile still requires the examined durable snapshot', async()=>{
   const {gateway,calls}=recordingGateway();
   const imported={spaces:{}};const snapshot={state:{old:true}};
-  await gateway.commitImportedProfile(imported,snapshot);
+  const branding={schemaVersion:1,enabled:true,text:"Imported",logo:""};
+  await gateway.commitImportedProfile(imported,snapshot,branding);
   assert.equal(calls[0].state,imported);
-  assert.deepEqual(calls[0].options,{recordSyncMutation:true,requireUnchangedCompactState:snapshot});
+  assert.deepEqual(calls[0].options,{recordSyncMutation:true,requireUnchangedCompactState:snapshot,importedBranding:branding});
   assert.equal(Object.hasOwn(calls[0].options,'baseState'),false);
 });
 
@@ -81,7 +82,8 @@ test('.48 all six New Tab writes route through the gateway, preserving caller ow
   assert.equal((source.match(/persistenceGateway\.commitImportedProfile\(/g)||[]).length,1);
   assert.doesNotMatch(source,/\bwriteLocalStateWithBaseline\s*\(/,'no bypass of shared gateway');
   assert.match(source,/catch\s*\(error\)[\s\S]*?presentLocalPersistenceError\(error\)/);
-  assert.match(source,/rollbackCustomBrandingImport\(brandingTransaction\)/);
+  assert.match(source,/normalizeCustomBranding\(parsed\.branding, \{ strict: true \}\)/);
+  assert.doesNotMatch(source,/rollbackCustomBrandingImport\(brandingTransaction\)/);
   assert.match(source,/settlePersistedSettingsDraft\(\)/);
   assert.doesNotMatch(gatewaySource,/\b(setTimeout|queueMicrotask|storage\.sync|storage\.local|localStorage)\s*[.(]/);
 });
