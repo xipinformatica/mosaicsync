@@ -90,7 +90,7 @@ test("1.33.0.19 rapid Add/Edit Shortcut opens serialize before editor state muta
     },
     localizeDocument() {}, closeDropChoice() {}, shortcutSyncPrepareGeneration: 0,
     resetDetectedFaviconPicker() {}, invalidateShortcutNameSuggestion() {}, shortcutForm: { reset() { resetCalls += 1; } },
-    shortcutId: field(), editingParentFolderId: null, editingPreferredPosition: null,
+    shortcutId: field(), editingNewShortcutId: "", uid: () => "session-id", editingParentFolderId: null, editingPreferredPosition: null,
     editingSourceSpaceId: "", editingDestinationSpaceId: "", state: { activeSpaceId: "personal" },
     shortcutDialogTitle: field(), t(key) { return key; }, shortcutTitle: field(), shortcutUrl: field(), shortcutAutomaticName: field(), shortcutSavePending: false,
     shortcutImageStyle: field(), pendingShortcutImage: "", pendingShortcutSyncData: "", pendingShortcutImageKind: "",

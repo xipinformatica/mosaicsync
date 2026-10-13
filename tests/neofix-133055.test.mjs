@@ -76,9 +76,9 @@ test('55: candidate commit checks latest persisted data while write lock is held
 
 test('55: original save must complete before optional one-shot enrichment; never wait for network before render', () => {
   const section=newtab.slice(newtab.indexOf('shortcutForm.addEventListener("submit"'),newtab.indexOf('deleteShortcutButton.addEventListener("click"'));
-  assert.match(section,/await saveState\(\{ crossSpaceSyncIntent \}\)/);
+  assert.match(section,/await saveState\(\{ crossSpaceSyncIntent, recoverOnFailure: true \}\)/);
   assert.match(section,/runPostSaveShortcutNameEnrichment/);
-  assert.ok(section.indexOf('await saveState({ crossSpaceSyncIntent })') < section.indexOf('runPostSaveShortcutNameEnrichment'));
+  assert.ok(section.indexOf('await saveState({ crossSpaceSyncIntent, recoverOnFailure: true })') < section.indexOf('runPostSaveShortcutNameEnrichment'));
   assert.match(section,/shortcutAutomaticName\.checked/);
   assert.match(section,/webAccessGranted/);
   assert.doesNotMatch(section,/await runPostSaveShortcutNameEnrichment/);

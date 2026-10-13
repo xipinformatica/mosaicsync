@@ -128,6 +128,7 @@ test("1.33.0.21 artwork-aware save chooses one preview-aware manifest refresh in
     DEFAULT_STATE: { schemaVersion: 1 },
     writeBaseline: {},
     stateMutationGeneration: 0,
+    failedShortcutRecoveryPending: false,
     nextMutationTime: value => Number(value || 0) + 1,
     repairTopLevelPositionsWithinCapacity: shortcuts => shortcuts,
     visibleTopLevelCapacity: () => 44,

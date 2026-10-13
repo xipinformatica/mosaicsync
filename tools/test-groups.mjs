@@ -63,6 +63,7 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
       /neofix-133058\.test\.mjs$/i,
       /neofix-133056\.test\.mjs$/i,
@@ -151,6 +152,7 @@ const GROUPS = Object.freeze({
   sync: {
     description: "Normal Sync, concurrent writes, profile state, distributed merge and journals",
     patterns: [
+      /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133046\.test\.mjs$/i,
       /neofix-133046-smoke-corrective\.test\.mjs$/i,
@@ -340,6 +342,7 @@ const GROUPS = Object.freeze({
   release: {
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
+      /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
       /neofix-133058\.test\.mjs$/i,
       /neofix-133056\.test\.mjs$/i,

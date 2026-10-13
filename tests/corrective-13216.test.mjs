@@ -113,6 +113,7 @@ function baseContext(state, hydrator) {
     writeBaseline: { revision: "S0" },
     meta: { deviceId: "device-a" },
     stateMutationGeneration: 0,
+    failedShortcutRecoveryPending: false,
     spaceSwitchGeneration: 0,
     crossSpacePreviewGeneration: 0,
     activeSpacePersistQueue: Promise.resolve(),

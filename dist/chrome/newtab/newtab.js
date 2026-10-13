@@ -28,6 +28,7 @@ import {
   DONATE_URL,
   LOCAL_META_KEY,
   LOCAL_STATE_KEY,
+  LOCAL_ACTIVE_SPACE_KEY,
   LOCAL_CUSTOM_BRANDING_KEY,
   LOCAL_SYNC_RECOVERY_STATUS_KEY,
   PRODUCT_NAME,
@@ -601,6 +602,10 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let crossSpaceHoverTimer = null;
   let crossSpaceDragPreserverEl = null;
   let editingSourceSpaceId = "personal";
+  // One identity per new-shortcut editor session, including retries after an
+  // ambiguous write that reached disk but reported an error.
+  let editingNewShortcutId = "";
+  let failedShortcutRecoveryPending = false;
   let editingDestinationSpaceId = "personal";
   let folderDragId = null;
   let folderDragMoved = false;
@@ -2716,12 +2721,6 @@ ${site.url}`;
     scheduleAppearanceHintRefresh(state.settings);
   }
 
-  function destinationContainsShortcut(spaceId, shortcutId) {
-    const workspace = state?.spaces?.[spaceId];
-    if (!workspace) return false;
-    return workspace.shortcuts.some(item => item.id === shortcutId || (item.type === "folder" && item.items.some(child => child.id === shortcutId)));
-  }
-
   async function commitCrossSpaceDrag({ position = null, targetFolderId = "" } = {}) {
     const drag = crossSpaceDrag;
     if (!drag) return false;
@@ -2746,14 +2745,23 @@ ${site.url}`;
       shortcutIds: [drag.shortcutId],
       deviceId: meta.deviceId
     });
+    if (!(next.spaces?.[targetSpaceId]?.shortcuts || []).some(item =>
+      item.id === drag.shortcutId || (item.type === "folder" && item.items?.some(child => child.id === drag.shortcutId))
+    )) throw new Error(t("moveSpaceFailed"));
     state = next;
-    if (!destinationContainsShortcut(targetSpaceId, drag.shortcutId)) throw new Error(t("moveSpaceFailed"));
 
+    // writeLocalState persists the moved layout and recovery intent together.
+    // A failed write must not leave a preview that later becomes a real move.
+    try {
+      await saveState({ crossSpaceSyncIntent, recoverOnFailure: true });
+    } catch (error) {
+      drag.committed = true; // endCrossSpaceDrag must not restore a stale preview.
+      drag.previewSpaceId = state.activeSpaceId;
+      clearCrossSpaceHover();
+      throw error;
+    }
     drag.committed = true;
     drag.previewSpaceId = targetSpaceId;
-    // writeLocalState persists the moved layout, active Space and recovery
-    // intent in one storage.local call; avoid a separate active-Space write.
-    await saveState({ crossSpaceSyncIntent });
     state = releaseLocalAssetsForSpaceNormalized(state, drag.sourceSpaceId);
     applySettings();
     render();
@@ -2916,7 +2924,49 @@ ${site.url}`;
     }
   }
 
-  async function saveState({ localCacheOnly = false, crossSpaceSyncIntent = null, artworkChanged = false } = {}) {
+  async function reAdoptDurableShortcutStateAfterFailure() {
+    // An unsuccessful/ambiguous write may have committed, and another tab may
+    // have committed while our own write waited for the lock. Never roll back
+    // to a pre-operation snapshot: it could erase that other tab's changes.
+    // Re-read the authoritative compact profile and active-Space pointer.
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const generationAtRead = persistedStateChangeGeneration;
+      const raw = await browser.storage.local.get([LOCAL_STATE_KEY, LOCAL_ACTIVE_SPACE_KEY, LOCAL_META_KEY]);
+      const compact = raw[LOCAL_STATE_KEY];
+      if (!compact || typeof compact !== "object") throw new Error("Missing persisted profile during failed-save recovery");
+      const activeSpaceId = rawStateMultipleSpacesEnabled(compact) && SPACE_IDS.includes(raw[LOCAL_ACTIVE_SPACE_KEY])
+        ? raw[LOCAL_ACTIVE_SPACE_KEY] : "personal";
+      const hydrated = await hydratePersistedState(compact, { spaceIds: [activeSpaceId] });
+      if (generationAtRead !== persistedStateChangeGeneration) continue;
+      // Invalidate any earlier asynchronous storage-change hydration; a newer
+      // event will still be delivered and adopted normally.
+      persistedStateChangeGeneration += 1;
+      const previousState = state;
+      state = selectActiveSpaceNormalized(normalizeState(hydrated), activeSpaceId);
+      writeBaseline = createPersistedWriteBaseline(compact);
+      if (raw[LOCAL_META_KEY]) meta = normalizeMeta(raw[LOCAL_META_KEY]);
+      stateMutationGeneration += 1;
+      applyPendingSettingsDraft();
+      syncFrequentlyVisitedLocalsFromState(state);
+      refreshSettingsControlsAfterExternalState(previousState);
+      reconcileLauncherAfterExternalState({ renderGrid: true });
+      updateSpaceSwitcher();
+      scheduleAppearanceHintRefresh(state.settings);
+      refreshFirstPaintCaches(state, meta);
+      scheduleRenderPreviewRefresh(state, meta);
+      failedShortcutRecoveryPending = false;
+      return;
+    }
+    throw new Error("Persisted profile changed during failed-save recovery; retry after storage settles");
+  }
+
+  async function saveState({ localCacheOnly = false, crossSpaceSyncIntent = null, artworkChanged = false, recoverOnFailure = false } = {}) {
+    if (failedShortcutRecoveryPending) {
+      // A previous recovery read also failed. Discard this attempted mutation
+      // instead of letting any later, unrelated save publish the hidden draft.
+      await reAdoptDurableShortcutStateAfterFailure();
+      throw new Error(t("localSaveFailedUnsaved"));
+    }
     const baseState = writeBaseline;
     state.schemaVersion = DEFAULT_STATE.schemaVersion;
     // User-visible/core mutations advance the synchronized revision. Device-local
@@ -2934,6 +2984,14 @@ ${site.url}`;
         recordSyncMutation: !localCacheOnly && !crossSpaceSyncIntent
       });
     } catch (error) {
+      if (recoverOnFailure) {
+        failedShortcutRecoveryPending = true;
+        try {
+          await reAdoptDurableShortcutStateAfterFailure();
+        } catch (recoveryError) {
+          console.warn(`${PRODUCT_NAME}: durable state could not be re-adopted after failed save`, recoveryError);
+        }
+      }
       throw presentLocalPersistenceError(error);
     }
     state = persisted.state;
@@ -4729,6 +4787,7 @@ ${site.url}`;
     shortcutNameLookupAbandoned = false;
     shortcutNameLastRequestedUrl = "";
     shortcutId.value = item?.id || "";
+    editingNewShortcutId = item ? "" : uid();
     editingParentFolderId = parentFolderId;
     editingPreferredPosition = preferredPosition;
     editingSourceSpaceId = state.activeSpaceId;
@@ -5175,15 +5234,27 @@ ${site.url}`;
       const title = shortcutTitle.value.trim() || hostLabel(url);
       const image = pendingShortcutImage;
       const id = shortcutId.value;
-      const record = id ? findShortcutRecord(id) : null;
+      const operationId = id || editingNewShortcutId || (editingNewShortcutId = uid());
+      // A write may have landed even if its Promise rejected. On retry, find
+      // that *same id* in either Space, not just the currently painted Space.
+      const durableSpaceId = SPACE_IDS.find(spaceId =>
+        (state.spaces?.[spaceId]?.shortcuts || []).some(item =>
+          item.id === operationId || (item.type === "folder" && item.items?.some(child => child.id === operationId))
+        )
+      );
+      if (id && !durableSpaceId) throw new Error(t("operationFailed"));
+      const sourceSpaceId = durableSpaceId || editingSourceSpaceId;
+      const switchedToPersistedSpace = sourceSpaceId !== state.activeSpaceId;
+      if (switchedToPersistedSpace) state = selectActiveSpaceNormalized(state, sourceSpaceId);
+      const record = durableSpaceId ? findShortcutRecord(operationId) : null;
       // Snapshot the authorization now: a permission granted during this save
       // is not permission for a speculative name lookup in the same operation.
       const mayEnrichAfterSave = !record && !id && shortcutAutomaticName.checked && webAccessGranted;
-      let savedShortcutId = id;
+      let savedShortcutId = operationId;
       const destinationSpaceId = isMultipleSpacesEnabled() && SPACE_IDS.includes(editingDestinationSpaceId)
         ? editingDestinationSpaceId
         : editingSourceSpaceId;
-      const movedAcrossSpaces = destinationSpaceId !== editingSourceSpaceId;
+      const movedAcrossSpaces = destinationSpaceId !== sourceSpaceId;
       if (movedAcrossSpaces) {
         const destination = state.spaces?.[destinationSpaceId];
         if (!destination || destination.shortcuts.length >= visibleTopLevelCapacity(destination.settings)) {
@@ -5243,7 +5314,7 @@ ${site.url}`;
         if (!editingParentFolderId && newTopLevelPosition == null) throw new Error(t("operationFailed"));
         const newShortcut = {
           type: "shortcut",
-          id: uid(),
+          id: operationId,
           title,
           url,
           builtinIcon: pendingShortcutBuiltinIcon,
@@ -5283,22 +5354,24 @@ ${site.url}`;
         const beforeMove = state;
         const movedState = moveShortcutBetweenSpacesNormalized(beforeMove, {
           shortcutId: savedShortcutId,
-          fromSpaceId: editingSourceSpaceId,
+          fromSpaceId: sourceSpaceId,
           toSpaceId: destinationSpaceId
         });
         // Describe cross-Space intent from the user's action, not cached Sync
         // authority. persistNormalizedState owns the fresh durable-meta decision.
         crossSpaceSyncIntent = createCrossSpaceSyncIntentNormalized(beforeMove, movedState, {
-          fromSpaceId: editingSourceSpaceId,
+          fromSpaceId: sourceSpaceId,
           toSpaceId: destinationSpaceId,
           shortcutIds: [savedShortcutId],
           deviceId: meta.deviceId
         });
+        if (!(movedState.spaces?.[destinationSpaceId]?.shortcuts || []).some(item =>
+          item.id === savedShortcutId || (item.type === "folder" && item.items?.some(child => child.id === savedShortcutId))
+        )) throw new Error(t("moveSpaceFailed"));
         state = movedState;
-        if (!destinationContainsShortcut(destinationSpaceId, savedShortcutId)) throw new Error(t("moveSpaceFailed"));
       }
 
-      await saveState({ crossSpaceSyncIntent });
+      await saveState({ crossSpaceSyncIntent, recoverOnFailure: true });
 
       if (webAccessPermissionPromise) {
         webAccessGranted = (await webAccessPermissionPromise) === true;
@@ -5310,10 +5383,10 @@ ${site.url}`;
           state.settings.autoSiteIcons = false;
           if (settingsAutoSiteIcons) settingsAutoSiteIcons.checked = false;
         }
-        await saveState({ localCacheOnly: true });
+        await saveState({ localCacheOnly: true, recoverOnFailure: true });
       }
 
-      if (movedAcrossSpaces) {
+      if (movedAcrossSpaces || switchedToPersistedSpace) {
         applySettings();
         updateSpaceSwitcher();
         scheduleAppearanceHintRefresh(state.settings);
@@ -5385,7 +5458,14 @@ ${site.url}`;
       }
     }
 
-    await saveState();
+    try {
+      await saveState({ recoverOnFailure: true });
+    } catch (error) {
+      // Keep the editor open. A second Delete must ask for confirmation again;
+      // the durable record has been re-adopted (or future writes are blocked).
+      showToast(error?.message || t("operationFailed"));
+      return;
+    }
     render();
     closeDialog(shortcutDialog);
     editingParentFolderId = null;

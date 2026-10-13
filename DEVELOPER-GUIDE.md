@@ -1,26 +1,4 @@
 # MosaicSync Developer Guide
-> 1.33.0.60: Browser release-gate synchronization: title/redirect smoke now waits for fresh-profile Welcome navigation to finish before querying extension APIs. CI archives retain both browser-smoke logs and title-smoke stderr on failure. Only test infrastructure and version metadata changed from .59; no new production behaviors or permissions. GitHub four-browser matrix required before publication. See `docs/QA-1.33.0.60.md`.
-
-> 1.33.0.59: On-demand redirect observers prevent unrelated background website traffic from keeping Chromium MV3 workers awake. The listener pair is installed only while the user-initiated title lookup is active, then removed after a five-second grace period. See `docs/QA-1.33.0.59.md`. Real-browser verification remains required.
-> 1.33.0.58: GitHub release matrix must pass the mechanical job AND Chromium 141/stable and Firefox 140/current browser lanes. Native redirect observation can be browser-dependent; see `docs/QA-1.33.0.58.md`. The title test accepts an explicit fail-closed `redirect-unavailable` only when a direct HTML title lookup succeeds and unsafe redirects are not contacted. A pass in this degraded case is **not** proof of canonical redirect title enrichment. Firefox New Tab must be opened through the privileged browser tab command in an isolated CI session, not WebDriver navigation to `about:newtab` or a non-deterministic keyboard gesture.
-
-> **Start here if you are new to the MosaicSync codebase.**
->
-> This guide explains how the repository is organized, how the application starts, where authoritative data lives, how Sync and Recovery differ, which files own the major behaviors, how Firefox and Chromium are kept aligned, and how to make changes without accidentally removing protections that exist for real historical bugs.
->
-> This document is intentionally **not** a source of truth for release numbers, schema versions, storage keys, quotas, browser minimum versions, or other runtime constants. Those values remain authoritative in source code and manifests. The guide describes architecture and workflow.
-
----
-
-## Shortcut editor and confirmation invariants
-
-Post-save automatic naming is **not** an extension of the editor request. The saved URL-first shortcut remains immediately usable, and the editor cancellation contract remains intact. Only a successful *new* automatic-name save with website access already granted may start one separate, bounded name-enrichment request. The permission decision is snapped before saving. The result is applied via `enrichShortcutNameIfUnchanged()` under the storage write lock, using fresh compact state and a name-only conditional patch; never call the normal UI `saveState()` with a stale copy in the asynchronous response. Record identity, URL, creation time and record mutation clock must match. This intentionally skips after an explicit manual edit, deletion, or uncertain ownership. Space/folder moves and unrelated favicon/position changes may survive if identity and name authority remain unchanged; no stale payload fields can be restored. The mutation advances only the target shortcut/folder/workspace clock and enters the normal pending Sync mutation journal. No new persisted automatic-name flag, new host permissions or periodic scans. The `.54` HTML-title safety/redirect rules still apply to site-name metadata.
-
-New shortcuts use a URL-first editor: typing a URL generates a local name, and Enter submits immediately without navigating to the Name field or waiting for a network request. **Automatic naming** is on by default for new shortcuts, with a read-only (not disabled) suggested-name field; manual names are enabled only after opting out. Editing existing shortcuts defaults to manual mode so saved names never change unexpectedly. The optional webpage-title lookup still requires prior website access and must be invalidated on save or closure. The title-only bounded fetch must not trust an apparent `</head>` embedded inside script content, and unfinished raw-text elements must be excluded through the read cap; the favicon reader retains its original stop-at-head optimization.
-
-Every confirmation in the New Tab uses the single `confirmMosaic()` in-page dialog, never `window.confirm()`; that includes shortcuts, Recovery cleanup, imports and Sync. The Cancel button initially receives focus, Escape/backdrop dismiss without mutations, the prompt text must remain `textContent` (not HTML), and simultaneous prompts fail closed. Both Firefox and Chromium package the same shared dialog. The modal is also a Settings child dialog: `isSettingsChildDialogOpen()` must suppress outside-pointer and Escape dismissal of Settings while confirmation is active.
-
----
 
 ## 1. What MosaicSync is
 
@@ -54,36 +32,11 @@ Useful companion documents:
 
 If you only have 30 minutes before touching code, read this guide, then `docs/ARCHITECTURE.md`, then the ADR that covers the subsystem you intend to change.
 
-### New Tab persistence gateway (Neofix 4)
+### How to use this guide
 
-`src/shared/newtab/persistence-gateway.js` owns **only the low-level call routing** for six New Tab commits. `commitWithBaseline()` reconstructs the pre-existing exact compact-baseline option pair and forwards caller-owned intent flags; `commitImportedProfile()` preserves the complete examined-snapshot guard and the explicit Sync mutation. It must not introduce queues, storage reads, retries or implicit error localization. The New Tab still owns state revisions, pending Settings drafts, current visible unsaved edits, branding rollback, durable-baseline adoption and UI projection. Preserve this separation in maintenance work. Any behavioral change requires a separate behavioral release and an explicit audit.
+This guide explains how the repository is organized, how the application starts, where authoritative data lives, how Sync and Recovery differ, which files own the major behaviors, how Firefox and Chromium are kept aligned, and how to make changes without accidentally removing protections that exist for real historical bugs.
 
-### Core correctness invariants
-
-Future changes must preserve these core correctness invariants:
-
-- **Content-addressed local artwork is validated once per exact context-owned ID/value pair.** First encounters must read and fully validate the stored bytes. A later hydration may reuse only bytes that this same JS context already validated for that asset ID; new IDs still cross the storage/validation boundary. When a complete persisted profile is adopted, trim this verified-value cache to asset IDs still referenced anywhere in that profile; partial Space/folder hydration must not prune it. The cache is an optimization, never a substitute for first-read validation or write-path collision checks.
-- **Visible top-level capacity is authoritative.** A successful add, Frequently Visited insertion, cross-Space move, folder ungroup or grid-layout change must never create a top-level position outside `rows × columns`; full-grid operations must reject before destructive mutation.
-- **Normalization must be a one-pass fixed point.** `normalizeState(normalizeState(x))` must be semantically identical to `normalizeState(x)`. In particular, repairing colliding top-level positions must return the array in the final assigned-position order; Sync merges can legitimately deliver two independently edited records targeting the same slot.
-- **A no-op stale rebase must preserve latest authority exactly.** If a caller's workspace is unchanged from its baseline, rebasing it onto a newer persisted workspace must return that latest workspace without manufacturing timestamp/signature changes through record reconstruction.
-- **Profile import is an untrusted boundary.** Raw structure is bounded before recursive/hash-heavy work, and imported raster assets receive strict container/geometry validation before becoming durable local artwork. Runtime compatibility validation for already-stored legacy artwork is intentionally separate.
-- **Import rollback must not overwrite newer local authority.** Custom Branding rollback is conditional on still owning the value it wrote, and an imported profile candidate must not replace live New Tab state before the durable state commit succeeds.
-
-These protections are correctness-driven and do not change Normal Sync/Recovery ownership, profile format v3, or Custom Branding's device-local-only boundary.
-
-New Tab presentation-ownership rules include:
-
-- **Presentation-only onboarding must stay outside authoritative state.** One-time visual guidance is device-local and lazy. It must not clone launcher identity (`.shortcut-slot`, `data-id`), invoke production mutation handlers, or touch profile/Sync/Recovery state. Revalidate eligibility before mounting, make asynchronous pre-mount work cancellable, ignore descendant artwork churn while reacting to real grid replacement, and provide a non-animated reduced-motion path.
-- **Sync status must not invent provenance.** Dataset authorship (the newest synchronized change) and local receipt timing are separate concepts. Exact incoming provenance may show the synchronized friendly device name; collaborative/non-exact provenance must be described as combined changes rather than attributed to one guessed sender.
-- **Folder scrolling is content-driven.** The folder panel owns the viewport height and the item grid is the flexible scroll region. Do not reintroduce a fixed pixel ceiling that can create a scrollbar even when all rows fit.
-- **Folder first-frame geometry must match authoritative geometry.** The parser-critical bootstrap already knows the saved tile size, so it must derive the folder-mosaic cell/icon/gap/padding and folder-item tile/icon variables with the same arithmetic as `applySettings()`. Do not let CSS reference defaults paint first and then visibly resize when the authoritative New Tab code takes over.
-- **First-paint ownership is an explicit, complete parity contract.** Any visual/state field that the synchronous bootstrap claims to know must either match the authoritative renderer or be explicitly deferred. For authoritative first-frame geometry, every property that the real `applySettings()` geometry owner writes must be classified exactly once as parity-required, intentionally deferred, or not bootstrap-owned; bootstrap may not silently introduce an undeclared geometry responsibility either. Classification and value parity must consume one shared test-only ownership declaration, so classifying a new parity-required property automatically enrolls it in real bootstrap-versus-authoritative value comparison. Geometry regressions execute both real owners at boundary/non-default settings and mutation-test one-sided ownership plus classified value divergence. Artwork regressions preserve the semantic distinction between immediate artwork, builtin artwork, known-but-deferred artwork and a genuinely iconless fallback. Do not replace this with duplicated expected-value formulas or independent hardcoded parity lists that can drift.
-- **A child Shortcut Editor preserves its open-folder context.** Opening the native editor for a shortcut inside a folder must not call `closeFolder()`, and document-level outside-folder handling must ignore pointer activity while that editor is open. `render()` owns the authoritative result: rerender/reposition the folder if it survives Save/Delete/Move, and close it only when the folder genuinely dissolves or disappears.
-- **Shortcut URL is required; shortcut title is optional.** The Add Shortcut form must allow an empty title while keeping the URL mandatory. At the save boundary, an empty/whitespace title resolves through `hostLabel(url)` after URL normalization, so persisted shortcut records still receive a deterministic non-empty title without new network access or schema changes. New-add focus belongs on the mandatory URL; edit focus remains on the existing title.
-- **Settings owns its child dialogs.** Wallpaper Gallery, Custom Branding and Recovery safety copies are modal children launched from the fixed Settings panel. Global outside-click/Escape handling must never close Settings behind an open Settings-owned child dialog; closing the child returns to Settings.
-- **Awaited Space hydration must prove ownership before touching live state.** A Personal/Work switch or drag preview may hydrate device-local assets asynchronously, but the result must remain local until both the owning Space operation and `stateMutationGeneration` still match. If authority changes during hydration/background preload, retry from the current state; if the UI operation is superseded, discard the result. Never pair a stale hydrated `state` with a newer `writeBaseline`.
-- **Local write failures must remain visible, localized and non-committal.** When a New Tab save fails, do not advance `writeBaseline` or discard the live pending user intention. `saveState()` already presents quota and generic local-storage errors through `presentLocalPersistenceError()`; direct workspace writes must use the same presentation at their transaction boundary. Immediate and debounced appearance saves, folder-title exits and async theme choices must surface that message rather than console-log or leave an unhandled rejection. This presentation invariant does not grant authority to overwrite a newer tab or alter Normal Sync/Recovery.
-- **Logical clocks must stay inside the safe-integer domain.** Persisted/local/Sync conflict clocks are non-negative safe integers. Imported profile clocks are untrusted ordering hints: only plausibly bounded future clocks may influence a whole-profile replacement stamp, while absurd near-ceiling values must never become authoritative. A deliberate import must also observe the current authoritative profile's clocks so it outranks what it replaces. Keep `nextMutationTime()` fail-closed at numeric exhaustion instead of allowing a timestamp to stop advancing.
+This document is intentionally **not** a source of truth for release numbers, schema versions, storage keys, quotas, browser minimum versions, or other runtime constants. Those values remain authoritative in source code and manifests. The guide describes architecture and workflow.
 
 ---
 
@@ -343,6 +296,12 @@ Performance fast paths are valid only after the same operation has crossed the n
 
 Logical clocks used for local/Sync ordering are non-negative JavaScript safe integers. Apply `normalizeLogicalTime()` at model trust boundaries. `nextMutationTime()` must always advance past accepted observed clocks and fails closed at the safe-integer ceiling rather than emitting a non-monotonic value. The same domain applies to record `modifiedAt`, tombstone `deletedAt`, `spaceMoveAt`, Settings clocks and workspace clocks. Whole-profile import has two distinct clock trust boundaries: clocks from the **untrusted backup file** beyond 366 days ahead of wall time cannot choose replacement authority; clocks **already stored locally or in Sync** retain causal ordering even if a real device clock is years ahead, and only clocks beyond the maximum JavaScript Date millisecond value (`8_640_000_000_000_000`) can be discarded for an explicit restore. Keep observed Settings and cross-Space namespace clocks in the same domain. A user-directed authoritative Sync publication immediately following New Tab profile import may use `nextProfileImportMutationTime()` for remote clocks; ordinary Sync and edits must continue using strict `nextMutationTime()`. Do not claim this heals Sync peers that previously accepted impossible clocks: such cloud/device convergence needs separate engineering. New Tab imports must reread persistent authority after confirmation and pass its exact compact snapshot into the write-lock `requireUnchangedCompactState` guard so concurrent updates abort the replacement instead of being silently overwritten or merged. Rebase an imported shortcut's `spaceMoveAt` only when that shortcut already carries a namespace generation in either imported or current state; shortcuts that never crossed Spaces should remain at zero.
 
+### New Tab persistence gateway (Neofix 4)
+
+`src/shared/newtab/persistence-gateway.js` owns **only the low-level call routing** for six New Tab commits. `commitWithBaseline()` reconstructs the pre-existing exact compact-baseline option pair and forwards caller-owned intent flags; `commitImportedProfile()` preserves the complete examined-snapshot guard and the explicit Sync mutation. It must not introduce queues, storage reads, retries or implicit error localization. The New Tab still owns state revisions, pending Settings drafts, current visible unsaved edits, branding rollback, durable-baseline adoption and UI projection. Preserve this separation in maintenance work. Any behavioral change requires a separate behavioral release and an explicit audit.
+
+---
+
 ## 6. How New Tab startup works
 
 The New Tab runtime is shared by both browsers.
@@ -441,6 +400,14 @@ src/shared/newtab/builtin-icons.js
 ```
 
 `newtab-critical.css` is especially sensitive because it participates in the first visible frame. Moving styling out of critical CSS can create a technically correct final UI that still flashes, shifts or paints incorrectly during startup.
+
+### Shortcut editor and confirmation invariants
+
+Post-save automatic naming is **not** an extension of the editor request. The saved URL-first shortcut remains immediately usable, and the editor cancellation contract remains intact. Only a successful *new* automatic-name save with website access already granted may start one separate, bounded name-enrichment request. The permission decision is snapped before saving. The result is applied via `enrichShortcutNameIfUnchanged()` under the storage write lock, using fresh compact state and a name-only conditional patch; never call the normal UI `saveState()` with a stale copy in the asynchronous response. Record identity, URL, creation time and record mutation clock must match. This intentionally skips after an explicit manual edit, deletion, or uncertain ownership. Space/folder moves and unrelated favicon/position changes may survive if identity and name authority remain unchanged; no stale payload fields can be restored. The mutation advances only the target shortcut/folder/workspace clock and enters the normal pending Sync mutation journal. No new persisted automatic-name flag, new host permissions or periodic scans. The `.54` HTML-title safety/redirect rules still apply to site-name metadata.
+
+New shortcuts use a URL-first editor: typing a URL generates a local name, and Enter submits immediately without navigating to the Name field or waiting for a network request. **Automatic naming** is on by default for new shortcuts, with a read-only (not disabled) suggested-name field; manual names are enabled only after opting out. Editing existing shortcuts defaults to manual mode so saved names never change unexpectedly. The optional webpage-title lookup still requires prior website access and must be invalidated on save or closure. The title-only bounded fetch must not trust an apparent `</head>` embedded inside script content, and unfinished raw-text elements must be excluded through the read cap; the favicon reader retains its original stop-at-head optimization.
+
+Every confirmation in the New Tab uses the single `confirmMosaic()` in-page dialog, never `window.confirm()`; that includes shortcuts, Recovery cleanup, imports and Sync. The Cancel button initially receives focus, Escape/backdrop dismiss without mutations, the prompt text must remain `textContent` (not HTML), and simultaneous prompts fail closed. Both Firefox and Chromium package the same shared dialog. The modal is also a Settings child dialog: `isSettingsChildDialogOpen()` must suppress outside-pointer and Escape dismissal of Settings while confirmation is active.
 
 ### Bookmarks dialog ownership
 
@@ -1368,6 +1335,34 @@ The architecture is frozen unless there is a concrete reason to change it. See A
 
 MV3/event-driven/browser callback reachability is not always obvious statically. Require positive evidence that the responsibility is still fulfilled.
 
+
+### Cross-cutting correctness invariants
+
+Future changes must preserve these core correctness invariants:
+
+- **Content-addressed local artwork is validated once per exact context-owned ID/value pair.** First encounters must read and fully validate the stored bytes. A later hydration may reuse only bytes that this same JS context already validated for that asset ID; new IDs still cross the storage/validation boundary. When a complete persisted profile is adopted, trim this verified-value cache to asset IDs still referenced anywhere in that profile; partial Space/folder hydration must not prune it. The cache is an optimization, never a substitute for first-read validation or write-path collision checks.
+- **Visible top-level capacity is authoritative.** A successful add, Frequently Visited insertion, cross-Space move, folder ungroup or grid-layout change must never create a top-level position outside `rows × columns`; full-grid operations must reject before destructive mutation.
+- **Normalization must be a one-pass fixed point.** `normalizeState(normalizeState(x))` must be semantically identical to `normalizeState(x)`. In particular, repairing colliding top-level positions must return the array in the final assigned-position order; Sync merges can legitimately deliver two independently edited records targeting the same slot.
+- **A no-op stale rebase must preserve latest authority exactly.** If a caller's workspace is unchanged from its baseline, rebasing it onto a newer persisted workspace must return that latest workspace without manufacturing timestamp/signature changes through record reconstruction.
+- **Profile import is an untrusted boundary.** Raw structure is bounded before recursive/hash-heavy work, and imported raster assets receive strict container/geometry validation before becoming durable local artwork. Runtime compatibility validation for already-stored legacy artwork is intentionally separate.
+- **Import rollback must not overwrite newer local authority.** Custom Branding rollback is conditional on still owning the value it wrote, and an imported profile candidate must not replace live New Tab state before the durable state commit succeeds.
+
+These protections are correctness-driven and do not change Normal Sync/Recovery ownership, profile format v3, or Custom Branding's device-local-only boundary.
+
+New Tab presentation-ownership rules include:
+
+- **Presentation-only onboarding must stay outside authoritative state.** One-time visual guidance is device-local and lazy. It must not clone launcher identity (`.shortcut-slot`, `data-id`), invoke production mutation handlers, or touch profile/Sync/Recovery state. Revalidate eligibility before mounting, make asynchronous pre-mount work cancellable, ignore descendant artwork churn while reacting to real grid replacement, and provide a non-animated reduced-motion path.
+- **Sync status must not invent provenance.** Dataset authorship (the newest synchronized change) and local receipt timing are separate concepts. Exact incoming provenance may show the synchronized friendly device name; collaborative/non-exact provenance must be described as combined changes rather than attributed to one guessed sender.
+- **Folder scrolling is content-driven.** The folder panel owns the viewport height and the item grid is the flexible scroll region. Do not reintroduce a fixed pixel ceiling that can create a scrollbar even when all rows fit.
+- **Folder first-frame geometry must match authoritative geometry.** The parser-critical bootstrap already knows the saved tile size, so it must derive the folder-mosaic cell/icon/gap/padding and folder-item tile/icon variables with the same arithmetic as `applySettings()`. Do not let CSS reference defaults paint first and then visibly resize when the authoritative New Tab code takes over.
+- **First-paint ownership is an explicit, complete parity contract.** Any visual/state field that the synchronous bootstrap claims to know must either match the authoritative renderer or be explicitly deferred. For authoritative first-frame geometry, every property that the real `applySettings()` geometry owner writes must be classified exactly once as parity-required, intentionally deferred, or not bootstrap-owned; bootstrap may not silently introduce an undeclared geometry responsibility either. Classification and value parity must consume one shared test-only ownership declaration, so classifying a new parity-required property automatically enrolls it in real bootstrap-versus-authoritative value comparison. Geometry regressions execute both real owners at boundary/non-default settings and mutation-test one-sided ownership plus classified value divergence. Artwork regressions preserve the semantic distinction between immediate artwork, builtin artwork, known-but-deferred artwork and a genuinely iconless fallback. Do not replace this with duplicated expected-value formulas or independent hardcoded parity lists that can drift.
+- **A child Shortcut Editor preserves its open-folder context.** Opening the native editor for a shortcut inside a folder must not call `closeFolder()`, and document-level outside-folder handling must ignore pointer activity while that editor is open. `render()` owns the authoritative result: rerender/reposition the folder if it survives Save/Delete/Move, and close it only when the folder genuinely dissolves or disappears.
+- **Shortcut URL is required; shortcut title is optional.** The Add Shortcut form must allow an empty title while keeping the URL mandatory. At the save boundary, an empty/whitespace title resolves through `hostLabel(url)` after URL normalization, so persisted shortcut records still receive a deterministic non-empty title without new network access or schema changes. New-add focus belongs on the mandatory URL; edit focus remains on the existing title.
+- **Settings owns its child dialogs.** Wallpaper Gallery, Custom Branding and Recovery safety copies are modal children launched from the fixed Settings panel. Global outside-click/Escape handling must never close Settings behind an open Settings-owned child dialog; closing the child returns to Settings.
+- **Awaited Space hydration must prove ownership before touching live state.** A Personal/Work switch or drag preview may hydrate device-local assets asynchronously, but the result must remain local until both the owning Space operation and `stateMutationGeneration` still match. If authority changes during hydration/background preload, retry from the current state; if the UI operation is superseded, discard the result. Never pair a stale hydrated `state` with a newer `writeBaseline`.
+- **Local write failures must remain visible, localized and non-committal.** When a New Tab save fails, do not advance `writeBaseline` or discard the live pending user intention. `saveState()` already presents quota and generic local-storage errors through `presentLocalPersistenceError()`; direct workspace writes must use the same presentation at their transaction boundary. Immediate and debounced appearance saves, folder-title exits and async theme choices must surface that message rather than console-log or leave an unhandled rejection. This presentation invariant does not grant authority to overwrite a newer tab or alter Normal Sync/Recovery.
+- **Logical clocks must stay inside the safe-integer domain.** Persisted/local/Sync conflict clocks are non-negative safe integers. Imported profile clocks are untrusted ordering hints: only plausibly bounded future clocks may influence a whole-profile replacement stamp, while absurd near-ceiling values must never become authoritative. A deliberate import must also observe the current authoritative profile's clocks so it outranks what it replaces. Keep `nextMutationTime()` fail-closed at numeric exhaustion instead of allowing a timestamp to stop advancing.
+
 ---
 
 ## 28. Architecture-change checklist
@@ -1426,6 +1421,11 @@ The default after a successful fix and green certification is to **stop**, not e
 5. Run canonical certification.
 6. Package from a fresh deterministic build.
 7. Verify clean-source reproduction.
+
+
+### Developer Guide editorial rule
+
+Keep this guide **product-first**. Immediately after the title, begin with `## 1. What MosaicSync is`, its plain-language description, and its feature overview. **Do not prepend changelog entries, version announcements, bug-fix notes, or low-level implementation invariants.** Place architectural safeguards beside their relevant subsystem, and keep release-specific history in `README-DEVELOPMENT.md`, `CHANGELOG.md`, or the appropriate `docs/QA-*.md` file. When older compatibility notes must remain in this guide, put them in the historical appendix at the end.
 
 ---
 
@@ -1574,6 +1574,9 @@ The goal is not to make every file look fashionable or minimal. The goal is to k
 
 When a piece of code looks unusually defensive, assume there may be history behind it until the ADRs, regression catalogue and tests prove otherwise.
 
+---
+
+## Appendix — Historical maintenance and release-gate notes
 
 ### Welcome staged-import retry and browser-bookmark boundary (1.33.0.42)
 
@@ -1616,3 +1619,12 @@ Keep generation/URL/editor-state checks before committing the title to the field
 - The editor issues at most one optional title request for each normalized URL within an editor session. Repeated blur never replaces a successfully suggested title with a fallback or initiates duplicate traffic. URL edits, manual naming, saving and dialog closure invalidate the result and send a separate cancellation message.
 - Background title requests use request IDs and AbortControllers isolated from favicon-choice requests. The bounded title fetch disallows redirects and uses no credentials or referrer. HTML comment/script/style/textarea/template content is excluded before matching a title. Rejected titles leave the offline label in place.
 - The real-browser gate must create a new shortcut without manually entering a name. All closing gestures must be tested independently; shared abandoned state can mask a missing guard. Browser matrix success on the exact candidate commit remains a publication prerequisite.
+
+### Browser gate notes from 1.33.0.58–1.33.0.60 (historical)
+
+These notes document past release-gate decisions. Check the current CI run and manifests for present requirements and release status.
+
+> 1.33.0.60: Browser release-gate synchronization: title/redirect smoke now waits for fresh-profile Welcome navigation to finish before querying extension APIs. CI archives retain both browser-smoke logs and title-smoke stderr on failure. Only test infrastructure and version metadata changed from .59; no new production behaviors or permissions. GitHub four-browser matrix required before publication. See `docs/QA-1.33.0.60.md`.
+
+> 1.33.0.59: On-demand redirect observers prevent unrelated background website traffic from keeping Chromium MV3 workers awake. The listener pair is installed only while the user-initiated title lookup is active, then removed after a five-second grace period. See `docs/QA-1.33.0.59.md`. Real-browser verification remains required.
+> 1.33.0.58: GitHub release matrix must pass the mechanical job AND Chromium 141/stable and Firefox 140/current browser lanes. Native redirect observation can be browser-dependent; see `docs/QA-1.33.0.58.md`. The title test accepts an explicit fail-closed `redirect-unavailable` only when a direct HTML title lookup succeeds and unsafe redirects are not contacted. A pass in this degraded case is **not** proof of canonical redirect title enrichment. Firefox New Tab must be opened through the privileged browser tab command in an isolated CI session, not WebDriver navigation to `about:newtab` or a non-deterministic keyboard gesture.

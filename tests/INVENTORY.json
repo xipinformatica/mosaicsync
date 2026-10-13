@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 220,
+  "totalFiles": 221,
   "counts": {
-    "behavioral": 108,
+    "behavioral": 109,
     "integration": 34,
     "static": 77,
     "browser": 1
@@ -349,6 +349,10 @@
     {
       "file": "tests/dead-code-retirement-1301829.test.mjs",
       "kind": "integration"
+    },
+    {
+      "file": "tests/ed1-failure-recovery.test.mjs",
+      "kind": "behavioral"
     },
     {
       "file": "tests/fault-injection-12414l.test.mjs",

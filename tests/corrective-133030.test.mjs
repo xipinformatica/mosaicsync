@@ -222,6 +222,7 @@ test("1.33.0.30 blank shortcut name is behaviorally persisted as the normalized 
     shortcutAutomaticName: { checked: false },
     shortcutTitle: { value: "   " },
     shortcutId: { value: "" },
+    editingNewShortcutId: "shortcut-1",
     shortcutSyncImage: { checked: false },
     shortcutImageStyle: { value: "contain" },
     findShortcutRecord() { return null; },

@@ -168,6 +168,7 @@ test("1.33.0.40 a failed user save keeps the live edit and the next successful s
     state: { schemaVersion: 7, updatedAt: 100, shortcuts: [{ id: "a", title: "Edited in memory" }], settings: {} },
     writeBaseline: { old: true },
     stateMutationGeneration: 0,
+    failedShortcutRecoveryPending: false,
     DEFAULT_STATE: { schemaVersion: 7 },
     nextMutationTime: value => Number(value || 0) + 1,
     repairTopLevelPositionsWithinCapacity: items => items,

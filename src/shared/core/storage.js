@@ -756,32 +756,35 @@ async function persistNormalizedState(normalized, {
         finalState = rebaseConcurrentState(baseState, normalized, latestRaw);
         rebased = true;
 
-        // Cross-Space recovery journals must describe the state that actually
-        // won the local rebase, not the stale pre-rebase intent.
-        if (syncDurabilityActive && effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
-          const inferDeviceId = intent => {
-            for (const side of [intent.destination, intent.source]) {
-              for (const record of side?.upserts || []) {
-                if (typeof record?.deviceId === "string" && record.deviceId) return record.deviceId;
-              }
-              if (typeof side?.settings?.deviceId === "string" && side.settings.deviceId) return side.settings.deviceId;
-            }
-            return "";
-          };
-          const regenerated = createCrossSpaceSyncIntent(latestRaw, finalState, {
-            fromSpaceId: effectiveCrossSpaceSyncIntent.fromSpaceId,
-            toSpaceId: effectiveCrossSpaceSyncIntent.toSpaceId,
-            shortcutIds: effectiveCrossSpaceSyncIntent.shortcutIds,
-            deviceId: inferDeviceId(effectiveCrossSpaceSyncIntent),
-            timestamp: effectiveCrossSpaceSyncIntent.createdAt
-          });
-          if (regenerated) {
-            effectiveCrossSpaceSyncIntent = {
-              ...regenerated,
-              intentId: effectiveCrossSpaceSyncIntent.intentId || regenerated.intentId
-            };
+      }
+    }
+
+    // Always derive the cross-Space recovery intent from the latest durable
+    // state inside the write lock, including when no concurrent rebase was
+    // necessary. A prior rejected write can otherwise leave a moved working
+    // copy and omit the source-Space tombstone on retry (XS-1).
+    if (syncDurabilityActive && effectiveCrossSpaceSyncIntent && typeof effectiveCrossSpaceSyncIntent === "object") {
+      const inferDeviceId = intent => {
+        for (const side of [intent.destination, intent.source]) {
+          for (const record of side?.upserts || []) {
+            if (typeof record?.deviceId === "string" && record.deviceId) return record.deviceId;
           }
+          if (typeof side?.settings?.deviceId === "string" && side.settings.deviceId) return side.settings.deviceId;
         }
+        return "";
+      };
+      const regenerated = createCrossSpaceSyncIntent(latestRaw || baseState || DEFAULT_STATE, finalState, {
+        fromSpaceId: effectiveCrossSpaceSyncIntent.fromSpaceId,
+        toSpaceId: effectiveCrossSpaceSyncIntent.toSpaceId,
+        shortcutIds: effectiveCrossSpaceSyncIntent.shortcutIds,
+        deviceId: inferDeviceId(effectiveCrossSpaceSyncIntent),
+        timestamp: effectiveCrossSpaceSyncIntent.createdAt
+      });
+      if (regenerated) {
+        effectiveCrossSpaceSyncIntent = {
+          ...regenerated,
+          intentId: effectiveCrossSpaceSyncIntent.intentId || regenerated.intentId
+        };
       }
     }
 

@@ -75,10 +75,13 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
     "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 3,
     // .42 adds one narrow branding rollback removal to preserve absent-vs-default
     // storage state after a rejected profile import; no routine read/write grows.
-    "local.remove": frozen.directStorageCallSites.byOperation["local.remove"] + 1
+    "local.remove": frozen.directStorageCallSites.byOperation["local.remove"] + 1,
+    // ED-1 adds one conditional durable-state recovery read after a failed
+    // shortcut transaction; successful startup/save paths remain unchanged.
+    "local.get": frozen.directStorageCallSites.byOperation["local.get"] + 1
   };
   assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
-    "Historical Sync reads are unchanged; .42 adds one explicit branding-import rollback removal, while preserving every other frozen storage operation count");
+    "Historical Sync reads remain unchanged; .42 branding rollback and ED-1 failed-save durable re-read are explicit conditional operations");
   for (const browser of ["firefox", "chrome"]) {
     for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
       const liveResult = live.runtimeCensus[browser][scenario];
