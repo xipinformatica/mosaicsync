@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.33.0.67
+
+**Private visual-polish candidate: font-independent plus symbols.**
+
+- Replaces text-glyph plus symbols with identical CSS-drawn horizontal and vertical bars in both the empty-Space onboarding tile and ordinary populated-grid add buttons. This removes system-font baseline differences across Windows, Linux and macOS.
+- Preserves existing button geometry, hover/focus/drag behavior, accessibility labels, privacy settings and all Sync/Recovery/deletion-safety logic.
+- No new permissions, external assets, network activity, storage changes or telemetry. Requires independent real-browser visual review, six GitHub checks and real signed-in two-device Sync verification before publication.
+
+## 1.33.0.66
+
+**Private visual-polish candidate: center the empty-Space onboarding plus.**
+
+- Corrects the optical vertical centering of the `+` glyph in the empty Personal/Work onboarding tile. Chromium screenshot pixel measurements showed the old glyph below center; the revised CSS moves it upward by 1.5 CSS pixels, keeping the original font, size, border and focus behavior.
+- Does not change ordinary populated-grid add buttons, New Tab JavaScript, Sync/Recovery, storage, permissions, network behavior, translations or telemetry.
+- Carries forward the independently accepted .65 Sync waiting UI and .64 safety corrections unchanged.
+- Private until independent visual re-audit, the GitHub six-job release gate and real signed-in Sync testing.
+
+## 1.33.0.65
+
+**Private Stage 2E candidate: truthful, localized Sync waiting state.**
+
+- Keeps the waiting explanation visible after a healthy Personal or Work reconciliation when the other Space is still pending. Previously the healthy Space could clear the warning.
+- Shows an explicit **Waiting for another device** headline and explanation for initialized profiles awaiting safe Sync repair, instead of incorrectly displaying **Sync ready** or a blank explanation.
+- Adds faithful waiting-state translations in all 34 UI locales, including Catalan, Spanish and Italian. Older persisted English warnings are translated through the existing catalog lookup.
+- Does not change witness quorum, deletion authority, Sync wire protocol, permissions, telemetry, storage formats, or Recovery behavior. Includes the independently accepted .64 Sync safety corrections, which are not separately published unless explicitly confirmed.
+- Private candidate until independent UI and Sync re-audit, final GitHub checks and real signed-in two-device verification.
+
+## 1.33.0.64
+
+- **Private candidate R-1 correction after independent HOLD:** a torn or deletion-repairing Space no longer blocks valid Sync updates to the other Space. Healthy Personal continues while Work waits, and healthy Work continues while Personal waits. The cross-Space repair and fast freshness checks now reconcile independently, and a waiting Space never triggers publication of an incomplete profile Recovery generation. Added two regression tests using independent three-device transports with retired historical authors. No change to witness quorum or deletion authority.
+- **Private Stage 2D Sync candidate (not published):** repairs mismatched Personal and Work dataset fingerprints from the actual post-write ledger, including normalized grid positions.
+- Adds conservative cooperative repair for concurrent/offline edits. Two participating devices must independently witness the same live ledger, including tombstones, before the repair leader can publish a corrected dataset marker. If delivery is incomplete or a peer has not updated, Sync waits instead of guessing.
+- Preserves locally authored deletion tombstones across background restarts and reasserts them if a stale offline edit overwrites their Sync keys, including when a storage change event is missed.
+- Displays a waiting state rather than incorrectly reporting Sync ready when the live dataset is torn.
+- No new permissions or telemetry. Adds a small Sync repair-witness metadata key per participating device and a device-local deletion-evidence journal; this is a **Sync wire-protocol extension**, requiring independent compatibility, quota and mixed-version review before release.
+
 ## 1.33.0.63
 
 **Stage 2C: durable recovery for failed folder and grid saves.**

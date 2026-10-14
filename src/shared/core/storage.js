@@ -22,6 +22,7 @@ import {
   LOCAL_ASSET_WRITE_LOCK_NAME,
   LOCAL_CUSTOM_BRANDING_KEY,
   LOCAL_META_KEY,
+  LOCAL_SYNC_DELETION_EVIDENCE_KEY,
   LOCAL_PENDING_CROSS_SPACE_SYNC_PREFIX,
   LOCAL_PENDING_SYNC_MUTATION_KEY,
   LOCAL_PRE_SPACES_BACKUP_KEY,
@@ -982,6 +983,46 @@ export async function enrichShortcutNameIfUnchanged(intent) {
   return result.applied === true;
 }
 
+// Keep the durable tombstone journal and its inexpensive presence bit in ONE
+// storage.local.set, under the same lock as all other local persistence writes.
+// The normal Sync-watch path pays no extra local read for profiles without
+// deletions; MV3 restarts cannot lose the presence bit independently of data.
+export async function rememberSyncDeletionEvidence(spaceId, deletions, cutoff) {
+  return withPersistenceWriteLock(async () => {
+    const stored = await browser.storage.local.get([LOCAL_META_KEY, LOCAL_SYNC_DELETION_EVIDENCE_KEY]);
+    const current = ensureDeviceId(stored?.[LOCAL_META_KEY] || DEFAULT_META);
+    const source = stored?.[LOCAL_SYNC_DELETION_EVIDENCE_KEY] || {};
+    const next = { ...source };
+    const entries = { ...(source[spaceId] || {}) };
+    for (const [id, record] of Object.entries(entries)) {
+      if (record?.kind !== "deleted" || Number(record.deletedAt) < cutoff) delete entries[id];
+    }
+    for (const [id, record] of deletions) {
+      if (record?.kind !== "deleted" || record.id !== id) continue;
+      const prior = entries[id];
+      // Each device's deletion is monotonic for a given shortcut ID.
+      entries[id] = !prior || Number(record.deletedAt) >= Number(prior.deletedAt) ? record : prior;
+    }
+    next[spaceId] = entries;
+    await browser.storage.local.set({
+      [LOCAL_SYNC_DELETION_EVIDENCE_KEY]: next,
+      [LOCAL_META_KEY]: { ...current, syncDeletionEvidencePresent: true }
+    });
+    return next;
+  });
+}
+
+export async function clearSyncDeletionEvidence() {
+  return withPersistenceWriteLock(async () => {
+    const stored = await browser.storage.local.get(LOCAL_META_KEY);
+    const current = ensureDeviceId(stored?.[LOCAL_META_KEY] || DEFAULT_META);
+    await browser.storage.local.set({
+      [LOCAL_SYNC_DELETION_EVIDENCE_KEY]: {},
+      [LOCAL_META_KEY]: { ...current, syncDeletionEvidencePresent: false }
+    });
+  });
+}
+
 export async function readLocalMeta() {
   const result = await browser.storage.local.get(LOCAL_META_KEY);
   return ensureDeviceId(result[LOCAL_META_KEY] || DEFAULT_META);
@@ -1013,7 +1054,8 @@ export async function writeLocalMeta(meta, {
       // A friendly device name is independent UI intent. Long-running Sync/status
       // writes may have been constructed from older meta and must not roll back a
       // newer rename merely because they acquire the persistence lock later.
-      deviceName: (allowDeviceNameChange || !hasStoredMeta) ? candidate.deviceName : current.deviceName
+      deviceName: (allowDeviceNameChange || !hasStoredMeta) ? candidate.deviceName : current.deviceName,
+      syncDeletionEvidencePresent: current.syncDeletionEvidencePresent
     });
     await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
     await writeSessionRenderMetaBestEffort(normalized);

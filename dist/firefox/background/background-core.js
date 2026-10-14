@@ -37,6 +37,7 @@ import {
   LOCAL_ICON_RECOVERY_STATUS_KEY,
   LOCAL_MAINTENANCE_MIGRATIONS_KEY,
   LOCAL_SYNC_DIAGNOSTICS_KEY,
+  LOCAL_SYNC_DELETION_EVIDENCE_KEY,
   LOCAL_SYNC_CONTINUITY_KEY,
   LOCAL_SYNC_RECOVERY_STATUS_KEY,
   LOCAL_PRE_SPACES_BACKUP_KEY,
@@ -114,6 +115,8 @@ import {
   readLocalMeta,
   updateLocalMeta,
   writeLocalMeta,
+  rememberSyncDeletionEvidence,
+  clearSyncDeletionEvidence,
   writeLocalState
 } from "../core/storage.js";
 import { compactSignature as compactRuntimeSignature, consumeExactExpectation, consumeExactSessionExpectations, countOwnEnumerable, hasOwnEnumerable, syncNamespaceFor, trimExpectationMap, trimSessionEntries } from "./runtime-utils.js";
@@ -142,6 +145,15 @@ import { createRecoveryContinuity } from "./recovery-continuity.js";
 import { createRecoveryGenerationFormat } from "./recovery-generation-format.js";
 import { createRecoveryGenerationLifecycle } from "./recovery-generation-lifecycle.js";
 import { createRecoveryGenerationStore } from "./recovery-generation-store.js";
+import {
+  deletionRepairs,
+  ledgerContainsOwnChanges,
+  liveLedgerWitnessDigest,
+  requiredWitnessDevices,
+  witnessFor,
+  witnessKey,
+  witnessesAgree
+} from "./sync-ledger-repair.js";
 import { devMark, devMeasure } from "../core/perf.js";
 import { isSafeSelfContainedSvgText, svgRasterDimensionsFromText } from "../core/svg-safety.js";
 
@@ -4225,6 +4237,30 @@ export function startBackground(adapter) {
       (sharedRevision && sharedRevision !== meta.lastAppliedSyncRevision) ||
       (workRevision && workRevision !== meta.lastAppliedWorkSyncRevision)
     );
+    // A torn ledger must not be mistaken for "already-applied" merely because
+    // the surviving dataset marker is our own last commit. That is the common
+    // concurrent-offline case. Process it before the fast freshness return.
+    // Repair each Space independently. A pending deletion in Personal must not
+    // suppress Work's repair (or prevent healthy Work from reconciling).
+    const personalDeletionRepair = await restoreDurableDeletionAuthority(PERSONAL_SPACE_ID, sources.shared, meta);
+    const workDeletionRepair = await restoreDurableDeletionAuthority(WORK_SPACE_ID, workSnapshot, meta);
+    const personalTorn = Boolean(sources.shared?.dataset && sources.shared?.settings && !isSnapshotUsable(sources.shared));
+    const workTorn = Boolean(workSnapshot?.dataset && workSnapshot?.settings && !isSnapshotUsable(workSnapshot));
+    if (personalTorn || workTorn || personalDeletionRepair || workDeletionRepair) {
+      // A torn or deletion-repairing Space waits, but the other Space must
+      // continue receiving valid commits. Do not enter the already-applied
+      // fast path or globally return before reconciling the healthy Space.
+      const result = await reconcile("merge");
+      await noteSyncDiagnostic({
+        ...(checkReason === "foreground" ? { lastForegroundSyncCheckAt: checkedAt } : {}),
+        ...(checkReason === "alarm" ? { lastSyncWatchCheckAt: checkedAt } : {}),
+        lastCheckAt: checkedAt,
+        lastCheckReason: checkReason,
+        lastCheckOutcome: result?.pending ? "torn-ledger-waiting" : (result?.ok === false ? "error" : "reconciled"),
+        ...diagnosticObservation
+      });
+      return result;
+    }
 
     // Recovery generations are safety copies, not live merge inputs. A device or
     // profile snapshot arriving before its compatibility ledger must therefore not
@@ -4688,6 +4724,7 @@ export function startBackground(adapter) {
       syncWaitStartedAt: 0
     });
     await writeLocalMeta(refreshed);
+    if (profileImport && refreshed.syncDeletionEvidencePresent) await clearSyncDeletionEvidence();
     // A normal/user-authoritative publish intentionally supersedes any old reset
     // sentinel, but only after a complete Personal+Work copy has been committed.
     const resetRead = await browser.storage.sync.get(SYNC_RESET_INTENT_KEY);
@@ -4935,6 +4972,13 @@ export function startBackground(adapter) {
       personalTombstones: continuityTombstonesFromRecords(remotePersonal.records),
       workTombstones: continuityTombstonesFromRecords(remoteWork.records)
     });
+
+    // A user-requested Restore supersedes old local deletion authority. Do
+    // not allow a pre-restore tombstone journal to veto restored shortcuts.
+    if (force && refreshed.syncDeletionEvidencePresent) {
+      await clearSyncDeletionEvidence();
+      refreshed = await readLocalMeta();
+    }
 
     // If the user created/edited anything while the fresh profile was waiting,
     // publish only that semantic delta after the complete remote baseline exists.
@@ -5302,6 +5346,11 @@ export function startBackground(adapter) {
       }
     }
 
+    // Persist deletion authority before the browser may upload the tombstone.
+    // A missed storage.onChanged event or MV3 worker restart must not allow a
+    // later offline stale rename to erase this device's deletion permanently.
+    if (deletionRecords.size) await rememberLocalDeletionEvidence(PERSONAL_SPACE_ID, deletionRecords);
+
     const oldSettings = makeSettingsRecordNormalized(oldState, meta.deviceId);
     if (!settingsRecordEqual(oldSettings, newSettings)) writes[SYNC_SETTINGS_KEY] = newSettings;
 
@@ -5384,6 +5433,7 @@ export function startBackground(adapter) {
     const newAssets = collectLocalAssetsNormalized(newState);
     const explicitlyDroppedAssetIds = new Set([...oldAssets.keys()].filter(id => !newAssets.has(id)));
     const writes = {};
+    const deletionRecords = new Map();
     const timestamp = nextMutationTime(
       oldState.updatedAt, newState.updatedAt, oldState.settingsModifiedAt, newState.settingsModifiedAt,
       newestRecordTimestamp(oldRecords), newestRecordTimestamp(newRecords)
@@ -5395,8 +5445,13 @@ export function startBackground(adapter) {
       if (!previous || !syncRecordEqual(previous, record)) writes[itemKey(id, WORK_SPACE_ID)] = { ...record, deviceId: meta.deviceId };
     }
     for (const id of oldRecords.keys()) {
-      if (!newRecords.has(id)) writes[itemKey(id, WORK_SPACE_ID)] = makeTombstone(id, meta.deviceId, timestamp);
+      if (!newRecords.has(id)) {
+        const tombstone = makeTombstone(id, meta.deviceId, timestamp);
+        writes[itemKey(id, WORK_SPACE_ID)] = tombstone;
+        deletionRecords.set(id, tombstone);
+      }
     }
+    if (deletionRecords.size) await rememberLocalDeletionEvidence(WORK_SPACE_ID, deletionRecords);
     if (!settingsRecordEqual(oldSettings, newSettings)) writes[namespace.settingsKey] = newSettings;
 
     let snapshot = await prepareSyncSnapshot(WORK_SPACE_ID);
@@ -5513,6 +5568,100 @@ export function startBackground(adapter) {
     return readLocalMeta();
   }
 
+  // The presence bit lives in the already-read local meta. A profile with no
+  // local deletions does not incur extra storage.local reads on Sync watchdogs.
+  async function readLocalDeletionEvidence(spaceId, meta) {
+    if (meta?.syncDeletionEvidencePresent !== true) return new Map();
+    const stored = await browser.storage.local.get(LOCAL_SYNC_DELETION_EVIDENCE_KEY);
+    const raw = stored?.[LOCAL_SYNC_DELETION_EVIDENCE_KEY]?.[spaceId] || {};
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    return new Map(Object.entries(raw).filter(([id, record]) =>
+      id && record?.kind === "deleted" && record.id === id &&
+      Number.isFinite(record.deletedAt) && record.deletedAt >= cutoff
+    ));
+  }
+
+  async function rememberLocalDeletionEvidence(spaceId, deletions) {
+    await rememberSyncDeletionEvidence(spaceId, deletions, Date.now() - TOMBSTONE_TTL_MS);
+  }
+
+  async function restoreDurableDeletionAuthority(spaceId, snapshot, meta) {
+    if (!snapshot?.records) return false;
+    const deletionEvidence = await readLocalDeletionEvidence(spaceId, meta);
+    const repairs = deletionRepairs(snapshot, deletionEvidence);
+    if (!repairs.size) return false;
+    const writes = {};
+    for (const [id, record] of repairs) writes[itemKey(id, spaceId)] = record;
+    // Do not publish a marker: a newly restored tombstone must be delivered
+    // and independently witnessed before it can become a coherent generation.
+    await writeSyncItems(writes);
+    return true;
+  }
+
+  // Cooperative repair is intentionally stricter than ordinary reconciliation.
+  // It cannot infer a complete download from elapsed time or a single browser's
+  // read. Distinct participating devices must independently attest to the SAME
+  // live ledger, including tombstones, and each must see its own changes in it.
+  // If one is offline, outdated or delivery is partial, this remains WAITING.
+  async function maybeRepairTornLedger(spaceId, snapshot, fullLocalState, meta, preloaded = null) {
+    if (!snapshot?.settings || !snapshot?.dataset) return { waiting: true, reason: "incomplete-ledger" };
+    if (isSnapshotUsable(snapshot)) return { waiting: false, coherent: true };
+    const namespace = syncNamespace(spaceId);
+    if (await restoreDurableDeletionAuthority(spaceId, snapshot, meta)) {
+      return { waiting: true, reason: "deletion-authority-repair" };
+    }
+    const deletionEvidence = await readLocalDeletionEvidence(spaceId, meta);
+
+    const localState = workspaceStateNormalized(fullLocalState, spaceId);
+    const localRecords = flattenStateNormalized(localState, meta.deviceId);
+    const localSettings = makeSettingsRecordNormalized(localState, meta.deviceId);
+    if (!ledgerContainsOwnChanges(snapshot, localRecords, localSettings, deletionEvidence)) {
+      return { waiting: true, reason: "local-changes-not-delivered" };
+    }
+    const all = preloaded;
+    if (!all) return { waiting: true, reason: "missing-ledger-observation" };
+    const key = witnessKey(namespace.prefix, meta.deviceId);
+    const witness = witnessFor(snapshot, meta.deviceId, spaceId);
+    if (stableStringify(all[key]) !== stableStringify(witness)) {
+      await writeSyncItems({ [key]: witness });
+      return { waiting: true, reason: "witness-published" };
+    }
+    const devices = requiredWitnessDevices(snapshot, meta.deviceId);
+    if (!witnessesAgree(snapshot, devices, all, namespace.prefix, meta.deviceId)) {
+      return { waiting: true, reason: "waiting-for-peer-witnesses" };
+    }
+    // Only the deterministic leader commits the repaired marker, avoiding a
+    // write storm when several workers observe the same completed handshake.
+    if (devices[0] !== meta.deviceId) return { waiting: true, reason: "waiting-for-repair-leader" };
+    const latest = await readSyncSnapshot(null, { includeAssets: false, spaceId });
+    if (isSnapshotUsable(latest)) return { waiting: false, coherent: true };
+    if (liveLedgerWitnessDigest(latest) !== witness.digest ||
+        (latest.dataset?.commitId || "") !== witness.datasetCommitId ||
+        !ledgerContainsOwnChanges(latest, localRecords, localSettings, deletionEvidence)) {
+      return { waiting: true, reason: "ledger-changed-during-handshake" };
+    }
+    const committed = datasetRecord(
+      datasetUpdatedAt(latest.records, latest.settings, Number(latest.dataset?.updatedAt) || 0),
+      latest.records, latest.settings,
+      { commitId: uid("commit"), originDeviceId: meta.deviceId }
+    );
+    await writeSyncItems({ [namespace.datasetKey]: committed });
+    return { waiting: true, reason: "repair-marker-published" };
+  }
+
+  async function markTornLedgerWaiting(meta) {
+    const next = await refreshQuota({
+      ...meta,
+      syncStatus: "waiting",
+      lastSyncError: "",
+      lastSyncWarning: "Waiting for changes from another device before safely completing Sync.",
+      syncWaitStartedAt: meta.syncWaitStartedAt || Date.now()
+    });
+    await writeLocalMeta(next);
+    await ensureSyncWatchAlarm(next);
+    return next;
+  }
+
   async function reconcilePersonal(strategy = "merge") {
     const { state: fullLocalState, meta } = await ensureLocalStorage();
     const localState = workspaceStateNormalized(fullLocalState, PERSONAL_SPACE_ID);
@@ -5545,22 +5694,20 @@ export function startBackground(adapter) {
       return { ok: true, pending: true, meta: waitingMeta };
     }
 
+    if (strategy === "merge" && await restoreDurableDeletionAuthority(PERSONAL_SPACE_ID, snapshot, meta)) {
+      const waiting = await markTornLedgerWaiting(meta);
+      return { ok: true, pending: true, reason: "deletion-authority-repair", meta: waiting };
+    }
+
     // On an initialized device, immutable recovery generations never participate
     // in the automatic live merge. If Firefox exposes an atomic generation before
     // the shared ledger is coherent, preserve the current local Personal Space and
     // wait for the dataset/records to finish arriving. Explicit Restore/bootstrap
     // paths may still consume the atomic generation as a whole.
     if (strategy === "merge" && !isSnapshotUsable(snapshot)) {
-      const refreshed = await refreshQuota({
-        ...meta,
-        syncStatus: "ready",
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncWaitStartedAt: 0
-      });
-      await writeLocalMeta(refreshed);
-      await ensureSyncWatchAlarm(refreshed);
-      return { ok: true, skipped: true, reason: "shared-ledger-pending", meta: refreshed, sharedLedgerPending: true };
+      await maybeRepairTornLedger(PERSONAL_SPACE_ID, snapshot, fullLocalState, meta, sources.all);
+      const waiting = await markTornLedgerWaiting(meta);
+      return { ok: true, pending: true, reason: "shared-ledger-pending", meta: waiting, sharedLedgerPending: true };
     }
 
     const observedMeta = observeRemoteCore(meta, core);
@@ -5634,16 +5781,18 @@ export function startBackground(adapter) {
 
     const hasCoreWrites = hasOwnEnumerable(syncWrites);
     const shouldCommitDataset = hasCoreWrites;
-    const desiredDataset = shouldCommitDataset
-      ? datasetRecord(
-          datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
-          mergedRecords,
-          mergedSettings,
-          { commitId: uid("commit"), originDeviceId: meta.deviceId }
-        )
-      : snapshot.dataset;
     await writeSyncItems(syncWrites);
-    if (shouldCommitDataset && desiredDataset) {
+    let desiredDataset = snapshot.dataset;
+    if (shouldCommitDataset) {
+      // Fingerprint the ACTUAL post-write ledger, not the pre-normalized merge.
+      // Position collisions change desiredRecords during state reconstruction.
+      const committed = await readSyncSnapshot(null, { includeAssets: false });
+      const committedSettings = committed.settings || mergedSettings;
+      desiredDataset = datasetRecord(
+        datasetUpdatedAt(committed.records, committedSettings, Number(snapshot.dataset?.updatedAt) || 0),
+        committed.records, committedSettings,
+        { commitId: uid("commit"), originDeviceId: meta.deviceId }
+      );
       await writeSyncItems({ [SYNC_DATASET_KEY]: desiredDataset });
     }
 
@@ -5694,19 +5843,18 @@ export function startBackground(adapter) {
       return { ok: true, meta: waiting, pending: true, workPending: true };
     }
 
+    if (strategy === "merge" && await restoreDurableDeletionAuthority(WORK_SPACE_ID, snapshot, meta)) {
+      const waiting = await markTornLedgerWaiting(meta);
+      return { ok: true, pending: true, reason: "deletion-authority-repair", meta: waiting };
+    }
+
     // Work follows the same safety boundary as Personal: a complete profile
     // generation is an atomic Restore/bootstrap fallback, not an automatic
     // per-record merge source while the live Work ledger is torn or absent.
     if (strategy === "merge" && !isSnapshotUsable(snapshot)) {
-      const refreshed = await refreshQuota({
-        ...meta,
-        syncStatus: "ready",
-        lastSyncError: "",
-        lastSyncWarning: "",
-        syncWaitStartedAt: 0
-      });
-      await writeLocalMeta(refreshed);
-      return { ok: true, skipped: true, reason: "work-ledger-pending", meta: refreshed, sharedLedgerPending: true };
+      await maybeRepairTornLedger(WORK_SPACE_ID, snapshot, fullLocalState, meta, all);
+      const waiting = await markTornLedgerWaiting(meta);
+      return { ok: true, pending: true, reason: "work-ledger-pending", meta: waiting, sharedLedgerPending: true };
     }
 
     const localState = workspaceStateNormalized(fullLocalState, WORK_SPACE_ID);
@@ -5782,16 +5930,18 @@ export function startBackground(adapter) {
 
     const hasCoreWrites = hasOwnEnumerable(syncWrites);
     const shouldCommitDataset = hasCoreWrites;
-    const desiredDataset = shouldCommitDataset
-      ? datasetRecord(
-          datasetUpdatedAt(mergedRecords, mergedSettings, Number(snapshot.dataset?.updatedAt) || 0),
-          mergedRecords,
-          mergedSettings,
-          { commitId: uid("commit"), originDeviceId: meta.deviceId }
-        )
-      : snapshot.dataset;
     await writeSyncItems(syncWrites);
-    if (shouldCommitDataset && desiredDataset) await writeSyncItems({ [namespace.datasetKey]: desiredDataset });
+    let desiredDataset = snapshot.dataset;
+    if (shouldCommitDataset) {
+      const committed = await readSyncSnapshot(null, { includeAssets: false, spaceId: WORK_SPACE_ID });
+      const committedSettings = committed.settings || mergedSettings;
+      desiredDataset = datasetRecord(
+        datasetUpdatedAt(committed.records, committedSettings, Number(snapshot.dataset?.updatedAt) || 0),
+        committed.records, committedSettings,
+        { commitId: uid("commit"), originDeviceId: meta.deviceId }
+      );
+      await writeSyncItems({ [namespace.datasetKey]: desiredDataset });
+    }
 
     snapshot = await readSyncSnapshot(null, { spaceId: WORK_SPACE_ID });
     const assetResult = await uploadMissingAssets(desiredAssets, snapshot.assets, WORK_SPACE_ID);
@@ -5822,15 +5972,19 @@ export function startBackground(adapter) {
         if (meta.syncEnabled && meta.syncInitialized) await retryPendingCrossSpaceSync(meta);
       }
       const personal = await reconcilePersonal(strategy);
-      if (!personal?.ok || personal?.pending) return personal;
-      let work = await reconcileWork(strategy);
+      if (!personal?.ok) return personal;
+      // Personal may be waiting for a torn ledger. Work is independent: never
+      // block its healthy updates merely because Personal cannot merge yet.
+      const work = await reconcileWork(strategy);
+      if (!work?.ok) return work;
+      const anySpacePending = Boolean(personal.pending || work.pending);
 
       // Keep the local immutable safety generation current after a successful
       // live reconciliation, but never feed that publication back into the same
       // automatic merge. A torn/missing Work ledger waits for Firefox delivery;
       // only explicit Restore/bootstrap may consume the atomic profile as data.
       let currentMeta = work?.meta || personal.meta || await readLocalMeta();
-      if (currentMeta.syncEnabled && currentMeta.syncInitialized) {
+      if (!anySpacePending && currentMeta.syncEnabled && currentMeta.syncInitialized) {
         const { state } = await ensureLocalStorage();
         const profilePublish = await publishProfileDeviceSnapshot(state, currentMeta);
         currentMeta = await writeLocalMeta({
@@ -5842,14 +5996,28 @@ export function startBackground(adapter) {
         });
       }
 
-      if (work?.pending) {
+      if (anySpacePending) {
+        // A healthy reconciler may have set status=ready; preserve a truthful
+        // waiting state until *both* Spaces have a coherent live ledger.
+        const latest = await readLocalMeta();
         const waiting = await writeLocalMeta({
-          ...(work.meta || currentMeta),
+          ...latest,
           syncStatus: "waiting",
           lastSyncError: "",
-          syncWaitStartedAt: (work.meta || currentMeta).syncWaitStartedAt || Date.now()
+          // A healthy Space may have cleared this warning during reconciliation.
+          // Restore it whenever the other Space remains pending.
+          lastSyncWarning: "Waiting for changes from another device before safely completing Sync.",
+          syncWaitStartedAt: latest.syncWaitStartedAt || Date.now()
         });
-        return { ...personal, meta: waiting, work: { ...work, meta: waiting } };
+        return {
+          ok: true, pending: true,
+          reason: personal.pending ? (personal.reason || "personal-pending") : (work.reason || "work-pending"),
+          sharedLedgerPending: Boolean(personal.sharedLedgerPending),
+          workLedgerPending: Boolean(work.sharedLedgerPending),
+          meta: waiting,
+          personal: { ...personal, meta: waiting },
+          work: { ...work, meta: waiting }
+        };
       }
       return work?.ok ? { ...personal, meta: work.meta || currentMeta || personal.meta, work } : personal;
     } finally {
@@ -6003,6 +6171,9 @@ export function startBackground(adapter) {
 
     await clearAssetGcLedger();
     await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC);
+    // An explicit reset starts a new authority epoch. Old deletion evidence
+    // must not veto shortcuts intentionally restored into that new epoch.
+    if (armedMeta.syncDeletionEvidencePresent) await clearSyncDeletionEvidence();
 
     const [usedBytes, remaining] = await Promise.all([
       browser.storage.sync.getBytesInUse(null),

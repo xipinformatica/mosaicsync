@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.33.0.63";
+export const VERSION = "1.33.0.67";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -56,6 +56,7 @@ export const LOCAL_ICON_RECOVERY_STATUS_KEY = "mosaicsync.icon-recovery-status.v
 export const LOCAL_FAVICON_QUALITY_AUDIT_KEY = "mosaicsync.favicon-quality-audit.v1";
 export const LOCAL_MAINTENANCE_MIGRATIONS_KEY = "mosaicsync.maintenance-migrations.v1";
 export const LOCAL_SYNC_DIAGNOSTICS_KEY = "mosaicsync.sync-diagnostics.v1";
+export const LOCAL_SYNC_DELETION_EVIDENCE_KEY = "mosaicsync.sync-deletion-evidence.v1";
 export const LOCAL_SYNC_CONTINUITY_KEY = "mosaicsync.sync-continuity.v1";
 export const LOCAL_SYNC_RECOVERY_STATUS_KEY = "mosaicsync.sync-recovery-status.v1";
 // Historical Web Lock string retained for rolling-version compatibility. The
@@ -279,6 +280,7 @@ export const DEFAULT_META = Object.freeze({
   onboardingCompleted: false,
   onboardingVersion: "",
   syncWaitStartedAt: 0,
+  syncDeletionEvidencePresent: false,
   // Local-only Sync delivery bookkeeping. These fields never enter storage.sync;
   // they let the UI distinguish a remote copy actually observed on this Firefox
   // from the timestamp embedded in the synchronized dataset itself.

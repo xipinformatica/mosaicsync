@@ -35,7 +35,7 @@ function state(personalItems = [], workItems = []) {
 }
 
 test("1.30 release and local Sync bookkeeping schemas are explicit", () => {
-  assert.equal(VERSION, "1.33.0.63");
+  assert.equal(VERSION, "1.33.0.67");
   assert.equal(META_SCHEMA_VERSION, 12);
   assert.equal(PROFILE_SNAPSHOT_SCHEMA_VERSION, 1);
 });
@@ -90,7 +90,8 @@ for (const browser of ["firefox", "chrome"]) {
     assert.match(fn, /strategy === "merge" && !isSnapshotUsable\(snapshot\)/);
     assert.match(fn, /reason: "work-ledger-pending"/);
     assert.match(fn, /const shouldCommitDataset = hasCoreWrites/);
-    assert.match(fn, /if \(shouldCommitDataset && desiredDataset\) await writeSyncItems\(\{ \[namespace\.datasetKey\]: desiredDataset \}\)/);
+    assert.match(fn, /if \(shouldCommitDataset\) \{[\s\S]*?const committed = await readSyncSnapshot\(null, \{ includeAssets: false, spaceId: WORK_SPACE_ID \}\)/);
+    assert.match(fn, /datasetUpdatedAt\(committed\.records, committedSettings,[\s\S]*?committed\.records, committedSettings/);
     assert.doesNotMatch(fn, /remoteMissing:\s*true/);
   });
 

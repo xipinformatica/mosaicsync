@@ -3720,7 +3720,8 @@ ${site.url}`;
     add.title = t("addShortcut");
     add.setAttribute("aria-label", t("addShortcut"));
     const plus = document.createElement("span");
-    plus.textContent = "+";
+    plus.className = "plus-mark";
+    plus.setAttribute("aria-hidden", "true");
     add.append(plus);
     add.addEventListener("click", () => openShortcutEditor(null, null, shortcutOrderMode === "recent" ? null : position));
 
@@ -7185,6 +7186,12 @@ ${site.url}`;
     } else if (syncing) {
       syncStatusText.textContent = t("updatingSync");
       syncStatusDetail.textContent = t("preparingSyncCopy");
+    } else if (waiting) {
+      // A waiting initialized profile is not ready, even if the other Space
+      // reconciled successfully. Keep this distinct from first-run bootstrap.
+      syncStatusText.textContent = t("syncWaitingForPeer");
+      const warning = syncWarningDescription(meta);
+      syncStatusDetail.textContent = warning || t("syncWaitingForPeerDetail");
     } else {
       const warning = syncWarningDescription(meta);
       if (warning || pressure !== "normal") {

@@ -1306,6 +1306,7 @@ export function normalizeMeta(raw) {
     onboardingCompleted: raw?.onboardingCompleted === true,
     onboardingVersion: typeof raw?.onboardingVersion === "string" ? raw.onboardingVersion : "",
     syncWaitStartedAt: Number.isFinite(raw?.syncWaitStartedAt) ? raw.syncWaitStartedAt : 0,
+    syncDeletionEvidencePresent: raw?.syncDeletionEvidencePresent === true,
     lastAppliedSyncRevision: typeof raw?.lastAppliedSyncRevision === "string" ? raw.lastAppliedSyncRevision : "",
     lastAppliedWorkSyncRevision: typeof raw?.lastAppliedWorkSyncRevision === "string" ? raw.lastAppliedWorkSyncRevision : "",
     lastAppliedDeviceSnapshotRevision: typeof raw?.lastAppliedDeviceSnapshotRevision === "string" ? raw.lastAppliedDeviceSnapshotRevision : "",

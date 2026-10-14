@@ -63,6 +63,8 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /visual-empty-plus-133066\.test\.mjs$/i,
+      /visual-plus-133067\.test\.mjs$/i,
       /stage2b-atomic-import-133062\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
@@ -153,6 +155,8 @@ const GROUPS = Object.freeze({
   sync: {
     description: "Normal Sync, concurrent writes, profile state, distributed merge and journals",
     patterns: [
+      /stage2d-64-ledger-repair\.test\.mjs$/i,
+      /stage2d-64-space-isolation\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
       /neofix-133046\.test\.mjs$/i,
@@ -200,6 +204,8 @@ const GROUPS = Object.freeze({
   recovery: {
     description: "Catastrophic Recovery, immutable generations, retention, restart and failure behavior",
     patterns: [
+      /stage2d-64-ledger-repair\.test\.mjs$/i,
+      /stage2d-64-space-isolation\.test\.mjs$/i,
       /stage2b-atomic-import-133062\.test\.mjs$/i,
       /recovery-/i,
       /corrective-13013\.test\.mjs$/i,
@@ -345,6 +351,8 @@ const GROUPS = Object.freeze({
   release: {
     description: "Build, packaging, identity, release contracts, certification and maintainability tooling",
     patterns: [
+      /stage2d-64-ledger-repair\.test\.mjs$/i,
+      /stage2d-64-space-isolation\.test\.mjs$/i,
       /stage2b-atomic-import-133062\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,

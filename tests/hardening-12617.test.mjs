@@ -70,6 +70,7 @@ for (const browser of ["firefox", "chrome"]) {
       }),
       retryPendingLocalSyncMutation: async meta => meta,
       repairDeliveredCoreEvidence: async () => ({ repaired: 0, resolved: 0 }),
+      restoreDurableDeletionAuthority: async () => false,
       beginOrContinueCatastrophicSyncRecovery: async () => null,
       markSyncContinuityHealthy: async () => null,
       completeRemoteDescriptor: () => null,
@@ -91,6 +92,7 @@ for (const browser of ["firefox", "chrome"]) {
       recordFingerprint: records => [...records.keys()].sort().join("|"),
       settingsRecordEqual: () => true,
       isSnapshotUsable: () => true,
+      markTornLedgerWaiting: async meta => meta,
       PERSONAL_SPACE_ID: "personal",
       WORK_SPACE_ID: "work",
       reconcile: async () => { reconciles += 1; return { ok: true }; }
@@ -228,6 +230,8 @@ for (const browser of ["firefox", "chrome"]) {
     const guard = fn.indexOf('strategy === "merge" && !isSnapshotUsable(snapshot)');
     const firstRepair = fn.indexOf("const syncWrites = {}");
     assert.ok(guard >= 0 && firstRepair > guard, "partial-ledger guard must run before any compatibility-ledger repair writes");
-    assert.match(fn.slice(guard, firstRepair), /return \{ ok: true, skipped: true, reason: "shared-ledger-pending", meta: refreshed, sharedLedgerPending: true \}/);
+    assert.match(fn.slice(guard, firstRepair), /await maybeRepairTornLedger\(PERSONAL_SPACE_ID, snapshot, fullLocalState, meta, sources\.all\)/);
+    assert.match(fn.slice(guard, firstRepair), /return \{ ok: true, pending: true, reason: "shared-ledger-pending", meta: waiting, sharedLedgerPending: true \}/);
+    assert.doesNotMatch(fn.slice(guard, firstRepair), /combinedRemoteCore\(snapshot, sources\.device\)[\s\S]*?mergeRecordMaps/, "torn recovery generations must never feed automatic merges");
   });
 }

@@ -77,13 +77,15 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
     // two local reads, two local writes, and the conditional rollback remove
     // are gone. The single atomic profile write already existed.
     "local.remove": frozen.directStorageCallSites.byOperation["local.remove"],
-    "local.set": frozen.directStorageCallSites.byOperation["local.set"] - 2,
+    "local.set": frozen.directStorageCallSites.byOperation["local.set"],
+    // Stage 2D adds two atomic journal/metadata persistence helpers. These
+    // execute only on deletions and explicit reset/import, not routine watches.
     // ED-1 adds one conditional durable recovery read, while .62 removes
     // the two obsolete branding import/rollback reads.
-    "local.get": frozen.directStorageCallSites.byOperation["local.get"] - 1
+    "local.get": frozen.directStorageCallSites.byOperation["local.get"] + 2
   };
   assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
-    "Historical Sync reads remain unchanged; .62 removes speculative branding import/rollback operations and retains ED-1 recovery");
+    "Static storage sites include Stage 2D durable deletion evidence while routine runtime reads stay within frozen ceilings");
   for (const browser of ["firefox", "chrome"]) {
     for (const [scenario, frozenResult] of Object.entries(frozen.runtimeCensus[browser])) {
       const liveResult = live.runtimeCensus[browser][scenario];
