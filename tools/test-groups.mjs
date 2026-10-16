@@ -65,6 +65,7 @@ const GROUPS = Object.freeze({
     patterns: [
       /visual-empty-plus-133066\.test\.mjs$/i,
       /visual-plus-133067\.test\.mjs$/i,
+      /visual-plus-forced-colors-133068\.test\.mjs$/i,
       /stage2b-atomic-import-133062\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133059\.test\.mjs$/i,
@@ -156,6 +157,8 @@ const GROUPS = Object.freeze({
     description: "Normal Sync, concurrent writes, profile state, distributed merge and journals",
     patterns: [
       /stage2d-64-ledger-repair\.test\.mjs$/i,
+      /stage2e-remote-reset-133069\.test\.mjs$/i,
+      /stage2f-offline-reset-133070\.test\.mjs$/i,
       /stage2d-64-space-isolation\.test\.mjs$/i,
       /ed1-failure-recovery\.test\.mjs$/i,
       /neofix-133049\.test\.mjs$/i,
@@ -205,6 +208,8 @@ const GROUPS = Object.freeze({
     description: "Catastrophic Recovery, immutable generations, retention, restart and failure behavior",
     patterns: [
       /stage2d-64-ledger-repair\.test\.mjs$/i,
+      /stage2e-remote-reset-133069\.test\.mjs$/i,
+      /stage2f-offline-reset-133070\.test\.mjs$/i,
       /stage2d-64-space-isolation\.test\.mjs$/i,
       /stage2b-atomic-import-133062\.test\.mjs$/i,
       /recovery-/i,

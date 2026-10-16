@@ -2234,7 +2234,7 @@ else if (scenario === 'sync-1301843-full-quota-clear') {
   const after=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
   const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
   assert.equal(cleared?.ok,true);
-  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY]);
+  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY, constants.SYNC_RESET_EPOCH_KEY]);
   assert.deepEqual(model.normalizeState(after),model.normalizeState(before));
   assert.equal(meta.syncEnabled,true,'explicit clear must preserve the enabled Sync preference');
   assert.equal(meta.syncInitialized,false);
@@ -2251,11 +2251,118 @@ else if (scenario === 'sync-1301843-full-quota-clear') {
     ok:true,
     cleared:true,
     localPreserved:true,
-    onlyResetIntent:keys.length===1 && keys[0]===constants.SYNC_RESET_INTENT_KEY,
+    onlyResetIntent:keys.length===2 && keys.includes(constants.SYNC_RESET_INTENT_KEY) && keys.includes(constants.SYNC_RESET_EPOCH_KEY),
     syncWaiting:meta.syncEnabled===true && meta.syncInitialized===false && meta.syncBootstrapMode==='await-remote',
     noAutoRepublish:sync.stats.setCalls===setsAfterClear,
     clearCalls:sync.stats.clearCalls
   }));
+}
+
+
+else if (scenario==='stage2f-legacy-current-epoch-preserves-unsynced') {
+  // Device joined the post-reset epoch while on .69 (never saw reset-intent, continuity.lastResetEpoch=0),
+  // is healthy and in sync, then upgrades to .70 with one unsynced local edit pending (journal + state).
+  const E=Date.now()+100000;
+  const cloudLayout=stateWith({personal:[shortcut('shared','https://shared.test/',4000)],work:[shortcut('w','https://w.test/',4000)]});
+  await sync.set({...remotePersonalEntries(cloudLayout,'cp'),...remoteWorkEntries(cloudLayout,'cw')});
+  await seedLocalState(cloudLayout,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});            // healthy, no marker yet (as on .69)
+  const c0=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]||{};
+  await sync.set({[constants.SYNC_RESET_EPOCH_KEY]:{schemaVersion:1,kind:'reset-epoch',epoch:E,initiatedByDevice:'peer-a',initiatedAt:Date.now()}}); // marker written by the .70 resetter earlier
+  const edited=stateWith({personal:[shortcut('shared','https://shared.test/',4000),shortcut('unsynced-edit','https://unsynced.test/',6000)],work:[shortcut('w','https://w.test/',4000)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:clone(edited),[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'unsynced',createdAt:Date.now(),before:clone(cloudLayout),after:clone(edited)}});
+  const rs=[]; for(let i=0;i<4;i++){const r=await send({type:'mosaicsync:reconcile-if-needed',reason:i%2?'alarm':'foreground'}); rs.push(r?.reason||(r?.ok?'ok':'fail'));}
+  const st=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const c=await sync.get(null);
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  const result={ok:rs[0]!=='intentional-remote-reset' && st.spaces.personal.shortcuts.some(x=>x.id==='unsynced-edit') &&
+    !!c[`${constants.SYNC_ITEM_PREFIX}unsynced-edit`] && Number(continuity.lastResetEpoch)===E,
+    scenario,continuityEstablishedBefore:!!c0.established,lastResetEpochBefore:c0.lastResetEpoch||0,checks:rs,
+    localHasUnsyncedEdit:st.spaces.personal.shortcuts.some(x=>x.id==='unsynced-edit'),
+    cloudHasUnsyncedEdit:!!c[`${constants.SYNC_ITEM_PREFIX}unsynced-edit`],epochAdopted:Number(continuity.lastResetEpoch)===E};
+  console.log(JSON.stringify(result));
+}
+
+else if (scenario==='stage2f-legacy-matching-ids-new-epoch-resets') {
+  // Matching IDs alone must NOT authorize adoption: this initialized device
+  // really missed a peer reset, and both IDs were republished with new content.
+  const E=Date.now()+100000;
+  const old=stateWith({personal:[shortcut('shared','https://old.test/',9000)],work:[shortcut('w','https://old-work.test/',9000)]});
+  const fresh=stateWith({personal:[shortcut('shared','https://new.test/',5000)],work:[shortcut('w','https://new-work.test/',5000)]});
+  await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set({...remotePersonalEntries(old,'before-p'),...remoteWorkEntries(old,'before-w')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const core={...remotePersonalEntries(fresh,'after-p','peer-a'),...remoteWorkEntries(fresh,'after-w','peer-a')};
+  for(const key of [...sync.data.keys()]) if(!(key in core)) sync.data.delete(key);
+  for(const [key,value] of Object.entries(core)) sync.data.set(key,clone(value));
+  sync.data.set(constants.SYNC_RESET_EPOCH_KEY,{schemaVersion:1,kind:'reset-epoch',epoch:E,initiatedByDevice:'peer-a',initiatedAt:Date.now()});
+  const beforeSets=sync.stats.setCalls;
+  const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const waiting=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const noWritesBeforeJoin=sync.stats.setCalls===beforeSets;
+  const joined=await send({type:'mosaicsync:wait-for-remote'});
+  const st=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const persisted=st.spaces.personal.shortcuts.find(x=>x.id==='shared')?.url==='https://new.test/' &&
+    st.spaces.work.shortcuts.find(x=>x.id==='w')?.url==='https://new-work.test/';
+  console.log(JSON.stringify({ok:observed.reason==='intentional-remote-reset'&&waiting.syncBootstrapMode==='await-remote'&&
+    noWritesBeforeJoin&&joined.ok&&persisted,observed:observed.reason,joined:joined.ok,persisted}));
+}
+
+else if (['stage2f-offline-reset-entirely-missed','stage2f-offline-reset-pending-edit','stage2f-reset-arrives-between-probe-and-full'].includes(scenario)) {
+  const old=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500)],work:[shortcut('old-work','https://old-work.test/',500)]});
+  const replacement=stateWith({personal:[shortcut('new-only','https://new-only.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+  await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set({...remotePersonalEntries(old,'old-p'),...remoteWorkEntries(old,'old-w')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  let before=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(before.established,true);
+  const marker={schemaVersion:1,kind:'reset-epoch',epoch:Date.now()+100000,initiatedByDevice:'peer-a',initiatedAt:Date.now()};
+  // Simulate server-side Sync state changing while this browser is offline:
+  // NONE of the intermediate reset-intent or replacement events are delivered.
+  sync.data.clear();
+  for(const [key,value] of Object.entries({...remotePersonalEntries(replacement,'new-p'),...remoteWorkEntries(replacement,'new-w')})) sync.data.set(key,clone(value));
+  sync.data.set(constants.SYNC_RESET_EPOCH_KEY,marker);
+  if (scenario === 'stage2f-reset-arrives-between-probe-and-full') {
+    const normalGet=sync.get.bind(sync);
+    let once=true;
+    sync.get=async keys=> {
+      if (once && Array.isArray(keys) && keys.includes(constants.SYNC_RESET_EPOCH_KEY)) {
+        once=false;
+        const result=await normalGet(keys);
+        delete result[constants.SYNC_RESET_EPOCH_KEY];
+        return result;
+      }
+      return normalGet(keys);
+    };
+  }
+  if (scenario === 'stage2f-offline-reset-pending-edit') {
+    // Force a pending write that would publish an old-world shortcut unless
+    // epoch authority is tested before replaying local durability journals.
+    const after=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('stray','https://stray.test/',900)],work:[shortcut('old-work','https://old-work.test/',500)]});
+    await local.set({[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'old-world',before:old,after}});
+  }
+  const beforeSets=sync.stats.setCalls;
+  const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const waiting=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  assert.equal(observed.reason,'intentional-remote-reset','offline survivor must observe persistent marker');
+  assert.equal(waiting.syncInitialized,false);
+  assert.equal(waiting.syncBootstrapMode,'await-remote');
+  assert.equal(sync.stats.setCalls,beforeSets,'offline survivor cannot rewrite new epoch');
+  assert.ok(sync.data.has(constants.SYNC_RESET_EPOCH_KEY));
+  const joined=await send({type:'mosaicsync:wait-for-remote'});
+  const received=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const fresh=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const continuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(joined.ok,true);
+  assert.equal(fresh.syncInitialized,true);
+  assert.equal(continuity.lastResetEpoch,marker.epoch);
+  assert.deepEqual(received.spaces.personal.shortcuts.map(x=>x.id),['new-only']);
+  assert.deepEqual(received.spaces.work.shortcuts.map(x=>x.id),['new-work']);
+  const next=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.notEqual(next.reason,'intentional-remote-reset','joining epoch must not reset again');
+  const cloud=await sync.get(null);
+  assert.ok(!Object.keys(cloud).some(k=>k.includes('obsolete')||k.includes('old-work')||k.includes('stray')));
+  console.log(JSON.stringify({ok:true,guarded:true,notRearmed:true,epochRetained:true,ready:true}));
 }
 
 else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
@@ -2267,7 +2374,7 @@ else if (scenario === 'sync-loss-13013-intentional-reset-is-nonzero') {
   const cleared=await send({type:'mosaicsync:clear-sync-data'});
   const remote=await sync.get(null);
   const keys=Object.keys(remote);
-  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY],'intentional clear must leave only the reset sentinel');
+  assert.deepEqual(keys,[constants.SYNC_RESET_INTENT_KEY, constants.SYNC_RESET_EPOCH_KEY],'intentional clear must leave a reset sentinel and durable epoch');
   assert.ok(await sync.getBytesInUse(null)>0,'intentional clear must never create a 0-byte namespace');
   assert.ok(Number(remote[constants.SYNC_RESET_INTENT_KEY]?.epoch)>0);
   assert.deepEqual(model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]),model.normalizeState(before),'clearing cloud copy must preserve local profile');
@@ -2388,6 +2495,205 @@ else if (scenario === 'sync-loss-13014-startup-warmup') {
     'browser restart must grant Firefox Sync a fresh warm-up window before recovery');
   assert.equal(sync.stats.setCalls,setsBefore,'expired quarantine from a previous session must not publish immediately on startup');
   console.log(JSON.stringify({ok:true,startupWarmup:true,recoveryEligibleAt:continuity.recoveryEligibleAt}));
+}
+
+else if (scenario === 'stage2e-remote-reset-deletion-evidence') {
+  const base=stateWith({personal:[shortcut('keep','https://keep.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const tombstone=model.makeTombstone('reused','device-b',fakeNow-1000);
+  const beforeMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  await local.set({
+    [constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY]:{personal:{reused:tombstone}},
+    [constants.LOCAL_META_KEY]:{...beforeMeta,syncDeletionEvidencePresent:true}
+  });
+  await sync.clear();
+  const epoch=fakeNow+100;
+  await sync.set({[constants.SYNC_RESET_INTENT_KEY]:{schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',epoch,initiatedByDevice:'peer-reset-device',initiatedAt:fakeNow}});
+  const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  assert.equal(observed.reason,'intentional-remote-reset');
+  const afterResetMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const afterResetEvidence=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY];
+  const replacement=stateWith({personal:[shortcut('reused','https://new.example.test/',900)],work:[shortcut('work-new','https://work-new.test/',900)]});
+  await sync.clear();
+  await sync.set({...remotePersonalEntries(replacement,'p2'),...remoteWorkEntries(replacement,'w2')});
+  const rejoined=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const afterJoinMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const afterJoinEvidence=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY];
+  const afterJoinState=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  // Deliver a post-reset partial update to the new shortcut, without its marker.
+  // The previous-epoch journal must never overwrite the new epoch's live record.
+  const key=`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('reused')}`;
+  const beforeTorn=(await sync.get(key))[key];
+  await sync.set({[key]:{...beforeTorn,title:'post-reset-new-edit',modifiedAt:fakeNow+300}});
+  const tornResult=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const afterTorn=(await sync.get(key))[key];
+  console.log(JSON.stringify({
+    ok:true,resetObserved:observed.reason,postResetInitialized:afterJoinMeta.syncInitialized,
+    journalRetainedAfterReset:Boolean(afterResetEvidence?.personal?.reused),
+    journalRetainedAfterRejoin:Boolean(afterJoinEvidence?.personal?.reused),
+    presenceBitAfterReset:afterResetMeta.syncDeletionEvidencePresent,
+    presenceBitAfterRejoin:afterJoinMeta.syncDeletionEvidencePresent,
+    replacementVisible:afterJoinState.spaces.personal.shortcuts.some(item=>item.id==='reused'),
+    tornResult:tornResult?.reason||'',postResetCloudKind:afterTorn?.kind,postResetCloudTitle:afterTorn?.title,
+    rejoinReason:rejoined?.reason||''
+  }));
+}
+
+else if (scenario === 'stage2e-remote-reset-atomic-failure' || scenario === 'stage2e-remote-reset-pending-failure' || scenario === 'stage2e-remote-reset-ambiguous-replay') {
+  const base=stateWith({personal:[shortcut('old','https://old.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const beforeMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const tombstone=model.makeTombstone('reused','device-b',fakeNow-1000);
+  await local.set({
+    [constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY]:{personal:{reused:tombstone}},
+    [constants.LOCAL_META_KEY]:{...beforeMeta,syncDeletionEvidencePresent:true}
+  });
+  await sync.clear();
+  await sync.set({[constants.SYNC_RESET_INTENT_KEY]:{
+    schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',
+    epoch:fakeNow+100,initiatedByDevice:'peer-reset-device',initiatedAt:fakeNow
+  }});
+  const atomicFailure=scenario === 'stage2e-remote-reset-atomic-failure' || scenario === 'stage2e-remote-reset-ambiguous-replay';
+  if (scenario === 'stage2e-remote-reset-ambiguous-replay') {
+    const edited=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('obsolete','https://obsolete.test/',600)],work:[shortcut('work','https://work.test/',500)]});
+    await local.set({[constants.LOCAL_STATE_KEY]:clone(edited),[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{
+      schemaVersion:1,journalId:'old-epoch-pending',createdAt:fakeNow-100,before:clone(base),after:clone(edited)
+    }});
+  }
+  if (atomicFailure) {
+    const normalSet=local.set.bind(local);
+    let injected=false;
+    local.set=async items=>{
+      if (!injected && Object.hasOwn(items||{}, constants.LOCAL_META_KEY) &&
+          Object.hasOwn(items||{}, constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY)) {
+        injected=true;
+        // Simulate an ambiguous successful commit: durable keys change but the
+        // storage API reports rejection after writing them.
+        if (scenario === 'stage2e-remote-reset-ambiguous-replay') await normalSet(items);
+        throw new Error('simulated atomic reset storage.local.set failure');
+      }
+      return normalSet(items);
+    };
+  } else {
+    await local.set({[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{
+      schemaVersion:1,journalId:'old-epoch-pending',createdAt:fakeNow-100,before:clone(base),after:clone(base)
+    }});
+    local.failNextRemoveKeys.add(constants.LOCAL_PENDING_SYNC_MUTATION_KEY);
+  }
+  const cloudWritesBefore=sync.stats.setCalls;
+  const failed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const heldMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const heldEvidence=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY];
+  const heldPending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  if (scenario === 'stage2e-remote-reset-ambiguous-replay') {
+    assert.equal(failed?.ok,false,'reported storage rejection is still surfaced');
+    assert.equal(heldMeta.syncInitialized,false,'ambiguous commit already switched to reset-waiting authority');
+    assert.equal(heldMeta.syncBootstrapMode,'await-remote');
+    assert.equal(heldMeta.syncDeletionEvidencePresent,false);
+    assert.equal(Boolean(heldEvidence?.personal?.reused),false);
+    assert.equal(heldPending?.journalId,'old-epoch-pending','the old rollback path reinstates the obsolete pending journal');
+    // A New Tab edit while the reset observer is waiting changes the local
+    // profile signature, so bootstrap cannot acknowledge the old journal as
+    // pendingAtStart. The new epoch must explicitly retire it BEFORE rejoin.
+    const duringWait=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('during-wait','https://wait.test/',750)],work:[shortcut('work','https://work.test/',500)]});
+    await local.set({[constants.LOCAL_STATE_KEY]:duringWait});
+    const replacement=stateWith({personal:[shortcut('new','https://new.test/',950)],work:[shortcut('work-new','https://work-new.test/',950)]});
+    await sync.clear();
+    await sync.set({...remotePersonalEntries(replacement,'p2'),...remoteWorkEntries(replacement,'w2')});
+    const bootstrap=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+    assert.equal(bootstrap?.ok,true,'valid new epoch must rejoin normally');
+    const afterJoinPending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+    assert.equal(afterJoinPending,undefined,'rejoin must retire previous-epoch pending mutations, even when signature changed');
+    const replay=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+    assert.equal(replay?.ok,true);
+    const cloud=await sync.get(null);
+    assert.equal(cloud[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('obsolete')}`],undefined,'obsolete previous-epoch addition must not be republished');
+    assert.equal(cloud[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent('old')}`],undefined,'old previous-epoch shortcut must not be republished');
+    console.log(JSON.stringify({ok:true,ambiguousWriteObserved:true,staleJournalDiscarded:true,rejoinSucceeded:true,oldCloudRecordsNotResurrected:true}));
+    process.exit(0);
+  }
+  assert.equal(failed?.ok,false,'storage failure must not report reset success');
+  assert.equal(heldMeta.syncInitialized,true,'failed reset cleanup must not transition to the new authority');
+  assert.equal(heldMeta.syncDeletionEvidencePresent,true,'failed reset cleanup must retain previous meta authority');
+  assert.ok(heldEvidence?.personal?.reused,'failed reset cleanup must preserve previous deletion journal');
+  if (!atomicFailure) assert.equal(heldPending?.journalId,'old-epoch-pending','failed pending cleanup must retain retry authority');
+  assert.equal(sync.stats.setCalls,cloudWritesBefore,'failed reset cleanup must not publish obsolete shortcuts');
+  const retried=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const readyMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const readyEvidence=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY];
+  const readyPending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  assert.equal(retried?.reason,'intentional-remote-reset');
+  assert.equal(readyMeta.syncInitialized,false);
+  assert.equal(readyMeta.syncDeletionEvidencePresent,false);
+  assert.equal(Boolean(readyEvidence?.personal?.reused),false);
+  assert.equal(readyPending,undefined,'successful reset retry removes old pending authority');
+  assert.equal((await sync.get(constants.SYNC_RESET_INTENT_KEY))[constants.SYNC_RESET_INTENT_KEY]?.kind,'reset-intent');
+  console.log(JSON.stringify({ok:true,variant:atomicFailure?'atomic-set-failure':'pending-remove-failure',failedClosed:true,retrySucceeded:true,oldEvidenceRetired:true}));
+}
+
+else if (scenario === 'stage2e-bootstrap-local-ambiguous') {
+  // Ambiguous reset commit restores an old journal; user edits while waiting; then chooses "Use this device".
+  const base=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('gone','https://gone.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  await sync.set({[constants.SYNC_RESET_INTENT_KEY]:{schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',epoch:fakeNow+100,initiatedByDevice:'peer-reset-device',initiatedAt:fakeNow}});
+  // Old-epoch journal: adds 'obsolete', deletes 'gone'.
+  const edited=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('obsolete','https://obsolete.test/',600)],work:[shortcut('work','https://work.test/',500)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:clone(edited),[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'old-epoch-pending',createdAt:fakeNow-100,before:clone(base),after:clone(edited)}});
+  const normalSet=local.set.bind(local); let injected=false;
+  local.set=async items=>{ if(!injected && Object.hasOwn(items||{},constants.LOCAL_META_KEY) && Object.hasOwn(items||{},constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY)){ injected=true; await normalSet(items); throw new Error('ambiguous commit'); } return normalSet(items); };
+  const failed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  local.set=normalSet;
+  assert.equal(injected,true,'the reset-meta commit must be ambiguous');
+  const heldPending=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  // While waiting, the user deletes 'obsolete' (no journal is written in await-remote mode).
+  const duringWait=stateWith({personal:[shortcut('old','https://old.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:duringWait});
+  const useThis=await send({type:'mosaicsync:bootstrap-local'});
+  const pendingAfterUse=(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY];
+  const r1=await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'});
+  const r2=await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'});
+  const cloud=await sync.get(null);
+  const meta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const ev=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY];
+  const k=id=>cloud[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`]?.kind||null;
+  console.log(JSON.stringify({scenario,ambiguousWriteInjected:injected,failedOk:failed?.ok,heldPending:heldPending?.journalId||null,useThisOk:useThis?.ok,pendingAfterUse:pendingAfterUse?.journalId||null,
+    r1:r1?.reason||r1?.ok,r2:r2?.reason||r2?.ok,cloud:{old:k('old'),obsolete:k('obsolete'),gone:k('gone')},
+    evidencePresentBit:meta.syncDeletionEvidencePresent,evidenceIds:Object.keys(ev?.personal||{}),pendingAtEnd:((await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]?.journalId)||null}));
+}
+
+else if (scenario === 'stage2e-bootstrap-local-restored-shortcut') {
+  // E2 sequence, then a peer intentionally restores same-ID 'gone' (e.g. backup import) in the new epoch.
+  const base=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('gone','https://gone.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready',lastSyncAt:fakeNow-1000});
+  await sync.set({...remotePersonalEntries(base,'p1'),...remoteWorkEntries(base,'w1')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  await sync.clear();
+  await sync.set({[constants.SYNC_RESET_INTENT_KEY]:{schemaVersion:constants.SYNC_RESET_INTENT_SCHEMA_VERSION,kind:'reset-intent',epoch:fakeNow+100,initiatedByDevice:'peer-reset-device',initiatedAt:fakeNow}});
+  const edited=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('obsolete','https://obsolete.test/',600)],work:[shortcut('work','https://work.test/',500)]});
+  await local.set({[constants.LOCAL_STATE_KEY]:clone(edited),[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'old-epoch-pending',createdAt:fakeNow-100,before:clone(base),after:clone(edited)}});
+  const normalSet=local.set.bind(local); let injected=false;
+  local.set=async items=>{ if(!injected && Object.hasOwn(items||{},constants.LOCAL_META_KEY) && Object.hasOwn(items||{},constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY)){ injected=true; await normalSet(items); throw new Error('ambiguous commit'); } return normalSet(items); };
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'}); local.set=normalSet;
+  assert.equal(injected,true,'the reset-meta commit must be ambiguous');
+  await local.set({[constants.LOCAL_STATE_KEY]:stateWith({personal:[shortcut('old','https://old.test/',500)],work:[shortcut('work','https://work.test/',500)]})});
+  await send({type:'mosaicsync:bootstrap-local'});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'}); await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'});
+  // Peer publishes a complete new-epoch ledger that intentionally contains 'gone' again (same ID, newer).
+  const restored=stateWith({personal:[shortcut('old','https://old.test/',500),shortcut('gone','https://gone.test/',fakeNow+5000)],work:[shortcut('work','https://work.test/',500)]});
+  await sync.clear();
+  await sync.set({...remotePersonalEntries(restored,'p9','peer-restore-device'),...remoteWorkEntries(restored,'w9','peer-restore-device')});
+  const r=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const r2=await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'});
+  const cloud=await sync.get(null); const st=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const k=id=>cloud[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`]?.kind||null;
+  console.log(JSON.stringify({scenario,ambiguousWriteInjected:injected,r:r?.reason||r?.ok,r2:r2?.reason||r2?.ok,cloudGone:k('gone'),localHasGone:st.spaces.personal.shortcuts.some(x=>x.id==='gone'),cloudObsolete:k('obsolete')}));
 }
 
 else if (scenario === 'sync-loss-13014-reset-peer-rejoins') {

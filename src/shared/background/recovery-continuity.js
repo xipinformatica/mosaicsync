@@ -143,6 +143,7 @@ export function createRecoveryContinuity({
       established: true,
       lastHealthyAt: Number(now),
       lastCompleteRevision: descriptor.revision || current.lastCompleteRevision || "",
+      lastResetEpoch: Math.max(Number(current.lastResetEpoch) || 0, Number(descriptor.resetEpoch) || 0),
       lastPublisherDeviceId: descriptor.publisherDeviceId || current.lastPublisherDeviceId || "",
       personalTombstones: descriptor.personalTombstones ?? current.personalTombstones,
       workTombstones: descriptor.workTombstones ?? current.workTombstones,

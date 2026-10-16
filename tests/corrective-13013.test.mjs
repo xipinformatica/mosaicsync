@@ -87,7 +87,7 @@ test("1.30.13+ explicit Sync clear preserves a reset sentinel and never leaves t
     assert.match(block, /markIntentionalSyncReset/);
     assert.match(block, /syncInitialized: false/);
     assert.match(block, /syncBootstrapMode: meta\.syncEnabled \? "await-remote" : "none"/);
-    assert.match(block, /writeSyncItems\(\{ \[SYNC_RESET_INTENT_KEY\]: resetIntent \}/);
+    assert.match(block, /writeSyncItems\(\{ \[SYNC_RESET_INTENT_KEY\]: resetIntent, \[SYNC_RESET_EPOCH_KEY\]: resetMarker \}/);
   }
 });
 

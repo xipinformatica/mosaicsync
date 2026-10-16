@@ -40,7 +40,7 @@ test("1.31.0 Clear Sync copy arms locally, makes capacity, commits the sentinel,
     const block = source.slice(start, end);
     const localReset = block.indexOf("markIntentionalSyncReset");
     const capacity = block.indexOf("planResetIntentCapacity");
-    const sentinel = block.lastIndexOf("writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }");
+    const sentinel = block.lastIndexOf("writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent, [SYNC_RESET_EPOCH_KEY]: resetMarker }");
     const finalRemoval = block.indexOf("removeSyncItems(oldKeys)");
     assert.ok(localReset >= 0, `${browser}: reset must be armed locally`);
     assert.ok(capacity > localReset, `${browser}: capacity planning must happen after local reset protection is armed`);

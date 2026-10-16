@@ -8,7 +8,7 @@
  * Keep persisted/synchronized key names stable: changing them is a data migration.
  */
 export const PRODUCT_NAME = "MosaicSync";
-export const VERSION = "1.33.0.67";
+export const VERSION = "1.33.0.70";
 export const DONATE_URL = "https://ko-fi.com/mosaicsync";
 export const SUPPORT_EMAIL = "mosaicsync@xipinformatica.cat";
 export const SUPPORT_URL = `mailto:${SUPPORT_EMAIL}`;
@@ -85,6 +85,8 @@ export const SYNC_DEVICE_SNAPSHOT_PREFIX = `${SYNC_PREFIX}device.`;
 export const SYNC_DEVICE_NAME_PREFIX = `${SYNC_PREFIX}device-name.`;
 export const SYNC_DEVICE_NAME_SCHEMA_VERSION = 1;
 export const SYNC_RESET_INTENT_KEY = `${SYNC_PREFIX}reset-intent`;
+// A durable epoch marker survives replacement publication, unlike reset-intent.
+export const SYNC_RESET_EPOCH_KEY = `${SYNC_PREFIX}reset-epoch.v1`;
 export const SYNC_RESET_INTENT_SCHEMA_VERSION = 1;
 export const SYNC_CONTINUITY_SCHEMA_VERSION = 1;
 export const SYNC_RECOVERY_STATUS_SCHEMA_VERSION = 1;

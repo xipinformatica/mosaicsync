@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.33.0.70
+
+**Private Stage 2F: durable offline-reset recognition and safe legacy-client upgrade.**
+
+- An updated device that was offline throughout an entire Sync reset can recognize the reset and wait instead of reintroducing obsolete shortcuts. A durable reset-epoch marker survives replacement publication.
+- Before replaying pending edits, deletion repair or Sync publications, the device checks newer reset authority. The marker is included in the deliberate-reset quota budget; the routine healthy watchdog retains its prior two Sync reads.
+- Corrects a data-loss regression found in the independent .70 audit: a device that already joined the new layout while on an older extension version, and then upgraded to .70, could mistake the marker for a new reset and discard an unsynchronized edit. Only a coherent, previously confirmed Personal+Work ledger with an exactly matching local baseline permits adopting the marker without discarding the pending edit. Matching shortcut IDs alone are insufficient; ambiguous or incomplete cases still wait safely.
+- Adds two Chrome/Firefox regression scenarios (four tests): preserving a real unsynchronized edit on the legacy-current-epoch upgrade, and rejecting epoch adoption when an offline old layout reuses identical shortcut IDs. The upgrade test fails in both browsers before the corrective and passes afterward.
+- During an actual reset the previous local layout remains on the device only while waiting. Accepting the replacement synchronized layout replaces it. All devices should be updated to .70, because older versions do not understand the persistent marker and an older Clear Sync operation can remove it. Different arrival orders for the marker and replacement core remain a separate unresolved real-browser validation item.
+- Does not change permissions, telemetry, locale strings or backup formats. Private until independent re-audit, six GitHub checks and signed-in two-device Chrome and Firefox acceptance.
+
+## 1.33.0.69
+
+**Stage 2E: remote-reset deletion authority isolation.**
+
+- Fixes a data-integrity issue where a device that observed a peer-initiated Sync reset could retain deletion evidence from the previous Sync epoch. A later incomplete Sync delivery could reassert that obsolete deletion against a shortcut restored into the new epoch.
+- Retires old deletion evidence and its presence bit atomically with the observer's transition to safe await-remote mode, under the existing local persistence lock.
+- Protects **both** post-reset rejoin choices—"Use the synchronized layout" and "Use this device's layout"—against leftover previous-epoch pending mutations, even if the reset write committed but reported an error and old retry records were rolled back. A cleanup failure aborts rejoin instead of replaying stale changes.
+- Adds Chrome/Firefox reset regression tests, including reject-before-write, pending-journal cleanup failure, ambiguous commit-then-error replay, and a deliberately restored shortcut surviving the "Use this device" path. Claude's E2/E2b scenarios were reproduced red-before-green (four browser-specific failures before, four passes after the local-rejoin guard).
+- Preserves all existing Sync reconciliation, witness requirements, Recovery, UI, localization and permissions.
+- Private candidate: requires independent review and real signed-in device testing before publication.
+
+## 1.33.0.68
+
+**Accessibility correction: High Contrast-safe plus symbols.**
+
+- Fixes an accessibility regression in 1.33.0.67: CSS-drawn add-button plus symbols could disappear in Windows High Contrast / forced-colours mode. The same centered bars now use borders, allowing browsers to remap them to visible system colours.
+- Keeps the 22px font-independent geometry, click, keyboard, hover, focus, drag and screen-reader behavior unchanged in empty Personal/Work Spaces and populated grids.
+- Preserves the 1.33.0.64–.65 Sync reliability and waiting-state improvements unchanged; no changes to Sync protocol, deletion evidence, storage formats, permissions, translations, telemetry or network access.
+- Private candidate pending independent real-browser accessibility review and real signed-in multi-device Sync verification.
+
 ## 1.33.0.67
 
 **Private visual-polish candidate: font-independent plus symbols.**

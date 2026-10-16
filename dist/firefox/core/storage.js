@@ -1031,7 +1031,8 @@ export async function readLocalMeta() {
 export async function writeLocalMeta(meta, {
   allowOnboardingChange = false,
   allowDeviceNameChange = false,
-  persistenceLockHeld = false
+  persistenceLockHeld = false,
+  clearDeletionEvidenceForRemoteReset = false
 } = {}) {
   const commit = async () => {
     const stored = await browser.storage.local.get(LOCAL_META_KEY);
@@ -1055,9 +1056,15 @@ export async function writeLocalMeta(meta, {
       // writes may have been constructed from older meta and must not roll back a
       // newer rename merely because they acquire the persistence lock later.
       deviceName: (allowDeviceNameChange || !hasStoredMeta) ? candidate.deviceName : current.deviceName,
-      syncDeletionEvidencePresent: current.syncDeletionEvidencePresent
+      syncDeletionEvidencePresent: clearDeletionEvidenceForRemoteReset ? false : current.syncDeletionEvidencePresent
     });
-    await browser.storage.local.set({ [LOCAL_META_KEY]: normalized });
+    // A peer-observed explicit Sync reset changes deletion authority epochs.
+    // Commit the reset waiting-state meta and journal removal in ONE local write,
+    // under the already-held persistence lock. A crash must never leave the
+    // new epoch active with the old epoch's deletion journal armed.
+    await browser.storage.local.set(clearDeletionEvidenceForRemoteReset
+      ? { [LOCAL_META_KEY]: normalized, [LOCAL_SYNC_DELETION_EVIDENCE_KEY]: {} }
+      : { [LOCAL_META_KEY]: normalized });
     await writeSessionRenderMetaBestEffort(normalized);
     return normalized;
   };

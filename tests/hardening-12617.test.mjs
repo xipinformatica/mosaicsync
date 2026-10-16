@@ -76,6 +76,7 @@ for (const browser of ["firefox", "chrome"]) {
       completeRemoteDescriptor: () => null,
       completeLiveRemoteDescriptor: () => null,
       observeRemoteResetIntent: async () => null,
+      guardMissedRemoteReset: async () => null,
       validResetIntent: () => false,
       SYNC_RESET_INTENT_KEY: "mosaicsync:reset-intent",
       browser: { storage: { sync: { get: async () => ({}) } } },

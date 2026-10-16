@@ -400,10 +400,10 @@ select{ font: inherit; }button{ color: inherit; }.page{
 .plus-mark{ position:relative; display:block; width:22px; height:22px; pointer-events:none; }
 .plus-mark::before,.plus-mark::after{
   content:""; position:absolute; left:50%; top:50%;
-  background:currentColor; border-radius:1px; transform:translate(-50%,-50%);
+  border:0 solid; border-radius:1px; transform:translate(-50%,-50%);
 }
-.plus-mark::before{ width:22px; height:2px; }
-.plus-mark::after{ width:2px; height:22px; }.empty-ghost-tile:hover{ background: rgba(139,92,246,.18); border-color: rgba(197,171,255,.86); transform: translateY(-1px); }.empty-ghost-tile.drag-cross-space-target{
+.plus-mark::before{ width:22px; border-top-width:2px; }
+.plus-mark::after{ height:22px; border-left-width:2px; }.empty-ghost-tile:hover{ background: rgba(139,92,246,.18); border-color: rgba(197,171,255,.86); transform: translateY(-1px); }.empty-ghost-tile.drag-cross-space-target{
   background: rgba(139,92,246,.28);
   border-color: rgba(213,194,255,.98);
   box-shadow: 0 0 0 3px rgba(139,92,246,.22), inset 0 0 0 1px rgba(255,255,255,.08);

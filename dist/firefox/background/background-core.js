@@ -56,6 +56,7 @@ import {
   SYNC_DEVICE_NAME_PREFIX,
   SYNC_DEVICE_NAME_SCHEMA_VERSION,
   SYNC_RESET_INTENT_KEY,
+  SYNC_RESET_EPOCH_KEY,
   SYNC_RESET_INTENT_SCHEMA_VERSION,
   SYNC_RECOVERY_STATUS_SCHEMA_VERSION,
   SYNC_ITEM_PREFIX,
@@ -668,6 +669,17 @@ export function startBackground(adapter) {
     });
   }
 
+  function validResetEpoch(value) {
+    return Boolean(value && value.kind === "reset-epoch" &&
+      Number(value.schemaVersion) === 1 && Number.isFinite(Number(value.epoch)) &&
+      Number(value.epoch) > 0 && typeof value.initiatedByDevice === "string" &&
+      value.initiatedByDevice.length > 0);
+  }
+
+  function resetEpochFromAll(all) {
+    return validResetEpoch(all?.[SYNC_RESET_EPOCH_KEY]) ? Number(all[SYNC_RESET_EPOCH_KEY].epoch) : 0;
+  }
+
   function validResetIntent(value) {
     return Boolean(value && value.kind === "reset-intent" &&
       Number(value.schemaVersion) === SYNC_RESET_INTENT_SCHEMA_VERSION &&
@@ -738,6 +750,7 @@ export function startBackground(adapter) {
     const workNamespace = syncNamespace(WORK_SPACE_ID);
     return [
       SYNC_RESET_INTENT_KEY,
+  SYNC_RESET_EPOCH_KEY,
       SYNC_SETTINGS_KEY,
       SYNC_DATASET_KEY,
       workNamespace.settingsKey,
@@ -754,6 +767,7 @@ export function startBackground(adapter) {
     return {
       revision: sources.profile?.revision || `${personal.revision || ""}|${work.revision || ""}`,
       publisherDeviceId: sources.profile?.originDeviceId || personal.originDeviceId || work.originDeviceId || "",
+      resetEpoch: resetEpochFromAll(sources.all),
       personalTombstones: continuityTombstonesFromRecords(personal.records),
       workTombstones: continuityTombstonesFromRecords(work.records)
     };
@@ -770,6 +784,7 @@ export function startBackground(adapter) {
       // A two-ledger live profile can contain contributions from several devices;
       // only retain a publisher identity when both final dataset commits agree.
       publisherDeviceId: personalPublisher && personalPublisher === workPublisher ? personalPublisher : "",
+      resetEpoch: resetEpochFromAll(sources.all),
       personalTombstones: continuityTombstonesFromRecords(sources.shared.records),
       workTombstones: continuityTombstonesFromRecords(workSnapshot.records)
     };
@@ -793,16 +808,79 @@ export function startBackground(adapter) {
         lastSyncError: "",
         lastSyncWarning: "",
         syncWaitStartedAt: Date.now()
-      }, { persistenceLockHeld: true });
+      }, { persistenceLockHeld: true, clearDeletionEvidenceForRemoteReset: true });
     });
     await ensureSyncWatchAlarm(next);
     return { ok: true, skipped: true, reason: "intentional-remote-reset", meta: next };
   }
 
+  // Clients <= .69 that joined after a peer reset had no durable epoch field.
+  // On upgrade they can see a newly understood marker while already using its
+  // replacement layout. Do not discard their legitimate unsynced journal just
+  // because their lastResetEpoch is zero. Require positive proof that BOTH
+  // coherent live ledgers are exactly the complete revision this device already
+  // observed, and that the last durable local baseline agrees with them.
+  async function adoptLegacyResetEpochIfCurrent(meta, marker, continuity) {
+    if (!continuity.established || continuity.lossState !== "none" ||
+        Number(continuity.lastResetEpoch) !== 0 || !continuity.lastCompleteRevision) return false;
+
+    const all = await browser.storage.sync.get(null);
+    if (validResetIntent(all?.[SYNC_RESET_INTENT_KEY])) return false;
+    const authority = all?.[SYNC_RESET_EPOCH_KEY];
+    if (!validResetEpoch(authority) || Number(authority.epoch) !== Number(marker.epoch) ||
+        authority.initiatedByDevice !== marker.initiatedByDevice) return false;
+
+    const sources = await readCoreSources(all, { includeAssets: false });
+    const work = await readSyncSnapshot(all, { includeAssets: false, spaceId: WORK_SPACE_ID });
+    const remote = completeLiveRemoteDescriptor(sources, work);
+    const appliedRevision = meta.lastAppliedSyncRevision && meta.lastAppliedWorkSyncRevision
+      ? `${meta.lastAppliedSyncRevision}|${meta.lastAppliedWorkSyncRevision}` : "";
+    if (!remote || (remote.revision !== appliedRevision && remote.revision !== continuity.lastCompleteRevision)) return false;
+
+    const { state } = await ensureLocalStorage();
+    const pending = await readPendingLocalSyncMutation();
+    // An unmatched journal has no proven baseline and cannot authorize adoption.
+    if (pending && localStateSyncSignature(pending.after) !== localStateSyncSignature(state)) return false;
+    const baseline = pending ? pending.before : state;
+    for (const [spaceId, snapshot] of [[PERSONAL_SPACE_ID, sources.shared], [WORK_SPACE_ID, work]]) {
+      const localSpace = workspaceStateNormalized(baseline, spaceId);
+      const localRecords = flattenStateNormalized(localSpace, meta.deviceId);
+      const localSettings = makeSettingsRecordNormalized(localSpace, meta.deviceId);
+      if (recordFingerprint(localRecords) !== recordFingerprint(snapshot.records) ||
+          !settingsRecordEqual(localSettings, snapshot.settings)) return false;
+    }
+
+    // Re-check the marker before persisting authority: a second reset may have
+    // happened during the full read. A failed local write stops pending replay.
+    const latest = await browser.storage.sync.get([SYNC_RESET_INTENT_KEY, SYNC_RESET_EPOCH_KEY]);
+    if (validResetIntent(latest?.[SYNC_RESET_INTENT_KEY]) ||
+        !validResetEpoch(latest?.[SYNC_RESET_EPOCH_KEY]) ||
+        Number(latest[SYNC_RESET_EPOCH_KEY].epoch) !== Number(marker.epoch) ||
+        latest[SYNC_RESET_EPOCH_KEY].initiatedByDevice !== marker.initiatedByDevice) return false;
+    await writeSyncContinuity({ ...continuity, lastResetEpoch: Number(marker.epoch) }, meta);
+    return true;
+  }
+
+  // The transient reset-intent disappears after replacement publication. This
+  // durable marker catches devices that were offline throughout BOTH events.
+  // Check it before pending-journal replay, recovery publication or local writes.
+  async function guardMissedRemoteReset(meta, all = null) {
+    if (!meta?.syncEnabled || !meta.syncInitialized) return null;
+    const values = all || await browser.storage.sync.get([SYNC_RESET_INTENT_KEY, SYNC_RESET_EPOCH_KEY]);
+    const intent = values?.[SYNC_RESET_INTENT_KEY];
+    if (validResetIntent(intent)) return observeRemoteResetIntent(intent, meta);
+    const marker = values?.[SYNC_RESET_EPOCH_KEY];
+    if (!validResetEpoch(marker)) return null;
+    const continuity = await readSyncContinuity(meta);
+    if (Number(marker.epoch) <= Number(continuity.lastResetEpoch)) return null;
+    if (await adoptLegacyResetEpochIfCurrent(meta, marker, continuity)) return null;
+    return observeRemoteResetIntent({ ...marker, kind: "reset-intent", schemaVersion: SYNC_RESET_INTENT_SCHEMA_VERSION }, meta);
+  }
+
   async function beginOrContinueCatastrophicSyncRecovery(meta, checkReason = "message", continuityContext = null) {
     let continuity = continuityContext?.current || await readSyncContinuity(meta);
     if (continuityContext) continuityContext.current = continuity;
-    if (!continuity.established) return null;
+    if (!continuity.established) return guardMissedRemoteReset(meta);
 
     // Once a loss has been observed, partial recovery fragments remain quarantined
     // until a complete Personal+Work profile validates. A failed mid-publication
@@ -810,6 +888,8 @@ export function startBackground(adapter) {
     // namespace non-zero.
     if (continuity.lossState !== "none") {
       const all = await browser.storage.sync.get(null);
+      const durableReset = await guardMissedRemoteReset(meta, all);
+      if (durableReset) return durableReset;
       const reset = all?.[SYNC_RESET_INTENT_KEY];
       if (validResetIntent(reset)) return observeRemoteResetIntent(reset, meta);
       const sources = await readCoreSources(all, { includeAssets: false });
@@ -843,11 +923,17 @@ export function startBackground(adapter) {
       } catch {
         // Optimization-only probe. Preserve the established full-read authority path.
       }
+      if (coreProbe) {
+        const durableReset = await guardMissedRemoteReset(meta, coreProbe);
+        if (durableReset) return durableReset;
+      }
       const probeReset = coreProbe?.[SYNC_RESET_INTENT_KEY];
       if (validResetIntent(probeReset)) return observeRemoteResetIntent(probeReset, meta);
       if (hasLiveSyncCoreSignal(coreProbe)) return null;
 
       const firstCoreCheck = await browser.storage.sync.get(null);
+      const firstDurableReset = await guardMissedRemoteReset(meta, firstCoreCheck);
+      if (firstDurableReset) return firstDurableReset;
       const firstReset = firstCoreCheck?.[SYNC_RESET_INTENT_KEY];
       if (validResetIntent(firstReset)) return observeRemoteResetIntent(firstReset, meta);
       if (hasLiveSyncCoreSignal(firstCoreCheck)) return null;
@@ -857,6 +943,8 @@ export function startBackground(adapter) {
       // grace gives Firefox ample time to deliver a coherent live ledger before any
       // survivor can republish from its protected local profile.
       const secondCoreCheck = await browser.storage.sync.get(null);
+      const secondDurableReset = await guardMissedRemoteReset(meta, secondCoreCheck);
+      if (secondDurableReset) return secondDurableReset;
       const secondReset = secondCoreCheck?.[SYNC_RESET_INTENT_KEY];
       if (validResetIntent(secondReset)) return observeRemoteResetIntent(secondReset, meta);
       if (hasLiveSyncCoreSignal(secondCoreCheck)) return null;
@@ -1130,6 +1218,7 @@ export function startBackground(adapter) {
         // granted. A device must first be explicitly bootstrapped from local or
         // synchronized data.
         if (meta.syncEnabled && meta.syncInitialized) {
+          if (await guardMissedRemoteReset(meta)) return;
           const continuity = await readSyncContinuity(meta);
           if (continuity.lossState !== "none") return;
           const pending = await readPendingLocalSyncMutation();
@@ -4214,6 +4303,10 @@ export function startBackground(adapter) {
     await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
     await repairDeliveredCoreEvidence(WORK_SPACE_ID);
     const all = await browser.storage.sync.get(null);
+    // The reset epoch can arrive between the cheap liveness probe and this
+    // authoritative read. Never mark that new epoch healthy with old local data.
+    const lateReset = await guardMissedRemoteReset(meta, all);
+    if (lateReset) return lateReset;
     const resetIntent = all?.[SYNC_RESET_INTENT_KEY];
     if (validResetIntent(resetIntent)) return observeRemoteResetIntent(resetIntent, meta);
     const sources = await readCoreSources(all, { includeAssets: false });
@@ -4628,6 +4721,18 @@ export function startBackground(adapter) {
     if (!meta.syncEnabled) {
       return { ok: false, error: "Firefox Account Sync permission is not enabled on this device.", meta };
     }
+    const missedBootstrapReset = await guardMissedRemoteReset(meta);
+    if (missedBootstrapReset) return missedBootstrapReset;
+    // A reset observer choosing its local layout must retire previous-epoch
+    // pending mutations before publishing into the replacement Sync history.
+    // Await-remote New Tab edits do not write journals; any present belong to
+    // the previous epoch. Abort the rejoin if cleanup cannot be committed.
+    if (meta.syncBootstrapMode === "await-remote") {
+      const resetContinuity = await readSyncContinuity(meta);
+      if (resetContinuity?.established === false && Number(resetContinuity.lastResetEpoch) > 0) {
+        await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC);
+      }
+    }
     // A successful authoritative publication may supersede durable work that
     // already existed when this exact local snapshot was captured. Remember only
     // that generation: a newer New Tab journal created while publication is in
@@ -4745,6 +4850,8 @@ export function startBackground(adapter) {
 
   async function bootstrapRemote({ waitIfMissing = false, force = false } = {}) {
     const { state: fullLocalState, meta } = await ensureLocalStorage();
+    const missedBootstrapReset = await guardMissedRemoteReset(meta);
+    if (missedBootstrapReset) return missedBootstrapReset;
     if (!meta.syncEnabled) {
       return { ok: false, error: "Firefox Account Sync permission is not enabled on this device.", meta };
     }
@@ -4864,6 +4971,19 @@ export function startBackground(adapter) {
       };
     }
 
+    // A reset observer must not carry pending local mutations from the previous
+    // Sync epoch into its first completed replacement bootstrap. In particular,
+    // an ambiguous local reset write may have committed await-remote metadata
+    // but thrown afterward, causing the earlier cleanup's rollback to restore
+    // old retry records. Those records must be retired BEFORE initializing the
+    // new epoch, regardless of whether they still match the saved local state.
+    const continuity = meta.syncBootstrapMode === "await-remote" ? await readSyncContinuity(meta) : null;
+    const awaitingPostResetReplacement = meta.syncBootstrapMode === "await-remote" &&
+      continuity?.established === false && Number(continuity.lastResetEpoch) > 0;
+    if (awaitingPostResetReplacement) {
+      await clearAllPendingSyncRecoveryState(SPACE_IDS_FOR_SYNC);
+    }
+
     await markSyncing(meta);
 
     const remotePersonal = personalCore;
@@ -4891,10 +5011,6 @@ export function startBackground(adapter) {
     // authoritative source. Its pre-reset local profile is preserved while waiting
     // for safety/UX, but it must NOT be merged back into the first complete
     // post-reset profile or the reset would resurrect old shortcuts/settings.
-    const continuity = await readSyncContinuity(meta);
-    const awaitingPostResetReplacement = meta.syncBootstrapMode === "await-remote" &&
-      continuity.established === false && Number(continuity.lastResetEpoch) > 0;
-
     // Ordinary fresh-device delivery still merges edits the user made while Sync
     // was arriving. A reset observer instead applies the exact verified remote
     // replacement, because the old local semantic state belongs to the reset epoch.
@@ -4969,6 +5085,7 @@ export function startBackground(adapter) {
     await markSyncContinuityHealthy(refreshed, {
       revision: sources.profile?.revision || `${remotePersonal.revision || ""}|${remoteWork.revision || ""}`,
       publisherDeviceId: sources.profile?.originDeviceId || remotePersonal.originDeviceId || remoteWork.originDeviceId || "",
+      resetEpoch: resetEpochFromAll(sources.all),
       personalTombstones: continuityTombstonesFromRecords(remotePersonal.records),
       workTombstones: continuityTombstonesFromRecords(remoteWork.records)
     });
@@ -5245,6 +5362,7 @@ export function startBackground(adapter) {
     let pending = entry.value;
     let currentMeta = meta || await readLocalMeta();
     if (!currentMeta.syncEnabled || !currentMeta.syncInitialized) return currentMeta;
+    if (await guardMissedRemoteReset(currentMeta)) return readLocalMeta();
 
     if (pending.kind === "intent") {
       pending = transactionFromPersistedIntent(pending, currentMeta);
@@ -5519,6 +5637,7 @@ export function startBackground(adapter) {
   }
 
   async function pushLocalMutation(oldRaw, newRaw, meta) {
+    if (await guardMissedRemoteReset(meta)) return;
     const oldState = normalizeState(oldRaw);
     // The normal storage writer already stamps fine-grained Settings clocks.
     // Repeat the inference defensively at the background boundary so a legacy/
@@ -5963,6 +6082,8 @@ export function startBackground(adapter) {
 
 
   async function reconcile(strategy = "merge") {
+    const resetGuardMeta = await readLocalMeta();
+    if (await guardMissedRemoteReset(resetGuardMeta)) return { ok: true, pending: true, meta: await readLocalMeta(), reason: "intentional-remote-reset" };
     devMark("background:reconcile-start");
     try {
       if (strategy === "merge") {
@@ -6049,7 +6170,12 @@ export function startBackground(adapter) {
   async function clearSyncData() {
     const meta = await readLocalMeta();
     const continuity = await readSyncContinuity(meta);
-    const epoch = nextMutationTime(continuity.lastResetEpoch, Date.now());
+    // Read before minting an epoch: another device may already have reset the
+    // account, and browser clocks need not be synchronized.
+    const existing = await browser.storage.sync.get(null);
+    const epoch = nextMutationTime(continuity.lastResetEpoch, resetEpochFromAll(existing), Date.now());
+    const resetMarker = { schemaVersion: 1, kind: "reset-epoch", epoch,
+      initiatedByDevice: meta.deviceId || "", initiatedAt: Date.now() };
     const resetIntent = {
       schemaVersion: SYNC_RESET_INTENT_SCHEMA_VERSION,
       kind: "reset-intent",
@@ -6086,7 +6212,6 @@ export function startBackground(adapter) {
 
     // Read the namespace before arming the local reset so a browser API read
     // failure cannot leave this device disabled when no remote mutation happened.
-    const existing = await browser.storage.sync.get(null);
     let armedMeta = meta;
     let remoteMutationStarted = false;
     try {
@@ -6105,7 +6230,8 @@ export function startBackground(adapter) {
         fits: syncItemsFitInSnapshot,
         entryBytes: syncEntryBytes,
         compareStableText,
-        isLiveCoreKey: isLiveSyncCoreKey
+        isLiveCoreKey: isLiveSyncCoreKey,
+        additionalResetItems: { [SYNC_RESET_EPOCH_KEY]: resetMarker }
       });
       if (capacity.blocked) {
         throw new Error("Firefox Sync is still delivering MosaicSync data. Retry Clear Sync copy after synchronization finishes.");
@@ -6118,15 +6244,18 @@ export function startBackground(adapter) {
       if (capacity.compactKey) {
         await writeSyncItems({
           [capacity.compactKey]: { schemaVersion: 1, kind: "reset-staging" },
-          [SYNC_RESET_INTENT_KEY]: resetIntent
+          [SYNC_RESET_INTENT_KEY]: resetIntent,
+          [SYNC_RESET_EPOCH_KEY]: resetMarker
         }, { skipPreflight: true });
       } else {
-        await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent }, { skipPreflight: true });
+        await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent, [SYNC_RESET_EPOCH_KEY]: resetMarker }, { skipPreflight: true });
       }
       remoteMutationStarted = true;
 
-      const committed = await browser.storage.sync.get(SYNC_RESET_INTENT_KEY);
-      if (!validResetIntent(committed?.[SYNC_RESET_INTENT_KEY])) {
+      const committed = await browser.storage.sync.get([SYNC_RESET_INTENT_KEY, SYNC_RESET_EPOCH_KEY]);
+      if (!validResetIntent(committed?.[SYNC_RESET_INTENT_KEY]) ||
+          !validResetEpoch(committed?.[SYNC_RESET_EPOCH_KEY]) ||
+          Number(committed[SYNC_RESET_EPOCH_KEY].epoch) !== epoch) {
         throw new Error("Firefox Sync could not verify the MosaicSync reset marker.");
       }
 
@@ -6141,12 +6270,13 @@ export function startBackground(adapter) {
         await browser.storage.session.remove(SESSION_SYNC_EXPECTATIONS_KEY).catch(() => {});
       }
 
-      const oldKeys = Object.keys(existing || {}).filter(key => key !== SYNC_RESET_INTENT_KEY);
+      const oldKeys = Object.keys(existing || {}).filter(key => key !== SYNC_RESET_INTENT_KEY && key !== SYNC_RESET_EPOCH_KEY);
       if (oldKeys.length) await removeSyncItems(oldKeys);
 
       const remaining = await browser.storage.sync.get(null);
       const remainingKeys = Object.keys(remaining || {});
-      if (remainingKeys.length !== 1 || remainingKeys[0] !== SYNC_RESET_INTENT_KEY || !validResetIntent(remaining[SYNC_RESET_INTENT_KEY])) {
+      if (remainingKeys.length !== 2 || !validResetIntent(remaining[SYNC_RESET_INTENT_KEY]) ||
+          !validResetEpoch(remaining[SYNC_RESET_EPOCH_KEY]) || Number(remaining[SYNC_RESET_EPOCH_KEY].epoch) !== epoch) {
         throw new Error("Firefox Sync could not verify the cleared MosaicSync namespace.");
       }
     } catch (error) {

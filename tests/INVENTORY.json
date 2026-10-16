@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 228,
+  "totalFiles": 231,
   "counts": {
     "behavioral": 114,
-    "integration": 34,
-    "static": 79,
+    "integration": 36,
+    "static": 80,
     "browser": 1
   },
   "files": [
@@ -827,6 +827,14 @@
       "kind": "behavioral"
     },
     {
+      "file": "tests/stage2e-remote-reset-133069.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/stage2f-offline-reset-133070.test.mjs",
+      "kind": "integration"
+    },
+    {
       "file": "tests/startup-12410.test.mjs",
       "kind": "static"
     },
@@ -920,6 +928,10 @@
     },
     {
       "file": "tests/visual-plus-133067.test.mjs",
+      "kind": "static"
+    },
+    {
+      "file": "tests/visual-plus-forced-colors-133068.test.mjs",
       "kind": "static"
     }
   ]

@@ -201,7 +201,7 @@ test("1.32.0.4 authority transitions commit metadata inside cleanup lock without
     const block = source.slice(start, end);
     assert.match(block, /clearAllPendingSyncRecoveryState\(SPACE_IDS_FOR_SYNC,\s*async\s*\(\)\s*=>\s*\{/s,
       `${label} must keep cleanup and authority commit under one serialized transition`);
-    assert.match(block, /writeLocalMeta\([\s\S]*?persistenceLockHeld:\s*true\s*\}/,
+    assert.match(block, /writeLocalMeta\([\s\S]*?persistenceLockHeld:\s*true(?:,\s*clearDeletionEvidenceForRemoteReset:\s*true)?\s*\}/,
       `${label} must use the already-held-lock metadata path instead of requesting the same Web Lock again`);
   }
 

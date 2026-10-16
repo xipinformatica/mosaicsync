@@ -8,7 +8,8 @@ export function planResetIntentCapacity(all, resetKey, resetValue, {
   fits,
   entryBytes,
   compareStableText,
-  isLiveCoreKey
+  isLiveCoreKey,
+  additionalResetItems = {}
 } = {}) {
   const values = all && typeof all === "object" && !Array.isArray(all) ? all : {};
   if (typeof resetKey !== "string" || !resetKey || typeof fits !== "function" ||
@@ -16,10 +17,11 @@ export function planResetIntentCapacity(all, resetKey, resetValue, {
       typeof isLiveCoreKey !== "function") {
     throw new TypeError("Invalid Sync reset capacity inputs");
   }
-  const resetItems = { [resetKey]: resetValue };
+  const resetItems = { [resetKey]: resetValue, ...additionalResetItems };
+  const protectedResetKeys = new Set(Object.keys(resetItems));
   if (fits(values, resetItems)) return { removeKeys: [], compactKey: "", blocked: false };
 
-  const allCandidates = Object.keys(values).filter(key => key !== resetKey);
+  const allCandidates = Object.keys(values).filter(key => !protectedResetKeys.has(key));
   const liveCandidates = allCandidates
     .filter(isLiveCoreKey)
     .sort((left, right) => entryBytes(left, values[left]) - entryBytes(right, values[right]) || compareStableText(left, right));
@@ -50,5 +52,8 @@ export function planResetIntentCapacity(all, resetKey, resetValue, {
   // replace that same live-core key with a tiny staging marker atomically with
   // reset-intent. Its key still satisfies Recovery's live-core predicate until
   // reset authority is durable; there is never a metadata-only interval.
+  if (!fits(simulated, { ...resetItems, [protectedKey]: { schemaVersion: 1, kind: "reset-staging" } })) {
+    return { removeKeys: [], compactKey: "", blocked: true };
+  }
   return { removeKeys, compactKey: protectedKey, blocked: false };
 }

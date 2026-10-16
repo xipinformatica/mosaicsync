@@ -72,7 +72,7 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
   assert.equal(live.version, runtimeVersion, "live census must identify the current runtime rather than impersonating 1.33.0.10");
   const expectedOperations = {
     ...frozen.directStorageCallSites.byOperation,
-    "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 3,
+    "sync.get": frozen.directStorageCallSites.byOperation["sync.get"] + 6, // 2F legacy upgrade: two one-time proof/recheck reads, in addition to existing epoch probes; routine watch unchanged
     // .62 retires the old two-step branding import and its rollback helper:
     // two local reads, two local writes, and the conditional rollback remove
     // are gone. The single atomic profile write already existed.

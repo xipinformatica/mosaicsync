@@ -93,8 +93,10 @@ test('deletion journal and presence bit are written in one guarded local transac
   const block = storage.slice(start, end);
   assert.match(block, /withPersistenceWriteLock\(async \(\) =>/);
   assert.match(block, /browser\.storage\.local\.set\(\{[\s\S]*?\[LOCAL_SYNC_DELETION_EVIDENCE_KEY\]: next,[\s\S]*?\[LOCAL_META_KEY\]: \{ \.\.\.current, syncDeletionEvidencePresent: true \}/);
-  assert.match(storage, /syncDeletionEvidencePresent: current\.syncDeletionEvidencePresent/,
-    'unrelated meta writes must preserve the durable journal-presence bit');
+  // Ordinary metadata writes must preserve the flag, but an observed remote
+  // reset intentionally retires prior-epoch evidence in the same local commit.
+  assert.match(storage, /syncDeletionEvidencePresent:\s*clearDeletionEvidenceForRemoteReset\s*\?\s*false\s*:\s*current\.syncDeletionEvidencePresent/,
+    'ordinary meta writes preserve deletion evidence; peer-reset authority transitions clear it');
 });
 
 test('cooperative repair never uses immutable Recovery generations as merge data', () => {

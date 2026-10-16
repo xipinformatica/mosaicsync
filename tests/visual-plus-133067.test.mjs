@@ -23,9 +23,9 @@ test('both add controls use the same 22px font-independent shape', () => {
 test('both perpendicular bars have a common geometric center and inherit color', () => {
   assert.match(css, /\.plus-mark::before,\s*\.plus-mark::after\s*\{([^}]*)\}/);
   const bar = css.match(/\.plus-mark::before,\s*\.plus-mark::after\s*\{([^}]*)\}/)[1];
-  for (const rule of ['content: "";', 'position: absolute;', 'left: 50%;', 'top: 50%;', 'background: currentColor;', 'transform: translate(-50%, -50%);']) assert.ok(bar.replaceAll(/\s+/g, "").includes(rule.replaceAll(/\s+/g, "")), rule);
-  assert.match(css, /\.plus-mark::before\s*\{\s*width:\s*22px;\s*height:\s*2px;/);
-  assert.match(css, /\.plus-mark::after\s*\{\s*width:\s*2px;\s*height:\s*22px;/);
+  for (const rule of ['content: "";', 'position: absolute;', 'left: 50%;', 'top: 50%;', 'border: 0 solid;', 'transform: translate(-50%, -50%);']) assert.ok(bar.replaceAll(/\s+/g, "").includes(rule.replaceAll(/\s+/g, "")), rule);
+  assert.match(css, /\.plus-mark::before\s*\{\s*width:\s*22px;\s*border-top-width:\s*2px;/);
+  assert.match(css, /\.plus-mark::after\s*\{\s*height:\s*22px;\s*border-left-width:\s*2px;/);
 });
 
 test('empty Personal and Work reuse one accessible onboarding button', () => {
