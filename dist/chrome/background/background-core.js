@@ -676,8 +676,37 @@ export function startBackground(adapter) {
       value.initiatedByDevice.length > 0);
   }
 
+  // A complete dataset marker is itself the last step of a core publication.
+  // The remote reset key can arrive later on another browser. Carry the same
+  // authority IN the commit marker so delivery order cannot make a new epoch
+  // look like an ordinary, mergeable old-epoch update.
+  function resetAuthorityFromDataset(value) {
+    if (!value || value.kind !== "dataset" || !Object.prototype.hasOwnProperty.call(value, "resetEpoch")) return null;
+    const epoch = Number(value.resetEpoch);
+    if (!Number.isSafeInteger(epoch) || epoch <= 0 || typeof value.resetInitiatedByDevice !== "string" || !value.resetInitiatedByDevice) {
+      throw new Error("Invalid Sync dataset reset authority; refusing to merge an untrusted generation.");
+    }
+    return { kind: "reset-epoch", schemaVersion: 1, epoch, initiatedByDevice: value.resetInitiatedByDevice };
+  }
+
+  function latestResetAuthority(all) {
+    const workDatasetKey = syncNamespace(WORK_SPACE_ID).datasetKey;
+    const candidates = [
+      validResetEpoch(all?.[SYNC_RESET_EPOCH_KEY]) ? all[SYNC_RESET_EPOCH_KEY] : null,
+      resetAuthorityFromDataset(all?.[SYNC_DATASET_KEY]),
+      resetAuthorityFromDataset(all?.[workDatasetKey])
+    ].filter(Boolean);
+    if (!candidates.length) return null;
+    const newest = candidates.reduce((a, b) => Number(a.epoch) >= Number(b.epoch) ? a : b);
+    if (candidates.some(candidate => Number(candidate.epoch) === Number(newest.epoch) &&
+        candidate.initiatedByDevice !== newest.initiatedByDevice)) {
+      throw new Error("Conflicting Sync reset authority; refusing to merge or publish.");
+    }
+    return newest;
+  }
+
   function resetEpochFromAll(all) {
-    return validResetEpoch(all?.[SYNC_RESET_EPOCH_KEY]) ? Number(all[SYNC_RESET_EPOCH_KEY].epoch) : 0;
+    return Number(latestResetAuthority(all)?.epoch) || 0;
   }
 
   function validResetIntent(value) {
@@ -826,8 +855,8 @@ export function startBackground(adapter) {
 
     const all = await browser.storage.sync.get(null);
     if (validResetIntent(all?.[SYNC_RESET_INTENT_KEY])) return false;
-    const authority = all?.[SYNC_RESET_EPOCH_KEY];
-    if (!validResetEpoch(authority) || Number(authority.epoch) !== Number(marker.epoch) ||
+    const authority = latestResetAuthority(all);
+    if (!authority || Number(authority.epoch) !== Number(marker.epoch) ||
         authority.initiatedByDevice !== marker.initiatedByDevice) return false;
 
     const sources = await readCoreSources(all, { includeAssets: false });
@@ -836,6 +865,12 @@ export function startBackground(adapter) {
     const appliedRevision = meta.lastAppliedSyncRevision && meta.lastAppliedWorkSyncRevision
       ? `${meta.lastAppliedSyncRevision}|${meta.lastAppliedWorkSyncRevision}` : "";
     if (!remote || (remote.revision !== appliedRevision && remote.revision !== continuity.lastCompleteRevision)) return false;
+    // An up-to-date OLD-world device that receives the durable key before the removals sees exactly the same
+    // evidence (its own applied revision, matching baseline). Only ledgers that already carry this epoch's stamp
+    // prove the device is in the new epoch.
+    const stampedWith = dataset => Object.prototype.hasOwnProperty.call(dataset || {}, "resetEpoch") &&
+      Number(dataset.resetEpoch) === Number(marker.epoch) && dataset.resetInitiatedByDevice === marker.initiatedByDevice;
+    if (!stampedWith(sources.shared?.dataset) || !stampedWith(work?.dataset)) return false;
 
     const { state } = await ensureLocalStorage();
     const pending = await readPendingLocalSyncMutation();
@@ -852,11 +887,11 @@ export function startBackground(adapter) {
 
     // Re-check the marker before persisting authority: a second reset may have
     // happened during the full read. A failed local write stops pending replay.
-    const latest = await browser.storage.sync.get([SYNC_RESET_INTENT_KEY, SYNC_RESET_EPOCH_KEY]);
-    if (validResetIntent(latest?.[SYNC_RESET_INTENT_KEY]) ||
-        !validResetEpoch(latest?.[SYNC_RESET_EPOCH_KEY]) ||
-        Number(latest[SYNC_RESET_EPOCH_KEY].epoch) !== Number(marker.epoch) ||
-        latest[SYNC_RESET_EPOCH_KEY].initiatedByDevice !== marker.initiatedByDevice) return false;
+    const latest = await browser.storage.sync.get(liveSyncCoreProbeKeys());
+    const confirmed = latestResetAuthority(latest);
+    if (validResetIntent(latest?.[SYNC_RESET_INTENT_KEY]) || !confirmed ||
+        Number(confirmed.epoch) !== Number(marker.epoch) ||
+        confirmed.initiatedByDevice !== marker.initiatedByDevice) return false;
     await writeSyncContinuity({ ...continuity, lastResetEpoch: Number(marker.epoch) }, meta);
     return true;
   }
@@ -866,11 +901,11 @@ export function startBackground(adapter) {
   // Check it before pending-journal replay, recovery publication or local writes.
   async function guardMissedRemoteReset(meta, all = null) {
     if (!meta?.syncEnabled || !meta.syncInitialized) return null;
-    const values = all || await browser.storage.sync.get([SYNC_RESET_INTENT_KEY, SYNC_RESET_EPOCH_KEY]);
+    const values = all || await browser.storage.sync.get(liveSyncCoreProbeKeys());
     const intent = values?.[SYNC_RESET_INTENT_KEY];
     if (validResetIntent(intent)) return observeRemoteResetIntent(intent, meta);
-    const marker = values?.[SYNC_RESET_EPOCH_KEY];
-    if (!validResetEpoch(marker)) return null;
+    const marker = latestResetAuthority(values);
+    if (!marker) return null;
     const continuity = await readSyncContinuity(meta);
     if (Number(marker.epoch) <= Number(continuity.lastResetEpoch)) return null;
     if (await adoptLegacyResetEpochIfCurrent(meta, marker, continuity)) return null;
@@ -4700,7 +4735,7 @@ export function startBackground(adapter) {
     }
 
     await writeSyncItems(writes);
-    const dataset = datasetRecord(timestamp, records, settings, { commitId: uid("commit"), originDeviceId: meta.deviceId });
+    const dataset = await datasetRecord(timestamp, records, settings, { commitId: uid("commit"), originDeviceId: meta.deviceId });
     await writeSyncItems({ [namespace.datasetKey]: dataset });
 
     snapshot = await readSyncSnapshot(null, { spaceId });
@@ -4788,7 +4823,7 @@ export function startBackground(adapter) {
     const fastPublish = { written: true, setRevision: "" };
 
     await writeSyncItems(writes);
-    const publishedDataset = datasetRecord(timestamp, records, settings, { commitId: uid("commit"), originDeviceId: meta.deviceId });
+    const publishedDataset = await datasetRecord(timestamp, records, settings, { commitId: uid("commit"), originDeviceId: meta.deviceId });
     await writeSyncItems({ [SYNC_DATASET_KEY]: publishedDataset });
 
     snapshot = await readSyncSnapshot();
@@ -4947,7 +4982,30 @@ export function startBackground(adapter) {
     // must independently validate. Missing/partial Work means "still arriving",
     // not "intentionally empty". An intentional empty Work has a valid settings +
     // dataset marker with liveRecordCount=0 and therefore passes this gate.
-    if (!remoteCoreUsable(personalCore) || (!profileComplete && !legacyComplete)) {
+    // A device that has not yet joined (fresh, or waiting after a reset) must not join a profile from a reset
+    // epoch it cannot prove. Once ANY live dataset carries a reset stamp, BOTH live Spaces must carry the
+    // current epoch's stamp: an unstamped Space may still be pre-reset data even when its revision is
+    // unfamiliar. A Recovery generation carries no stamp: trust it only if it equals the live ledgers, or it
+    // was published by the reset's initiator after minting the epoch (its own clock).
+    let replacementNotReady = false;
+    if (meta.syncBootstrapMode === "await-remote" || !meta.syncInitialized) {
+      const joinAuthority = latestResetAuthority(sources.all);
+      const datasetEpoch = dataset => Object.prototype.hasOwnProperty.call(dataset || {}, "resetEpoch") ? Number(dataset.resetEpoch) : 0;
+      const spaces = [sources.shared?.dataset, workSnapshot?.dataset];
+      // A device that has observed a reset (by intent, key or stamp) waits for ledgers stamped with that epoch even
+      // when nothing visible is stamped yet: the durable key can arrive before the old ledgers are removed.
+      const observedContinuity = meta.syncBootstrapMode === "await-remote" ? await readSyncContinuity(meta) : null;
+      const observedReset = Boolean(observedContinuity && observedContinuity.established === false &&
+        Number(observedContinuity.lastResetEpoch) > 0);
+      if (joinAuthority && (observedReset || spaces.some(dataset => datasetEpoch(dataset) > 0))) {
+        const bothStamped = spaces.every(dataset => datasetEpoch(dataset) === Number(joinAuthority.epoch));
+        const atomicTrusted = atomicMatchesLive || Boolean(atomicProfile &&
+          atomicProfile.originDeviceId === joinAuthority.initiatedByDevice &&
+          Number(atomicProfile.publishedAt) >= Number(joinAuthority.epoch));
+        replacementNotReady = !bothStamped || (useAtomicProfile && !atomicTrusted);
+      }
+    }
+    if (!remoteCoreUsable(personalCore) || (!profileComplete && !legacyComplete) || replacementNotReady) {
       const preserveInitializedDevice = force && meta.syncInitialized === true;
       const waitingMeta = await writeLocalMeta({
         ...meta,
@@ -5162,12 +5220,13 @@ export function startBackground(adapter) {
     const newAssets = collectLocalAssetsNormalized(newState);
     const droppedAssetIds = [...oldAssets.keys()].filter(id => !newAssets.has(id));
     const dataset = hasOwnEnumerable(writes)
-      ? datasetRecord(
-          datasetUpdatedAt(newRecords, newSettings, timestamp),
-          newRecords,
-          newSettings,
-          { commitId: uid("commit"), originDeviceId: meta.deviceId }
-        )
+      ? {
+          schemaVersion: SYNC_SCHEMA_VERSION, kind: "dataset",
+          updatedAt: datasetUpdatedAt(newRecords, newSettings, timestamp),
+          liveRecordCount: liveRecordCount(newRecords), recordFingerprint: recordFingerprint(newRecords),
+          settingsModifiedAt: Number(newSettings?.modifiedAt) || 0,
+          commitId: uid("commit"), originDeviceId: meta.deviceId
+        }
       : null;
 
     return {
@@ -5306,7 +5365,7 @@ export function startBackground(adapter) {
       // merely because it was absent from our local payload when the move began.
       const committedSnapshot = await readSyncSnapshot(null, { includeAssets: false, spaceId });
       const committedSettings = committedSnapshot.settings || payload.newSettings;
-      committedDataset = datasetRecord(
+      committedDataset = await datasetRecord(
         datasetUpdatedAt(committedSnapshot.records, committedSettings, Number(payload.timestamp) || Date.now()),
         committedSnapshot.records,
         committedSettings,
@@ -5490,7 +5549,7 @@ export function startBackground(adapter) {
       // a too-small liveRecordCount/fingerprint.
       const committedSnapshot = await readSyncSnapshot(null, { includeAssets: false });
       const committedSettings = committedSnapshot.settings || newSettings;
-      publishedDataset = datasetRecord(
+      publishedDataset = await datasetRecord(
         datasetUpdatedAt(committedSnapshot.records, committedSettings, timestamp),
         committedSnapshot.records,
         committedSettings,
@@ -5583,7 +5642,7 @@ export function startBackground(adapter) {
       // record count/fingerprint, even if its storage event was missed locally.
       const committedSnapshot = await readSyncSnapshot(null, { includeAssets: false, spaceId: WORK_SPACE_ID });
       const committedSettings = committedSnapshot.settings || newSettings;
-      publishedDataset = datasetRecord(
+      publishedDataset = await datasetRecord(
         datasetUpdatedAt(committedSnapshot.records, committedSettings, timestamp),
         committedSnapshot.records,
         committedSettings,
@@ -5759,7 +5818,7 @@ export function startBackground(adapter) {
         !ledgerContainsOwnChanges(latest, localRecords, localSettings, deletionEvidence)) {
       return { waiting: true, reason: "ledger-changed-during-handshake" };
     }
-    const committed = datasetRecord(
+    const committed = await datasetRecord(
       datasetUpdatedAt(latest.records, latest.settings, Number(latest.dataset?.updatedAt) || 0),
       latest.records, latest.settings,
       { commitId: uid("commit"), originDeviceId: meta.deviceId }
@@ -5907,7 +5966,7 @@ export function startBackground(adapter) {
       // Position collisions change desiredRecords during state reconstruction.
       const committed = await readSyncSnapshot(null, { includeAssets: false });
       const committedSettings = committed.settings || mergedSettings;
-      desiredDataset = datasetRecord(
+      desiredDataset = await datasetRecord(
         datasetUpdatedAt(committed.records, committedSettings, Number(snapshot.dataset?.updatedAt) || 0),
         committed.records, committedSettings,
         { commitId: uid("commit"), originDeviceId: meta.deviceId }
@@ -6054,7 +6113,7 @@ export function startBackground(adapter) {
     if (shouldCommitDataset) {
       const committed = await readSyncSnapshot(null, { includeAssets: false, spaceId: WORK_SPACE_ID });
       const committedSettings = committed.settings || mergedSettings;
-      desiredDataset = datasetRecord(
+      desiredDataset = await datasetRecord(
         datasetUpdatedAt(committed.records, committedSettings, Number(snapshot.dataset?.updatedAt) || 0),
         committed.records, committedSettings,
         { commitId: uid("commit"), originDeviceId: meta.deviceId }
@@ -6173,7 +6232,16 @@ export function startBackground(adapter) {
     // Read before minting an epoch: another device may already have reset the
     // account, and browser clocks need not be synchronized.
     const existing = await browser.storage.sync.get(null);
-    const epoch = nextMutationTime(continuity.lastResetEpoch, resetEpochFromAll(existing), Date.now());
+    // PROPOSED (Claude .71 audit): never let contradictory/malformed visible authority block the user's
+    // escape hatch. Mint above every numeric epoch we can see; the new key then dominates.
+    let visibleEpoch = 0;
+    try { visibleEpoch = resetEpochFromAll(existing); }
+    catch {
+      const workDatasetKey = syncNamespace(WORK_SPACE_ID).datasetKey;
+      visibleEpoch = Math.max(0, ...[existing?.[SYNC_RESET_EPOCH_KEY]?.epoch, existing?.[SYNC_DATASET_KEY]?.resetEpoch,
+        existing?.[workDatasetKey]?.resetEpoch].map(Number).filter(Number.isSafeInteger));
+    }
+    const epoch = nextMutationTime(continuity.lastResetEpoch, visibleEpoch, Date.now());
     const resetMarker = { schemaVersion: 1, kind: "reset-epoch", epoch,
       initiatedByDevice: meta.deviceId || "", initiatedAt: Date.now() };
     const resetIntent = {
@@ -6874,7 +6942,21 @@ export function startBackground(adapter) {
   // -----------------------------------------------------------------------------
   // Snapshot commit markers / completeness validation
   // -----------------------------------------------------------------------------
-  function datasetRecord(timestamp, records, settings, commit = {}) {
+  async function datasetRecord(timestamp, records, settings, commit = {}) {
+    // Never copy an unfamiliar peer's new epoch onto this device's old-world
+    // writes. If authority advanced during a publication, leave the ledger
+    // uncommitted and let the reset guard quarantine it on the next check.
+    const resetValues = await browser.storage.sync.get(liveSyncCoreProbeKeys());
+    const authority = latestResetAuthority(resetValues);
+    if (authority) {
+      const meta = await readLocalMeta();
+      if (meta.syncEnabled && meta.syncInitialized) {
+        const continuity = await readSyncContinuity(meta);
+        if (Number(authority.epoch) > Number(continuity.lastResetEpoch)) {
+          throw new Error("A newer Sync reset was detected; refusing an old-epoch dataset commit.");
+        }
+      }
+    }
     return {
       schemaVersion: SYNC_SCHEMA_VERSION,
       kind: "dataset",
@@ -6883,7 +6965,8 @@ export function startBackground(adapter) {
       recordFingerprint: recordFingerprint(records),
       settingsModifiedAt: Number(settings?.modifiedAt) || 0,
       commitId: typeof commit.commitId === "string" ? commit.commitId : "",
-      originDeviceId: typeof commit.originDeviceId === "string" ? commit.originDeviceId : ""
+      originDeviceId: typeof commit.originDeviceId === "string" ? commit.originDeviceId : "",
+      ...(authority ? { resetEpoch: Number(authority.epoch), resetInitiatedByDevice: authority.initiatedByDevice } : {})
     };
   }
 

@@ -347,6 +347,15 @@ function remoteWorkEntries(remoteState, commitId, originDeviceId = "remote-devic
   return entries;
 }
 
+
+// Stage 3A fixtures model a .71+ resetter: completed dataset markers carry the reset epoch stamp.
+function stampResetEpoch(entries, epoch, device) {
+  for (const key of [constants.SYNC_DATASET_KEY, `${constants.SYNC_SPACE_PREFIX}work.dataset`]) {
+    if (entries[key]) { entries[key].resetEpoch = epoch; entries[key].resetInitiatedByDevice = device; }
+  }
+  return entries;
+}
+
 function findCompactShortcut(rawState, id) {
   for (const spaceId of ['personal','work']) {
     for (const item of rawState?.spaces?.[spaceId]?.shortcuts || []) {
@@ -2268,6 +2277,10 @@ else if (scenario==='stage2f-legacy-current-epoch-preserves-unsynced') {
   await seedLocalState(cloudLayout,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
   await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});            // healthy, no marker yet (as on .69)
   const c0=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]||{};
+  // The same commits were published by the .71+ resetter WITH its stamp; a <=.69 client simply ignored the field.
+  for (const key of [constants.SYNC_DATASET_KEY, `${constants.SYNC_SPACE_PREFIX}work.dataset`]) {
+    const value=clone(sync.data.get(key)); value.resetEpoch=E; value.resetInitiatedByDevice='peer-a'; sync.data.set(key,value);
+  }
   await sync.set({[constants.SYNC_RESET_EPOCH_KEY]:{schemaVersion:1,kind:'reset-epoch',epoch:E,initiatedByDevice:'peer-a',initiatedAt:Date.now()}}); // marker written by the .70 resetter earlier
   const edited=stateWith({personal:[shortcut('shared','https://shared.test/',4000),shortcut('unsynced-edit','https://unsynced.test/',6000)],work:[shortcut('w','https://w.test/',4000)]});
   await local.set({[constants.LOCAL_STATE_KEY]:clone(edited),[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'unsynced',createdAt:Date.now(),before:clone(cloudLayout),after:clone(edited)}});
@@ -2292,7 +2305,7 @@ else if (scenario==='stage2f-legacy-matching-ids-new-epoch-resets') {
   await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
   await sync.set({...remotePersonalEntries(old,'before-p'),...remoteWorkEntries(old,'before-w')});
   await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
-  const core={...remotePersonalEntries(fresh,'after-p','peer-a'),...remoteWorkEntries(fresh,'after-w','peer-a')};
+  const core=stampResetEpoch({...remotePersonalEntries(fresh,'after-p','peer-a'),...remoteWorkEntries(fresh,'after-w','peer-a')},E,'peer-a');
   for(const key of [...sync.data.keys()]) if(!(key in core)) sync.data.delete(key);
   for(const [key,value] of Object.entries(core)) sync.data.set(key,clone(value));
   sync.data.set(constants.SYNC_RESET_EPOCH_KEY,{schemaVersion:1,kind:'reset-epoch',epoch:E,initiatedByDevice:'peer-a',initiatedAt:Date.now()});
@@ -2320,7 +2333,7 @@ else if (['stage2f-offline-reset-entirely-missed','stage2f-offline-reset-pending
   // Simulate server-side Sync state changing while this browser is offline:
   // NONE of the intermediate reset-intent or replacement events are delivered.
   sync.data.clear();
-  for(const [key,value] of Object.entries({...remotePersonalEntries(replacement,'new-p'),...remoteWorkEntries(replacement,'new-w')})) sync.data.set(key,clone(value));
+  for(const [key,value] of Object.entries(stampResetEpoch({...remotePersonalEntries(replacement,'new-p'),...remoteWorkEntries(replacement,'new-w')},marker.epoch,'peer-a'))) sync.data.set(key,clone(value));
   sync.data.set(constants.SYNC_RESET_EPOCH_KEY,marker);
   if (scenario === 'stage2f-reset-arrives-between-probe-and-full') {
     const normalGet=sync.get.bind(sync);
@@ -2695,6 +2708,317 @@ else if (scenario === 'stage2e-bootstrap-local-restored-shortcut') {
   const k=id=>cloud[`${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`]?.kind||null;
   console.log(JSON.stringify({scenario,ambiguousWriteInjected:injected,r:r?.reason||r?.ok,r2:r2?.reason||r2?.ok,cloudGone:k('gone'),localHasGone:st.spaces.personal.shortcuts.some(x=>x.id==='gone'),cloudObsolete:k('obsolete')}));
 }
+
+else if (scenario.startsWith('claude71-')) {
+  // TEST-ONLY (Claude, .71 audit). Real shipped background, harness storage. Each scenario prints one JSON line.
+  const E=Date.now()+100000;
+  const WDS=`${constants.SYNC_SPACE_PREFIX}work.dataset`;
+  const keyRec=(e=E,dev='peer-reset')=>({schemaVersion:1,kind:'reset-epoch',epoch:e,initiatedByDevice:dev,initiatedAt:Date.now()});
+  const stamp=(entries,which=['personal','work'],e=E,dev='peer-reset')=>{
+    for(const sp of which){const k=sp==='work'?WDS:constants.SYNC_DATASET_KEY; if(entries[k]){entries[k].resetEpoch=e;entries[k].resetInitiatedByDevice=dev;}}
+    return entries;};
+  const old=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('keep','https://keep-old.test/',500)],work:[shortcut('old-work','https://old-work.test/',500)]});
+  const fresh=stateWith({personal:[shortcut('current','https://current.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+  const oldCore=()=>({...remotePersonalEntries(old,'old-p','device-b'),...remoteWorkEntries(old,'old-w','device-b')});
+  const newP=()=>remotePersonalEntries(fresh,'new-p','peer-reset');
+  const newW=()=>remoteWorkEntries(fresh,'new-w','peer-reset');
+  const metaNow=async()=>(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const cont=async()=>(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]||{};
+  const ids=async sp=>model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces[sp].shortcuts.map(x=>x.id).sort();
+  const cloudIds=async(sp='personal')=>{const c=await sync.get(null);const pre=sp==='work'?`${constants.SYNC_SPACE_PREFIX}work.item.`:constants.SYNC_ITEM_PREFIX;
+    return Object.entries(c).filter(([k,v])=>k.startsWith(pre)&&(v?.kind==='shortcut'||v?.kind==='folder')).map(([,v])=>v.id).sort();};
+  const checks=async n=>{const out=[];for(let i=0;i<n;i++){let r;try{r=await send({type:'mosaicsync:reconcile-if-needed',reason:i%2?'alarm':'foreground'});}catch(e){r={reason:'THROW:'+String(e.message||e).slice(0,90)};}
+    out.push(r?.reason||(r?.ok?'ok':('fail:'+String(r?.error||'').slice(0,90))));}return out;};
+  const call=async m=>{try{const r=await send(m);return r?.ok?'ok':('fail:'+String(r?.error||r?.reason||JSON.stringify(r)).slice(0,110));}catch(e){return 'THROW:'+String(e.message||e).slice(0,110);}};
+  const replace=entries=>{sync.data.clear();for(const [k,v] of Object.entries(entries))sync.data.set(k,clone(v));};
+  const state=async extra=>{const m=await metaNow();const c=await cont();const s=await sync.get(null);
+    return {scenario,...extra,init:m.syncInitialized,mode:m.syncBootstrapMode||'',status:m.syncStatus,lastResetEpoch:c.lastResetEpoch===E?'E':(c.lastResetEpoch||0),
+      localP:await ids('personal'),localW:await ids('work'),cloudP:await cloudIds('personal'),cloudW:await cloudIds('work'),
+      pStamp:s[constants.SYNC_DATASET_KEY]?.resetEpoch===E?'E':(s[constants.SYNC_DATASET_KEY]?.resetEpoch??'-'),wStamp:s[WDS]?.resetEpoch===E?'E':(s[WDS]?.resetEpoch??'-'),
+      pending:!!(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]};};
+  const startOld=async()=>{await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});replace(oldCore());await checks(1);
+    assert.equal((await cont()).established,true);};
+  const pendingAdd=async(id,space='personal')=>{const before=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const ws=model.workspaceStateNormalized(before,space); const t=model.nextMutationTime(ws.updatedAt);
+    const after=model.replaceWorkspaceNormalized(before,space,{...ws,shortcuts:[...ws.shortcuts,shortcut(id,`https://${id}.test/`,t)],updatedAt:t});
+    await local.set({[constants.LOCAL_STATE_KEY]:after,[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:`j-${id}`,createdAt:Date.now(),before,after}});};
+  const out=[];
+  if (scenario==='claude71-o1-n4-stamped-core-first') {
+    // My .70 N4 with a .71 resetter: removals + stamped core delivered first, separate key later.
+    await startOld(); replace(stamp({...newP(),...newW()}));
+    const sets0=sync.stats.setCalls; const first=await checks(2); const setsBeforeKey=sync.stats.setCalls-sets0;
+    const mid=await state({});
+    sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec());
+    const later=await checks(2); const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,setsBeforeKey,midLocalP:mid.localP,midCloudP:mid.cloudP,midMode:mid.mode,later,join,after})));
+  } else if (scenario==='claude71-o2-work-stamp-personal-old' || scenario==='claude71-o3-personal-stamp-work-old') {
+    // Only ONE Space's reset delivery has arrived; the other Space still holds the complete OLD ledger.
+    await startOld(); await pendingAdd('stray');
+    const workFirst=scenario==='claude71-o2-work-stamp-personal-old';
+    const o=oldCore(); const keep={}; for(const [k,v] of Object.entries(o)){const isWork=k.startsWith(`${constants.SYNC_SPACE_PREFIX}work.`); if(workFirst?!isWork:isWork) keep[k]=v;}
+    replace({...keep,...(workFirst?stamp(newW(),['work']):stamp(newP(),['personal']))});
+    const sets0=sync.stats.setCalls; const first=await checks(3); const setsBeforeRest=sync.stats.setCalls-sets0;
+    const mid=await state({});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()});
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,setsBeforeRest,mid:{mode:mid.mode,localP:mid.localP,cloudP:mid.cloudP,cloudW:mid.cloudW,pending:mid.pending},join,after})));
+  } else if (scenario==='claude71-o4-batches') {
+    // Delivery in four separate batches with checks between: removals, Work core, Personal core, separate key.
+    await startOld(); const sets0=sync.stats.setCalls; const steps={};
+    sync.data.clear(); steps.removals=await checks(2);
+    for(const [k,v] of Object.entries(stamp(newW(),['work']))) sync.data.set(k,clone(v)); steps.work=await checks(2);
+    for(const [k,v] of Object.entries(stamp(newP(),['personal']))) sync.data.set(k,clone(v)); steps.personal=await checks(2);
+    const setsBeforeKey=sync.stats.setCalls-sets0;
+    sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec()); steps.key=await checks(2);
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({steps,setsBeforeKey,join,after})));
+  } else if (scenario==='claude71-o5-marker-without-records') {
+    // Stamped dataset markers overwrite the old markers before any new record/settings arrives.
+    await startOld(); await pendingAdd('stray'); const s={...oldCore()}; const nP=stamp(newP()), nW=stamp(newW(),['work']);
+    s[constants.SYNC_DATASET_KEY]=nP[constants.SYNC_DATASET_KEY]; s[WDS]=nW[WDS]; replace(s);
+    const sets0=sync.stats.setCalls; const first=await checks(3);
+    console.log(JSON.stringify(await state({first,writes:sync.stats.setCalls-sets0})));
+  } else if (scenario==='claude71-o10-stamped-markers-old-recovery-profile') {
+    // Stamped new markers arrive first (old records still present -> torn), and an OLD complete Recovery
+    // generation (written by an old-world peer, not yet removed on this device) is still visible.
+    await startOld(); const s={...oldCore()}; const nP=stamp(newP()), nW=stamp(newW(),['work']);
+    s[constants.SYNC_DATASET_KEY]=nP[constants.SYNC_DATASET_KEY]; s[WDS]=nW[WDS];
+    const fx=await completeProfileSnapshotFixture(old,{deviceId:'old-peer',commitId:'old-gen',publishedAt:900});
+    replace({...s,...fx.entries});
+    const sets0=sync.stats.setCalls; const first=await checks(3); const mid=await state({});
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const afterJoin=await state({});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); const after=await checks(3);
+    console.log(JSON.stringify(await state({first,writes:sync.stats.setCalls-sets0,mid:{mode:mid.mode,localP:mid.localP},join,afterJoin:{mode:afterJoin.mode,localP:afterJoin.localP,cloudP:afterJoin.cloudP},after})));
+  } else if (scenario==='claude71-o6-records-without-marker' || scenario==='claude71-o6b-records-without-marker-pending') {
+    // New records/settings delivered, both markers and the separate key still in flight (old markers removed).
+    await startOld(); if(scenario.endsWith('pending')) await pendingAdd('stray');
+    const n={...newP(),...newW()}; delete n[constants.SYNC_DATASET_KEY]; delete n[WDS]; replace(n);
+    const sets0=sync.stats.setCalls; const first=await checks(3); const writesBeforeMarkers=sync.stats.setCalls-sets0;
+    const mid=await state({});
+    const st=stamp({...newP(),...newW()}); sync.data.set(constants.SYNC_DATASET_KEY,st[constants.SYNC_DATASET_KEY]); sync.data.set(WDS,st[WDS]);
+    const afterMarkers=await checks(2); sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec());
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,writesBeforeMarkers,mid:{mode:mid.mode,cloudP:mid.cloudP,pStamp:mid.pStamp,localP:mid.localP},afterMarkers,join,after})));
+  } else if (scenario==='claude71-o7-newer-stamp-older-key') {
+    // Device already joined epoch E1 (key E1). A second reset E2 is visible only as a dataset stamp.
+    const E1=E-50000; await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()},['personal','work'],E1),[constants.SYNC_RESET_EPOCH_KEY]:keyRec(E1)}); const c0=await checks(2);
+    const e1Recorded=(await cont()).lastResetEpoch===E1;
+    const f2=stateWith({personal:[shortcut('second','https://second.test/',7000)],work:[shortcut('w2','https://w2.test/',7000)]});
+    replace({...stamp({...remotePersonalEntries(f2,'p2','peer-2'),...remoteWorkEntries(f2,'w2','peer-2')},['personal','work'],E,'peer-2'),[constants.SYNC_RESET_EPOCH_KEY]:keyRec(E1)});
+    await pendingAdd('epoch1-edit');
+    const sets0=sync.stats.setCalls; const first=await checks(2);
+    console.log(JSON.stringify(await state({c0,e1Recorded,first,writes:sync.stats.setCalls-sets0})));
+  } else if (scenario==='claude71-o7b-stale-stamp-newer-key') {
+    // Device in epoch E; key says E; a stale Personal marker stamped with an OLDER epoch is (re)delivered.
+    await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); const c0=await checks(2);
+    const d=clone(sync.data.get(constants.SYNC_DATASET_KEY)); d.resetEpoch=E-50000; d.resetInitiatedByDevice='older'; sync.data.set(constants.SYNC_DATASET_KEY,d);
+    const first=await checks(2); await pendingAdd('ok-edit'); const second=await checks(2);
+    console.log(JSON.stringify(await state({c0,first,second})));
+  } else if (scenario==='claude71-o8-same-epoch-conflict' || scenario==='claude71-o8b-invalid-stamp') {
+    // Healthy device already in epoch E. The account then carries contradictory authority for the SAME epoch
+    // (two devices minted E concurrently) or a malformed stamp. Is there any way out?
+    await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); const c0=await checks(2);
+    const d=clone(sync.data.get(constants.SYNC_DATASET_KEY));
+    if (scenario.endsWith('conflict')) d.resetInitiatedByDevice='peer-other'; else d.resetEpoch='not-a-number';
+    sync.data.set(constants.SYNC_DATASET_KEY,d);
+    const routine=await checks(2); await pendingAdd('user-edit'); const edit=await checks(1);
+    const clear=await call({type:'mosaicsync:clear-sync-data'});
+    const afterClear=await state({});
+    const useLocal=await call({type:'mosaicsync:bootstrap-local'});
+    const off=await call({type:'mosaicsync:set-sync-enabled',enabled:false}); const on=await call({type:'mosaicsync:set-sync-enabled',enabled:true});
+    const useLocal2=await call({type:'mosaicsync:bootstrap-local'}); const useRemote=await call({type:'mosaicsync:wait-for-remote'});
+    console.log(JSON.stringify(await state({c0,routine,edit,clear,afterClearMode:afterClear.mode,useLocal,off,on,useLocal2,useRemote,cloudKeyEpoch:(await sync.get(constants.SYNC_RESET_EPOCH_KEY))[constants.SYNC_RESET_EPOCH_KEY]?.epoch===E?'E':'other'})));
+  } else if (scenario==='claude71-o9-old-deletion-evidence') {
+    // Old-world device deleted 'keep' (tombstone + durable deletion evidence). The new epoch deliberately
+    // contains a same-ID 'keep'. Stamped core first, key later. Evidence must not be reasserted.
+    await startOld();
+    const before=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    const nb=model.normalizeState(before); const ws=model.workspaceStateNormalized(nb,'personal'); const stampT=model.nextMutationTime(ws.updatedAt);
+    const after=model.replaceWorkspaceNormalized(nb,'personal',{...ws,shortcuts:ws.shortcuts.filter(x=>x.id!=='keep'),updatedAt:stampT});
+    await local.set({[constants.LOCAL_STATE_KEY]:after});
+    for(const l of events.onStorageChanged.listeners) l({[constants.LOCAL_STATE_KEY]:{oldValue:before,newValue:after}},'local');
+    const s0=sync.stats.setCalls; await send({type:'mosaicsync:get-sync-status'}); const dbg={sets:sync.stats.setCalls-s0,err:(await metaNow()).lastSyncError,n:events.onStorageChanged.listeners.length};
+    const del=await checks(2); const ev=(await local.get(constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY))[constants.LOCAL_SYNC_DELETION_EVIDENCE_KEY]; const evidenceArmed=JSON.stringify(ev||{}).includes('keep'); const keepAfterDel=(await sync.get(null))[`${constants.SYNC_ITEM_PREFIX}keep`]?.kind;
+    const f=stateWith({personal:[shortcut('current','https://current.test/',5000),shortcut('keep','https://keep-new.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+    replace(stamp({...remotePersonalEntries(f,'new-p','peer-reset'),...remoteWorkEntries(f,'new-w','peer-reset')}));
+    const sets0=sync.stats.setCalls; const first=await checks(2); const writesBeforeKey=sync.stats.setCalls-sets0;
+    sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec()); const join=await call({type:'mosaicsync:wait-for-remote'}); const after2=await checks(3);
+    const c=await sync.get(null); const keepRec=c[`${constants.SYNC_ITEM_PREFIX}keep`];
+    console.log(JSON.stringify(await state({dbg,del,evidenceArmed,keepAfterDel,evKeys:Object.keys(ev||{}),first,writesBeforeKey,join,after:after2,cloudKeep:keepRec?.kind==='deleted'?'TOMBSTONE':keepRec?.url})));
+  } else if (scenario==='claude71-n6b-legacy-remote-advanced') {
+    // N6 variant: legacy device (lastResetEpoch 0) already in the current epoch with one unsynced edit, but a peer
+    // made one more ordinary edit in the current epoch before this device's first .71 check.
+    const cloud=stateWith({personal:[shortcut('shared','https://shared.test/',4000)],work:[shortcut('w','https://w.test/',4000)]});
+    replace({...remotePersonalEntries(cloud,'cp','peer-a'),...remoteWorkEntries(cloud,'cw','peer-a')});
+    await seedLocalState(cloud,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'}); await checks(1);
+    const c0=await cont(); sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec(E,'peer-a'));
+    await pendingAdd('unsynced-edit');
+    const adv=stateWith({personal:[shortcut('shared','https://shared.test/',4000),shortcut('peer-later','https://peer-later.test/',8000)],work:[shortcut('w','https://w.test/',4000)]});
+    for(const [k,v] of Object.entries(stamp(remotePersonalEntries(adv,'cp2','peer-a'),['personal'],E,'peer-a'))) sync.data.set(k,clone(v));
+    const first=await checks(4);
+    console.log(JSON.stringify(await state({legacyBefore:c0.lastResetEpoch||0,first})));
+  } else if (scenario==='claude71-s1-stamps-all-paths') {
+    // After a real reset by THIS device: do ordinary later publications (Personal edit, Work edit, merge commit) keep stamps?
+    const base=stateWith({personal:[shortcut('p','https://p.test/',500)],work:[shortcut('w','https://w.test/',500)]});
+    await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...remotePersonalEntries(base,'b-p','device-b'),...remoteWorkEntries(base,'b-w','device-b')}); await checks(1);
+    const clear=await call({type:'mosaicsync:clear-sync-data'}); const pub=await call({type:'mosaicsync:bootstrap-local'});
+    const key=(await sync.get(constants.SYNC_RESET_EPOCH_KEY))[constants.SYNC_RESET_EPOCH_KEY];
+    const st=async()=>{const s=await sync.get(null);return [s[constants.SYNC_DATASET_KEY]?.resetEpoch===key.epoch&&s[constants.SYNC_DATASET_KEY]?.resetInitiatedByDevice===key.initiatedByDevice,
+      s[WDS]?.resetEpoch===key.epoch&&s[WDS]?.resetInitiatedByDevice===key.initiatedByDevice];};
+    const r={clear,pub,afterPublish:await st()};
+    await pendingAdd('p2','personal'); r.personalEditChecks=await checks(1); r.afterPersonalEdit=await st();
+    await pendingAdd('w2','work'); r.workEditChecks=await checks(1); r.afterWorkEdit=await st();
+    // A peer's ordinary unstamped commit (.70 peer) adds a record; this device merges and re-commits.
+    const s=await sync.get(null); const rec={...s[`${constants.SYNC_ITEM_PREFIX}p`],id:'peer70',url:'https://peer70.test/',deviceId:'peer70',modifiedAt:Date.now()+5};
+    sync.data.set(`${constants.SYNC_ITEM_PREFIX}peer70`,rec); const d=clone(s[constants.SYNC_DATASET_KEY]); delete d.resetEpoch; delete d.resetInitiatedByDevice; d.commitId='c70'; d.originDeviceId='peer70';
+    d.liveRecordCount=(d.liveRecordCount||0)+1; delete d.recordFingerprint; sync.data.set(constants.SYNC_DATASET_KEY,d);
+    r.mergeChecks=await checks(3); r.afterPeer70=await st(); r.localP=await ids('personal'); r.cloudP=await cloudIds('personal');
+    console.log(JSON.stringify({scenario,...r}));
+  } else if (scenario==='claude71-r1-readcount') {
+    // Sync I/O for a routine healthy watch and for one ordinary local edit (stamped account).
+    await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); await checks(3);
+    const g0={...sync.stats}; await send({type:'mosaicsync:reconcile-if-needed',reason:'alarm'}); const g1={...sync.stats};
+    await pendingAdd('edit'); await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'}); const g2={...sync.stats};
+    const d=(a,b)=>({get:b.getCalls-a.getCalls,getAll:b.getAllCalls-a.getAllCalls,set:b.setCalls-a.setCalls,remove:b.removeCalls-a.removeCalls});
+    console.log(JSON.stringify({scenario,routineWatch:d(g0,g1),oneEdit:d(g1,g2)}));
+  } else if (scenario==='claude71-w1-reset-learned-mid-push') {
+    // The reset (separate key AND stamped core) becomes visible after the pre-publication guard but while this
+    // old-world device is writing its record batch. Does datasetRecord's check prevent damage?
+    await startOld(); await pendingAdd('stray');
+    const realSet=sync.set.bind(sync); let armed=true;
+    sync.set=async items=>{await realSet(items);
+      if(armed && Object.keys(items||{}).some(k=>k===`${constants.SYNC_ITEM_PREFIX}stray`)){armed=false;
+        const keepStray=sync.data.get(`${constants.SYNC_ITEM_PREFIX}stray`);
+        replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); sync.data.set(`${constants.SYNC_ITEM_PREFIX}stray`,keepStray);}};
+    const first=await checks(1); sync.set=realSet;
+    const mid=await state({});
+    const s=await sync.get(null);
+    const live=[...Object.entries(s)].filter(([k,v])=>k.startsWith(constants.SYNC_ITEM_PREFIX)&&v?.kind==='shortcut').length;
+    const later=await checks(2); const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,mid:{mode:mid.mode,cloudP:mid.cloudP,pStamp:mid.pStamp,pendingKept:mid.pending},markerLiveCount:s[constants.SYNC_DATASET_KEY]?.liveRecordCount,actualLive:live,later,join,after})));
+  } else throw new Error('unknown claude71 scenario');
+}
+
+else if (scenario.startsWith('claude71x-')) {
+  // TEST-ONLY (Claude, .71 audit). Real shipped background, harness storage. Each scenario prints one JSON line.
+  const E=Date.now()+100000;
+  const WDS=`${constants.SYNC_SPACE_PREFIX}work.dataset`;
+  const keyRec=(e=E,dev='peer-reset')=>({schemaVersion:1,kind:'reset-epoch',epoch:e,initiatedByDevice:dev,initiatedAt:Date.now()});
+  const stamp=(entries,which=['personal','work'],e=E,dev='peer-reset')=>{
+    for(const sp of which){const k=sp==='work'?WDS:constants.SYNC_DATASET_KEY; if(entries[k]){entries[k].resetEpoch=e;entries[k].resetInitiatedByDevice=dev;}}
+    return entries;};
+  const old=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('keep','https://keep-old.test/',500)],work:[shortcut('old-work','https://old-work.test/',500)]});
+  const fresh=stateWith({personal:[shortcut('current','https://current.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+  const oldCore=()=>({...remotePersonalEntries(old,'old-p','device-b'),...remoteWorkEntries(old,'old-w','device-b')});
+  const newP=()=>remotePersonalEntries(fresh,'new-p','peer-reset');
+  const newW=()=>remoteWorkEntries(fresh,'new-w','peer-reset');
+  const metaNow=async()=>(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const cont=async()=>(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]||{};
+  const ids=async sp=>model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces[sp].shortcuts.map(x=>x.id).sort();
+  const cloudIds=async(sp='personal')=>{const c=await sync.get(null);const pre=sp==='work'?`${constants.SYNC_SPACE_PREFIX}work.item.`:constants.SYNC_ITEM_PREFIX;
+    return Object.entries(c).filter(([k,v])=>k.startsWith(pre)&&(v?.kind==='shortcut'||v?.kind==='folder')).map(([,v])=>v.id).sort();};
+  const checks=async n=>{const out=[];for(let i=0;i<n;i++){let r;try{r=await send({type:'mosaicsync:reconcile-if-needed',reason:i%2?'alarm':'foreground'});}catch(e){r={reason:'THROW:'+String(e.message||e).slice(0,90)};}
+    out.push(r?.reason||(r?.ok?'ok':('fail:'+String(r?.error||'').slice(0,90))));}return out;};
+  const call=async m=>{try{const r=await send(m);return r?.ok?'ok':('fail:'+String(r?.error||r?.reason||JSON.stringify(r)).slice(0,110));}catch(e){return 'THROW:'+String(e.message||e).slice(0,110);}};
+  const replace=entries=>{sync.data.clear();for(const [k,v] of Object.entries(entries))sync.data.set(k,clone(v));};
+  const state=async extra=>{const m=await metaNow();const c=await cont();const s=await sync.get(null);
+    return {scenario,...extra,init:m.syncInitialized,mode:m.syncBootstrapMode||'',status:m.syncStatus,lastResetEpoch:c.lastResetEpoch===E?'E':(c.lastResetEpoch||0),
+      localP:await ids('personal'),localW:await ids('work'),cloudP:await cloudIds('personal'),cloudW:await cloudIds('work'),
+      pStamp:s[constants.SYNC_DATASET_KEY]?.resetEpoch===E?'E':(s[constants.SYNC_DATASET_KEY]?.resetEpoch??'-'),wStamp:s[WDS]?.resetEpoch===E?'E':(s[WDS]?.resetEpoch??'-'),
+      pending:!!(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]};};
+  const startOld=async()=>{await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});replace(oldCore());await checks(1);
+    assert.equal((await cont()).established,true);};
+  const pendingAdd=async(id,space='personal')=>{const before=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const ws=model.workspaceStateNormalized(before,space); const t=model.nextMutationTime(ws.updatedAt);
+    const after=model.replaceWorkspaceNormalized(before,space,{...ws,shortcuts:[...ws.shortcuts,shortcut(id,`https://${id}.test/`,t)],updatedAt:t});
+    await local.set({[constants.LOCAL_STATE_KEY]:after,[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:`j-${id}`,createdAt:Date.now(),before,after}});};
+
+  const fullLater=async()=>{replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()});};
+  if (scenario==='claude71x-p1-stale-prior-old-personal') {
+    // Like O2, but before the reset ANOTHER old-world device edited Personal while this device was offline,
+    // so the still-visible old Personal ledger has a revision this device never applied.
+    await startOld();
+    const old2=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('keep','https://keep-old.test/',500),shortcut('peer-old-edit','https://peer-old-edit.test/',700)],work:[shortcut('old-work','https://old-work.test/',500)]});
+    const p2=remotePersonalEntries(old2,'old-p2','old-peer');
+    replace({...p2,...stamp(newW(),['work'])});
+    const sets0=sync.stats.setCalls; const first=await checks(3); const mid=await state({});
+    await fullLater(); const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,writesBeforeRest:sync.stats.setCalls-sets0,mid:{mode:mid.mode,localP:mid.localP,cloudP:mid.cloudP},join,after})));
+  } else if (scenario==='claude71x-p2-initiator-old-recovery-future-clock') {
+    // O10, but the stale Recovery generation was written BEFORE the reset by the device that later initiated it,
+    // while its clock was ahead (publishedAt > epoch). Still pre-reset data.
+    await startOld(); const s={...oldCore()}; const nP=stamp(newP()), nW=stamp(newW(),['work']);
+    s[constants.SYNC_DATASET_KEY]=nP[constants.SYNC_DATASET_KEY]; s[WDS]=nW[WDS];
+    const fx=await completeProfileSnapshotFixture(old,{deviceId:'peer-reset',commitId:'old-gen',publishedAt:E+3600000});
+    replace({...s,...fx.entries});
+    const sets0=sync.stats.setCalls; const first=await checks(3); const mid=await state({});
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const afterJoin=await state({});
+    await fullLater(); const after=await checks(3);
+    console.log(JSON.stringify(await state({first,writes:sync.stats.setCalls-sets0,mid:{mode:mid.mode,localP:mid.localP},join,afterJoin:{mode:afterJoin.mode,localP:afterJoin.localP,cloudP:afterJoin.cloudP},after})));
+  } else if (scenario==='claude71x-p3-max-epoch-stamp') {
+    // Corrupt-but-"valid" stamp: resetEpoch = Number.MAX_SAFE_INTEGER. Is Clear Sync still an escape hatch?
+    await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); const c0=await checks(2);
+    const d=clone(sync.data.get(constants.SYNC_DATASET_KEY)); d.resetEpoch=Number.MAX_SAFE_INTEGER; sync.data.set(constants.SYNC_DATASET_KEY,d);
+    const routine=await checks(2); const join=await call({type:'mosaicsync:wait-for-remote'});
+    const clear=await call({type:'mosaicsync:clear-sync-data'}); const useLocal=await call({type:'mosaicsync:bootstrap-local'});
+    const off=await call({type:'mosaicsync:set-sync-enabled',enabled:false}); const on=await call({type:'mosaicsync:set-sync-enabled',enabled:true});
+    const useLocal2=await call({type:'mosaicsync:bootstrap-local'});
+    console.log(JSON.stringify(await state({c0,routine,join,clear,useLocal,off,on,useLocal2})));
+  } else if (scenario==='claude71x-p4-fresh-device-mixed-70-personal' || scenario==='claude71x-p4b-fresh-device-mixed-70-personal-with-recovery') {
+    // A brand-new device chooses "use the synchronized layout" while Work is stamped E (a .71 publication) and
+    // Personal was last republished by a .70 peer (unstamped, but genuinely new-epoch data).
+    const blank=stateWith({personal:[],work:[]});
+    await seedLocalState(blank,{syncEnabled:true,syncInitialized:false,syncBootstrapMode:''});
+    const p=newP(); const extra=scenario.includes('recovery')?(await completeProfileSnapshotFixture(fresh,{deviceId:'peer-70',commitId:'g70',publishedAt:E+10})).entries:{};
+    replace({...p,...stamp(newW(),['work']),[constants.SYNC_RESET_EPOCH_KEY]:keyRec(),...extra});
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(3);
+    console.log(JSON.stringify(await state({join,after})));
+  } else if (scenario==='claude71x-p5-continuity-read-fails-at-gate') {
+    // O2 state, then the full replacement arrives; the continuity read inside the new gate fails once.
+    await startOld(); const o=oldCore(); const keep={}; for(const [k,v] of Object.entries(o)) if(!k.startsWith(`${constants.SYNC_SPACE_PREFIX}work.`)) keep[k]=v;
+    replace({...keep,...stamp(newW(),['work'])}); const first=await checks(2);
+    const mid=await state({});
+    local.failNextGetKeys.add(constants.LOCAL_SYNC_CONTINUITY_KEY);
+    const tryWhileOld=await call({type:'mosaicsync:wait-for-remote'}); const m1=await state({});
+    await fullLater(); const join=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,mid:{mode:mid.mode},tryWhileOld,afterFailMode:m1.mode,afterFailLocalP:m1.localP,join,after})));
+  } else if (scenario==='claude71x-p6-clear-fails-in-conflict') {
+    // O8 conflict; the first Clear Sync write of reset-intent fails (quota/error); then the user retries.
+    await seedLocalState(fresh,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+    replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()}); await checks(2);
+    const d=clone(sync.data.get(constants.SYNC_DATASET_KEY)); d.resetInitiatedByDevice='peer-other'; sync.data.set(constants.SYNC_DATASET_KEY,d);
+    const realSet=sync.set.bind(sync); let armed=true;
+    sync.set=async items=>{ if(armed && Object.hasOwn(items||{},constants.SYNC_RESET_INTENT_KEY)){armed=false; const e=new Error('QUOTA_BYTES quota exceeded'); throw e;} return realSet(items); };
+    const clear1=await call({type:'mosaicsync:clear-sync-data'}); const m1=await state({}); sync.set=realSet;
+    const clear2=await call({type:'mosaicsync:clear-sync-data'}); const useLocal=await call({type:'mosaicsync:bootstrap-local'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({clear1,afterFail:{mode:m1.mode,init:m1.init,status:m1.status},clear2,useLocal,after})));
+  } else if (scenario==='claude71x-p7-fresh-device-old-personal') {
+    // A brand-new device chooses "use the synchronized layout" while the reset's Work half (stamped) has arrived
+    // but the Personal removals have not: Personal is still the complete OLD ledger.
+    const blank=stateWith({personal:[],work:[]});
+    await seedLocalState(blank,{syncEnabled:true,syncInitialized:false,syncBootstrapMode:''});
+    const o=oldCore(); const keep={}; for(const [k,v] of Object.entries(o)) if(!k.startsWith(`${constants.SYNC_SPACE_PREFIX}work.`)) keep[k]=v;
+    replace({...keep,...stamp(newW(),['work'])});
+    const join1=await call({type:'mosaicsync:wait-for-remote'}); const mid=await state({});
+    await fullLater(); const join2=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(3);
+    console.log(JSON.stringify(await state({join1,mid:{mode:mid.mode,init:mid.init,localP:mid.localP,cloudP:mid.cloudP},join2,after})));
+  } else if (scenario==='claude71x-p8-unstamped-personal-then-stamped') {
+    // ChatGPT's stage3a-single-work-stamp shape: Personal NEW but unstamped (a .70 publisher), Work stamped.
+    // Must wait (not join) while Personal is unproven, then join cleanly once Personal is stamped.
+    await startOld(); const c=stamp({...newP(),...newW()}); delete c[constants.SYNC_DATASET_KEY].resetEpoch; delete c[constants.SYNC_DATASET_KEY].resetInitiatedByDevice;
+    replace(c); const sets0=sync.stats.setCalls; const first=await checks(2); sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec());
+    const join1=await call({type:'mosaicsync:wait-for-remote'}); const mid=await state({});
+    await fullLater(); const join2=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,writesBeforeStamp:sync.stats.setCalls-sets0,join1,mid:{mode:mid.mode,localP:mid.localP},join2,after})));
+  } else throw new Error('unknown claude71x scenario');
+}
+
 
 else if (scenario === 'sync-loss-13014-reset-peer-rejoins') {
   const base=stateWith({personal:[shortcut('old','https://old.test/',500)],work:[shortcut('work-old','https://work-old.test/',500)]});
@@ -3884,6 +4208,177 @@ else if (scenario === 'corrective-133020-survivor-publication-failure-aborts-cle
   assert.equal(Object.hasOwn(after,target.rootKey),true,'target Recovery must remain untouched when the fresh survivor cannot be published');
   assert.ok(typeof result?.error === 'string' && result.error.length>0,'failed publication must return an explicit error');
   console.log(JSON.stringify({ok:true,failedClosed:true,targetPreserved:true}));
+}
+
+
+
+else if (scenario.startsWith('claude71y-')) {
+  // TEST-ONLY (Claude, .71 audit). Real shipped background, harness storage. Each scenario prints one JSON line.
+  const E=Date.now()+100000;
+  const WDS=`${constants.SYNC_SPACE_PREFIX}work.dataset`;
+  const keyRec=(e=E,dev='peer-reset')=>({schemaVersion:1,kind:'reset-epoch',epoch:e,initiatedByDevice:dev,initiatedAt:Date.now()});
+  const stamp=(entries,which=['personal','work'],e=E,dev='peer-reset')=>{
+    for(const sp of which){const k=sp==='work'?WDS:constants.SYNC_DATASET_KEY; if(entries[k]){entries[k].resetEpoch=e;entries[k].resetInitiatedByDevice=dev;}}
+    return entries;};
+  const old=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('keep','https://keep-old.test/',500)],work:[shortcut('old-work','https://old-work.test/',500)]});
+  const fresh=stateWith({personal:[shortcut('current','https://current.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+  const oldCore=()=>({...remotePersonalEntries(old,'old-p','device-b'),...remoteWorkEntries(old,'old-w','device-b')});
+  const newP=()=>remotePersonalEntries(fresh,'new-p','peer-reset');
+  const newW=()=>remoteWorkEntries(fresh,'new-w','peer-reset');
+  const metaNow=async()=>(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const cont=async()=>(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]||{};
+  const ids=async sp=>model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces[sp].shortcuts.map(x=>x.id).sort();
+  const cloudIds=async(sp='personal')=>{const c=await sync.get(null);const pre=sp==='work'?`${constants.SYNC_SPACE_PREFIX}work.item.`:constants.SYNC_ITEM_PREFIX;
+    return Object.entries(c).filter(([k,v])=>k.startsWith(pre)&&(v?.kind==='shortcut'||v?.kind==='folder')).map(([,v])=>v.id).sort();};
+  const checks=async n=>{const out=[];for(let i=0;i<n;i++){let r;try{r=await send({type:'mosaicsync:reconcile-if-needed',reason:i%2?'alarm':'foreground'});}catch(e){r={reason:'THROW:'+String(e.message||e).slice(0,90)};}
+    out.push(r?.reason||(r?.ok?'ok':('fail:'+String(r?.error||'').slice(0,90))));}return out;};
+  const call=async m=>{try{const r=await send(m);return r?.ok?'ok':('fail:'+String(r?.error||r?.reason||JSON.stringify(r)).slice(0,110));}catch(e){return 'THROW:'+String(e.message||e).slice(0,110);}};
+  const replace=entries=>{sync.data.clear();for(const [k,v] of Object.entries(entries))sync.data.set(k,clone(v));};
+  const state=async extra=>{const m=await metaNow();const c=await cont();const s=await sync.get(null);
+    return {scenario,...extra,init:m.syncInitialized,mode:m.syncBootstrapMode||'',status:m.syncStatus,lastResetEpoch:c.lastResetEpoch===E?'E':(c.lastResetEpoch||0),
+      localP:await ids('personal'),localW:await ids('work'),cloudP:await cloudIds('personal'),cloudW:await cloudIds('work'),
+      pStamp:s[constants.SYNC_DATASET_KEY]?.resetEpoch===E?'E':(s[constants.SYNC_DATASET_KEY]?.resetEpoch??'-'),wStamp:s[WDS]?.resetEpoch===E?'E':(s[WDS]?.resetEpoch??'-'),
+      pending:!!(await local.get(constants.LOCAL_PENDING_SYNC_MUTATION_KEY))[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]};};
+  const startOld=async()=>{await seedLocalState(old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});replace(oldCore());await checks(1);
+    assert.equal((await cont()).established,true);};
+  const pendingAdd=async(id,space='personal')=>{const before=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const ws=model.workspaceStateNormalized(before,space); const t=model.nextMutationTime(ws.updatedAt);
+    const after=model.replaceWorkspaceNormalized(before,space,{...ws,shortcuts:[...ws.shortcuts,shortcut(id,`https://${id}.test/`,t)],updatedAt:t});
+    await local.set({[constants.LOCAL_STATE_KEY]:after,[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:`j-${id}`,createdAt:Date.now(),before,after}});};
+
+
+  const fullLater=async()=>{replace({...stamp({...newP(),...newW()}),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()});};
+  if (scenario==='claude71y-k1-key-first-old-ledgers') {
+    // The EXPECTED order: the durable key arrives first (the transient reset-intent already came and went, or was
+    // never seen), while both old ledgers are still intact; removals + stamped replacement arrive later.
+    await startOld(); sync.data.set(constants.SYNC_RESET_EPOCH_KEY,keyRec());
+    const sets0=sync.stats.setCalls; const first=await checks(3); const mid=await state({});
+    const join1=await call({type:'mosaicsync:wait-for-remote'}); const mid2=await state({});
+    await fullLater(); const join2=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({first,writesBeforeCore:sync.stats.setCalls-sets0,mid:{mode:mid.mode,init:mid.init,localP:mid.localP,cloudP:mid.cloudP},join1,mid2:{mode:mid2.mode,localP:mid2.localP,cloudP:mid2.cloudP},join2,after})));
+  } else if (scenario==='claude71y-k2-fresh-device-key-first') {
+    // A brand-new device joins while only the key has arrived and both OLD ledgers are still intact.
+    await seedLocalState(stateWith({personal:[],work:[]}),{syncEnabled:true,syncInitialized:false,syncBootstrapMode:''});
+    replace({...oldCore(),[constants.SYNC_RESET_EPOCH_KEY]:keyRec()});
+    const join1=await call({type:'mosaicsync:wait-for-remote'}); const mid=await state({});
+    await fullLater(); const join2=await call({type:'mosaicsync:wait-for-remote'}); const after=await checks(3);
+    console.log(JSON.stringify(await state({join1,mid:{mode:mid.mode,init:mid.init,localP:mid.localP,cloudP:mid.cloudP},join2,after})));
+  } else if (scenario==='claude71y-k3-fresh-conflict-authority') {
+    // Fresh device, contradictory stamps visible: join must fail closed, Clear Sync must still work.
+    await seedLocalState(stateWith({personal:[shortcut('mine','https://mine.test/',100)],work:[]}),{syncEnabled:true,syncInitialized:false,syncBootstrapMode:''});
+    const c=stamp({...newP(),...newW()}); c[WDS].resetInitiatedByDevice='other'; replace({...c,[constants.SYNC_RESET_EPOCH_KEY]:keyRec()});
+    const join=await call({type:'mosaicsync:wait-for-remote'}); const m=await state({});
+    const clear=await call({type:'mosaicsync:clear-sync-data'}); const useLocal=await call({type:'mosaicsync:bootstrap-local'}); const after=await checks(2);
+    console.log(JSON.stringify(await state({join,afterJoin:{mode:m.mode,init:m.init,localP:m.localP},clear,useLocal,after})));
+  } else throw new Error('unknown claude71y scenario');
+}
+
+
+else if (scenario==='stage3a-published-markers') {
+  // Prove the *actual producer*, not only a hand-written fixture, stamps both
+  // finished dataset markers with its durable reset authority.
+  const base=stateWith({personal:[shortcut('personal','https://personal.test/',500)],work:[shortcut('work','https://work.test/',500)]});
+  await seedLocalState(base,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set({...remotePersonalEntries(base,'old-p'),...remoteWorkEntries(base,'old-w')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const reset=await send({type:'mosaicsync:clear-sync-data'});
+  assert.equal(reset?.ok,true);
+  const published=await send({type:'mosaicsync:bootstrap-local'});
+  const cloud=await sync.get(null);
+  const authority=cloud[constants.SYNC_RESET_EPOCH_KEY];
+  const p=cloud[constants.SYNC_DATASET_KEY];
+  const w=cloud[`${constants.SYNC_SPACE_PREFIX}work.dataset`];
+  const ok=published?.ok===true && authority?.epoch>0 && p?.resetEpoch===authority.epoch &&
+    w?.resetEpoch===authority.epoch && p?.resetInitiatedByDevice===authority.initiatedByDevice &&
+    w?.resetInitiatedByDevice===authority.initiatedByDevice;
+  console.log(JSON.stringify({ok,published:published?.ok,personalEpoch:p?.resetEpoch||0,workEpoch:w?.resetEpoch||0,resetEpoch:authority?.epoch||0}));
+}
+
+else if (scenario.startsWith('stage3a-')) {
+  // A peer has reset and published the new complete ledgers, but browser Sync
+  // delivers the reset-epoch KEY after those ledgers. The dataset COMMIT markers
+  // already carry that epoch: they must quarantine the offline old-world device.
+  const old=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500)],work:[shortcut('old-work','https://old-work.test/',500)]});
+  const fresh=stateWith({personal:[shortcut('current','https://current.test/',5000)],work:[shortcut('new-work','https://new-work.test/',5000)]});
+  const E=Date.now()+100000;
+  const resetMarker={schemaVersion:1,kind:'reset-epoch',epoch:E,initiatedByDevice:'peer-reset',initiatedAt:Date.now()};
+  const workDatasetKey=`${constants.SYNC_SPACE_PREFIX}work.dataset`;
+  const cloudNew={...remotePersonalEntries(fresh,'new-p','peer-reset'),...remoteWorkEntries(fresh,'new-w','peer-reset')};
+  for(const k of [constants.SYNC_DATASET_KEY,workDatasetKey]) {
+    cloudNew[k].resetEpoch=E;
+    cloudNew[k].resetInitiatedByDevice='peer-reset';
+  }
+  const originallyCurrent=scenario==='stage3a-current-legacy-adopts-without-key';
+  await seedLocalState(originallyCurrent ? fresh : old,{syncEnabled:true,syncInitialized:true,syncStatus:'ready'});
+  await sync.set(originallyCurrent
+    ? {...remotePersonalEntries(fresh,'new-p','peer-reset'),...remoteWorkEntries(fresh,'new-w','peer-reset')}
+    : {...remotePersonalEntries(old,'old-p'),...remoteWorkEntries(old,'old-w')});
+  await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+  const beforeContinuity=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY];
+  assert.equal(beforeContinuity.established,true);
+  if (scenario==='stage3a-current-legacy-adopts-without-key') {
+    // This .70 device has already joined a complete replacement while the new
+    // dataset stamp was not yet visible; it has an unuploaded local mutation.
+    // Matching complete applied revisions and local baseline is positive proof.
+    for(const [k,v] of Object.entries(cloudNew)) sync.data.set(k,clone(v));
+    // Let it observe current core WITHOUT either embedded stamp or separate key.
+    const untaggedP=clone(cloudNew[constants.SYNC_DATASET_KEY]);
+    const untaggedW=clone(cloudNew[workDatasetKey]);
+    delete untaggedP.resetEpoch; delete untaggedP.resetInitiatedByDevice;
+    delete untaggedW.resetEpoch; delete untaggedW.resetInitiatedByDevice;
+    sync.data.set(constants.SYNC_DATASET_KEY,untaggedP);
+    sync.data.set(workDatasetKey,untaggedW);
+    await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+    // Keep the current state as a synced baseline then introduce the new stamp.
+    const baseline=clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const edited=clone(baseline);
+    edited.spaces.personal.shortcuts.push(shortcut('unsynced','https://unsynced.test/',9000));
+    await local.set({[constants.LOCAL_STATE_KEY]:edited,[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'current-world',before:baseline,after:edited}});
+    sync.data.set(constants.SYNC_DATASET_KEY,clone(cloudNew[constants.SYNC_DATASET_KEY]));
+    sync.data.set(workDatasetKey,clone(cloudNew[workDatasetKey]));
+    const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+    const localAfter=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const c=await sync.get(null);
+    const epoch=(await local.get(constants.LOCAL_SYNC_CONTINUITY_KEY))[constants.LOCAL_SYNC_CONTINUITY_KEY]?.lastResetEpoch;
+    console.log(JSON.stringify({ok:observed?.reason!=='intentional-remote-reset' && localAfter.spaces.personal.shortcuts.some(x=>x.id==='unsynced') &&
+      !!c[`${constants.SYNC_ITEM_PREFIX}unsynced`] && epoch===E,adopted:epoch===E,preserved:localAfter.spaces.personal.shortcuts.some(x=>x.id==='unsynced'),published:!!c[`${constants.SYNC_ITEM_PREFIX}unsynced`],observed:observed?.reason||''}));
+  } else {
+    sync.data.clear();
+    for(const [k,v] of Object.entries(cloudNew)) sync.data.set(k,clone(v));
+    if (scenario==='stage3a-single-work-stamp') {
+      delete sync.data.get(constants.SYNC_DATASET_KEY).resetEpoch;
+      delete sync.data.get(constants.SYNC_DATASET_KEY).resetInitiatedByDevice;
+    }
+    if (scenario==='stage3a-pending-edit-late-key') {
+      const pending=stateWith({personal:[shortcut('obsolete','https://obsolete.test/',500),shortcut('stray','https://stray.test/',900)],work:[shortcut('old-work','https://old-work.test/',500)]});
+      await local.set({[constants.LOCAL_PENDING_SYNC_MUTATION_KEY]:{schemaVersion:1,journalId:'old-world',before:old,after:pending}});
+    }
+    const beforeSets=sync.stats.setCalls;
+    const observed=await send({type:'mosaicsync:reconcile-if-needed',reason:'foreground'});
+    const waiting=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+    const noWrite=sync.stats.setCalls===beforeSets;
+    const noObsolete=!sync.data.has(`${constants.SYNC_ITEM_PREFIX}obsolete`);
+    const noStray=!sync.data.has(`${constants.SYNC_ITEM_PREFIX}stray`);
+    // The separate reset marker arrives *after* this check, as in N4.
+    await sync.set({[constants.SYNC_RESET_EPOCH_KEY]:resetMarker});
+    let unstampedSpaceRefused=true;
+    if (scenario==='stage3a-single-work-stamp') {
+      // Unstamped Personal is unproven; wait until both Spaces carry the current epoch.
+      const early=await send({type:'mosaicsync:wait-for-remote'});
+      const earlyMeta=(await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+      const earlyIds=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]).spaces.personal.shortcuts.map(x=>x.id);
+      unstampedSpaceRefused=early?.ok===true && earlyMeta.syncBootstrapMode==='await-remote' && !earlyIds.includes('current');
+      sync.data.set(constants.SYNC_DATASET_KEY,clone(cloudNew[constants.SYNC_DATASET_KEY]));
+    }
+    const joined=await send({type:'mosaicsync:wait-for-remote'});
+    const state=model.normalizeState((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+    const ids=state.spaces.personal.shortcuts.map(x=>x.id);
+    const finalCloud=await sync.get(null);
+    const ok=observed?.reason==='intentional-remote-reset' && waiting.syncBootstrapMode==='await-remote' && unstampedSpaceRefused &&
+      noWrite && noObsolete && noStray && joined?.ok===true && ids.includes('current') &&
+      !ids.includes('obsolete') && !ids.includes('stray') && !finalCloud[`${constants.SYNC_ITEM_PREFIX}obsolete`];
+    console.log(JSON.stringify({ok,observed:observed?.reason||'',waiting:waiting.syncBootstrapMode,noWrite,noObsolete,noStray,joined:joined?.ok===true,ids}));
+  }
 }
 
 else {

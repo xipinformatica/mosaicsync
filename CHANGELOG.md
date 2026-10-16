@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.33.0.71
+
+**Private Stage 3A: safer late-reset detection and recovery hardening.**
+
+- Detects a missed reset when stamped Personal/Work dataset markers arrive before the separate persistent reset key. The markers include reset epoch and reset initiator.
+- Checks dataset-embedded authority before merging, replaying pending edits or publishing. A marker from either Space is sufficient to quarantine an obsolete device.
+- Prevents old-world publishers from stamping their unrecognized epoch onto a new dataset commit; preserves the .70 legacy-upgrade protection for legitimately unsynced edits.
+- Closes the reset-**key-first** window (K1): a previously healthy but offline device must not interpret the persistent epoch key as proof that its old Personal/Work layouts are current. Both live Spaces must carry the new epoch before the legacy adoption check or post-reset join can succeed. While waiting, unsynced local edits are retained rather than incorrectly published.
+- Prevents waiting **and first-time** devices from joining a mixed-era profile. If either live Space carries a reset epoch, both Personal and Work must carry that same epoch before the combined live layout can be accepted; a changed revision on an unstamped Space is not sufficient proof. Old Recovery generations remain restricted, and Clear Sync can recover from conflicting or malformed reset authority.
+- Adds permanent Chrome/Firefox single-device and multi-device regressions reproducing one-Space-first delivery, old Recovery, and concurrent reset conflicts (16 further cases plus six proof-gate regressions and two key-first regressions for an already-stale laptop, first-time join, and unstamped new Personal), plus existing late-key and upgrade tests. No permissions, telemetry, new sync key or backup-format changes.
+- Limits remain: record writes made before a device learns about a reset cannot always be fenced; delivery of records before commit markers remains a known risk. Mixed-version devices can strip stamps, and legacy-upgrade uncertainty may make a device wait with its unsynced edit instead of adopting an unproven layout. Update all devices, export a backup before destructive reset/rejoin, and do not claim order-independent reset safety.
+- Remaining release gates: independent re-audit of this key-first-corrected .71, six GitHub checks and genuine signed-in multi-device reset tests. No public publication approval.
+
 ## 1.33.0.70
 
 **Private Stage 2F: durable offline-reset recognition and safe legacy-client upgrade.**

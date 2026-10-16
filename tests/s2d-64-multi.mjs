@@ -65,7 +65,7 @@ class Relay {
     const d = this.d(id), ch = {};
     const keys = new Set([...this.server.keys(), ...d.view.keys()]);
     for (const k of keys) {
-      if (this.block && this.block.dev === id && this.block.keys.has(k)) continue; // test-only partial delivery
+      if (this.block && this.block.dev === id && (this.block.keys ? this.block.keys.has(k) : this.block.test(k))) continue; // test-only partial delivery
       const sv = this.serverVer.get(k) || 0;
       if (sv === (d.seen.get(k) || 0)) continue; // nothing new from server for this key
       const nv = this.server.get(k), ov = d.view.get(k);

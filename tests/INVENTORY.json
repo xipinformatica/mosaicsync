@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 231,
+  "totalFiles": 235,
   "counts": {
     "behavioral": 114,
-    "integration": 36,
+    "integration": 40,
     "static": 80,
     "browser": 1
   },
@@ -832,6 +832,22 @@
     },
     {
       "file": "tests/stage2f-offline-reset-133070.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/stage3a-claude-reset-133071.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/stage3a-key-first-133071.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/stage3a-reset-order-133071.test.mjs",
+      "kind": "integration"
+    },
+    {
+      "file": "tests/stage3a-reset-proof-133071.test.mjs",
       "kind": "integration"
     },
     {
