@@ -50,7 +50,7 @@ test('1.33.0.49 Ukrainian locale includes all 480 translations with intact token
   const { MESSAGES: en } = await import('../src/shared/core/i18n-locales/en.js');
   const { MESSAGES: uk } = await import('../src/shared/core/i18n-locales/uk.js');
   assert.deepEqual(Object.keys(uk).sort(),Object.keys(en).sort());
-  assert.equal(Object.keys(uk).length,483);
+  assert.equal(Object.keys(uk).length,484);
   const tokens = text => [...String(text).matchAll(/\{([A-Za-z0-9_]+)\}/g)].map(x=>x[1]).sort();
   for(const [key,val] of Object.entries(en)) {
     assert.ok(String(uk[key]).trim(),`${key}: empty`);

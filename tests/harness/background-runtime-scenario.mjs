@@ -4381,6 +4381,142 @@ else if (scenario.startsWith('stage3a-')) {
   }
 }
 
+else if (scenario.startsWith('audit-ig')) {
+  // Independent Claude favicon audit (.82). Instagram-like deterministic fixture built from a saved
+  // instagram.com <head> (icon 192, apple-touch 76/120/152/167/180, shortcut .ico, manifest).
+  const variant = process.env.IG_VARIANT || 'healthy';
+  const S = 'https://static.cdninstagram.com/rsrc.php/';
+  const ico = frames => { // frames: [[side, marker]]
+    const pngs = frames.map(([s, m]) => tinyPng(s, s, m));
+    const header = new Uint8Array(6 + 16 * frames.length); const dv = new DataView(header.buffer);
+    dv.setUint16(2, 1, true); dv.setUint16(4, frames.length, true);
+    let offset = header.length;
+    frames.forEach(([s], i) => { const e = 6 + i * 16; header[e] = s >= 256 ? 0 : s; header[e + 1] = s >= 256 ? 0 : s; dv.setUint16(e + 4, 1, true); dv.setUint16(e + 6, 32, true); dv.setUint32(e + 8, pngs[i].length, true); dv.setUint32(e + 12, offset, true); offset += pngs[i].length; });
+    const out = new Uint8Array(offset); out.set(header, 0); let p = header.length; for (const b of pngs) { out.set(b, p); p += b.length; } return out;
+  };
+  const files = {
+    [`${S}v4/yR/r/lam-fZmwmvn.png`]: ['touch76', tinyPng(76, 76, 1)],
+    [`${S}v4/ys/r/aM-g435MtEX.png`]: ['touch120', tinyPng(120, 120, 2)],
+    [`${S}v4/yx/r/H1l_HHqi4p6.png`]: ['touch152', tinyPng(152, 152, 3)],
+    [`${S}v4/yB/r/-7Z_RkdLJUX.png`]: ['touch167', tinyPng(167, 167, 4)],
+    [`${S}v4/yG/r/De-Dwpd5CHc.png`]: ['touch180', tinyPng(180, 180, 5)],
+    [`${S}v4/yI/r/VsNE-OHk_8a.png`]: ['icon192', tinyPng(192, 192, 6)],
+    [`${S}y4/r/QaBlI0OZiks.ico`]: ['shortcutIco16+32', ico([[16, 7], [32, 8]]), 'image/x-icon'],
+    ['https://www.instagram.com/favicon.ico']: ['wwwFavicon16+32', ico([[16, 9], [32, 10]]), 'image/x-icon'],
+    ['https://www.instagram.com/static/m192.png']: ['manifest192', tinyPng(192, 192, 11)],
+    ['https://www.instagram.com/static/m512.png']: ['manifest512', tinyPng(512, 512, 12)]
+  };
+  const head = `<!DOCTYPE html><html><head><link data-default-icon="${S}v4/yI/r/VsNE-OHk_8a.png" rel="icon" sizes="192x192" href="${S}v4/yI/r/VsNE-OHk_8a.png" /><meta name="x" content="y" />` +
+    [['76x76', 'v4/yR/r/lam-fZmwmvn.png'], ['120x120', 'v4/ys/r/aM-g435MtEX.png'], ['152x152', 'v4/yx/r/H1l_HHqi4p6.png'], ['167x167', 'v4/yB/r/-7Z_RkdLJUX.png'], ['180x180', 'v4/yG/r/De-Dwpd5CHc.png']]
+      .map(([s, p]) => `<link rel="apple-touch-icon" sizes="${s}" href="${S}${p}" />`).join('') +
+    `<link data-default-icon="${S}y4/r/QaBlI0OZiks.ico" rel="shortcut icon" type="image/x-icon" href="${S}y4/r/QaBlI0OZiks.ico" /><link rel="manifest" href="/data/manifest.json" crossorigin="use-credentials" /><title>Instagram</title></head><body></body></html>`;
+  const manifest = JSON.stringify({ name: 'Instagram', icons: [{ src: '/static/m192.png', sizes: '192x192', type: 'image/png' }, { src: '/static/m512.png', sizes: '512x512', type: 'image/png' }] });
+  const text = (t, type, url) => responseBytes(new TextEncoder().encode(t), type, url);
+  const notOk = (status, url) => ({ ok: false, status, url, headers: { get() { return null; } }, body: null, async arrayBuffer() { return new ArrayBuffer(0); } });
+  const counts = {}; let failIcon192 = false; let pageMode = variant === 'html-429' ? '429' : variant === 'html-challenge' ? 'challenge' : 'ok';
+  const nameOf = url => files[url]?.[0] || url;
+  fetchHandler = async url => {
+    counts[nameOf(url)] = (counts[nameOf(url)] || 0) + 1;
+    if (browserName === 'chrome' && url.includes('_favicon/')) return responseBytes(tinyPng(128, 128, url.includes('placeholder') ? 14 : 13), 'image/png', url); // Chromium renders its 16/32 cache into a 128 canvas
+    if (url === 'https://www.instagram.com/' || url === 'https://www.instagram.com/accounts/login/') {
+      if (pageMode === '429') return notOk(429, url);
+      if (pageMode === 'challenge') return text('<!DOCTYPE html><html><head><title>Instagram</title><meta name="robots" content="noindex"></head><body>Please wait a few minutes before you try again.</body></html>', 'text/html; charset=utf-8', url);
+      return text(head, 'text/html; charset=utf-8', url);
+    }
+    if (url === 'https://www.instagram.com/data/manifest.json') {
+      if (variant === 'manifest-ok') return text(manifest, 'application/manifest+json', url);
+      return notOk(401, url);
+    }
+    if (url === 'https://shop.example/') return text('<!DOCTYPE html><html><head><link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"><link rel="apple-touch-icon" sizes="120x120" href="/touch120.png"><link rel="manifest" href="/site.webmanifest"></head></html>', 'text/html', url);
+    if (url === 'https://shop.example/site.webmanifest') return text(JSON.stringify({ icons: [{ src: '/m192.png', sizes: '192x192', purpose: 'any' }, { src: '/m512.png', sizes: '512x512', purpose: 'any' }] }), 'application/manifest+json', url);
+    if (url === 'https://shop.example/favicon-32.png') { counts['shop-link32'] = (counts['shop-link32'] || 0) + 1; return responseBytes(tinyPng(32, 32, 21), 'image/png', url); }
+    if (url === 'https://shop.example/touch120.png') return responseBytes(tinyPng(120, 120, 22), 'image/png', url);
+    if (url === 'https://shop.example/m192.png') return responseBytes(tinyPng(192, 192, 23), 'image/png', url);
+    if (url === 'https://shop.example/m512.png') return responseBytes(tinyPng(512, 512, 24), 'image/png', url);
+    if (failIcon192 && url.endsWith('VsNE-OHk_8a.png')) throw new TypeError('network');
+    if (files[url]) return responseBytes(files[url][1], files[url][2] || 'image/png', url);
+    return notOk(404, url);
+  };
+  const id = 'ig';
+  const describe = async () => {
+    const raw = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    const item = findCompactShortcut(raw, id);
+    if (!item?.localImageAssetId) return 'none';
+    const asset = (await local.get(`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`))[`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`] || '';
+    const m = /^data:([^;]+);base64,(.*)$/.exec(asset); if (!m) return 'unknown';
+    const b = Buffer.from(m[2], 'base64');
+    if (b[0] === 0x89) { const marker = b[31]; const hit = Object.values(files).find(([, f]) => f[31] === marker && f[0] === 0x89); const shop = {21:'shop link 32x32',22:'shop touch 120',23:'shop manifest 192',24:'shop manifest 512'}[marker]; return marker === 13 ? 'chromeNative128canvas' : shop || (hit ? hit[0] : `png(${b.readUInt32BE(16)})`); }
+    if (b[0] === 0 && b[2] === 1) { const hit = Object.values(files).find(([, f]) => Buffer.compare(Buffer.from(f), b) === 0); return hit ? hit[0] : 'ico'; }
+    return m[1];
+  };
+  const ledger = async () => ((await local.get(constants.LOCAL_FAVICON_QUALITY_AUDIT_KEY))[constants.LOCAL_FAVICON_QUALITY_AUDIT_KEY]?.items || []).length;
+  const queue = async () => ((await local.get(constants.LOCAL_ICON_RECOVERY_QUEUE_KEY))[constants.LOCAL_ICON_RECOVERY_QUEUE_KEY]?.items || []).map(i => `${i.qualityUpgrade ? 'Q' : 'F'}${i.attempts}`).join(',');
+  const settle = ms => new Promise(r => setTimeout(r, ms));
+  const fireRecovery = async () => { for (const l of events.onAlarm.listeners) l({ name: constants.ICON_RECOVERY_ALARM }); await settle(400); };
+  const out = { variant, browser: browserName, steps: [] };
+  const step = async tag => out.steps.push({ tag, stored: await describe(), queue: await queue(), auditLedger: await ledger() });
+  let realNow = Date.now(); let offset = 0; Date.now = () => realNow + offset;
+
+  websiteAccess = variant !== 'no-access-then-grant';
+  const siteUrl = variant === 'generic-ranking' ? 'https://shop.example/' : 'https://www.instagram.com/';
+  if (variant === 'upgrade-weak' || variant === 'upgrade-manual') {
+    const manual = variant === 'upgrade-manual';
+    const old = shortcut(id, siteUrl);
+    old.image = `data:image/png;base64,${Buffer.from(tinyPng(32, 32, 9)).toString('base64')}`;
+    old.imageSyncKind = 'device';
+    old.imageSourceKind = manual ? 'upload' : 'favicon';
+    old.imageSourceUrl = manual ? '' : 'https://www.instagram.com/favicon.ico';
+    await seedLocalState(stateWith({ personal: [old] }));
+    await local.set({ [constants.LOCAL_FAVICON_QUALITY_AUDIT_KEY]: {
+      version: 1, items: [{ url: siteUrl, checkedAt: Date.now(), policyVersion: constants.FAVICON_QUALITY_AUDIT_POLICY_VERSION }]
+    } });
+    await step('before upgrade (checked recently)');
+    for (const listener of events.onInstalled.listeners) listener({ reason: 'update', previousVersion: process.env.IG_PREVIOUS_VERSION || '1.33.0.82' });
+    await settle(2200);
+    await step('after upgrade, without user action');
+    out.finalSourceKind = findCompactShortcut((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY],id)?.imageSourceKind;
+    out.fetchCounts = counts;
+    console.log(JSON.stringify(out));
+  } else {
+  await seedLocalState(stateWith({ personal: [shortcut(id, siteUrl)] }));
+  await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id], force: true });
+  await step('after first (fast) pass');
+  await settle(600); await step('after automatic quality continuation');
+  if (variant === 'no-access-then-grant') {
+    websiteAccess = true;
+    for (const l of events.onPermissionAdded.listeners) l({ origins: ['http://*/*', 'https://*/*'] });
+    await settle(1500); await step('after Website Access granted');
+    await fireRecovery(); await step('after next recovery alarm');
+  }
+  if (variant === 'html-429' || variant === 'html-challenge') {
+    for (let i = 0; i < 6; i++) { offset += 31 * 60_000; await fireRecovery(); await step(`retry ${i + 1} (+31 min)`); }
+    pageMode = 'ok'; offset += 8 * 24 * 60 * 60_000;
+    await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id] }); await settle(600); await step('8 days later, site healthy, ordinary hydration request');
+  }
+  if (variant === 'regress-after-30d') {
+    // A good icon is stored; 31 days later the audit re-runs while the 192 icon transiently fails.
+    failIcon192 = true; offset += 31 * 24 * 60 * 60_000;
+    await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id] });
+    await settle(600); await step('30-day re-audit with icon192 temporarily unreachable');
+    failIcon192 = false; await fireRecovery(); await step('after next alarm (icon192 reachable again)');
+  }
+  if (variant === 'regress-429-after-30d') {
+    pageMode = '429'; offset += 31 * 24 * 60 * 60_000;
+    await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id] });
+    await settle(600); await step('30-day re-audit while instagram.com returns 429');
+    for (let i = 0; i < 5; i++) { offset += 31 * 60_000; await fireRecovery(); await step(`re-audit retry ${i + 1} (+31 min, still 429)`); }
+    pageMode = 'ok'; offset += 2 * 24 * 60 * 60_000; await fireRecovery(); await step('2 days later, site healthy again (no new trigger)');
+    await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id] }); await settle(600); await step('ordinary New Tab hydration request');
+    offset += 7 * 24 * 60 * 60_000;
+    await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: [id] }); await settle(600); await step('+7 more days, ordinary hydration request');
+  }
+  const picker = await send({ type: 'mosaicsync:discover-favicon-choices', pageUrl: siteUrl, requestId: 'audit-request-1' });
+  out.manualPicker = (picker.candidates || []).map(c => `${(nameOf(c.sourceUrl) || 'browser').replace('https://shop.example/','')}:${c.source}:${c.qualitySide}`);
+  out.fetchCounts = counts;
+  console.log(JSON.stringify(out));
+  }
+}
+
 else {
   throw new Error(`unknown scenario ${scenario}`);
 }

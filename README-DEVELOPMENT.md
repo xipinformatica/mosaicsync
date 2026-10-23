@@ -1,3 +1,7 @@
+## 1.33.0.82 — lean stable candidate (private)
+
+Built from the independently audited .71 K1 source, with Stage 3B research archived rather than activated. Only the Clear Sync confirmation receives a peer-online/update reminder in all 34 UI languages. The known offline-reset race may require manual layout selection on a returning device. No new synchronization protocol, background read, permission or data format is introduced. Release requires exact-build independent and real-device checks.
+
 **Stage 3A K1 reset-key-first guard (.71 private correction):** On an already-initialized offline device, the persistent reset key can arrive while both visible Spaces still describe the *old* synchronized layout. A matching local baseline and applied revision do not establish membership in the new epoch. Adopt a legacy-reset marker only when the Personal and Work dataset commits both carry that exact epoch and initiator. A device already waiting after observing a reset cannot rejoin old unstamped ledgers or matching old Recovery merely because no live stamp has arrived: it waits for both current-epoch stamps. Test `tests/stage3a-key-first-133071.test.mjs` (Chrome and Firefox) and preserve the corrected Stage 2F reset fixtures. New devices arriving while only a reset key is visible and pre-epoch offline writes remain documented limitations. No changes to protected DEVELOPER-GUIDE.md.
 
 
@@ -33,7 +37,7 @@ The full Personal and Work dataset commit markers now carry the persistent reset
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.71
+Current release: 1.33.0.84
 
 1.33.0.70 private Stage 2F candidate adds a persistent browser Sync reset epoch so upgraded devices that missed the transient reset-intent while offline do not resurrect pre-reset shortcuts on return. It adds one small Sync metadata key and uses the existing liveness probe; .63–.69 installations do not understand this signal. Independent audit, GitHub gates and real signed-in multi-device testing are pending.
 

@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.33.0.84
+
+- Fixes a Chrome-only favicon regression where a browser-cached icon enlarged to 128 pixels could prevent a sharper real website icon from being selected.
+- Gives previously checked low-resolution automatic icons another bounded upgrade opportunity when updating from .83. Existing seven-day retries and manually chosen or uploaded artwork remain protected.
+- No Sync/Recovery, permissions, data format, translations or Stage 3B changes. Private corrective: independent audit and release gates remain pending.
+
+## 1.33.0.83
+
+- Improves existing automatically detected website icons when a previous quality check encountered an incomplete page or temporary network block. On upgrading, previously blurry automatic icons receive a bounded fresh check when Website Access is available.
+- A low-quality or exhausted quality check is eligible again after seven days instead of thirty, and background/tab favicon learning no longer replaces sharp automatic artwork with fewer decoded pixels. User-selected and uploaded images remain untouched.
+- No Sync/Recovery changes, storage format changes, new permissions, telemetry or Stage 3B code. Private corrective: independent audit and release gates still required.
+
+## 1.33.0.82
+
+**Stable candidate based on the independently audited 1.33.0.71 K1 foundation.**
+
+- Before clearing the synchronized copy, the existing confirmation now reminds you to bring your other computers online, update MosaicSync, and let synchronization finish. A previously offline computer may ask which layout to keep when it reconnects.
+- The reminder is translated in all 34 UI languages. Clear Sync, layout choices, normal Sync and Recovery behavior are unchanged; no new permissions, storage formats, telemetry or background reads.
+- Stage 3B generation experiments (.72–.81) are archived and intentionally **not included**. The rare offline-reset race remains a documented limitation, not a fixed case. Export a backup and update every device before a reset.
+- Private release candidate: requires independent review, the six exact-commit release checks, and ideally real signed-in Chrome/Firefox two-device acceptance before any publication.
+
 ## 1.33.0.71
 
 **Private Stage 3A: safer late-reset detection and recovery hardening.**

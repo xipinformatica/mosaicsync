@@ -7593,6 +7593,8 @@ ${site.url}`;
   clearSyncButton?.addEventListener("click", async () => {
     const confirmed = await confirmMosaic(`${t("deleteSyncTitle")}
 
+${t("clearSyncPeerWarning")}
+
 ${t("clearSyncWarning")}`, { danger: true });
     if (!confirmed) return;
 

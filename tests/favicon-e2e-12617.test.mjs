@@ -111,6 +111,8 @@ for (const browserName of ["firefox", "chrome"]) {
     };
     installQueueMutationStub(ctx);
     vm.createContext(ctx);
+    ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+    vm.runInContext(extract(src, "faviconQualitySide"),ctx);
     for (const name of ["seedIconRecoveryQueue", "processIconRecoveryQueue", "requestMissingShortcutIconHydration"]) {
       vm.runInContext(extract(src, name), ctx);
     }
@@ -151,6 +153,8 @@ test("1.26.17 Chrome native fallback is attempted without Website Access and doe
   };
   installQueueMutationStub(ctx);
   vm.createContext(ctx);
+  ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+  vm.runInContext(extract(src, "faviconQualitySide"), ctx);
   vm.runInContext(extract(src, "processIconRecoveryQueue"), ctx);
   const result = await ctx.processIconRecoveryQueue();
   assert.equal(resolverCalls, 1);

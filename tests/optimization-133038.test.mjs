@@ -174,6 +174,9 @@ async function runBackgroundLearnedRefresh(shortcut) {
   const context = {
     learnedArtworkMayReplace: policy.learnedArtworkMayReplace,
     learnedArtworkDisposition: policy.learnedArtworkDisposition,
+    // This legacy test supplies deliberately fake image bytes; the actual pixel
+    // downgrade guard is exercised with valid PNG headers in .83 regressions.
+    automaticFaviconWouldDowngrade: () => false,
     normalizeLocalFaviconDataUrl: async value => value,
     writeLocalState: async () => { writes += 1; }
   };

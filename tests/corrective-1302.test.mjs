@@ -109,6 +109,7 @@ for (const browser of ["firefox", "chrome"]) {
       LOCAL_FAVICON_QUALITY_AUDIT_KEY:key,
       FAVICON_QUALITY_AUDIT_MAX_ENTRIES:256,
       FAVICON_QUALITY_AUDIT_POLICY_VERSION:1,
+      FAVICON_QUALITY_AUDIT_TTL_MS:30*24*60*60*1000,
       browser:{storage:{local:{
         get:async()=>({[key]:structuredClone(stored)}),
         set:async value=>{

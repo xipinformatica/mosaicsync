@@ -136,7 +136,7 @@ test('53: all 34 UI locales include a nonempty automatic naming translation',asy
     const {MESSAGES}=await import(pathToFileURL(resolve(dir,file)).href);
     assert.equal(typeof MESSAGES.automaticNaming,'string',file);
     assert.ok(MESSAGES.automaticNaming.trim(),file);
-    assert.equal(Object.keys(MESSAGES).length,483,file);
+    assert.equal(Object.keys(MESSAGES).length,484,file);
     translations.add(MESSAGES.automaticNaming);
   }
   assert.ok(translations.size>20,'should not silently reuse English for every locale');

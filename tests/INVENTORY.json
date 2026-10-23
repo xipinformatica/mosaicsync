@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 235,
+  "totalFiles": 237,
   "counts": {
     "behavioral": 114,
-    "integration": 40,
+    "integration": 42,
     "static": 80,
     "browser": 1
   },
@@ -379,6 +379,10 @@
       "kind": "static"
     },
     {
+      "file": "tests/favicon-quality-133083.test.mjs",
+      "kind": "integration"
+    },
+    {
       "file": "tests/favicon-queue-12414h.test.mjs",
       "kind": "behavioral"
     },
@@ -477,6 +481,10 @@
     {
       "file": "tests/improvements-1273.test.mjs",
       "kind": "behavioral"
+    },
+    {
+      "file": "tests/lean-release-133082.test.mjs",
+      "kind": "integration"
     },
     {
       "file": "tests/legal-links-12414m3.test.mjs",

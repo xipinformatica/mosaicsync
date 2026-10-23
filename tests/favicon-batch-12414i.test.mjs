@@ -64,10 +64,13 @@ function installQueueMutationStub(ctx) {
 }
 
 function runFunctions(src, names, context, prelude = "") {
-  const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy, ...context };
+  const ctx = { console, atob, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy, ...context };
+  ctx.FAVICON_LOW_QUALITY_SIDE ??= 64;
+  ctx.FAVICON_LOW_QUALITY_RECHECK_MS ??= 7*24*60*60*1000;
   installQueueMutationStub(ctx);
   vm.createContext(ctx);
-  const helperNames = ["manualFaviconPreferencePending", "shortcutAllowsFaviconRecovery"];
+  const helperNames = ["manualFaviconPreferencePending", "shortcutAllowsFaviconRecovery",
+    "faviconQualitySide", "storedArtworkSide", "automaticFaviconWouldDowngrade"];
   const uniqueNames = [...new Set([...helperNames, ...names])];
   const body = uniqueNames.map(name => extract(src, name)).join("\n\n");
   vm.runInContext(`${prelude}\n${body}`, ctx);
@@ -200,7 +203,7 @@ for (const browser of ["firefox", "chrome"]) {
     let finalQueue = null;
     let status = null;
     let metaWrites = 0;
-    const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
+    const ctx = { console, atob, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -227,7 +230,8 @@ for (const browser of ["firefox", "chrome"]) {
     });
     installQueueMutationStub(ctx);
     installQueueMutationStub(ctx);
-  vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
+  ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+  vm.runInContext(`${extract(src, "faviconQualitySide")}\nlet iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
     const summary = await ctx.processIconRecoveryQueue();
     assert.equal(reads >= 2, true, "the durable queue must be re-read after the network batch");
@@ -240,7 +244,7 @@ for (const browser of ["firefox", "chrome"]) {
     const src = readBackgroundSource(browser);
     const queue = { version: 2, items: [{ id: "same", url: "https://same.example/", attempts: 0, nextAttemptAt: 0, qualityUpgrade: true }] };
     let finalQueue = null;
-    const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
+    const ctx = { console, atob, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
     vm.createContext(ctx);
     Object.assign(ctx, {
       ICON_RECOVERY_CONCURRENCY: 3,
@@ -267,7 +271,8 @@ for (const browser of ["firefox", "chrome"]) {
     });
     installQueueMutationStub(ctx);
     installQueueMutationStub(ctx);
-  vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
+  ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+  vm.runInContext(`${extract(src, "faviconQualitySide")}\nlet iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
     const summary = await ctx.processIconRecoveryQueue();
     assert.equal(summary.attempted, 1);
@@ -310,7 +315,7 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
   const src = readBackgroundSource("chrome");
   const queue = { version: 2, items: [{ id: "store", url: "https://chromewebstore.google.com/detail/x", attempts: 0, nextAttemptAt: 0, qualityUpgrade: false }] };
   let finalQueue = null;
-  const ctx = { console, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
+  const ctx = { console, atob, normalizeFaviconPreference, automaticFaviconArtworkPolicy, isAutomaticArtworkSourceKind, learnedArtworkDisposition, learnedArtworkMayReplace, shortcutNeedsProactiveFaviconPolicy };
   vm.createContext(ctx);
   Object.assign(ctx, {
     ICON_RECOVERY_CONCURRENCY: 3,
@@ -336,7 +341,8 @@ test("chrome: 1.24.14i protected Chrome pages remain terminal recovery misses", 
     scheduleImmediateIconRecoveryContinuation: () => {}
   });
   installQueueMutationStub(ctx);
-  vm.runInContext(`let iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
+  ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+  vm.runInContext(`${extract(src, "faviconQualitySide")}\nlet iconRecoveryRun = null;\n${extract(src, "processIconRecoveryQueue")}`, ctx);
 
   const summary = await ctx.processIconRecoveryQueue();
   assert.equal(summary.failed, 1);

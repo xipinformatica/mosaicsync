@@ -1119,6 +1119,8 @@ export function startBackground(adapter) {
       if (details.reason !== "install" && meta?.onboardingCompleted) {
         const previousVersion = String(details.previousVersion || "");
         const resolverQualityUpgrade = /^1\.24\.14(?:\.[1234])?$/.test(previousVersion);
+        const earlierStableVersion = /^1\.33\.0\.(\d+)$/.exec(previousVersion);
+        const favicon84Upgrade = Boolean(earlierStableVersion && Number(earlierStableVersion[1]) < 84);
         return requestMissingShortcutIconHydration({
           // Resolver changes reset exhausted retry backoff once so existing
           // automatically learned icons can benefit immediately after upgrade.
@@ -1127,7 +1129,10 @@ export function startBackground(adapter) {
           // recovers declared site artwork from the original public root when an
           // authenticated deep link redirects to a login provider, so re-check
           // 1.24.14 through 1.24.14c device-local favicons once without touching uploads.
-          upgradeRecoveredFavicons: /^1\.20\.9(?:\.|$)/.test(previousVersion) || resolverQualityUpgrade
+          upgradeRecoveredFavicons: /^1\.20\.9(?:\.|$)/.test(previousVersion) || resolverQualityUpgrade,
+          // On first .84 upgrade, revisit only weak automatically learned art, including .83 installs.
+          // Existing manual uploads/picker selections are never eligible.
+          upgradeLowResFavicons: favicon84Upgrade
         });
       }
       return null;
@@ -1971,6 +1976,33 @@ export function startBackground(adapter) {
       declared,
       sourceKind
     };
+  }
+
+  // Inspect the actual stored raster pixels, not a declared size or a browser-
+  // native favicon canvas that might have upscaled a tiny original.
+  function storedArtworkSide(image) {
+    const match = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/i.exec(String(image || ""));
+    if (!match) return 0;
+    try {
+      const binary = atob(match[2]);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      const mime = sniffImageMime(bytes, match[1].toLowerCase());
+      const { width, height } = imageDimensionsFromBytes(bytes, mime);
+      return width && height ? Math.min(width, height) : 0;
+    } catch { return 0; }
+  }
+
+  // Do not overwrite known sharp, automatically discovered pixels with fewer
+  // pixels just because an anonymous request encountered a temporary bad page.
+  function automaticFaviconWouldDowngrade(shortcut, image) {
+    if (!automaticFaviconArtwork(shortcut)) return false;
+    // Browser-native artwork (no site URL) is a rendered canvas whose pixel size
+    // says nothing about the sharpness of the original icon; real site artwork may replace it.
+    if (!shortcut.imageSourceUrl) return false;
+    const previousSide = storedArtworkSide(shortcut.image);
+    const incomingSide = storedArtworkSide(image);
+    return previousSide > 0 && incomingSide > 0 && incomingSide < previousSide;
   }
 
   async function fetchImageDataUrl(value) {
@@ -2956,6 +2988,10 @@ export function startBackground(adapter) {
       const preferenceUpgrade = Boolean(result.allowFaviconUpgrade) && manualFaviconPreferencePending(shortcut);
       const upgradingRecoveredFavicon = Boolean(result.allowFaviconUpgrade) && automaticFaviconArtwork(shortcut);
       if (!shortcutNeedsProactiveFavicon(shortcut) && !upgradingRecoveredFavicon && !preferenceUpgrade) continue;
+      if (!preferenceUpgrade && automaticFaviconWouldDowngrade(shortcut, result.image)) {
+        unchangedIds.add(result.id);
+        continue;
+      }
       const disposition = learnedArtworkDisposition(shortcut, { sourceKind: "favicon", sourceUrl: result.sourceUrl });
       const nextFallback = disposition.preservesUserProvenance
         ? (currentPreference ? result.preferenceMatched !== true : true)
@@ -3024,13 +3060,17 @@ export function startBackground(adapter) {
     return now - item.checkedAt >= FAVICON_QUALITY_AUDIT_TTL_MS;
   }
 
-  async function markFaviconQualityAuditsComplete(urls) {
+  const FAVICON_LOW_QUALITY_RECHECK_MS = 7 * 24 * 60 * 60 * 1000;
+  const FAVICON_LOW_QUALITY_SIDE = 64;
+  async function markFaviconQualityAuditsComplete(urls, { recheckAfterMs = FAVICON_QUALITY_AUDIT_TTL_MS } = {}) {
     const values = [...new Set((urls || []).filter(value => /^https?:/i.test(String(value || ""))))];
     if (!values.length) return;
     const run = faviconQualityAuditWriteQueue.catch(() => {}).then(async () => {
       const ledger = await readFaviconQualityAuditLedger();
       const byUrl = new Map((ledger.items || []).map(item => [item.url, item]));
-      const checkedAt = Date.now();
+      // Keep the existing ledger format; shortened checks expire under the
+      // normal 30-day policy without adding a second timer or storage schema.
+      const checkedAt = Date.now() - Math.max(0, FAVICON_QUALITY_AUDIT_TTL_MS - recheckAfterMs);
       for (const value of values) {
         try {
           const url = new URL(String(value)).href;
@@ -3165,7 +3205,7 @@ export function startBackground(adapter) {
     }, ICON_RECOVERY_CONTINUE_DELAY_MS);
   }
 
-  async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeRecoveredFavicons = false } = {}) {
+  async function seedIconRecoveryQueue({ shortcutIds = [], force = false, upgradeRecoveredFavicons = false, upgradeLowResFavicons = false } = {}) {
     const loaded = await ensureLocalStorage();
     const requested = new Set(Array.isArray(shortcutIds) ? shortcutIds.filter(value => typeof value === "string" && value) : []);
     const targeted = requested.size > 0;
@@ -3173,12 +3213,15 @@ export function startBackground(adapter) {
       readFaviconQualityAuditLedger(),
       hasWebAccess()
     ]);
+    const upgradeOnInstall = shortcut => upgradeLowResFavicons && automaticFaviconArtwork(shortcut) &&
+      (storedArtworkSide(shortcut.image) > 0 && storedArtworkSide(shortcut.image) < FAVICON_LOW_QUALITY_SIDE ||
+        !shortcut.imageSourceUrl);
     const eligible = flattenShortcuts(loaded.state).filter(shortcut => {
       if (!shortcutAllowsFaviconRecovery(loaded.state, shortcut.id)) return false;
       if (targeted && !requested.has(shortcut.id)) return false;
       if (shortcutNeedsProactiveFavicon(shortcut)) return true;
       return webAccessGranted && automaticFaviconArtwork(shortcut) &&
-        (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons));
+        (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons) || upgradeOnInstall(shortcut));
     });
 
     const queue = await mutateIconRecoveryQueue(current => {
@@ -3194,7 +3237,7 @@ export function startBackground(adapter) {
         const reset = force || !previous || previous.url !== shortcut.url ||
           normalizeFaviconPreference(previous.faviconPreference) !== faviconPreference;
         const migrationUpgrade = automaticFaviconArtwork(shortcut) &&
-          (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons));
+          (faviconQualityAuditNeeded(qualityLedger, shortcut.url) || Boolean(upgradeRecoveredFavicons) || upgradeOnInstall(shortcut));
         nextById.set(shortcut.id, {
           id: shortcut.id,
           url: shortcut.url,
@@ -3342,8 +3385,9 @@ export function startBackground(adapter) {
       const outcomes = resolved.map(({ item, result }) => {
         if (!result?.image) return { item, ok: false, reason: result?.reason || "not-found" };
         if (applicationFailed) return { item, ok: false, reason: "commit-error" };
-        if (appliedIds.has(item.id)) return { item, ok: true, changed: true, reason: "", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true };
-        if (unchangedIds.has(item.id)) return { item, ok: true, changed: false, reason: "unchanged", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true };
+        const lowRes = faviconQualitySide(result) < FAVICON_LOW_QUALITY_SIDE;
+        if (appliedIds.has(item.id)) return { item, ok: true, changed: true, reason: "", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true, lowRes };
+        if (unchangedIds.has(item.id)) return { item, ok: true, changed: false, reason: "unchanged", provisional: Boolean(result.provisional), qualityComplete: result.qualityComplete === true, lowRes };
         return { item, ok: false, reason: "stale" };
       });
 
@@ -3354,6 +3398,7 @@ export function startBackground(adapter) {
       let exhausted = 0;
       let blockedByPermission = 0;
       const completedQualityAuditUrls = new Set();
+      const shortRecheckAuditUrls = new Set();
       // Apply network outcomes as one short mutation against the latest persisted
       // queue. A seed that lands while networking is in flight is therefore kept.
       queue = await mutateIconRecoveryQueue(async currentQueue => {
@@ -3366,12 +3411,12 @@ export function startBackground(adapter) {
             if (outcome.changed) hydrated += 1;
             else unchanged += 1;
             if (current.qualityUpgrade && outcome.qualityComplete) {
-              completedQualityAuditUrls.add(current.url);
+              (outcome.lowRes ? shortRecheckAuditUrls : completedQualityAuditUrls).add(current.url);
               byId.delete(outcome.item.id);
             } else if (outcome.provisional && webAccessGranted) {
               const next = nextIconRecoveryQualityRetry(current);
               if (current.qualityUpgrade && next.exhausted) {
-                completedQualityAuditUrls.add(current.url);
+                shortRecheckAuditUrls.add(current.url);
                 byId.delete(outcome.item.id);
                 exhausted += 1;
               } else {
@@ -3403,7 +3448,7 @@ export function startBackground(adapter) {
           }
           const next = nextIconRecoveryFailure(current);
           if (current.qualityUpgrade && next.exhausted) {
-            completedQualityAuditUrls.add(current.url);
+            shortRecheckAuditUrls.add(current.url);
             byId.delete(outcome.item.id);
             exhausted += 1;
           } else {
@@ -3422,6 +3467,7 @@ export function startBackground(adapter) {
         };
       });
       if (completedQualityAuditUrls.size) await markFaviconQualityAuditsComplete([...completedQualityAuditUrls]);
+      if (shortRecheckAuditUrls.size) await markFaviconQualityAuditsComplete([...shortRecheckAuditUrls], { recheckAfterMs: FAVICON_LOW_QUALITY_RECHECK_MS });
       if (canAutonomouslyRetry) await scheduleIconRecoveryAlarm(queue);
       else { try { await browser.alarms?.clear?.(ICON_RECOVERY_ALARM); } catch {} }
       const summary = {
@@ -3523,6 +3569,7 @@ export function startBackground(adapter) {
     let changed = false;
     for (const shortcut of targets) {
       if (!learnedArtworkMayReplace(shortcut, { sourceKind })) continue;
+      if (automaticFaviconWouldDowngrade(shortcut, image)) continue;
       const disposition = learnedArtworkDisposition(shortcut, { sourceKind, sourceUrl });
       if (shortcut.image === image &&
           shortcut.imageAssetId === "" &&
@@ -3620,7 +3667,12 @@ export function startBackground(adapter) {
         { persistSyncError: false }
       );
       learned = applied === true || learned;
-      if (discovered.qualityComplete === true) await markFaviconQualityAuditsComplete([tab.url]);
+      if (discovered.qualityComplete === true) {
+        await markFaviconQualityAuditsComplete([tab.url], {
+          recheckAfterMs: faviconQualitySide(discovered) < FAVICON_LOW_QUALITY_SIDE
+            ? FAVICON_LOW_QUALITY_RECHECK_MS : FAVICON_QUALITY_AUDIT_TTL_MS
+        });
+      }
     }
 
     return learned;

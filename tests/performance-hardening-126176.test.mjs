@@ -99,6 +99,9 @@ for (const browser of ["firefox", "chrome"]) {
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
     installQueueMutationStub(ctx);
+    ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+    ctx.automaticFaviconWouldDowngrade = () => false; // legacy fixtures have no prior artwork
+    vm.runInContext(extract(src, "faviconQualitySide"), ctx);
     vm.runInContext(`
       let iconRecoveryRun = null;
       ${extract(src, "processIconRecoveryQueue")}
@@ -239,6 +242,9 @@ for (const browser of ["firefox", "chrome"]) {
       scheduleImmediateIconRecoveryContinuation: () => {}
     });
     installQueueMutationStub(ctx);
+    ctx.FAVICON_LOW_QUALITY_SIDE = 64;
+    ctx.automaticFaviconWouldDowngrade = () => false; // legacy fixtures have no prior artwork
+    vm.runInContext(extract(src, "faviconQualitySide"), ctx);
     vm.runInContext(`
       let iconRecoveryRun = null;
       ${extract(src, "applyProactiveFaviconResults")}
