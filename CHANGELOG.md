@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.33.0.86
+
+- Improves automatic icon quality on sites where a small browser favicon hides a sharper home-screen icon. MosaicSync can now check the site’s standard Apple Touch icon during its background quality pass, without disturbing already-sharp artwork.
+- The extra check is limited to icons smaller than 128 pixels and preserves existing manually selected images. No new permissions or Sync/Recovery changes.
+
+## 1.33.0.85
+
+- New shortcuts use short, recognizable website identities where reliable metadata supports them; fixes cases such as Tesla marketing slogans and Le Monde domain-style names.
+- Homepage campaign links, language homepages, and content-specific pages are distinguished so article and document titles can remain useful.
+- An automatic name already accepted in the editor is not fetched and changed again immediately after Save. Quick Enter-to-save still permits one optional background lookup.
+- No retroactive renaming of existing shortcuts, third-party naming service, new permissions, Sync/Recovery protocol changes, or Stage 3B code.
+
 ## 1.33.0.84
 
 - Fixes a Chrome-only favicon regression where a browser-cached icon enlarged to 128 pixels could prevent a sharper real website icon from being selected.

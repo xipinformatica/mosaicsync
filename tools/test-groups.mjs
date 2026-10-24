@@ -63,6 +63,7 @@ const GROUPS = Object.freeze({
   newtab: {
     description: "New Tab UI, Settings, Spaces, folders, Frequently Visited and presentation",
     patterns: [
+      /naming-identity-133085\.test\.mjs$/i,
       /visual-empty-plus-133066\.test\.mjs$/i,
       /visual-plus-133067\.test\.mjs$/i,
       /visual-plus-forced-colors-133068\.test\.mjs$/i,

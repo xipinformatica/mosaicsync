@@ -4517,6 +4517,71 @@ else if (scenario.startsWith('audit-ig')) {
   }
 }
 
+else if (scenario === 'naming-identity') {
+  // Automatic naming: real shipped background title lookup over deterministic local pages.
+  websiteAccess = true;
+  const pages = {
+    'https://tesla.com/': '<head><meta property="og:site_name" content="Tesla"><title>Electric Cars, Solar &amp; Clean Energy | Tesla</title></head>',
+    'https://lemonde.fr/': '<head><meta property="og:site_name" content="LeMonde.fr"><title>Le Monde.fr - Actualités et Infos en France et dans le monde</title></head>',
+    'https://tesla.com/model3': '<head><meta property="og:site_name" content="Tesla"><title>Model 3 | Tesla</title></head>',
+    'https://booking.com/': '<head><meta property="og:site_name" content="Booking.com"><title>Booking.com | Official site | The best hotels</title></head>'
+  };
+  fetchHandler = async url => pages[url]
+    ? responseBytes(new TextEncoder().encode(pages[url]), 'text/html; charset=utf-8', url)
+    : { ok: false, status: 404, url, headers: { get() { return null; } }, body: null, async arrayBuffer() { return new ArrayBuffer(0); } };
+  const out = {};
+  let n = 0;
+  for (const pageUrl of Object.keys(pages)) {
+    out[pageUrl] = await send({ type: 'mosaicsync:suggest-shortcut-title', pageUrl, requestId: `naming-identity-${n++}` });
+  }
+  console.log(JSON.stringify(out));
+}
+
+else if (scenario === 'favicon-undeclared-touch') {
+  // A site declares only a favicon.ico (as icon, shortcut icon and apple-touch-icon, like
+  // newyorker.com) while a sharper home-screen icon lives at the standard /apple-touch-icon.png.
+  websiteAccess = true;
+  const frames = (process.env.TOUCH_ICO_FRAMES || '16,32,48,64').split(',').map(Number);
+  const touchMode = process.env.TOUCH_ICON || 'ok';
+  const pngs = frames.map((side, i) => tinyPng(side, side, 80 + i));
+  const header = new Uint8Array(6 + 16 * frames.length); const dv = new DataView(header.buffer);
+  dv.setUint16(2, 1, true); dv.setUint16(4, frames.length, true);
+  let offset = header.length;
+  frames.forEach((side, i) => { const e = 6 + i * 16; header[e] = side >= 256 ? 0 : side; header[e + 1] = side >= 256 ? 0 : side; dv.setUint16(e + 4, 1, true); dv.setUint16(e + 6, 32, true); dv.setUint32(e + 8, pngs[i].length, true); dv.setUint32(e + 12, offset, true); offset += pngs[i].length; });
+  const favicon = new Uint8Array(offset); favicon.set(header, 0); let cursor = header.length; for (const png of pngs) { favicon.set(png, cursor); cursor += png.length; }
+  const ico = 'https://news.example/assets/favicon.ico';
+  const page = `<!doctype html><html><head><title>News</title><link rel="icon" href="${ico}"><link rel="shortcut icon" href="${ico}" type="image/x-icon"><link rel="apple-touch-icon" href="${ico}"><link rel="apple-touch-icon-precomposed" href="${ico}"></head></html>`;
+  const fetched = [];
+  fetchHandler = async url => {
+    fetched.push(url);
+    if (browserName === 'chrome' && url.includes('_favicon/')) return responseBytes(tinyPng(128, 128, url.includes('placeholder') ? 14 : 13), 'image/png', url);
+    if (url === 'https://news.example/') return responseBytes(new TextEncoder().encode(page), 'text/html; charset=utf-8', url);
+    if (url === ico) return responseBytes(favicon, 'image/x-icon', url);
+    if (url === 'https://news.example/apple-touch-icon.png') {
+      if (touchMode === 'ok') return responseBytes(tinyPng(180, 180, 90), 'image/png', url);
+      if (touchMode === 'network') throw new TypeError('network');
+    }
+    return { ok: false, status: 404, url, headers: { get() { return null; } }, body: null, async arrayBuffer() { return new ArrayBuffer(0); } };
+  };
+  const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const stored = async () => {
+    const raw = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    const item = findCompactShortcut(raw, 'news');
+    if (!item?.localImageAssetId) return 'none';
+    const asset = (await local.get(`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`))[`${constants.LOCAL_ASSET_PREFIX}${item.localImageAssetId}`] || '';
+    const bytes = Buffer.from(asset.split(',')[1] || '', 'base64');
+    return bytes[0] === 0x89 && bytes[31] === 90 ? 'touch' : bytes[0] === 0x89 && bytes[31] === 13 ? 'native' : 'favicon';
+  };
+  await seedLocalState(stateWith({ personal: [shortcut('news', 'https://news.example/')] }));
+  await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: ['news'], force: true });
+  await settle(1200);
+  await send({ type: 'mosaicsync:hydrate-missing-icons', shortcutIds: ['news'] });
+  await settle(1200);
+  const ledger = ((await local.get(constants.LOCAL_FAVICON_QUALITY_AUDIT_KEY))[constants.LOCAL_FAVICON_QUALITY_AUDIT_KEY]?.items || []).length;
+  const queue = ((await local.get(constants.LOCAL_ICON_RECOVERY_QUEUE_KEY))[constants.LOCAL_ICON_RECOVERY_QUEUE_KEY]?.items || []).length;
+  console.log(JSON.stringify({ stored: await stored(), ledger, queue, touchRequests: fetched.filter(url => url.endsWith('/apple-touch-icon.png')).length }));
+}
+
 else {
   throw new Error(`unknown scenario ${scenario}`);
 }

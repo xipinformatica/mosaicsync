@@ -37,10 +37,12 @@ The full Personal and Work dataset commit markers now carry the persistent reset
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.84
+Current release: 1.33.0.86
 
 1.33.0.70 private Stage 2F candidate adds a persistent browser Sync reset epoch so upgraded devices that missed the transient reset-intent while offline do not resurrect pre-reset shortcuts on return. It adds one small Sync metadata key and uses the existing liveness probe; .63–.69 installations do not understand this signal. Independent audit, GitHub gates and real signed-in multi-device testing are pending.
 
+
+**1.33.0.86 favicon-quality corrective:** During the existing bounded background quality inspection, an automatically discovered favicon smaller than 128 pixels also gets one try at the conventional Apple Touch icon path. Larger established icons skip this probe. Existing ranking, privacy, manually chosen artwork, Sync/Recovery and startup render path stay unchanged.
 
 ## 1.33.0.48 — Neofix 4: behavior-preserving New Tab persistence boundary
 

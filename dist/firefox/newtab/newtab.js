@@ -107,7 +107,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, cleanShortcutPageTitle, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, chooseShortcutPageName, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -4697,6 +4697,7 @@ ${site.url}`;
   let shortcutNameLastRequestedUrl = "";
   let shortcutNameRequestId = "";
   let shortcutNameRequestSequence = 0;
+  let shortcutNameSuggestion = null; // { url, name } of a website answer shown in the editor
   function cancelShortcutNameRequest() {
     if (!shortcutNameRequestId) return;
     const requestId = shortcutNameRequestId;
@@ -4705,6 +4706,7 @@ ${site.url}`;
   }
   function invalidateShortcutNameSuggestion() {
     shortcutNameSuggestionGeneration += 1;
+    shortcutNameSuggestion = null;
     cancelShortcutNameRequest();
   }
   function suggestShortcutNameFromUrl(requestTitle = false) {
@@ -4739,9 +4741,10 @@ ${site.url}`;
         let currentUrl;
         try { currentUrl = normalizeShortcutUrl(shortcutUrl.value); } catch { return; }
         if (currentUrl !== url || !result?.ok) return;
-        const title = cleanShortcutPageTitle(result.siteName, fallback, result.finalPageUrl) ||
-          cleanShortcutPageTitle(result.title, fallback, result.finalPageUrl);
+        const title = chooseShortcutPageName(result, fallback, url);
         if (title) { shortcutTitle.value = title; updateImagePreview(); }
+        // This answer is final for this URL: saving this exact name needs no second lookup.
+        shortcutNameSuggestion = { url, name: shortcutTitle.value };
       }).catch(() => {
         if (shortcutNameRequestId === requestId) shortcutNameRequestId = "";
       }); // A failed lookup never blocks shortcut creation.
@@ -4759,8 +4762,7 @@ ${site.url}`;
         type: "mosaicsync:suggest-shortcut-title", pageUrl: saved.url, requestId
       });
       if (!result?.ok) return;
-      const title = cleanShortcutPageTitle(result.siteName, saved.title, result.finalPageUrl) ||
-        cleanShortcutPageTitle(result.title, saved.title, result.finalPageUrl);
+      const title = chooseShortcutPageName(result, saved.title, saved.url);
       if (!title) return;
       // A deliberate manual name (even if identical to the offline fallback)
       // changes the persisted revision and makes this operation ineligible.
@@ -5231,6 +5233,7 @@ ${site.url}`;
       // so the request still occurs in the original submit user gesture while an
       // invalid URL or impossible destination now causes zero permission prompts.
       const url = normalizeShortcutUrl(shortcutUrl.value);
+      const editorSuggestion = shortcutNameSuggestion;
       invalidateShortcutNameSuggestion(); // Save abandons any outstanding optional title request.
       const title = shortcutTitle.value.trim() || hostLabel(url);
       const image = pendingShortcutImage;
@@ -5250,7 +5253,10 @@ ${site.url}`;
       const record = durableSpaceId ? findShortcutRecord(operationId) : null;
       // Snapshot the authorization now: a permission granted during this save
       // is not permission for a speculative name lookup in the same operation.
-      const mayEnrichAfterSave = !record && !id && shortcutAutomaticName.checked && webAccessGranted;
+      // The name the website already answered for this URL is final: saving it must not
+      // trigger a second lookup that could rename the tile a moment later.
+      const acceptedSuggestion = editorSuggestion?.url === url && editorSuggestion.name === title;
+      const mayEnrichAfterSave = !record && !id && shortcutAutomaticName.checked && webAccessGranted && !acceptedSuggestion;
       let savedShortcutId = operationId;
       const destinationSpaceId = isMultipleSpacesEnabled() && SPACE_IDS.includes(editingDestinationSpaceId)
         ? editingDestinationSpaceId

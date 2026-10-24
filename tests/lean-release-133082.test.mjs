@@ -42,5 +42,5 @@ test('.82 protects the K1 developer guide and ships no Stage 3B generation engin
   assert.doesNotMatch(bg,/sync-generation-(?:reset|completion|fence|lifecycle)/);
   const names=await readdir('src/shared/background');
   assert.equal(names.filter(n=>n.startsWith('sync-generation-')).length,0);
-  assert.match(await read('CHANGELOG.md'),/^# Changelog\n\n## 1\.33\.0\.84/m);
+  assert.match(await read('CHANGELOG.md'),/^# Changelog\n\n## 1\.33\.0\.86/m);
 });

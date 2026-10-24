@@ -2506,6 +2506,15 @@ export function startBackground(adapter) {
         qualityUnresolved = qualityUnresolved || conventionalScan.qualityUnresolved === true || conventionalScan.complete !== true;
         sawTimeout = sawTimeout || conventionalScan.sawTimeout === true;
       }
+    } else if (preferQuality && initialOrigin && best?.image && faviconQualitySide(best) < 128 && Date.now() < deadlineAt) {
+      // A small favicon can reach the "good enough" score through its declaration alone and
+      // hide the site's undeclared home-screen icon, which is drawn for launcher tiles. Check
+      // that one standard location; tile-ready (128px+) art skips it, and a failure here never
+      // reopens the audit.
+      const touch = await fetchImageDataUrlDetailed(`${initialOrigin}/apple-touch-icon.png`, {
+        deadlineAt: Math.min(deadlineAt, Date.now() + 2_500), declared: true, sourceKind: "touch"
+      });
+      if (touch.image) best = betterFaviconCandidate(best, touch);
     }
 
     const finalOrigin = discoveredFinalOrigin;

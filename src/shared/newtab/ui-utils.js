@@ -254,6 +254,87 @@ export function cleanShortcutPageTitle(raw, fallback = "", finalPageUrl = "") {
   return title.length >= 2 && title !== fallback ? title : "";
 }
 
+// Website metadata may confirm, reformat or replace the offline name. The result depends
+// only on the URL and the metadata, never on the name currently shown, so the editor and
+// post-save enrichment agree. Unusable metadata leaves the offline name in place.
+const SHORTCUT_TITLE_SEPARATOR = /\s+[|–—·•]\s+|\s+-\s+/;
+const SHORTCUT_GENERIC_NAME = /^(?:home|home ?page|welcome|untitled|index|website|web site|main page|start page|inicio|inici|portada|accueil|startseite|página inicial|pagina iniziale|bienvenido|benvinguts|bienvenue|willkommen|benvenuto)$/i;
+// Campaign/referral parameters that never change which page is shown.
+const SHORTCUT_TRACKING_PARAM = /^(?:utm_\w+|fbclid|gclid|gbraid|wbraid|dclid|msclkid|yclid|twclid|ttclid|igshid|mc_cid|mc_eid|_hsenc|_hsmi|mkt_tok|_ga|_gl|si|ref|ref_src)$/i;
+function shortcutNameKey(value) {
+  return String(value || "").normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+}
+// "/", "/es/", "/es_es", "/es/es/" with only tracking parameters: the site's home page.
+function isShortcutHomepage(page) {
+  let languages = null;
+  try { languages = new Intl.DisplayNames(["en"], { type: "language" }); } catch {}
+  const locale = segment => {
+    const match = /^([a-z]{2})(?:[-_](?:[a-z]{2}|[a-z]{4}))?$/i.exec(segment);
+    return Boolean(match && languages && languages.of(match[1].toLowerCase()) !== match[1].toLowerCase());
+  };
+  const segments = page.pathname.split("/").filter(Boolean);
+  return segments.length <= 2 && segments.every(locale) &&
+    [...page.searchParams.keys()].every(key => SHORTCUT_TRACKING_PARAM.test(key));
+}
+export function chooseShortcutPageName(result, currentName = "", pageUrl = "") {
+  if (!result?.ok) return "";
+  let page;
+  try { page = new URL(pageUrl); } catch { return ""; }
+  const host = page.hostname.toLowerCase().replace(/\.$/, "").replace(/^www\d*\./, "");
+  const labels = host.split(".");
+  const fallback = friendlyShortcutName(page.href);
+  const identity = shortcutNameKey(fallback);
+  const platform = [...SHORTCUT_HOSTED_SUFFIXES].find(suffix => host.endsWith(`.${suffix}`));
+  const hostWords = labels.slice(0, platform ? -platform.split(".").length : -1).map(shortcutNameKey).filter(word => word.length >= 4);
+  const withoutSuffix = name => {
+    for (const parts of [2, 1]) {
+      const suffix = `.${labels.slice(-parts).join(".")}`;
+      if (labels.length > parts && name.toLowerCase().endsWith(suffix)) return name.slice(0, -suffix.length).trim();
+    }
+    return name;
+  };
+  const isBareDomain = name => !/\s/.test(name) && (host === name.toLowerCase() || host.endsWith(`.${name.toLowerCase()}`));
+  // 3: the hostname's own identity ("Tesla", "Le Monde.fr", "X (formerly Twitter)");
+  // 2: the bare domain written out ("Booking.com"); 1: contains a hostname word; 0: unrelated.
+  const rank = name => {
+    if (!name || !identity) return 0;
+    if (shortcutNameKey(withoutSuffix(name.replace(/\s*\([^()]*\)$/, ""))) === identity) return isBareDomain(name) ? 2 : 3;
+    const key = shortcutNameKey(name);
+    return hostWords.some(word => key.includes(word) || (key.length >= 4 && word.includes(key))) ? 1 : 0;
+  };
+  // "Le Monde.fr" -> "Le Monde" and "X (formerly Twitter)" -> "X"; "Booking.com" keeps its brand.
+  const display = name => {
+    if (rank(name) < 3) return name;
+    const core = name.replace(/\s*\([^()]*\)$/, "");
+    const bare = withoutSuffix(core);
+    return bare !== core && /\s/.test(bare) ? bare : core;
+  };
+  const usable = value => value.length >= 2 && value.length <= 52 && !SHORTCUT_GENERIC_NAME.test(value);
+  const title = String(result.title || "").replace(/\s+/g, " ").trim();
+  const parts = title.split(SHORTCUT_TITLE_SEPARATOR).map(part => part.trim());
+  const lead = parts.length > 1 && SHORTCUT_GENERIC_NAME.test(parts[0]) ? 1 : 0; // "Home | Acme Bakery"
+  const siteName = [cleanShortcutPageTitle(result.siteName, "", result.finalPageUrl)].find(usable) || "";
+  const firstSegment = [cleanShortcutPageTitle(lead ? parts.slice(1).join(" | ") : title, "", result.finalPageUrl)].find(usable) || "";
+  let chosen = "";
+  if (isShortcutHomepage(page)) {
+    // Home page: the website's identity beats a descriptive or marketing page title.
+    const prefix = firstSegment.split(/[:,]\s+|\.\s+/)[0].trim(); // "Figma: The ..." -> "Figma"
+    const later = firstSegment ? parts.slice(lead + 1) : [];
+    let best = "", bestRank = 0;
+    for (const [name, minimum] of [[siteName, 1], [firstSegment, 1], [prefix, 2], ...later.map(name => [name, 3])]) {
+      const score = usable(name) ? rank(name) : 0;
+      if (score >= minimum && score > bestRank) { best = name; bestRank = score; }
+    }
+    chosen = display(best || siteName || firstSegment);
+  } else {
+    // Specific page (article, document, product): its own title is the name. The site
+    // name is used only when the title is missing or merely repeats the site's identity.
+    chosen = firstSegment && rank(firstSegment) < 2 ? firstSegment : siteName ? display(siteName) : "";
+  }
+  if (!chosen && Math.max(rank(siteName), rank(firstSegment)) >= 2) chosen = fallback;
+  return chosen && chosen !== currentName ? chosen : "";
+}
+
 export function normalizeShortcutUrl(raw) {
   let value = String(raw || "").trim();
   if (!value) throw new Error("Enter a URL.");

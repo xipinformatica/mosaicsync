@@ -88,7 +88,7 @@ test('55: website metadata is separate from the page title and retains existing 
   assert.match(background,/og:site_name/);
   assert.match(background,/siteName/);
   assert.match(background,/redirect: "manual", stopAtHeadEnd: false/);
-  assert.match(newtab,/cleanShortcutPageTitle\(result\.siteName/);
+  assert.match(newtab,/chooseShortcutPageName\(result, saved\.title, saved\.url\)/);
 });
 
 function titleHarness() {

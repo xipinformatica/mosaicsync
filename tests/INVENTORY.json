@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 237,
+  "totalFiles": 239,
   "counts": {
-    "behavioral": 114,
-    "integration": 42,
+    "behavioral": 115,
+    "integration": 43,
     "static": 80,
     "browser": 1
   },
@@ -391,6 +391,10 @@
       "kind": "behavioral"
     },
     {
+      "file": "tests/favicon-touch-icon-133086.test.mjs",
+      "kind": "integration"
+    },
+    {
       "file": "tests/feature-133029.test.mjs",
       "kind": "static"
     },
@@ -516,6 +520,10 @@
     },
     {
       "file": "tests/model-sync.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/naming-identity-133085.test.mjs",
       "kind": "behavioral"
     },
     {
