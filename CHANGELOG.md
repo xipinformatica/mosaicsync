@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.33.0.87
+
+- Makes the four icon/image buttons in the shortcut editor the same size and properly aligned, even when translated labels occupy different numbers of lines. Also improves their layout in narrow windows.
+- Keeps all 34 existing translations exactly as they were. No changes to favicon selection, naming, permissions, Sync, Recovery or stored data.
+
 ## 1.33.0.86
 
 - Improves automatic icon quality on sites where a small browser favicon hides a sharper home-screen icon. MosaicSync can now check the site’s standard Apple Touch icon during its background quality pass, without disturbing already-sharp artwork.

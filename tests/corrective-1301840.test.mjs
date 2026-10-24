@@ -41,6 +41,22 @@ test("1.30.18.40 all four artwork actions share one desktop row", async () => {
     "desktop and laptop editors must use one four-action row");
 });
 
+test("artwork actions keep one size and one baseline in every language", async () => {
+  const css = await source("src/shared/newtab/newtab-secondary.css");
+  // Both desktop layouts (normal and short laptop) stretch every action to the row height and
+  // reserve two text lines, so a translation that wraps never makes one button taller.
+  for (const block of [
+    css.match(/^@media \(min-width: 621px\)\{\n([\s\S]*?)\n\}/m)?.[1] || "",
+    css.match(/^@media \(min-width: 621px\) and \(max-height: 760px\)\{\n([\s\S]*?)\n\}/m)?.[1] || ""
+  ]) {
+    const row = block.match(/#shortcutDialog \.row-actions\{([^}]*)\}/)?.[1] || "";
+    const items = block.match(/#shortcutDialog \.row-actions button\{([^}]*)\}/)?.[1] || "";
+    assert.match(row, /align-items:stretch/, "every action must fill the row height");
+    assert.match(items, /min-height:calc\(2\.4em \+ 12px\)/, "two text lines must be reserved");
+    assert.match(items, /width:100%/, "every action must fill its column");
+  }
+});
+
 test("1.30.18.40 Light-mode field labels remain transparent while controls retain their surfaces", async () => {
   const css = await source("src/shared/newtab/newtab-critical.css");
   const labelRule = css.match(/:root\[data-effective-theme="light"\] \.field > span,\s*:root\[data-effective-theme="light"\] \.image-fieldset legend\s*\{([^}]*)\}/)?.[1] || "";

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 
-const VERSION = "1.33.0.86";
+const VERSION = "1.33.0.87";
 
 async function read(path) { return readFile(path, "utf8"); }
 
