@@ -130,7 +130,7 @@ async function runShortcutRace(firstItem, secondItem) {
     pendingShortcutImageIsFallback: false, pendingShortcutBuiltinIcon: "", pendingShortcutColorTag: "",
     dataUrlByteLength() { return 0; }, classifyImage() { return "none"; },
     BUILTIN_SHORTCUT_ICON_KEYS: [], SHORTCUT_COLOR_TAG_KEYS: [], shortcutImageUrl: field(), shortcutSyncImage: field(),
-    useShortcutImageUrl: field(), shortcutArtworkEdited: false, deleteShortcutButton: field(),
+    useShortcutImageUrl: field(), shortcutWebImageDialog: { open: false }, shortcutArtworkEdited: false, deleteShortcutButton: field(),
     shortcutBuiltinIconPicker: field(), chooseBuiltinShortcutIcon: { setAttribute() {} },
     updateBuiltinShortcutIconSelection() {}, updateShortcutColorSelection() {}, updateImagePreview() {}, updateShortcutSpaceChoice() {},
     queueMicrotask(fn) { fn(); }, console

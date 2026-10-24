@@ -173,24 +173,27 @@
       <fieldset class="image-fieldset">
         <legend>Icon or image</legend>
         <div class="image-editor">
-          <div id="imagePreview" class="image-preview" aria-label="Image preview"><span>A</span></div>
+          <div class="shortcut-preview-column">
+            <div id="imagePreview" class="image-preview" aria-label="Image preview"><span>A</span></div>
+            <button id="clearShortcutImage" class="text-button shortcut-clear-image" type="button" hidden>Clear image</button>
+          </div>
           <div class="image-controls">
+            <label class="shortcut-discover-choice">
+              <input id="shortcutAutoDiscover" type="checkbox" checked disabled>
+              <span>Discover automatically</span>
+            </label>
             <div class="row-actions">
               <label class="file-button" for="shortcutImageFile">Choose local image</label>
               <input id="shortcutImageFile" class="visually-hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/x-icon,image/vnd.microsoft.icon">
               <button id="chooseDetectedFavicon" class="secondary-button compact-icon-picker-button" type="button" aria-expanded="false">Choose detected favicon</button>
               <button id="chooseBuiltinShortcutIcon" class="secondary-button compact-icon-picker-button" type="button" aria-expanded="false">Built-in icons</button>
-              <button id="clearShortcutImage" class="text-button" type="button">Clear image</button>
+              <button id="openShortcutWebImage" class="secondary-button compact-icon-picker-button" type="button">Use web image</button>
             </div>
             <div id="detectedFaviconPicker" class="detected-favicon-picker" role="group" aria-label="Detected favicons" hidden>
               <div id="detectedFaviconChoices" class="detected-favicon-choices"></div>
               <p id="detectedFaviconStatus" class="detected-favicon-status" role="status" aria-live="polite"></p>
             </div>
             <div id="shortcutBuiltinIconPicker" class="builtin-icon-picker" role="group" aria-label="Built-in icons" hidden></div>
-            <div class="web-image-row">
-              <input id="shortcutImageUrl" type="url" inputmode="url" maxlength="2048" autocomplete="off" placeholder="https://example.com/icon.png" aria-label="Online image address">
-              <button id="useShortcutImageUrl" class="secondary-button" type="button">Use web image</button>
-            </div>
             <div id="shortcutSyncImageRow" class="artwork-sync-row">
               <label class="artwork-sync-toggle">
                 <input id="shortcutSyncImage" type="checkbox">
@@ -242,6 +245,23 @@
     </form>
   </dialog>
 
+  <dialog id="shortcutWebImageDialog" class="dialog shortcut-web-image-dialog" aria-labelledby="shortcutWebImageDialogTitle">
+    <form id="shortcutWebImageForm" class="dialog-card">
+      <div class="dialog-heading">
+        <h2 id="shortcutWebImageDialogTitle">Use web image</h2>
+        <button id="shortcutWebImageClose" class="icon-button dialog-close-button" type="button" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
+      </div>
+      <label class="field">
+        <span>Online image address</span>
+        <input id="shortcutImageUrl" type="url" inputmode="url" maxlength="2048" autocomplete="off" placeholder="https://example.com/icon.png" required>
+      </label>
+      <div class="dialog-actions">
+        <button id="shortcutWebImageCancel" class="secondary-button" type="button">Cancel</button>
+        <button id="useShortcutImageUrl" class="primary-button" type="submit">Use web image</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="mosaicConfirmDialog" class="dialog mosaic-confirm-dialog" aria-labelledby="mosaicConfirmTitle" aria-describedby="mosaicConfirmMessage">
     <div class="dialog-card" role="document">
       <div class="dialog-heading"><h2 id="mosaicConfirmTitle">Continue</h2></div>
@@ -257,7 +277,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.33.0.87</p>
+          <p class="eyebrow">MosaicSync · 1.33.0.88</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>

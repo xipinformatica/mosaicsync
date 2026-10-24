@@ -416,6 +416,12 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   const chooseBuiltinShortcutIcon = document.getElementById("chooseBuiltinShortcutIcon");
   const shortcutBuiltinIconPicker = document.getElementById("shortcutBuiltinIconPicker");
   const shortcutColorPicker = document.getElementById("shortcutColorPicker");
+  const shortcutAutoDiscover = document.getElementById("shortcutAutoDiscover");
+  const shortcutWebImageDialog = document.getElementById("shortcutWebImageDialog");
+  const shortcutWebImageForm = document.getElementById("shortcutWebImageForm");
+  const openShortcutWebImage = document.getElementById("openShortcutWebImage");
+  const shortcutWebImageClose = document.getElementById("shortcutWebImageClose");
+  const shortcutWebImageCancel = document.getElementById("shortcutWebImageCancel");
   const shortcutImageUrl = document.getElementById("shortcutImageUrl");
   const useShortcutImageUrl = document.getElementById("useShortcutImageUrl");
   const shortcutSyncImage = document.getElementById("shortcutSyncImage");
@@ -4812,6 +4818,7 @@ ${site.url}`;
     shortcutImageUrl.value = pendingShortcutImageSourceKind === "remote" ? pendingShortcutImageSourceUrl : "";
     shortcutSyncImage.checked = pendingShortcutImageKind === "sync" || pendingShortcutImageKind === "local";
     if (useShortcutImageUrl) useShortcutImageUrl.disabled = false;
+    if (shortcutWebImageDialog?.open) shortcutWebImageDialog.close();
     shortcutArtworkEdited = false;
     deleteShortcutButton.hidden = !item;
     if (shortcutBuiltinIconPicker) shortcutBuiltinIconPicker.hidden = true;
@@ -4905,6 +4912,7 @@ ${site.url}`;
 
   shortcutDialog?.addEventListener("close", () => {
     shortcutSyncPrepareGeneration += 1;
+    if (shortcutWebImageDialog?.open) shortcutWebImageDialog.close();
     resetDetectedFaviconPicker();
     invalidateShortcutNameSuggestion();
   });
@@ -4915,11 +4923,28 @@ ${site.url}`;
     const image = pendingShortcutImage;
     appendImageOrFallback(imagePreview, image, shortcutTitle.value || "A", pendingShortcutBuiltinIcon);
 
-    const isUserArtwork = pendingShortcutImageSourceKind === "upload" ||
-      (pendingShortcutImageKind === "sync" && !["remote", "favicon", "firefox"].includes(pendingShortcutImageSourceKind));
-    if (shortcutSyncImageRow) shortcutSyncImageRow.hidden = !isUserArtwork || pendingShortcutImageIsFallback;
-    shortcutSyncImage.disabled = !image || pendingShortcutImageIsFallback || !isUserArtwork;
-    if (!isUserArtwork) shortcutSyncImage.checked = false;
+    // This control is exclusively for user-uploaded local files. A manually
+    // selected detected favicon is also tagged "upload" for ownership but has
+    // a compact faviconPreference; it must not expose the local-file control.
+    // Preserve a legacy checked Sync choice while it is hidden: opening and
+    // saving an old shortcut must never silently remove its synced image.
+    const isLocalUpload = Boolean(image) && pendingShortcutImageSourceKind === "upload" &&
+      !pendingShortcutFaviconPreference && !pendingShortcutImageIsFallback;
+    if (shortcutSyncImageRow) shortcutSyncImageRow.hidden = !isLocalUpload;
+    shortcutSyncImage.disabled = !isLocalUpload;
+
+    // Automatic is the default and is an indicator, not an opt-out that would
+    // require an incompatible new on-wire preference. Choosing manual artwork
+    // unchecks it; checking it again explicitly returns to automatic discovery.
+    const isManualArtwork = Boolean(pendingShortcutBuiltinIcon) ||
+      ["upload", "remote", "builtin"].includes(pendingShortcutImageSourceKind) ||
+      (Boolean(image) && !["favicon", "firefox"].includes(pendingShortcutImageSourceKind));
+    // Respect the existing global setting: do not show a misleading checked
+    // automatic-discovery mode when the user disabled site-icon learning.
+    shortcutAutoDiscover.checked = !isManualArtwork && Boolean(state.settings.autoSiteIcons);
+    shortcutAutoDiscover.disabled = !isManualArtwork || !state.settings.autoSiteIcons;
+    clearShortcutImage.hidden = !isManualArtwork;
+    imagePreview.classList.toggle("is-auto-empty", !isManualArtwork && !image);
     if (shortcutSyncImageHint) {
       const syncBytes = dataUrlByteLength(pendingShortcutSyncData);
       if (shortcutSyncImage.checked && syncBytes) {
@@ -5097,9 +5122,10 @@ ${site.url}`;
     }
   });
 
-  clearShortcutImage.addEventListener("click", () => {
+  function resetShortcutToAutomaticDiscovery() {
     shortcutSyncPrepareGeneration += 1;
     shortcutArtworkEdited = true;
+    resetDetectedFaviconPicker();
     pendingShortcutImage = "";
     pendingShortcutSyncData = "";
     pendingShortcutImageKind = "none";
@@ -5112,9 +5138,35 @@ ${site.url}`;
     shortcutSyncImage.checked = false;
     updateBuiltinShortcutIconSelection();
     updateImagePreview();
+  }
+  clearShortcutImage.addEventListener("click", resetShortcutToAutomaticDiscovery);
+  shortcutAutoDiscover.addEventListener("change", () => {
+    if (shortcutAutoDiscover.checked) resetShortcutToAutomaticDiscovery();
+    else updateImagePreview(); // No unsupported persisted opt-out without manual artwork.
   });
 
-  useShortcutImageUrl?.addEventListener("click", () => {
+  openShortcutWebImage?.addEventListener("click", () => {
+    if (!shortcutDialog.open || shortcutWebImageDialog.open) return;
+    localizeDocument(shortcutWebImageDialog);
+    shortcutWebImageDialog.showModal();
+    shortcutImageUrl.focus();
+  });
+  function closeWebImageDialog() {
+    if (shortcutWebImageDialog.open) shortcutWebImageDialog.close();
+  }
+  shortcutWebImageCancel?.addEventListener("click", closeWebImageDialog);
+  shortcutWebImageClose?.addEventListener("click", closeWebImageDialog);
+  shortcutWebImageDialog?.addEventListener("click", event => {
+    if (event.target === shortcutWebImageDialog) closeWebImageDialog();
+  });
+  shortcutWebImageDialog?.addEventListener("close", () => {
+    shortcutSyncPrepareGeneration += 1; // Cancel in-flight image fetches; never apply after dismissal.
+    useShortcutImageUrl.disabled = false;
+  });
+
+  shortcutWebImageForm?.addEventListener("submit", event => {
+    event.preventDefault(); // Enter applies the web image, never saves the shortcut.
+    if (!shortcutWebImageDialog.open || !shortcutDialog.open || useShortcutImageUrl.disabled) return;
     const generation = ++shortcutSyncPrepareGeneration;
     const editorShortcutId = shortcutId.value;
     const source = String(shortcutImageUrl.value || "").trim();
@@ -5133,7 +5185,7 @@ ${site.url}`;
       useShortcutImageUrl.disabled = true;
       try {
         const granted = await permissionPromise;
-        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
         // Remember the decision either way. A denied web-image request must not
         // cause the next ordinary shortcut click to show the same all-sites
         // permission prompt again. The user can explicitly retry in Advanced.
@@ -5141,13 +5193,13 @@ ${site.url}`;
         if (!state.settings.webAccessPrompted) {
           state.settings.webAccessPrompted = true;
           await saveState({ localCacheOnly: true });
-          if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
+          if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
         }
         if (!webAccessGranted) throw new Error(t("websiteAccessDenied"));
         const blob = await fetchBoundedRemoteImageBlob(parsed.href);
-        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
         const image = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
-        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
+        if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
         pendingShortcutBuiltinIcon = "";
         pendingShortcutImage = image;
         pendingShortcutSyncData = "";
@@ -5160,13 +5212,14 @@ ${site.url}`;
         shortcutArtworkEdited = true;
         updateBuiltinShortcutIconSelection();
         updateImagePreview();
+        closeWebImageDialog();
         showToast(t("webImageCached"));
       } catch (error) {
-        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
+        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutWebImageDialog.open && shortcutId.value === editorShortcutId) {
           showToast(error.message || t("operationFailed"));
         }
       } finally {
-        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
+        if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutWebImageDialog.open && shortcutId.value === editorShortcutId) {
           useShortcutImageUrl.disabled = false;
         }
       }

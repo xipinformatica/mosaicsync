@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.33.0.88
+
+- Reorganizes shortcut image selection: automatic favicon discovery is shown as the default, with a muted empty preview, and all four manual choices align as one consistent set.
+- Moves Clear image beneath the preview. The web-image address now opens in a separate dialog only when requested. “Sync this image” is offered only for a selected local-file upload.
+- Adds the new discovery label in all 34 UI languages. The existing icon resolver, stored profile and Sync/Recovery formats are unchanged.
+
 ## 1.33.0.87
 
 - Makes the four icon/image buttons in the shortcut editor the same size and properly aligned, even when translated labels occupy different numbers of lines. Also improves their layout in narrow windows.

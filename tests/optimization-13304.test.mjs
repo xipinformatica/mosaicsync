@@ -55,8 +55,11 @@ test("1.33.0.4 lazy Wallpaper Gallery opening is bound to the current Settings o
 test("1.33.0.4 critical-path census proves the pilot extraction reduced startup DOM and eager bindings", () => {
   const raw = execFileSync(process.execPath, ["tools/critical-path-census.mjs", "--json"], { encoding: "utf8" });
   const parsed = JSON.parse(raw);
-  assert.ok(parsed.initialDom.elementCount <= 631, `expected <=631 initial elements, got ${parsed.initialDom.elementCount}`);
-  assert.ok(parsed.initialDom.secondaryElementCount <= 523, `expected <=523 secondary elements, got ${parsed.initialDom.secondaryElementCount}`);
+  // .88 adds an on-demand web-image modal and a descriptive automatic-artwork state.
+  // This small increase is wholly inside the secondary editor; the primary DOM remains unchanged.
+  assert.equal(parsed.initialDom.primaryElementCount, 108);
+  assert.ok(parsed.initialDom.elementCount <= 636, `expected <=631 initial elements, got ${parsed.initialDom.elementCount}`);
+  assert.ok(parsed.initialDom.secondaryElementCount <= 528, `expected <=523 secondary elements, got ${parsed.initialDom.secondaryElementCount}`);
   assert.ok(parsed.eagerDomBindings.total <= 198, `expected <=198 eager bindings, got ${parsed.eagerDomBindings.total}`);
   assert.ok(parsed.eagerDomBindings.secondary <= 163, `expected <=163 secondary eager bindings, got ${parsed.eagerDomBindings.secondary}`);
   assert.ok(parsed.deferredModules.roots.some(entry => entry.root === "newtab/wallpaper-gallery-shell.js"), "gallery shell must be in the deferred module graph");

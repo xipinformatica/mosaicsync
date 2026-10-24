@@ -121,19 +121,19 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.30.3 ${browser} shortcut artwork jobs are invalidated by editor close and guarded after awaits`, () => {
     const uploadStart = sharedNewtab.indexOf('shortcutImageFile.addEventListener("change", async () => {');
-    const uploadEnd = sharedNewtab.indexOf('\n  clearShortcutImage.addEventListener', uploadStart);
+    const uploadEnd = sharedNewtab.indexOf('\n  function resetShortcutToAutomaticDiscovery()', uploadStart);
     const upload = sharedNewtab.slice(uploadStart, uploadEnd);
     assert.match(upload, /const generation = \+\+shortcutSyncPrepareGeneration;/);
     assert.match(upload, /const editorShortcutId = shortcutId\.value;/);
     assert.match(upload, /await optimizeImageFile[\s\S]*?generation !== shortcutSyncPrepareGeneration[\s\S]*?!shortcutDialog\?\.open[\s\S]*?shortcutId\.value !== editorShortcutId/);
 
-    const remoteStart = sharedNewtab.indexOf('useShortcutImageUrl?.addEventListener("click", () => {');
-    const remoteEnd = sharedNewtab.indexOf('\n  chooseDetectedFavicon?.addEventListener', remoteStart);
+    const remoteStart = sharedNewtab.indexOf('shortcutWebImageForm?.addEventListener("submit", event => {');
+    const remoteEnd = sharedNewtab.indexOf('\n  shortcutSyncImage?.addEventListener', remoteStart);
     const remote = sharedNewtab.slice(remoteStart, remoteEnd);
     for (const awaited of ["permissionPromise", "saveState", "fetchBoundedRemoteImageBlob", "imageBlobToDataUrl"]) {
       assert.match(remote, new RegExp(`await ${awaited.replace('.', '\\.')}`), `remote artwork path must await ${awaited}`);
     }
-    assert.match(remote, /generation !== shortcutSyncPrepareGeneration \|\| !shortcutDialog\?\.open \|\| shortcutId\.value !== editorShortcutId/g);
+    assert.match(remote, /generation !== shortcutSyncPrepareGeneration \|\| !shortcutDialog\?\.open \|\| !shortcutWebImageDialog\.open \|\| shortcutId\.value !== editorShortcutId/g);
     assert.match(sharedNewtab, /shortcutDialog\?\.addEventListener\("close", \(\) => \{\s*shortcutSyncPrepareGeneration \+= 1;[\s\S]*?resetDetectedFaviconPicker\(\);/);
   });
 

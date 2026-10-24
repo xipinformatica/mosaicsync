@@ -95,7 +95,7 @@ test('50 corrective: typing stays offline; lookup begins on URL blur or Enter', 
   assert.match(newtab,/if \(!requestTitle \|\| !webAccessGranted\) return/);
   assert.match(newtab,/generation !== shortcutNameSuggestionGeneration \|\| !shortcutDialog\.open \|\| shortcutId\.value \|\| shortcutNameManuallyEdited/);
   assert.match(newtab,/currentUrl !== url \|\| !result\?\.ok/);
-  assert.match(newtab,/shortcutDialog\?\.addEventListener\("close", \(\) => \{\s*shortcutSyncPrepareGeneration \+= 1;\s*resetDetectedFaviconPicker\(\);\s*invalidateShortcutNameSuggestion\(\)/);
+  assert.match(newtab,/shortcutDialog\?\.addEventListener\("close", \(\) => \{\s*shortcutSyncPrepareGeneration \+= 1;\s*if \(shortcutWebImageDialog\?\.open\) shortcutWebImageDialog\.close\(\);\s*resetDetectedFaviconPicker\(\);\s*invalidateShortcutNameSuggestion\(\)/);
   assert.match(newtab,/const title = shortcutTitle\.value\.trim\(\) \|\| hostLabel\(url\)/);
   assert.match(newtab,/shortcutNameManuallyEdited = Boolean\(item\)/);
 });

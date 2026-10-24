@@ -34,7 +34,7 @@ test("1.30.18.40 all four artwork actions share one desktop row", async () => {
   ]);
 
   const actions = html.match(/<div class="row-actions">([\s\S]*?)<\/div>/)?.[1] || "";
-  for (const id of ["shortcutImageFile", "chooseDetectedFavicon", "chooseBuiltinShortcutIcon", "clearShortcutImage"]) {
+  for (const id of ["shortcutImageFile", "chooseDetectedFavicon", "chooseBuiltinShortcutIcon", "openShortcutWebImage"]) {
     assert.match(actions, new RegExp(`id="${id}"`), `${id} must remain in the common artwork-action group`);
   }
   assert.match(css, /@media \(min-width: 621px\)[\s\S]*?#shortcutDialog \.row-actions\s*\{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/,

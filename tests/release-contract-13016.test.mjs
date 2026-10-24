@@ -5,7 +5,7 @@ import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
 
-const VERSION = "1.33.0.87";
+const VERSION = "1.33.0.88";
 const FIREFOX_KEYS = [
   "action", "author", "background", "browser_specific_settings", "chrome_settings_overrides",
   "chrome_url_overrides", "content_security_policy", "default_locale", "description", "homepage_url",

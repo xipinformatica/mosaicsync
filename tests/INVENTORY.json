@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 240,
+  "totalFiles": 241,
   "counts": {
-    "behavioral": 115,
+    "behavioral": 116,
     "integration": 43,
     "static": 81,
     "browser": 1
@@ -341,6 +341,10 @@
     {
       "file": "tests/corrective-133087-icon-actions.test.mjs",
       "kind": "static"
+    },
+    {
+      "file": "tests/corrective-133088-artwork-editor.test.mjs",
+      "kind": "behavioral"
     },
     {
       "file": "tests/custom-branding-1321.test.mjs",
