@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.33.0.89
+
+- Fixes a Chrome/Chromium issue that could leave website icons missing after a visit or manual selection from detected favicons. Chromium sometimes supplies a PNG but labels it as BMP; MosaicSync now recognizes its real type and can save the detected picture.
+- Retains protections against generic browser placeholder artwork and safeguards manually selected images. No change to website naming, the shortcut editor, permissions, Sync, Recovery or stored data formats.
+
 ## 1.33.0.88
 
 - Reorganizes shortcut image selection: automatic favicon discovery is shown as the default, with a muted empty preview, and all four manual choices align as one consistent set.

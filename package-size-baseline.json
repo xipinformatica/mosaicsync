@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "browsers": {
     "firefox": {
-      "version": "1.33.0.88",
+      "version": "1.33.0.89",
       "rawBytes": 2685440,
       "deflatedBytes": 778914,
       "categories": {
@@ -256,7 +256,7 @@
       ]
     },
     "chrome": {
-      "version": "1.33.0.88",
+      "version": "1.33.0.89",
       "rawBytes": 2707253,
       "deflatedBytes": 793510,
       "categories": {

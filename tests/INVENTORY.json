@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 241,
+  "totalFiles": 242,
   "counts": {
-    "behavioral": 116,
+    "behavioral": 117,
     "integration": 43,
     "static": 81,
     "browser": 1
@@ -344,6 +344,10 @@
     },
     {
       "file": "tests/corrective-133088-artwork-editor.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/corrective-133089-native-favicon-type.test.mjs",
       "kind": "behavioral"
     },
     {

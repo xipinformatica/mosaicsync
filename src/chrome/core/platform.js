@@ -46,7 +46,11 @@ async function readNativeFaviconBytes(pageUrl, size) {
     if (!blob.size || blob.size > 512000) return null;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     if (!bytes.length) return null;
-    const type = /^image\//i.test(blob.type || "") ? blob.type : "image/png";
+    // Chromium re-encodes _favicon output as PNG but can label the blob
+    // image/bmp, which the profile model rejects (dropping the pixels). Name
+    // PNG bytes by their signature, never by that label.
+    const isPng = bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a;
+    const type = isPng ? "image/png" : (/^image\//i.test(blob.type || "") ? blob.type : "image/png");
     return { bytes, type };
   } catch {
     return null;
