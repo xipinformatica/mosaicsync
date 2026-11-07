@@ -345,37 +345,55 @@ return {
 // No direct extension-file navigation can conceal a broken New Tab override.
 export async function openBrowserNewTab(client, kind) {
   if (kind !== "firefox") return client.navigate("chrome://newtab/");
+
+  // A freshly installed temporary Firefox add-on can register its New Tab
+  // override after the first browser tab opens. This is a known .89/.91 CI
+  // startup race, not an extension-page navigation. Exercise a second *real*
+  // browser New Tab if necessary; never navigate to a moz-extension URL, and
+  // never accept an onboarding/Welcome page in place of the New Tab override.
   const previous = new Set(await client.windowHandles());
-  await client.request("POST", client.endpoint("/moz/context"), { context: "chrome" });
-  try {
-    await client.execute(`
-      const services = typeof Services === "undefined"
-        ? ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services
-        : Services;
-      const win = services.wm.getMostRecentWindow("navigator:browser");
-      if (!win?.gBrowser) throw new Error("Firefox browser window not found");
-      if (typeof win.BrowserCommands?.openTab === "function") {
-        win.BrowserCommands.openTab();
-      } else {
-        win.gBrowser.selectedTab = win.gBrowser.addTrustedTab("about:newtab");
-      }
-    `);
-  } finally {
-    await client.request("POST", client.endpoint("/moz/context"), { context: "content" });
-  }
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    const handles = await client.windowHandles();
-    for (const handle of handles) {
-      if (previous.has(handle)) continue;
-      await client.switchWindow(handle);
-      const url = String(await client.currentUrl());
-      // A Welcome tab can appear during addon installation: only the real
-      // New Tab override is acceptable, never another extension page.
-      if (url.startsWith("moz-extension://") && url.includes("/newtab/newtab.html")) return;
+  const opened = new Set();
+  const observed = new Map();
+  for (let launch = 0; launch < 2; launch += 1) {
+    await client.request("POST", client.endpoint("/moz/context"), { context: "chrome" });
+    try {
+      await client.execute(`
+        const services = typeof Services === "undefined"
+          ? ChromeUtils.importESModule("resource://gre/modules/Services.sys.mjs").Services
+          : Services;
+        const win = services.wm.getMostRecentWindow("navigator:browser");
+        if (!win?.gBrowser) throw new Error("Firefox browser window not found");
+        if (typeof win.BrowserCommands?.openTab === "function") {
+          win.BrowserCommands.openTab();
+        } else {
+          win.gBrowser.selectedTab = win.gBrowser.addTrustedTab("about:newtab");
+        }
+      `);
+    } finally {
+      await client.request("POST", client.endpoint("/moz/context"), { context: "content" });
     }
-    await sleep(100);
+
+    // Keep checking both attempts' tabs: the first one might complete after
+    // Firefox has asynchronously installed the New Tab override.
+    const deadline = Date.now() + (launch === 0 ? 12000 : 15000);
+    while (Date.now() < deadline) {
+      const handles = await client.windowHandles();
+      for (const handle of handles) {
+        if (previous.has(handle)) continue;
+        opened.add(handle);
+        await client.switchWindow(handle);
+        const url = String(await client.currentUrl());
+        observed.set(handle, url);
+        if (url.startsWith("moz-extension://") && url.includes("/newtab/newtab.html")) {
+          if (launch > 0) console.warn("Firefox New Tab override appeared after a fresh-profile registration retry.");
+          return;
+        }
+      }
+      await sleep(100);
+    }
+    if (launch === 0) console.warn(`Firefox New Tab override not ready on first opening; retrying a genuine New Tab. Observed: ${JSON.stringify([...observed.values()])}`);
   }
-  throw new Error("Firefox browser New Tab did not resolve to MosaicSync's override.");
+  throw new Error(`Firefox browser New Tab did not resolve to MosaicSync's override after two genuine New Tab attempts. New handles: ${opened.size}. Observed URLs: ${JSON.stringify([...observed.values()])}`);
 }
 
 export async function waitForExtensionPage(client, expectedScheme, timeoutMs = 12000) {
