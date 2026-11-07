@@ -3481,7 +3481,6 @@ ${site.url}`;
     const url = shortcutNavigationUrl(item);
     if (!url) return false;
     if (recordUsage) recordShortcutOpened(item.id);
-    void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     void browser.tabs.create({ url, active: false }).catch(error => console.warn(`${PRODUCT_NAME}: could not open shortcut in new tab`, error));
     return true;
   }
@@ -3563,7 +3562,6 @@ ${site.url}`;
     card.addEventListener("auxclick", event => {
       if (event.button !== 1) return;
       recordShortcutOpened(item.id);
-      void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
     });
     if (shortcutOrderMode !== "recent") attachDragHandlers(slot, item);
     slot.dataset.interactive = "true";
@@ -4391,7 +4389,6 @@ ${site.url}`;
       button.addEventListener("auxclick", event => {
         if (event.button !== 1) return;
         recordShortcutOpened(item.id);
-        void browser.runtime.sendMessage({ type: "mosaicsync:expect-shortcut-navigation", shortcutId: item.id }).catch(() => {});
       });
 
       cell.append(button, edit);

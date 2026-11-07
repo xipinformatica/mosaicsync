@@ -42,7 +42,7 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.33.0.89");
+  assert.equal(VERSION, "1.33.0.91");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
 });
@@ -117,8 +117,8 @@ test("1.26.0 New Tab interaction code implements requested mouse, Space and freq
     const bookmarksController = await readFile(`dist/${browser}/newtab/bookmarks-controller.js`, "utf8");
     assert.match(js, /card\.addEventListener\("contextmenu", event => \{\s*event\.preventDefault\(\);\s*event\.stopPropagation\(\);\s*openShortcutInNewTab\(item\);/s,
       `${browser}: shortcut right-click should open a background tab`);
-    assert.match(js, /card\.addEventListener\("auxclick"[\s\S]*?event\.button !== 1[\s\S]*?expect-shortcut-navigation/,
-      `${browser}: shortcut middle-click should preserve native new-tab behavior and navigation tracking`);
+    assert.match(js, /card\.addEventListener\("auxclick", event => \{\s*if \(event\.button !== 1\) return;\s*recordShortcutOpened\(item\.id\);\s*\}\);/,
+      `${browser}: shortcut middle-click keeps native new-tab behavior and records usage without marking the New Tab's own tab`);
     assert.match(js, /showFrequentSiteContextMenu\(event, site\)/, `${browser}: frequent sites need a right-click menu`);
     for (const key of ["openInNewTab", "addShortcut", "addToBookmarks"]) assert.ok(js.includes(`t("${key}")`), `${browser}: missing frequent menu action ${key}`);
     assert.match(js, /event\.altKey[\s\S]*event\.shiftKey[\s\S]*event\.code === "Digit1"[\s\S]*"personal"[\s\S]*event\.code === "Digit2"[\s\S]*"work"/,

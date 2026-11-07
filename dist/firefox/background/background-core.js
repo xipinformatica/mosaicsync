@@ -3600,13 +3600,26 @@ export function startBackground(adapter) {
     return changed;
   }
 
+  // A clicked tile only learns from pages on its own host ("www." aside, same
+  // port). Tab events cannot tell a redirect from an address the person typed
+  // after the tile's page failed to load, so any other host, including a sibling
+  // subdomain or another port, never becomes the tile's icon. Ordinary
+  // background discovery still follows redirects.
+  function pageIsOnShortcutHost(shortcutUrl, pageUrl) {
+    try {
+      return shortcutHostKey(shortcutUrl) === shortcutHostKey(pageUrl) && new URL(shortcutUrl).port === new URL(pageUrl).port;
+    } catch {
+      return false;
+    }
+  }
+
   function findFaviconLearningTargets(state, pageUrl, shortcutId = "") {
     const pageOrigin = shortcutOrigin(pageUrl);
     const pageHostKey = shortcutHostKey(pageUrl);
     if (!pageOrigin || !pageHostKey) return [];
 
     return flattenShortcuts(state).filter(shortcut => {
-      const requestedShortcut = shortcutId && shortcut.id === shortcutId;
+      const requestedShortcut = shortcutId && shortcut.id === shortcutId && pageIsOnShortcutHost(shortcut.url, pageUrl);
       const sameSiteFallback = !shortcutId &&
         (shortcutOrigin(shortcut.url) === pageOrigin || shortcutHostKey(shortcut.url) === pageHostKey);
       const refreshableSiteArtwork = isAutomaticArtworkSourceKind(shortcut.imageSourceKind);

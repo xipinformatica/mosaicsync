@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.33.0.91
+
+- Prevents shortcuts from accidentally taking another website’s icon when a page fails to load and you browse elsewhere.
+- Corrects icon handling when opening shortcuts in a separate tab. Existing icons, browser Sync and Recovery stay unchanged.
+
 ## 1.33.0.89
 
 - Fixes a Chrome/Chromium issue that could leave website icons missing after a visit or manual selection from detected favicons. Chromium sometimes supplies a PNG but labels it as BMP; MosaicSync now recognizes its real type and can save the detected picture.

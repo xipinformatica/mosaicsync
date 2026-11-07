@@ -840,6 +840,18 @@ else if (scenario === 'firefox-tab-updated-learning-1301816') {
   let raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
   assert.equal(findCompactShortcut(raw,'learned').localImageAssetId, '', 'unrelated tab updates must be gated by expected-navigation state');
 
+  // A clicked tile only learns from its own host. Whatever else the tab reports (another site after a page
+  // without an icon, or after the tile's page never answered: a sibling subdomain, the same host on
+  // another port) must not become the tile's icon.
+  for (const [otherTab, firstUrl, secondUrl] of [[43, pageUrl, 'https://unrelated.test/'], [44, '', 'https://maps.learned.test/'], [45, '', 'https://learned.test:8443/']]) {
+    await send({ type:'mosaicsync:expect-shortcut-navigation', shortcutId:'learned' }, { id: runtimeId, tab: { id: otherTab } });
+    if (firstUrl) onUpdated(otherTab, { status:'complete' }, { id: otherTab, url: firstUrl, favIconUrl: '' });
+    onUpdated(otherTab, { status:'complete', favIconUrl: iconDataUrl }, { id: otherTab, url: secondUrl, favIconUrl: iconDataUrl });
+    await new Promise(resolve => setTimeout(resolve, 60));
+    raw=(await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    assert.equal(findCompactShortcut(raw,'learned').localImageAssetId, '', `${secondUrl} must not donate its icon to the learned.test tile`);
+  }
+
   const expected = await send({ type:'mosaicsync:expect-shortcut-navigation', shortcutId:'learned' }, { id: runtimeId, tab: { id: tabId } });
   assert.equal(expected?.ok, true);
   let pending=(await session.get(constants.SESSION_PENDING_NAVIGATIONS_KEY))[constants.SESSION_PENDING_NAVIGATIONS_KEY];

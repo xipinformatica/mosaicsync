@@ -37,7 +37,7 @@ The full Personal and Work dataset commit markers now carry the persistent reset
 
 **1.33.0.50 shortcut editor improvements:** New shortcuts receive offline hostname-derived names immediately. While typing, suggestions are strictly offline; after leaving the URL field or pressing Enter, previously granted optional website access allows a bounded, credential-free HTML-head lookup. Partial hostnames never cause requests while typing. The result is accepted only for the same editor session and URL, while manually typed names and existing names remain authoritative. The user never sees a permission request merely for naming. The old blanket 1px upward offset for editor buttons was removed after its Linux font regression was independently reproduced; native flex centering is retained until a cross-platform optical fix is validated. Favicon/Sync/Recovery behavior is unchanged.
 
-Current release: 1.33.0.89
+Current release: 1.33.0.91
 
 **1.33.0.89 Chromium native favicon MIME corrective:** The private `_favicon` endpoint can supply encoded PNG bytes while labeling the blob `image/bmp`. This previously constructed `data:image/bmp` URLs, which the state normalizer discards; native browser icon learning and manual detected-favicon persistence then failed. The Chrome-only adapter now checks all eight PNG signature bytes and reports `image/png` for actual PNG payloads; generic placeholders remain rejected through the existing required sentinel. Naming metadata fetching, Firefox native favicon logic, Sync, Recovery, storage, permissions and UI localizations are unchanged. Review: `tests/corrective-133089-native-favicon-type.test.mjs`.
 
