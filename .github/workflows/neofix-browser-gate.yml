@@ -94,6 +94,7 @@ jobs:
           python3 tools/package.py --firefox-dev
       - name: Real fresh-profile setup and background/shortcut smoke
         env:
+          MOZ_REMOTE_ALLOW_SYSTEM_ACCESS: '1'
           MOSAICSYNC_CHROME_BIN: ${{ steps.chrome.outputs.chrome-path }}
           MOSAICSYNC_CHROMEDRIVER_BIN: ${{ steps.chrome.outputs.chromedriver-path }}
           MOSAICSYNC_FIREFOX_BIN: ${{ steps.firefox.outputs.firefox-path }}
