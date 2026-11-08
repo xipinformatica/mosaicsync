@@ -4594,6 +4594,318 @@ else if (scenario === 'favicon-undeclared-touch') {
   console.log(JSON.stringify({ stored: await stored(), ledger, queue, touchRequests: fetched.filter(url => url.endsWith('/apple-touch-icon.png')).length }));
 }
 
+else if (scenario === 'sync-recovery-copies-yield-to-layout' || scenario === 'sync-recovery-copies-kept-on-write-rate-limit' || scenario === 'sync-recovery-copies-yield-in-firefox-quota-window' || scenario === 'sync-recovery-copies-yield-at-firefox-item-limit') {
+  // Three computers share one browser-Sync namespace with the real 100 KB byte quota.
+  // When a layout change does not fit, older Recovery generations must give way
+  // (the newest complete copy of every computer stays) instead of Sync stopping.
+  // Firefox enforces its quota counting 4 more bytes per stored item (plus 1) than
+  // getBytesInUse reports (measured in Firefox 158); Chrome counts key + JSON.
+  const bytesOf = (key, value) => Buffer.byteLength(String(key)) + Buffer.byteLength(JSON.stringify(value));
+  const used = () => { let total = 0; for (const [k, v] of sync.data) total += bytesOf(k, v); return total; };
+  // Both browsers report key + JSON bytes from getBytesInUse (measured in Chrome 153 and Firefox 158).
+  sync.getBytesInUse = async (keys = null) => { const wanted = keys == null ? null : new Set([].concat(keys)); let total = 0; for (const [k, v] of sync.data) if (!wanted || wanted.has(k)) total += bytesOf(k, v); return total; };
+  const normalSet = sync.set.bind(sync);
+  sync.set = async items => {
+    let total = used();
+    const keys = new Set(sync.data.keys());
+    for (const [k, v] of Object.entries(items || {})) { total += bytesOf(k, v) - (sync.data.has(k) ? bytesOf(k, sync.data.get(k)) : 0); keys.add(k); }
+    if (browserName === 'firefox') total += 4 * keys.size + 1;
+    if (total > constants.SYNC_QUOTA_BYTES) {
+      const e = browserName === 'firefox' ? new Error('QuotaExceededError: storage.sync API call exceeded its quota limitations.') : new Error('QUOTA_BYTES quota exceeded');
+      e.name = 'QuotaExceededError'; throw e;
+    }
+    return normalSet(items);
+  };
+  let seed = 7;
+  const rnd = n => { let out = ''; for (let i = 0; i < n; i += 1) { seed = (seed * 1103515245 + 12345) % 2147483648; out += (seed % 36).toString(36); } return out; };
+  const many = (prefix, n) => Array.from({ length: n }, (_, i) => ({ ...shortcut(`${prefix}-${i}`, `https://${rnd(8)}.test/${rnd(16)}`, 100 + i), title: rnd(12) }));
+  const atItemLimit = scenario === 'sync-recovery-copies-yield-at-firefox-item-limit';
+  await seedLocalState(stateWith({ personal: many('p', atItemLimit ? 40 : 100), work: many('w', atItemLimit ? 10 : 40) }), { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off' });
+  await send({ type: 'mosaicsync:set-sync-enabled', enabled: true });
+  assert.equal((await send({ type: 'mosaicsync:bootstrap-local' }))?.ok, true);
+  let counter = 0;
+  const addShortcut = async () => {
+    const oldRaw = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    const next = clone(oldRaw); const id = `added-${counter++}`;
+    next.spaces.personal.shortcuts.push({ ...shortcut(id, `https://${rnd(8)}.test/${rnd(16)}`, 5000 + counter), title: rnd(12), position: next.spaces.personal.shortcuts.length });
+    const normalized = model.normalizeState(next);
+    await local.set({ [constants.LOCAL_STATE_KEY]: normalized });
+    for (const listener of events.onStorageChanged.listeners) listener({ [constants.LOCAL_STATE_KEY]: { oldValue: oldRaw, newValue: normalized } }, 'local');
+    await send({ type: 'mosaicsync:get-sync-status' });
+    const key = `${constants.SYNC_ITEM_PREFIX}${encodeURIComponent(id)}`;
+    return Boolean((await sync.get(key))[key]);
+  };
+  const setDevice = async id => { const m = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY]; await local.set({ [constants.LOCAL_META_KEY]: { ...m, deviceId: id } }); };
+  for (const device of ['device-c', 'device-d']) { await setDevice(device); await addShortcut(); await addShortcut(); }
+  await setDevice('device-b');
+  const generations = async () => {
+    const copies = await send({ type: 'mosaicsync:get-recovery-copies' });
+    return Object.fromEntries((copies?.devices || []).map(d => [d.deviceId, d.generations.length]));
+  };
+  const before = await generations();
+  if (atItemLimit) {
+    // The exact edge of Firefox's accounting: 512 items after the write and 100,352 bytes by
+    // getBytesInUse, so Firefox counts 100,352 + 4 x 512 + 1 = 102,401 and refuses by one byte.
+    for (let i = 0; sync.data.size < constants.SYNC_QUOTA_MAX_ITEMS - 1; i += 1) await normalSet({ [`audit.fill.${i}`]: '' });
+    let arranged = null;
+    const quotaSet = sync.set;
+    sync.set = async items => {
+      const keys = Object.keys(items || {});
+      if (!arranged && keys.some(key => key.startsWith(`${constants.SYNC_ITEM_PREFIX}added-`))) {
+        const writeBytes = keys.reduce((sum, key) => sum + bytesOf(key, items[key]) - (sync.data.has(key) ? bytesOf(key, sync.data.get(key)) : 0), 0);
+        const others = used() - bytesOf('audit.fill.0', sync.data.get('audit.fill.0'));
+        const target = constants.SYNC_QUOTA_BYTES - 4 * constants.SYNC_QUOTA_MAX_ITEMS;
+        sync.data.set('audit.fill.0', 'f'.repeat(target - writeBytes - others - bytesOf('audit.fill.0', '')));
+        const newKeys = keys.filter(key => !sync.data.has(key)).length;
+        arranged = { itemsAfterWrite: sync.data.size + newKeys, bytesAfterWrite: used() + writeBytes };
+      }
+      return quotaSet(items);
+    };
+    const reached = await addShortcut();
+    console.log(JSON.stringify({ ...arranged, reached, before, after: await generations() }));
+  } else if (scenario === 'sync-recovery-copies-yield-in-firefox-quota-window') {
+    // Firefox refuses a write that still fits by getBytesInUse (it counts 4 more bytes per
+    // item). Fill Sync so the next layout change lands exactly in that window.
+    const layoutBytes = () => { let total = 0; for (const [k, v] of sync.data) if (!k.startsWith(constants.SYNC_DEVICE_SNAPSHOT_PREFIX) && k !== 'audit.filler') total += bytesOf(k, v); return total; };
+    const startLayout = layoutBytes(); await addShortcut(); const write = layoutBytes() - startLayout;
+    const free = write + 2 * sync.data.size;
+    const fillerBytes = constants.SYNC_QUOTA_BYTES - free - used() - Buffer.byteLength('audit.filler') - 2;
+    await normalSet({ 'audit.filler': 'f'.repeat(Math.max(0, fillerBytes)) });
+    const plainFreeBefore = constants.SYNC_QUOTA_BYTES - used();
+    const reached = await addShortcut();
+    console.log(JSON.stringify({ write, plainFreeBefore, items: sync.data.size, reached, before, after: await generations() }));
+  } else if (scenario === 'sync-recovery-copies-kept-on-write-rate-limit') {
+    // A temporary write-rate limit while space remains must not cost any safety copy.
+    let armed = true;
+    const capacitySet = sync.set;
+    sync.set = async items => {
+      if (armed && Object.keys(items || {}).some(key => key.startsWith(constants.SYNC_ITEM_PREFIX))) {
+        armed = false;
+        // Chrome's write-rate wording; Firefox has no write-rate limit, so its variant uses Firefox's
+        // generic quota error while space remains (an unexplained refusal must not cost copies either).
+        throw new Error(browserName === 'firefox' ? 'QuotaExceededError: storage.sync API call exceeded its quota limitations.' : 'This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.');
+      }
+      return capacitySet(items);
+    };
+    const usedBefore = used();
+    const first = await addShortcut();
+    const second = await addShortcut();
+    console.log(JSON.stringify({ rateLimited: !armed, usedBefore, first, second, before, after: await generations() }));
+  } else {
+  let edits = 0, allReached = true;
+  while (edits < 30) { edits += 1; if (!(await addShortcut())) { allReached = false; break; } }
+  const after = await generations();
+  const meta = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  console.log(JSON.stringify({ edits, allReached, syncStatus: meta.syncStatus, before, after, usedBytes: used() }));
+  }
+}
+
+else if (scenario.startsWith('sync-reset-browser-quota-')) {
+  // Clear Sync copy at each browser's real Sync quota rule (measured in Firefox 140/158
+  // and Chrome 153). Firefox serializes the whole namespace as one JSON object and
+  // refuses a write when that text exceeds 102,400 bytes, although getBytesInUse sums
+  // only key + JSON per item (4 bytes per item plus 1 less). Chrome reports and
+  // enforces key + its own JSON per item: numbers beyond 32 bits are doubles
+  // ("2147483648.0", "1.794152714551e+12") and "<", U+2028 and U+2029 are escaped.
+  const mode = scenario.slice('sync-reset-browser-quota-'.length);
+  const firefox = browserName === 'firefox';
+  const enc = text => Buffer.byteLength(String(text));
+  const bytesOf = (key, value) => enc(key) + enc(JSON.stringify(value));
+  const chromeExtra = value => {
+    let extra = 0;
+    JSON.stringify(value, (key, item) => {
+      if (typeof item === 'number' && Number.isInteger(item) && Math.abs(item) > 2147483647 && Math.abs(item) < 1e21) {
+        extra += Math.abs(item) < 1e12 ? 2 : item.toExponential().length - String(item).length;
+      } else if (typeof item === 'string') extra += 5 * (item.match(/</g) || []).length + 3 * (item.match(/[\u2028\u2029]/g) || []).length;
+      return item;
+    });
+    return extra;
+  };
+  const browserBytesOf = (key, value) => bytesOf(key, value) + (firefox ? 0 : chromeExtra(value));
+  const reportedOf = map => { let total = 0; for (const [k, v] of map) total += browserBytesOf(k, v); return total; };
+  const enforcedOf = map => firefox ? enc(JSON.stringify(Object.fromEntries(map))) : reportedOf(map);
+  sync.getBytesInUse = async (keys = null) => { const wanted = keys == null ? null : new Set([].concat(keys)); let total = 0; for (const [k, v] of sync.data) if (!wanted || wanted.has(k)) total += browserBytesOf(k, v); return total; };
+  const INTENT = constants.SYNC_RESET_INTENT_KEY, EPOCH = constants.SYNC_RESET_EPOCH_KEY;
+  const work = `${constants.SYNC_SPACE_PREFIX}work.`;
+  const liveCore = key => key === constants.SYNC_SETTINGS_KEY || key === constants.SYNC_DATASET_KEY || key.startsWith(constants.SYNC_ITEM_PREFIX) ||
+    key === `${work}settings` || key === `${work}dataset` || key.startsWith(`${work}item.`);
+  const quotaError = () => { const e = firefox ? new Error('QuotaExceededError: storage.sync API call exceeded its quota limitations.') : new Error('QUOTA_BYTES quota exceeded'); e.name = 'QuotaExceededError'; return e; };
+  const unicode = mode === 'unicode';
+  const many = (prefix, n) => Array.from({ length: n }, (_, i) => ({ ...shortcut(`${prefix}-${i}`, `https://${prefix}${i}.example.test/path/${i}`, 1794152714551 + i), title: unicode ? `Ràdio <Sant Fost> · Català ${i} 🧡` : `Site ${i}` }));
+  await seedLocalState(stateWith({ personal: many('p', 60), work: many('w', 20) }), { syncEnabled: false, syncInitialized: false, syncBootstrapMode: 'none', syncStatus: 'off' });
+  await send({ type: 'mosaicsync:set-sync-enabled', enabled: true });
+  assert.equal((await send({ type: 'mosaicsync:bootstrap-local' }))?.ok, true);
+  await send({ type: 'mosaicsync:get-sync-status' });
+
+  // Pad precisely with test filler records, as the existing full-quota reset test does.
+  const normalSet = sync.set.bind(sync), normalRemove = sync.remove.bind(sync);
+  const deviceId = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY].deviceId || '';
+  const now = Date.now();
+  const markerBytes = bytesOf(INTENT, { schemaVersion: constants.SYNC_RESET_INTENT_SCHEMA_VERSION, kind: 'reset-intent', epoch: now, initiatedByDevice: deviceId, initiatedAt: now }) +
+    bytesOf(EPOCH, { schemaVersion: 1, kind: 'reset-epoch', epoch: now, initiatedByDevice: deviceId, initiatedAt: now });
+  // The markers cost 4 serialization bytes each in Firefox; in Chrome their four timestamps
+  // cost up to 5 bytes each. 'exact-fit' leaves exactly that much room; otherwise the namespace
+  // is 'full': Firefox 100 bytes under its limit, Chrome 10 bytes short of the markers' cost.
+  const markerCost = markerBytes + (firefox ? 8 : 20);
+  const metric = () => firefox ? enforcedOf(sync.data) : reportedOf(sync.data);
+  const target = constants.SYNC_QUOTA_BYTES - (['exact-fit', 'rate-limit', 'own-unmutated-interrupted'].includes(mode) ? markerCost : firefox ? 100 : markerCost - 10);
+  const fillerKey = i => `mosaicsync.test.filler.${String(i).padStart(3, '0')}`;
+  let index = 0;
+  if (mode === 'item-limit') {
+    const slots = constants.SYNC_QUOTA_MAX_ITEMS - 2 - sync.data.size;
+    // Each filler costs its key (26 bytes) + JSON quotes (2), plus Firefox's 4 serialization bytes.
+    const per = Math.floor((target - metric() - slots * (28 + (firefox ? 4 : 0))) / slots);
+    for (let s = 0; s < slots - 1; s += 1) await normalSet({ [fillerKey(index++)]: 'x'.repeat(per) });
+  } else {
+    const unit = unicode ? 'àé🧡' : 'x';
+    while (target - metric() > 7900) await normalSet({ [fillerKey(index++)]: unit.repeat(Math.floor(7000 / enc(unit))) });
+  }
+  await normalSet({ [fillerKey(index)]: '' });
+  await normalSet({ [fillerKey(index)]: 'x'.repeat(target - metric()) });
+  assert.equal(metric(), target);
+  if (mode === 'item-limit') assert.equal(sync.data.size, constants.SYNC_QUOTA_MAX_ITEMS - 2);
+
+  // A pending, not yet published local edit must survive and must not be republished.
+  const raw0 = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const edited = clone(raw0);
+  edited.spaces.personal.shortcuts.push({ ...shortcut('pending-edit', 'https://pending.example.test/', 9000), title: 'Pending', position: edited.spaces.personal.shortcuts.length });
+  await storageCore.writeLocalState(edited, { recordSyncMutation: true, baseState: raw0, baseStateIsCompact: true });
+  const localBefore = clone((await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY]);
+  const remoteBefore = JSON.stringify(Object.fromEntries(sync.data));
+
+  // Browser-faithful writer, with the reset invariants checked after every mutation.
+  const preSentinelRemovals = [], violations = [];
+  const durable = () => sync.data.has(INTENT) && sync.data.has(EPOCH);
+  const check = op => {
+    if (!sync.data.size) violations.push(`${op}: empty namespace`);
+    else if (!durable() && ![...sync.data.keys()].some(liveCore)) violations.push(`${op}: no live-core key before durable reset authority`);
+  };
+  let rateLimitArmed = mode === 'rate-limit';
+  sync.set = async items => {
+    const projected = new Map(sync.data);
+    for (const [k, v] of Object.entries(items || {})) {
+      if (bytesOf(k, v) > constants.SYNC_QUOTA_BYTES_PER_ITEM) throw quotaError();
+      projected.set(k, v);
+    }
+    if (projected.size > constants.SYNC_QUOTA_MAX_ITEMS || enforcedOf(projected) > constants.SYNC_QUOTA_BYTES) throw quotaError();
+    if (rateLimitArmed && Object.prototype.hasOwnProperty.call(items || {}, INTENT)) {
+      rateLimitArmed = false;
+      const e = new Error('This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.'); e.name = 'QuotaExceededError'; throw e;
+    }
+    await normalSet(items);
+    check('set');
+  };
+  sync.remove = async keys => {
+    if (!durable()) preSentinelRemovals.push([].concat(keys).length);
+    await normalRemove(keys);
+    check('remove');
+  };
+
+  if (mode.startsWith('own-')) {
+    // R1: this computer's own reset did not make its marker durable (refused, write-rate limited,
+    // or the worker stopped mid-write). Nothing automatic may adopt the pre-reset cloud over the
+    // unsynced local edit or discard its journal: not a reconcile, an alarm, an incoming Sync
+    // change, a worker restart, nor another computer's later reset.
+    const settle = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const failure = mode.replace(/^own-/, '').replace(/-peer-reset$/, '');
+    const journalKey = constants.LOCAL_PENDING_SYNC_MUTATION_KEY;
+    const journalBefore = JSON.stringify((await local.get(journalKey))[journalKey] || null);
+    let deviceWrites = 0, reachedMarker;
+    const markerReached = new Promise(resolve => { reachedMarker = resolve; });
+    const strictSet = sync.set, strictRemove = sync.remove;
+    let markerFailureArmed = true;
+    sync.set = async items => {
+      deviceWrites += 1;
+      if (markerFailureArmed && Object.prototype.hasOwnProperty.call(items || {}, INTENT)) {
+        markerFailureArmed = false;
+        reachedMarker();
+        if (failure === 'refused') throw quotaError();
+        if (failure === 'rate') { const e = new Error('This request exceeds the MAX_WRITE_OPERATIONS_PER_MINUTE quota.'); e.name = 'QuotaExceededError'; throw e; }
+        if (failure === 'committed-interrupted') await normalSet(items);
+        return new Promise(() => {}); // the worker stops here
+      }
+      return strictSet(items);
+    };
+    sync.remove = async keys => { deviceWrites += 1; return strictRemove(keys); };
+    const clearing = send({ type: 'mosaicsync:clear-sync-data' }).then(r => r, e => ({ ok: false, error: String(e?.message || e) }));
+    await markerReached;
+    const interrupted = failure.endsWith('interrupted');
+    const firstResult = interrupted ? null : await clearing;
+    if (interrupted) {
+      // Fresh worker over the same persisted storage, as after a browser or worker restart.
+      await restartBackgroundForStep5Measurement(`own-reset-${mode}`);
+      for (const listener of events.onStartup.listeners) await listener();
+      await settle(300);
+    }
+    if (mode.endsWith('-peer-reset')) {
+      // Another computer completes its own reset and publishes a new, stamped layout.
+      const peerEpoch = Date.now() + 60_000;
+      const peerState = stateWith({ personal: [shortcut('peer-new', 'https://peer-new.test/', 1794152714551)], work: [shortcut('peer-work', 'https://peer-work.test/', 1794152714551)] });
+      const stamp = entries => Object.fromEntries(Object.entries(entries).map(([k, v]) => [k, v?.kind === 'dataset' ? { ...v, resetEpoch: peerEpoch, resetInitiatedByDevice: 'device-peer' } : v]));
+      await normalRemove([...sync.data.keys()]);
+      await normalSet({ [EPOCH]: { schemaVersion: 1, kind: 'reset-epoch', epoch: peerEpoch, initiatedByDevice: 'device-peer', initiatedAt: Date.now() },
+        ...stamp(remotePersonalEntries(peerState, 'peer-p', 'device-peer')), ...stamp(remoteWorkEntries(peerState, 'peer-w', 'device-peer')) });
+    }
+    const writesAtFailure = deviceWrites;
+    // Every automatic trigger a real browser would fire.
+    await send({ type: 'mosaicsync:reconcile-if-needed', reason: 'foreground' });
+    for (const listener of events.onAlarm.listeners) await listener({ name: constants.SYNC_WATCH_ALARM });
+    const liveKey = [...sync.data.keys()].find(liveCore);
+    if (liveKey) for (const listener of events.onStorageChanged.listeners) await listener({ [liveKey]: { oldValue: null, newValue: sync.data.get(liveKey) } }, 'sync');
+    await settle(300);
+    await send({ type: 'mosaicsync:get-sync-status' });
+    const localAfter = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    const metaAfter = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+    const journalAfter = JSON.stringify((await local.get(journalKey))[journalKey] || null);
+    const automatic = {
+      localPreserved: JSON.stringify(model.normalizeState(localAfter)) === JSON.stringify(model.normalizeState(localBefore)),
+      pendingEditKept: localAfter.spaces.personal.shortcuts.some(s => s.id === 'pending-edit'),
+      journalKept: journalBefore !== 'null' && journalAfter === journalBefore,
+      noDeviceWrites: deviceWrites === writesAtFailure,
+      syncInitialized: metaAfter.syncInitialized === true,
+      syncEnabled: metaAfter.syncEnabled === true
+    };
+    // The user's explicit retry still completes the reset with the local layout kept.
+    markerFailureArmed = false;
+    const retry = await send({ type: 'mosaicsync:clear-sync-data' });
+    const retryKeys = Object.keys(Object.fromEntries(sync.data));
+    const localRetry = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+    console.log(JSON.stringify({
+      failure, firstFailed: interrupted ? true : firstResult?.ok === false, automatic,
+      retry: { cleared: retry?.ok === true, error: String(retry?.error || ''), onlyResetMarkers: retryKeys.length === 2 && retryKeys.includes(INTENT) && retryKeys.includes(EPOCH),
+        pendingEditKept: localRetry.spaces.personal.shortcuts.some(s => s.id === 'pending-edit') },
+      violations
+    }));
+  } else {
+  const cleared = await send({ type: 'mosaicsync:clear-sync-data' });
+  const remote = Object.fromEntries(sync.data);
+  const keys = Object.keys(remote);
+  const meta = (await local.get(constants.LOCAL_META_KEY))[constants.LOCAL_META_KEY];
+  const localAfter = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  // No automatic resurrection: neither a reconcile nor a new local edit may publish.
+  const setsAfter = sync.stats.setCalls;
+  await send({ type: 'mosaicsync:reconcile-if-needed', reason: 'foreground' });
+  const raw1 = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  const edit2 = clone(raw1);
+  edit2.spaces.personal.shortcuts.push({ ...shortcut('after-clear', 'https://after.example.test/', 9100), title: 'After', position: edit2.spaces.personal.shortcuts.length });
+  await storageCore.writeLocalState(edit2, { recordSyncMutation: true, baseState: raw1, baseStateIsCompact: true });
+  const raw2 = (await local.get(constants.LOCAL_STATE_KEY))[constants.LOCAL_STATE_KEY];
+  for (const listener of events.onStorageChanged.listeners) listener({ [constants.LOCAL_STATE_KEY]: { oldValue: raw1, newValue: raw2 } }, 'local');
+  await send({ type: 'mosaicsync:get-sync-status' });
+  console.log(JSON.stringify({
+    cleared: cleared?.ok === true, error: String(cleared?.error || ''),
+    remoteUnchanged: JSON.stringify(remote) === remoteBefore,
+    onlyResetMarkers: keys.length === 2 && keys.includes(INTENT) && keys.includes(EPOCH),
+    localPreserved: JSON.stringify(model.normalizeState(localAfter)) === JSON.stringify(model.normalizeState(localBefore)),
+    pendingEditKept: localAfter.spaces.personal.shortcuts.some(s => s.id === 'pending-edit'),
+    syncEnabled: meta.syncEnabled === true, syncInitialized: meta.syncInitialized === true,
+    syncWaiting: meta.syncBootstrapMode === 'await-remote' && meta.syncStatus === 'waiting',
+    noAutoRepublish: sync.stats.setCalls === setsAfter,
+    preSentinelRemovals, violations, items: keys.length
+  }));
+  }
+}
+
 else {
   throw new Error(`unknown scenario ${scenario}`);
 }

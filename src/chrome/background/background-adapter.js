@@ -60,5 +60,7 @@ export const backgroundAdapter = Object.freeze({
   resolveTabNativeFavicon,
   isProtectedFaviconUrl: isProtectedChromeStoreUrl,
   handlesDataCollectionPermission: false,
-  resetProfileProtectionOnSyncDisable: true
+  resetProfileProtectionOnSyncDisable: true,
+  syncQuotaCountsSerializedNamespace: false,
+  syncQuotaWidensLargeNumbers: true
 });

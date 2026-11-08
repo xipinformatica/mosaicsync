@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.33.0.93
+
+- Fixes **Clear Sync copy** so it can clear the synchronized layout even when browser Sync storage is full, in both Firefox and Chrome.
+- Protects unsynced local changes when Clear Sync fails or is interrupted. Instead of automatically accepting an old synchronized layout, MosaicSync asks you which layout to use. No new permissions, data formats, network services or telemetry.
+
+## 1.33.0.92
+
+- Keeps your shortcuts and layout syncing when browser Sync storage fills up with older Recovery safety copies. MosaicSync now safely makes room for regular changes automatically instead of requiring you to press Safe cleanup.
+- Each device's newest verified Recovery copy remains protected. A temporary browser write limit does not trigger cleanup, and if enough space still cannot be freed your local data stays safe with the existing warning. No new permissions or data-format changes.
+
 ## 1.33.0.91
 
 - Prevents shortcuts from accidentally taking another website’s icon when a page fails to load and you browse elsewhere.

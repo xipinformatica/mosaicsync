@@ -172,7 +172,9 @@ export function startBackground(adapter) {
     resolveTabNativeFavicon: resolveTabNativeFaviconAdapter,
     isProtectedFaviconUrl,
     handlesDataCollectionPermission = false,
-    resetProfileProtectionOnSyncDisable = false
+    resetProfileProtectionOnSyncDisable = false,
+    syncQuotaCountsSerializedNamespace = false,
+    syncQuotaWidensLargeNumbers = false
   } = adapter;
   for (const [name, fn] of Object.entries({
     cleanupLegacyWebOriginPermissions,
@@ -6300,12 +6302,42 @@ export function startBackground(adapter) {
     return result;
   }
 
+  // Clear Sync must know exactly whether its two reset markers fit, and browsers
+  // count Sync bytes differently from MosaicSync's key + JSON estimate (measured
+  // in Firefox 140/158 and Chrome 153). Existing data therefore starts from the
+  // browser's own getBytesInUse, which Chrome enforces exactly: it stores large
+  // numbers such as timestamps as doubles ("1.794152714551e+12", up to 5 bytes
+  // more each). Firefox enforces its quota on the whole namespace serialized as
+  // one JSON object, 4 bytes per item plus 1 more than getBytesInUse. Counting
+  // too little makes Clear Sync fail on a full namespace; counting too much would
+  // remove old records before the reset marker is durable.
+  function resetItemsFitInBrowserQuota(existing, reportedBytes) {
+    let estimated = 0;
+    for (const [key, value] of Object.entries(existing || {})) estimated += syncEntryBytes(key, value);
+    const unestimated = Math.max(0, (Number(reportedBytes) || 0) - estimated);
+    return (all, items) => {
+      if (!syncItemsFitInSnapshot(all, items)) return false;
+      const projected = { ...all, ...items };
+      let bytes = unestimated;
+      for (const [key, value] of Object.entries(projected)) bytes += syncEntryBytes(key, value);
+      if (syncQuotaCountsSerializedNamespace) bytes += 4 * Object.keys(projected).length + 1;
+      if (syncQuotaWidensLargeNumbers) {
+        JSON.stringify(items, (key, value) => {
+          if (typeof value === "number" && Math.abs(value) > 2147483647) bytes += 5;
+          return value;
+        });
+      }
+      return bytes <= SYNC_QUOTA_BYTES;
+    };
+  }
+
   async function clearSyncData() {
     const meta = await readLocalMeta();
     const continuity = await readSyncContinuity(meta);
     // Read before minting an epoch: another device may already have reset the
     // account, and browser clocks need not be synchronized.
     const existing = await browser.storage.sync.get(null);
+    const reportedBytes = await browser.storage.sync.getBytesInUse(null).catch(() => 0);
     // PROPOSED (Claude .71 audit): never let contradictory/malformed visible authority block the user's
     // escape hatch. Mint above every numeric epoch we can see; the new key then dominates.
     let visibleEpoch = 0;
@@ -6358,10 +6390,15 @@ export function startBackground(adapter) {
     let remoteMutationStarted = false;
     try {
       // Arm the reset locally before the browser namespace is emptied. The
-      // continuity reset plus uninitialized await-remote mode make the removal
-      // burst non-authoritative without silently changing the user's Sync toggle.
+      // continuity reset plus an uninitialized device make the removal burst
+      // non-authoritative without silently changing the user's Sync toggle.
       // Automatic local publication still requires syncInitialized=true.
-      armedMeta = await writeLocalMeta(resetMeta);
+      // Until this device's own reset marker is verified, the cloud still holds
+      // the pre-reset layout, and "await-remote" would adopt it over unsynced
+      // local edits after a failed or interrupted reset. The device therefore
+      // waits for an explicit choice first and awaits a new source only once
+      // the marker is durable.
+      armedMeta = await writeLocalMeta({ ...resetMeta, syncBootstrapMode: "none" });
       await markIntentionalSyncReset(armedMeta, epoch);
       await ensureSyncWatchAlarm(armedMeta);
 
@@ -6369,7 +6406,7 @@ export function startBackground(adapter) {
       // If interrupted before the sentinel is durable, at least one old item
       // remains and peers stay in ordinary partial-delivery handling.
       const capacity = planResetIntentCapacity(existing, SYNC_RESET_INTENT_KEY, resetIntent, {
-        fits: syncItemsFitInSnapshot,
+        fits: resetItemsFitInBrowserQuota(existing, reportedBytes),
         entryBytes: syncEntryBytes,
         compareStableText,
         isLiveCoreKey: isLiveSyncCoreKey,
@@ -6388,9 +6425,9 @@ export function startBackground(adapter) {
           [capacity.compactKey]: { schemaVersion: 1, kind: "reset-staging" },
           [SYNC_RESET_INTENT_KEY]: resetIntent,
           [SYNC_RESET_EPOCH_KEY]: resetMarker
-        }, { skipPreflight: true });
+        }, { skipPreflight: true, reclaimRecovery: false });
       } else {
-        await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent, [SYNC_RESET_EPOCH_KEY]: resetMarker }, { skipPreflight: true });
+        await writeSyncItems({ [SYNC_RESET_INTENT_KEY]: resetIntent, [SYNC_RESET_EPOCH_KEY]: resetMarker }, { skipPreflight: true, reclaimRecovery: false });
       }
       remoteMutationStarted = true;
 
@@ -6400,6 +6437,7 @@ export function startBackground(adapter) {
           Number(committed[SYNC_RESET_EPOCH_KEY].epoch) !== epoch) {
         throw new Error("Firefox Sync could not verify the MosaicSync reset marker.");
       }
+      armedMeta = await writeLocalMeta(resetMeta);
 
       // Retire stale write-suppression/evidence from the deleted namespace before
       // removing the old namespace. This also keeps a later fresh
@@ -6745,7 +6783,7 @@ export function startBackground(adapter) {
         // The budget was computed once for the whole asset pass. Firefox still
         // enforces the real quota on set(), so a concurrent Sync change remains
         // safe without re-reading the entire storage area for every favicon.
-        await writeSyncItems(payload, { skipPreflight: true });
+        await writeSyncItems(payload, { skipPreflight: true, reclaimRecovery: false });
         uploaded += 1;
       } catch (error) {
         if (isQuotaError(error)) {
@@ -6836,7 +6874,36 @@ export function startBackground(adapter) {
   // -----------------------------------------------------------------------------
   // storage.sync quota accounting and writes
   // -----------------------------------------------------------------------------
-  async function writeSyncItems(items, { reserveBytes = 0, skipPreflight = false, trackExpected = true } = {}) {
+  // Your layout comes first. If browser Sync is full, older Recovery safety
+  // copies give way automatically, exactly as the Settings "Safe cleanup" button
+  // does (the newest complete copy of every device always stays), and the
+  // write is retried once. Only a write that truly does not fit qualifies: a
+  // temporary write-rate limit keeps every copy. Firefox enforces its quota
+  // counting 4 bytes per stored item plus 1 more than getBytesInUse reports,
+  // hence the margin. Recovery's own publication, best-effort artwork and the
+  // Clear Sync copy reset never evict safety copies this way.
+  const SYNC_QUOTA_ACCOUNTING_MARGIN_BYTES = 4 * SYNC_QUOTA_MAX_ITEMS + 1;
+  async function writeSyncItems(items, options = {}) {
+    try {
+      return await writeSyncItemsOnce(items, options);
+    } catch (error) {
+      if (!isQuotaError(error) || options.reclaimRecovery === false ||
+        /WRITE_OPERATIONS/i.test(String(error?.message || error || "")) ||
+        Object.keys(items || {}).some(isDeviceSnapshotKey)) throw error;
+      const fits = await canFitSyncItems(items, (options.reserveBytes || 0) + SYNC_QUOTA_ACCOUNTING_MARGIN_BYTES).catch(() => true);
+      if (fits) throw error;
+      let reclaimed = false;
+      try {
+        reclaimed = (await cleanupRecoveryCopies({ mode: "superseded" }))?.removedGenerations > 0;
+      } catch (cleanupError) {
+        console.warn(`${PRODUCT_NAME}: automatic Recovery cleanup skipped`, cleanupError);
+      }
+      if (!reclaimed) throw error;
+      return writeSyncItemsOnce(items, options);
+    }
+  }
+
+  async function writeSyncItemsOnce(items, { reserveBytes = 0, skipPreflight = false, trackExpected = true } = {}) {
     const entries = Object.entries(items);
     if (!entries.length) return;
 

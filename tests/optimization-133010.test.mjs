@@ -82,7 +82,10 @@ test("1.33.0.10 frozen Step-5A measurements remain reproducible on later Snow Le
     // execute only on deletions and explicit reset/import, not routine watches.
     // ED-1 adds one conditional durable recovery read, while .62 removes
     // the two obsolete branding import/rollback reads.
-    "local.get": frozen.directStorageCallSites.byOperation["local.get"] + 2
+    "local.get": frozen.directStorageCallSites.byOperation["local.get"] + 2,
+    // Clear Sync copy reads the browser's own Sync byte count once before planning
+    // reset capacity (explicit user action only; routine reads are unchanged).
+    "sync.getBytesInUse": frozen.directStorageCallSites.byOperation["sync.getBytesInUse"] + 1
   };
   assert.deepEqual(live.directStorageCallSites.byOperation, expectedOperations,
     "Static storage sites include Stage 2D durable deletion evidence while routine runtime reads stay within frozen ceilings");
