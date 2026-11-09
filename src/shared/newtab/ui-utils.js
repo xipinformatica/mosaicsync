@@ -586,3 +586,28 @@ export function renderCacheGridMatchesState(manifest, state) {
   return true;
 }
 
+
+// Settings-only representation: no storage calls and no quota decisions.
+export function recoveryDeviceCopyCountText(count, translate) {
+  const amount = Math.max(0, Math.trunc(Number(count) || 0));
+  return `${amount} ${translate(amount === 1 ? "recoveryDeviceCopyOne" : "recoveryDeviceCopyOther")}`;
+}
+
+export function syncStorageDisplayUsage(usage, quotaBytes, firefoxItemCount = null) {
+  const quota = Math.max(0, Number(quotaBytes) || 0);
+  const bytes = value => Math.max(0, Number(value) || 0);
+  const core = bytes(usage?.core);
+  const recovery = bytes(usage?.recovery);
+  const shortcutArtwork = bytes(usage?.shortcutArtwork);
+  // Do not guess missing Firefox counts or make new storage reads for display.
+  if (!Number.isInteger(firefoxItemCount) || firefoxItemCount < 0 ||
+      !Number.isFinite(Number(usage?.total))) {
+    return { core, recovery, shortcutArtwork, overhead: bytes(usage?.overhead), free: bytes(usage?.free) };
+  }
+  const accounting = 4 * firefoxItemCount + (firefoxItemCount > 0 ? 1 : 0);
+  const free = Math.max(0, quota - bytes(usage.total) - accounting);
+  // Include both Firefox JSON overhead and any unclassified existing Sync keys.
+  // Rows total quota bytes whenever the namespace has not exceeded its quota.
+  const overhead = Math.max(0, quota - free - core - recovery - shortcutArtwork);
+  return { core, recovery, shortcutArtwork, overhead, free };
+}

@@ -3961,6 +3961,57 @@ else if (scenario === 'recovery-manager-132010-safe-cleanup') {
   console.log(JSON.stringify({ok:true,safeCleanupCount:before.safeCleanupCount,removedGenerations:result.removedGenerations,newestProtected:true,unrelatedKeysProtected:true}));
 }
 
+else if (scenario === 'recovery-manager-133094-display-hint') {
+  const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
+  const own=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'own',publishedAt:500});
+  const remote=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'remote',publishedAt:400});
+  const remoteOld=await modernCompleteProfileSnapshotFixture(base,{deviceId:'old-device',commitId:'older',publishedAt:300});
+  const matureMeta={syncEnabled:true,syncInitialized:true,deviceId:'device-b',deviceSnapshotGcPass:10,
+    deviceSnapshotRootSeenPass:{[own.rootKey]:1,[remote.rootKey]:1,[remoteOld.rootKey]:1}};
+  await seedLocalState(base,matureMeta);
+  await sync.set({...own.entries,...remote.entries});
+  const oneEach=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(oneEach.recoveryOldDeviceHintAvailable,true,'mature remote copy with a current-device fallback permits the hint');
+  const model=await send({type:'mosaicsync:get-recovery-copies'});
+  assert.equal(model.devices.find(d=>d.deviceId==='old-device')?.canRemoveDevice,true,
+    'hint must agree with the actual Remove device copies button');
+  // The button is eligible, but removing the device first publishes another
+  // complete copy of this computer. With only ~1 KB left, even the current
+  // verified copy cannot fit, so Settings must not recommend the dead end.
+  const usedBeforeFiller=await sync.getBytesInUse(null);
+  const fillerKey='mosaicsync.sync.readonly-hint-filler';
+  const fillerValue={kind:'display-filler',text:'x'.repeat(Math.max(0,102400-usedBeforeFiller-1100-150))};
+  await sync.set({[fillerKey]:fillerValue});
+  const nearlyFull=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(nearlyFull.recoveryOldDeviceHintAvailable,false,
+    'eligible old-device button cannot be recommended without space for a fresh own snapshot');
+  const stillRemovable=await send({type:'mosaicsync:get-recovery-copies'});
+  assert.equal(stillRemovable.devices.find(d=>d.deviceId==='old-device')?.canRemoveDevice,true,
+    'storage-space check only controls the hint, not Recovery deletion authority');
+  await sync.remove(fillerKey);
+  await seedLocalState(base,{...matureMeta,deviceSnapshotGcPass:1});
+  const immature=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(immature.recoveryOldDeviceHintAvailable,false,'unmatured old-device copies must not produce an unusable hint');
+  const immatureModel=await send({type:'mosaicsync:get-recovery-copies'});
+  assert.equal(immatureModel.devices.find(d=>d.deviceId==='old-device')?.canRemoveDevice,false,
+    'unmatured old-device copies must not offer the button');
+  await seedLocalState(base,matureMeta);
+  await sync.set({...remoteOld.entries});
+  const hasOlder=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(hasOlder.recoveryOldDeviceHintAvailable,false,'removable older copy suppresses hint');
+  await sync.remove(Object.keys(remoteOld.entries));
+  await sync.remove(Object.keys(own.entries));
+  const missingFallback=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(missingFallback.recoveryOldDeviceHintAvailable,false,'missing own verified fallback suppresses hint');
+  await sync.set({...own.entries});
+  await sync.remove(Object.keys(remote.entries));
+  const onlyCurrent=await send({type:'mosaicsync:get-sync-status'});
+  assert.equal(onlyCurrent.recoveryOldDeviceHintAvailable,false,'no other device suppresses hint');
+  assert.ok(Number(oneEach.usage.itemCount) >= Object.keys(own.entries).length+Object.keys(remote.entries).length,
+    'display item count includes the full namespace');
+  console.log(JSON.stringify({ok:true,oneEach:true,nearlyFull:false,immature:false,hasOlder:false,missingFallback:false,onlyCurrent:false}));
+}
+
 else if (scenario === 'recovery-manager-132010-device-revalidation') {
   const base=stateWith({personal:[shortcut('safe','https://safe.test/',100)]});
   const current=await modernCompleteProfileSnapshotFixture(base,{deviceId:'device-b',commitId:'current',publishedAt:500});

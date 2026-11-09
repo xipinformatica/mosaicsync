@@ -107,7 +107,7 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, chooseShortcutPageName, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom } from "./ui-utils.js";
+import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, chooseShortcutPageName, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom, syncStorageDisplayUsage, recoveryDeviceCopyCountText } from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -6955,7 +6955,7 @@ ${site.url}`;
       strong.textContent = recoveryDeviceDisplayName(device);
       const small = document.createElement("small");
       const generations = Array.isArray(device.generations) ? device.generations : [];
-      small.textContent = `${generations.length} · ${formatBytes(device.bytes || 0)}`;
+      small.textContent = `${recoveryDeviceCopyCountText(generations.length, t)} · ${formatBytes(device.bytes || 0)}`;
       title.append(strong, small);
       heading.append(title);
 
@@ -7011,12 +7011,8 @@ ${site.url}`;
             if (confirmed) void performRecoveryCleanup({ mode: "generation", rootKey: generation.rootKey });
           });
           row.append(remove);
-        } else {
-          const protectedText = document.createElement("span");
-          protectedText.className = "recovery-generation-protected";
-          protectedText.textContent = t("recoveryProtected");
-          row.append(protectedText);
         }
+        // The newest badge already explains why this generation has no Delete button.
         list.append(row);
       });
       card.append(list);
@@ -7208,7 +7204,12 @@ ${site.url}`;
       overhead: meta.syncUsageOverheadBytes,
       free: Math.max(0, SYNC_QUOTA_BYTES - meta.syncBytesInUse)
     };
-    const pressure = syncStoragePressure(usage.free);
+    // Presentation only: Firefox counts whole-namespace JSON, including four
+    // extra bytes per item plus one. The background's quota/cleanup logic is
+    // deliberately unaffected. Older status payloads retain their old display.
+    const shownUsage = syncStorageDisplayUsage(usage, SYNC_QUOTA_BYTES,
+      PLATFORM_ID === "firefox" ? (usage.itemCount ?? meta.syncItemCount) : null);
+    const pressure = syncStoragePressure(shownUsage.free);
     const limitations = syncLimitationKinds(meta);
     const quotaError = errored && isSyncQuotaErrorText(meta.lastSyncError);
 
@@ -7256,7 +7257,10 @@ ${site.url}`;
         // almost-full quota warning (or being masked by it).
         syncStatusText.textContent = t(syncReadyHeadlineKey(meta, pressure));
         const details = [];
-        if (pressure !== "normal") details.push(t("syncStorageFreeRemaining", { free: formatBytes(usage.free) }));
+        if (pressure !== "normal") {
+          details.push(t("syncStorageFreeRemaining", { free: formatBytes(shownUsage.free) }));
+          if (status?.recoveryOldDeviceHintAvailable) details.push(t("syncOldDeviceRecoveryHint", { action: t("manageRecoveryCopies") }));
+        }
         if (warning) details.push(warning);
         syncStatusDetail.textContent = details.join(" ");
       } else {
@@ -7284,12 +7288,12 @@ ${site.url}`;
 
     syncQuotaText.textContent = `${formatBytes(meta.syncBytesInUse)} / ${formatBytes(SYNC_QUOTA_BYTES)}`;
     syncQuotaText.title = t("syncItemsUsed", { count: meta.syncItemCount || 0 });
-    if (syncUsageCore) syncUsageCore.textContent = formatBytes(usage.core);
-    if (syncUsageRecovery) syncUsageRecovery.textContent = formatBytes(usage.recovery);
+    if (syncUsageCore) syncUsageCore.textContent = formatBytes(shownUsage.core);
+    if (syncUsageRecovery) syncUsageRecovery.textContent = formatBytes(shownUsage.recovery);
     if (recoveryCopiesManageButton) recoveryCopiesManageButton.disabled = !enabled || syncing || usage.recovery <= 0;
-    if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatBytes(usage.shortcutArtwork);
-    if (syncUsageOverhead) syncUsageOverhead.textContent = formatBytes(usage.overhead);
-    if (syncUsageFree) syncUsageFree.textContent = formatBytes(usage.free);
+    if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatBytes(shownUsage.shortcutArtwork);
+    if (syncUsageOverhead) syncUsageOverhead.textContent = formatBytes(shownUsage.overhead);
+    if (syncUsageFree) syncUsageFree.textContent = formatBytes(shownUsage.free);
     if (syncStorageBreakdown) syncStorageBreakdown.dataset.pressure = quotaError ? "full" : pressure;
     if (syncRevisionText) {
       syncRevisionText.hidden = false;
@@ -7515,6 +7519,16 @@ ${site.url}`;
 
   recoveryCopiesManageButton?.addEventListener("click", () => {
     if (!recoveryCopiesDialog) return;
+    // The dialog is initially hidden in the HTML. Localize before opening it
+    // so non-English users never briefly see the source-language title.
+    const title = recoveryCopiesDialog.querySelector("#recoveryCopiesTitle");
+    const intro = recoveryCopiesDialog.querySelector("#recoveryCopiesIntro");
+    const eyebrow = recoveryCopiesDialog.querySelector(".dialog-heading .eyebrow");
+    const close = recoveryCopiesDialog.querySelector(".dialog-close-button");
+    if (title) title.textContent = t("recoverySafetyCopies");
+    if (intro) intro.textContent = t("recoveryCopiesIntro");
+    if (eyebrow) eyebrow.textContent = t("syncStorage");
+    if (close) close.setAttribute("aria-label", t("close"));
     if (!recoveryCopiesDialog.open) {
       recoveryCopiesSessionGeneration += 1;
       recoveryCopiesDialog.showModal();

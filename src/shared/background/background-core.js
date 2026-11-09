@@ -4367,7 +4367,9 @@ export function startBackground(adapter) {
       shortcutArtwork: Math.max(0, Number(shortcutArtwork) || 0),
       overhead: Math.max(0, Number(overhead) || 0),
       free: Math.max(0, SYNC_QUOTA_BYTES - total),
-      total
+      total,
+      // Display only; includes all keys charged by whole-namespace Firefox JSON.
+      itemCount: Object.keys(all || {}).length
     };
   }
 
@@ -4749,6 +4751,46 @@ export function startBackground(adapter) {
       ? liveRecordCount(core.records)
       : (Number.isInteger(Number(snapshot.dataset?.liveRecordCount)) ? Number(snapshot.dataset.liveRecordCount) : 0)) +
       (workUsable ? liveRecordCount(workCore.records) : (Number.isInteger(Number(workSnapshot.dataset?.liveRecordCount)) ? Number(workSnapshot.dataset.liveRecordCount) : 0));
+    // Read-only Settings hint. A verified newest generation for each device
+    // leaves nothing eligible for automatic superseded-generation cleanup.
+    const shownRecoveryRoots = verifiedProfileDeviceSnapshotDescriptors(all, sources.deviceSnapshots);
+    const shownRecoveryCount = new Map();
+    for (const root of shownRecoveryRoots) {
+      shownRecoveryCount.set(root.deviceId, (shownRecoveryCount.get(root.deviceId) || 0) + 1);
+    }
+    // Display the old-device tip only when the Recovery manager would actually
+    // offer "Remove device copies". Maturity and the acting device's verified
+    // fallback are required, not just one generation per device.
+    // A device-removal action publishes a *fresh* full-profile copy for this
+    // computer before it deletes anything. Advice is useful only when that
+    // protective publication has room. Estimate from this device's verified
+    // latest generation, with headroom for a larger local layout/new keys.
+    // This is display-only, based on the status read already in hand: it does
+    // not change Recovery publication/cleanup decisions or call storage again.
+    const ownRoot = shownRecoveryRoots
+      .filter(root => root.deviceId === meta.deviceId)
+      .sort(compareDeviceSnapshotGenerationRecency)[0];
+    const ownKeys = ownRoot ? deviceSnapshotKeysForRoot(all, ownRoot.key) : [];
+    const ownCopyBytes = ownKeys.reduce((sum, key) => sum + syncEntryBytes(key, all[key]), 0);
+    const projectedItemCount = Object.keys(all).length + ownKeys.length;
+    const browserQuotaOverhead = syncQuotaCountsSerializedNamespace
+      ? 4 * projectedItemCount + 1
+      : 0;
+    const freshCopyBytes = Math.ceil(ownCopyBytes * 1.25) + 1024;
+    const freshCopyCanFit = ownKeys.length > 0 &&
+      projectedItemCount <= SYNC_QUOTA_MAX_ITEMS &&
+      usedBytes + browserQuotaOverhead + freshCopyBytes <= SYNC_QUOTA_BYTES;
+    const recoveryOldDeviceHintAvailable = freshCopyCanFit && meta.syncInitialized &&
+      shownRecoveryCount.size > 1 &&
+      [...shownRecoveryCount.values()].every(count => count === 1) &&
+      [...shownRecoveryCount.keys()].some(deviceId => deviceId !== meta.deviceId &&
+        planManualRecoveryCleanup(all, sources.deviceSnapshots, {
+          mode: "device",
+          deviceId,
+          currentDeviceId: meta.deviceId,
+          rootSeenPass: meta.deviceSnapshotRootSeenPass || {},
+          gcPass: Number(meta.deviceSnapshotGcPass) || 0
+        }).rootKeys.length > 0);
     const latestDevice = sources.deviceSnapshots.reduce((latest, candidate) =>
       !latest || Number(candidate.publishedAt) > Number(latest.publishedAt) ? candidate : latest, null);
     const statusMeta = !exceeded && meta.syncEnabled && !hasRemoteData
@@ -4765,6 +4807,7 @@ export function startBackground(adapter) {
       remoteExpectedItems: expectedItems,
       remoteAssets,
       usage,
+      recoveryOldDeviceHintAvailable,
       hasRemoteSignal,
       hasRemoteData,
       // The synchronized Frequently Visited preference may arrive before this

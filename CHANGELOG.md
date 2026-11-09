@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.33.0.94
+
+- Clarifies Recovery safety-copy counts and labels in all languages, corrects the displayed free space on Firefox, and offers low-space advice only when removing an unused device’s backups is available. The Recovery dialog is fully localized. Sync/Recovery behavior remains unchanged.
+
 ## 1.33.0.93
 
 - Fixes **Clear Sync copy** so it can clear the synchronized layout even when browser Sync storage is full, in both Firefox and Chrome.

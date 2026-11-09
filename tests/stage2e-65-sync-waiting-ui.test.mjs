@@ -1,3 +1,4 @@
+import {syncStorageDisplayUsage} from "../src/shared/newtab/ui-utils.js";
 // @kind behavioral
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,7 +16,7 @@ const uiEnd = source.indexOf('  async function refreshSyncStatus()', uiStart);
 assert.ok(uiStart >= 0 && uiEnd > uiStart);
 const uiFunction = source.slice(uiStart, uiEnd);
 
-function renderStatus({syncStatus = 'waiting', syncInitialized = true, lastSyncWarning = ''} = {}) {
+function renderStatus({syncStatus = 'waiting', syncInitialized = true, lastSyncWarning = '', status = null, bytesInUse = 0, bootstrapMode = 'none'} = {}) {
   const headline = {textContent: ''};
   const detail = {textContent: ''};
   const dot = {classes: [], classList: {remove(){}, add(value){dot.classes.push(value);}}};
@@ -23,7 +24,7 @@ function renderStatus({syncStatus = 'waiting', syncInitialized = true, lastSyncW
   const ctx = {
     meta: {}, lastSyncStatus: null,
     normalizeMeta: x => x,
-    syncStoragePressure: () => 'normal', syncLimitationKinds: () => ({artwork:false,recovery:false}),
+    syncStoragePressure: free => free < 25 * 1024 ? 'warning' : 'normal', syncLimitationKinds: () => ({artwork:false,recovery:false}),
     isSyncQuotaErrorText: () => false,
     syncWarningDescription: m => m.lastSyncWarning || '',
     t: key => EN[key] || key,
@@ -38,10 +39,11 @@ function renderStatus({syncStatus = 'waiting', syncInitialized = true, lastSyncW
     syncUsageCore: null, syncUsageRecovery: null, recoveryCopiesManageButton: null,
     syncUsageShortcuts: null, syncUsageOverhead: null, syncUsageFree: null,
     syncStorageBreakdown: null, syncRevisionText: null,
-    syncReadyHeadlineKey: () => 'syncReady',
+    syncReadyHeadlineKey: () => 'syncStorageGettingFull',
+    PLATFORM_ID: 'firefox', syncStorageDisplayUsage,
   };
   runInNewContext(uiFunction + '\nglobalThis.render=updateSyncUi;', ctx);
-  ctx.render({syncEnabled:true, syncInitialized, syncStatus, syncBootstrapMode:'none', lastSyncWarning, syncBytesInUse:0});
+  ctx.render({syncEnabled:true, syncInitialized, syncStatus, syncBootstrapMode:bootstrapMode, lastSyncWarning, syncBytesInUse:bytesInUse}, status);
   return {headline: headline.textContent, detail: detail.textContent, classes:dot.classes};
 }
 
@@ -128,4 +130,31 @@ test('Stage 2E: retired Personal author retains waiting explanation while health
       assert.ok(view.items.some(x => x.startsWith('x-b')), 'healthy Work must converge');
     }
   } finally {rmSync(dir,{recursive:true,force:true});}
+});
+
+
+test('.94 Settings shows an existing verified cloud copy in explicit choice mode', () => {
+  const result = renderStatus({syncStatus:'waiting', syncInitialized:false,
+    status:{hasRemoteData:true, hasRemoteSignal:true, remoteState:'complete', remoteUpdatedAt:0,
+      usage:{core:500, recovery:500, shortcutArtwork:0, overhead:100, total:1100, free:101300, itemCount:12}}});
+  assert.equal(result.headline, 'waitingForLayout');
+  assert.equal(result.detail, 'completeCopyAvailable');
+});
+
+test('.94 Settings retains the existing no-copy detail when a complete cloud copy is absent', () => {
+  const result = renderStatus({syncStatus:'waiting', syncInitialized:false,
+    status:{hasRemoteData:false, hasRemoteSignal:false, remoteState:'none',
+      usage:{core:0, recovery:0, shortcutArtwork:0, overhead:150, total:150, free:102250, itemCount:1}}});
+  assert.equal(result.detail, 'noSyncCopyYet');
+});
+
+test('.94 low-space old-device hint is limited to actual pressure plus exhausted old-copy cleanup', () => {
+  const usage={core:62000,recovery:20000,shortcutArtwork:0,overhead:2000,total:84000,free:18400,itemCount:110};
+  const base={hasRemoteData:true,hasRemoteSignal:true,remoteState:'complete',usage};
+  const normal=renderStatus({syncStatus:'ready',status:{...base,usage:{...usage, total:60000, free:42400},recoveryOldDeviceHintAvailable:true}});
+  const cleanupAvailable=renderStatus({syncStatus:'ready',status:{...base,recoveryOldDeviceHintAvailable:false}});
+  const actionable=renderStatus({syncStatus:'ready',status:{...base,recoveryOldDeviceHintAvailable:true}});
+  assert.ok(!normal.detail.includes('syncOldDeviceRecoveryHint'));
+  assert.ok(!cleanupAvailable.detail.includes('syncOldDeviceRecoveryHint'));
+  assert.ok(actionable.detail.includes('syncOldDeviceRecoveryHint'));
 });
