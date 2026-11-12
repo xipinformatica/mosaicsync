@@ -42,7 +42,7 @@ const themedState = () => {
 };
 
 test("1.30 public version and schema changes are unified", () => {
-  assert.equal(VERSION, "1.33.0.94");
+  assert.equal(VERSION, "1.33.0.95");
   assert.equal(STATE_SCHEMA_VERSION, 19);
   assert.equal(SYNC_SCHEMA_VERSION, 11);
 });
@@ -145,10 +145,14 @@ test("new 1.26.0 labels are localized in all 34 UI catalogs and are not hardcode
         `${browser}/${file}: frequently-visited description still hardcodes five`);
     }
     const html = await readFile(`dist/${browser}/newtab/newtab.html`, "utf8");
+    // The frequent-sites permission paragraph is an English placeholder that newtab.js replaces at
+    // runtime with two localized keys; its sentence may name the "Number shown" control.
+    assert.equal((html.match(/<p id="frequentSyncPermissionText"/g) || []).length, 1, `${browser}: one frequent-sites placeholder paragraph`);
+    const controlsHtml = html.replace(/<p id="frequentSyncPermissionText"[^>]*>[^<]*<\/p>/, "");
     for (const english of [
       "Default Space on this device", "Number shown", "Separate light and dark wallpapers",
       "Current background", "Open in new tab", "Add to bookmarks", "Folder color"
-    ]) assert.equal(html.includes(english), false, `${browser}: new UI English must not be hardcoded in HTML: ${english}`);
+    ]) assert.equal(controlsHtml.includes(english), false, `${browser}: new UI English must not be hardcoded in HTML: ${english}`);
   }
 });
 

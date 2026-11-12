@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Adatvédelem-központú újlap a Chromehoz mappákkal, testreszabható elrendezéssel és választható Chrome Synckel. A MosaicSync nulla telemetriát használ."
+    "message": "Adatvédelembarát Chrome-újlap mappákkal, testreszabással és választható Chrome Synckel. A MosaicSync nem gyűjt telemetriát."
   },
   "actionOpenHome": {
     "message": "MosaicSync megnyitása"

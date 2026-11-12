@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Prywatna strona nowej karty Chrome z folderami, personalizacją i opcjonalnym Chrome Sync. Zero telemetrii MosaicSync."
+    "message": "Dbająca o prywatność strona nowej karty Chrome: foldery, personalizacja i opcjonalny Chrome Sync. MosaicSync nie zbiera telemetrii."
   },
   "actionOpenHome": {
     "message": "Otwórz MosaicSync"

@@ -29,6 +29,7 @@ function renderStatus({syncStatus = 'waiting', syncInitialized = true, lastSyncW
     syncWarningDescription: m => m.lastSyncWarning || '',
     t: key => EN[key] || key,
     formatBytes: x => String(x),
+    formatLocalizedBytes: x => String(x),
     SYNC_QUOTA_BYTES: 102400,
     syncStatusText: headline, syncStatusDetail: detail, syncStatusDot: dot,
     syncQuotaText: {textContent:'', title:''},

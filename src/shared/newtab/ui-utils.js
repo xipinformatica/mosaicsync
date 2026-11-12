@@ -418,10 +418,25 @@ export function manualGridRenderEquivalent(leftState, rightState) {
   return true;
 }
 
-export function formatBytes(bytes) {
+// Display formatting only: retain the historical 1024-byte KB thresholds,
+// decimal precision and rounding. Locale changes punctuation, not storage math.
+export function formatBytes(bytes, locale = "en") {
   const value = Math.max(0, Number(bytes) || 0);
-  if (value < 1024) return `${value} B`;
-  return `${(value / 1024).toFixed(value < 10_240 ? 1 : 0)} KB`;
+  const isKilobytes = value >= 1024;
+  const digits = isKilobytes && value < 10_240 ? 1 : 0;
+  const number = isKilobytes ? Number((value / 1024).toFixed(digits)) : value;
+  const formatted = new Intl.NumberFormat(locale === "nap" ? "it" : locale, {
+    useGrouping: false,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  }).format(number);
+  // Keep the 1024-based accounting and the compact layout unchanged. Only
+  // abbreviations vary where a regional convention differs from English.
+  const unit = locale === "fr" ? (isKilobytes ? "Ko" : "o")
+    : locale === "fi" ? (isKilobytes ? "kt" : "t")
+    : locale === "uk" ? (isKilobytes ? "КБ" : "Б")
+    : (isKilobytes ? "KB" : "B");
+  return `${formatted} ${unit}`;
 }
 
 export function clearCanonicalHostCacheForTests() { canonicalHostCache.clear(); }
@@ -590,7 +605,9 @@ export function renderCacheGridMatchesState(manifest, state) {
 // Settings-only representation: no storage calls and no quota decisions.
 export function recoveryDeviceCopyCountText(count, translate) {
   const amount = Math.max(0, Math.trunc(Number(count) || 0));
-  return `${amount} ${translate(amount === 1 ? "recoveryDeviceCopyOne" : "recoveryDeviceCopyOther")}`;
+  // Count-neutral label template per language ("Copies: {count}"), so no
+  // language shows a counting word or a hard-coded English colon as a label.
+  return translate("recoveryDeviceCopyOther", { count: amount });
 }
 
 export function syncStorageDisplayUsage(usage, quotaBytes, firefoxItemCount = null) {

@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Pestanya nova del Chrome centrada en la privadesa, amb carpetes, personalització i Chrome Sync opcional. Zero telemetria de MosaicSync."
+    "message": "Pestanya nova del Chrome que respecta la privadesa: carpetes, personalització i Chrome Sync opcional. Sense telemetria."
   },
   "actionOpenHome": {
     "message": "Obre MosaicSync"

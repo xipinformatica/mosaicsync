@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Nouvel onglet Chrome axé sur la confidentialité, avec dossiers, personnalisation et Chrome Sync facultatif. Zéro télémétrie MosaicSync."
+    "message": "Nouvel onglet Chrome respectueux de la vie privée : dossiers, personnalisation, Chrome Sync facultatif. Aucune télémétrie."
   },
   "actionOpenHome": {
     "message": "Ouvrir MosaicSync"

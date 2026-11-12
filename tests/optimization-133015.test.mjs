@@ -105,8 +105,10 @@ test("1.33.0.15 a cleanup that finishes after close/reopen completes but refresh
     async sendSyncMessage() { return cleanup.promise; },
     renderRecoveryCopies(value) { rendered.push(value.tag); },
     showSyncFeedback() {},
+    localizePresentationError(error) { return error.message; },
     t(key) { return key; },
     formatBytes(value) { return String(value); },
+    formatLocalizedBytes(value) { return String(value); },
     async refreshSyncStatus() {},
     async loadRecoveryCopies(generation) { reloaded.push(generation); }
   });

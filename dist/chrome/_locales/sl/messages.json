@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Stran novega zavihka za Chrome s poudarkom na zasebnosti, mapami, prilagodljivo postavitvijo in izbirnim Chrome Sync. MosaicSync ne uporablja telemetrije."
+    "message": "Nov zavihek za Chrome, ki spoštuje zasebnost: mape, prilagajanje in izbirni Chrome Sync. MosaicSync ne zbira telemetrije."
   },
   "actionOpenHome": {
     "message": "Odpri MosaicSync"

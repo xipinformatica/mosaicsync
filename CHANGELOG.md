@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.33.0.95
+
+- Improves translations across all 34 languages, especially Recovery copy labels, counts and confirmation messages, and fixes text that could run off the screen.
+- Explains common Sync, shortcut and image problems more clearly in the selected language, with the right browser terminology in Firefox and Chrome.
+- Makes dates, sizes and punctuation more consistent. Your shortcuts, Sync and Recovery storage behavior are unchanged.
+
 ## 1.33.0.94
 
 - Clarifies Recovery safety-copy counts and labels in all languages, corrects the displayed free space on Firefox, and offers low-space advice only when removing an unused device’s backups is available. The Recovery dialog is fully localized. Sync/Recovery behavior remains unchanged.

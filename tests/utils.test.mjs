@@ -10,6 +10,16 @@ test("New Tab URL helpers are deterministic", () => {
   assert.equal(normalizeShortcutUrl("example.com"), "https://example.com/");
   assert.equal(normalizeShortcutUrl("127.0.0.1:8080/test"), "http://127.0.0.1:8080/test");
   assert.equal(formatBytes(1536), "1.5 KB");
+  assert.equal(formatBytes(1536, "fr"), "1,5 Ko");
+  assert.equal(formatBytes(1536, "de"), "1,5 KB");
+  assert.equal(formatBytes(1536, "nap"), "1,5 KB");
+  assert.equal(formatBytes(1536, "fi"), "1,5 kt");
+  assert.equal(formatBytes(1023, "fi"), "1023 t");
+  assert.equal(formatBytes(1536, "uk"), "1,5 КБ");
+  assert.equal(formatBytes(1023, "uk"), "1023 Б");
+  assert.equal(formatBytes(10240, "fr"), "10 Ko");
+  assert.equal(formatBytes(1023, "fr"), "1023 o");
+
 });
 
 test("background expectation helpers preserve limits and signatures", () => {

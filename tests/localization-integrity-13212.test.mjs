@@ -125,7 +125,7 @@ const REVIEWED_STATIC_HTML = new Set([
   "https://example.com",
   "https://example.com/icon.png",
   // Replaced as one dynamic sentence from two localized status keys once the FV controller initializes.
-  "Firefox permission is required to show frequently visited pages. Sites come from this browser only. Show and Count preferences sync; browsing history is never synchronized."
+  "Firefox permission is required to show frequently visited pages. Sites come from this browser only. “Show” and “Number shown” preferences sync; browsing history is never synchronized."
 ]);
 
 function isVersionEyebrow(value) {

@@ -64,7 +64,12 @@ async function writeManifestLocales(target, browser, registry) {
       extensionDescription: { message: browser === "chrome" ? entry.chromeDescription : entry.firefoxDescription },
       actionOpenHome: { message: entry.actionOpenHome }
     };
-    const dir = join(localeRoot, locale);
+    // Chrome recognizes sv/no, while Firefox uses sv_SE/nb_NO.
+    // Keep the canonical 34-entry registry and all UI locale IDs unchanged.
+    const outputLocale = browser === "chrome"
+      ? ({ sv_SE: "sv", nb_NO: "no" }[locale] || locale)
+      : locale;
+    const dir = join(localeRoot, outputLocale);
     await mkdir(dir, { recursive: true });
     await writeFile(join(dir, "messages.json"), `${JSON.stringify(messages, null, 2)}\n`, "utf8");
   }

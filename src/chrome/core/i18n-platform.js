@@ -88,6 +88,51 @@ const SPECIAL_RULES = Object.freeze({
   ]
 });
 
+// Product-specific Chrome wording, keyed rather than added to global regex rules.
+// This presentation adapter never changes Sync/Recovery protocol decisions.
+const CHROME_COPY_OVERRIDES = Object.freeze({
+  en: {
+    syncPendingAccountWait: "Waiting for your Google Account to deliver the MosaicSync layout. This can take a few minutes; your shortcuts will appear automatically when it arrives.",
+    chooseFirefoxAccount: "To synchronize between Chrome computers, sign in to Chrome with the same Google Account on each one. You can also use MosaicSync fully on just this computer."
+  },
+  bg: {
+    syncTurnedOffDevice: "Chrome Sync е изключен на това устройство.",
+    syncRemainsEnabled: "Chrome Sync остава включен."
+  },
+  el: {
+    syncTurnedOffDevice: "Το Chrome Sync απενεργοποιήθηκε σε αυτή τη συσκευή.",
+    syncRemainsEnabled: "Το Chrome Sync παραμένει ενεργό."
+  },
+  lt: {
+    syncTurnedOffDevice: "Chrome Sync išjungtas šiame įrenginyje.",
+    syncRemainsEnabled: "Chrome Sync lieka įjungtas."
+  },
+  lv: {
+    syncTurnedOffDevice: "Chrome Sync šajā ierīcē izslēgts.",
+    syncRemainsEnabled: "Chrome Sync paliek iespējots."
+  },
+  ro: {
+    syncTurnedOffDevice: "Chrome Sync este oprit pe acest dispozitiv.",
+    syncRemainsEnabled: "Chrome Sync rămâne activ."
+  },
+  hr: {
+    syncTurnedOffDevice: "Chrome Sync isključen je na ovom uređaju.",
+    syncRemainsEnabled: "Chrome Sync ostaje uključen."
+  },
+  sk: {
+    syncTurnedOffDevice: "Chrome Sync je na tomto zariadení vypnutý.",
+    syncRemainsEnabled: "Chrome Sync zostáva zapnutý."
+  },
+  sl: {
+    syncTurnedOffDevice: "Chrome Sync je izklopljen v tej napravi.",
+    syncRemainsEnabled: "Chrome Sync ostaja omogočen."
+  },
+  uk: {
+    syncTurnedOffDevice: "Chrome Sync вимкнено на цьому пристрої.",
+    syncRemainsEnabled: "Chrome Sync залишається ввімкненим."
+  }
+});
+
 const DEFAULT_RULES = Object.freeze([
   [/Firefox Account Sync/g, "Chrome Sync"],
   [/Mozilla/g, "Google"],
@@ -100,9 +145,32 @@ export function platformizeUiText(value, locale = "en", key = "") {
   // Chrome Sync is a product name, so keep this primary label consistent in
   // every locale while surrounding explanatory prose stays fully localized.
   if (key === "firefoxSync") return "Chrome Sync";
+  const specific = CHROME_COPY_OVERRIDES[locale]?.[key];
+  if (specific) return specific;
   const rules = SPECIAL_RULES[locale] || DEFAULT_RULES;
   for (const [pattern, replacement] of rules) text = text.replace(pattern, replacement);
   // Safety net for languages whose grammar does not inflect browser names.
   text = text.replace(/Mozilla/g, "Google").replace(/Firefox/g, "Chrome").replace(/Firefok\w*/g, "Chrome");
+  // The only browser name in this status refers to the account provider;
+  // Chrome profiles synchronize using a Google Account, not a "Chrome account".
+  if (key === "syncPendingAccountWait") {
+    text = text.replaceAll("Chrome", "Google");
+    if (locale === "ca") text = text.replaceAll("del Google", "de Google");
+  }
+  // Chrome Sync is the browser feature; "Google Sync" is not a product name.
+  // Restrict the correction to this presentation key, without changing account copy.
+  if (key === "syncServerlessCompact") text = text.replaceAll("Google Sync", "Chrome Sync");
+  if (key === "chooseFirefoxAccount" && locale === "de") {
+    text = text.replace("Chrome-Konto", "Google-Konto");
+  }
+  if (locale === "ko") {
+    // Chrome is pronounced 크롬 (consonant-final), unlike Firefox (vowel-final).
+    for (const [before, after] of [
+      ["Chrome가", "Chrome이"], ["Chrome는", "Chrome은"],
+      ["Chrome를", "Chrome을"], ["Chrome와", "Chrome과"],
+      ["Chrome로", "Chrome으로"]
+    ]) text = text.replaceAll(before, after);
+  }
+  if (locale === "bg") text = text.replaceAll("във Chrome", "в Chrome");
   return text;
 }

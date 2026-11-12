@@ -170,6 +170,7 @@ test('.44 Welcome source-resolution quota is localized only for staged profile i
     commitPendingSourceCandidate:async () => {throw ctx.error;},
     discardPendingSourceCandidate() {}, configureSourceStep() {}, latestSyncStatus:null,
     setStatus: (...args) => messages.push(args),
+    localizePresentationError: error => error.message,
     t:key => `Localized:${key}`, ERROR_CODES,
     isQuotaExceededError:e => /quota/i.test(e?.message || ''),
   });

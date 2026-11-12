@@ -59,14 +59,14 @@ import { MESSAGES as EN } from "../src/shared/core/i18n-locales/en.js";
 import { MESSAGES as CA } from "../src/shared/core/i18n-locales/ca.js";
 
 function renderedCopyCount(count, catalog) {
-  return recoveryDeviceCopyCountText(count, key => catalog[key]);
+  return recoveryDeviceCopyCountText(count, (key, vars = {}) => catalog[key].replace("{count}", String(vars.count)));
 }
 
 test(".94 Recovery device heading labels one and two copies in English and Catalan", () => {
-  assert.equal(renderedCopyCount(1, EN), "1 copy");
-  assert.equal(renderedCopyCount(2, EN), "2 copies");
-  assert.equal(renderedCopyCount(1, CA), "1 còpia de seguretat");
-  assert.equal(renderedCopyCount(2, CA), "2 còpies de seguretat");
+  assert.equal(renderedCopyCount(1, EN), "Copies: 1");
+  assert.equal(renderedCopyCount(2, EN), "Copies: 2");
+  assert.equal(renderedCopyCount(1, CA), "Còpies: 1");
+  assert.equal(renderedCopyCount(2, CA), "Còpies: 2");
 });
 
 for (const itemCount of [100, 512]) {
@@ -98,8 +98,11 @@ test(".94 all supported locale catalogs include correctly scoped Recovery displa
     for (const key of ["recoveryDeviceCopyOne", "recoveryDeviceCopyOther", "syncOldDeviceRecoveryHint"]) {
       assert.ok(MESSAGES[key] && typeof MESSAGES[key] === "string", `${file} ${key}`);
     }
-    assert.equal(recoveryDeviceCopyCountText(1, key => MESSAGES[key]).startsWith("1 "), true);
-    assert.equal(recoveryDeviceCopyCountText(2, key => MESSAGES[key]).startsWith("2 "), true);
+    const render = n => recoveryDeviceCopyCountText(n, (key, vars = {}) => MESSAGES[key].replace("{count}", String(vars.count)));
+    assert.match(MESSAGES.recoveryDeviceCopyOther, /\{count\}/, `${file}: device copy label is a template`);
+    assert.match(render(2), /2$/, `${file}: count shown last`);
+    assert.doesNotMatch(render(2), /^\p{Ll}/u, `${file}: label must not start with a lower-case word`);
+    assert.doesNotMatch(render(2), /^(件|개|份|個)/u, `${file}: a counter word is not a label`);
     assert.ok(MESSAGES.syncOldDeviceRecoveryHint.includes("{action}"),
       `${file}: the tip must display the localized Manage button label`);
   }
@@ -119,14 +122,14 @@ for (const browser of ["firefox", "chrome"]) {
 
 test(".94 Recovery copy labels match the dialog terminology in French, Finnish and Dutch", async () => {
   const translations = [
-    ["fr", "1 sauvegarde", "2 sauvegardes"],
-    ["fi", "1 varmuuskopio", "2 varmuuskopiota"],
-    ["nl", "1 back-up", "2 back-ups"]
+    ["fr", "Copies\u00a0: 1", "Copies\u00a0: 2"],
+    ["fi", "Kopiot: 1", "Kopiot: 2"],
+    ["nl", "Kopieën: 1", "Kopieën: 2"]
   ];
   for (const [locale, one, two] of translations) {
     const { MESSAGES } = await import(`../src/shared/core/i18n-locales/${locale}.js`);
-    assert.equal(recoveryDeviceCopyCountText(1, key => MESSAGES[key]), one);
-    assert.equal(recoveryDeviceCopyCountText(2, key => MESSAGES[key]), two);
+    assert.equal(recoveryDeviceCopyCountText(1, (key, vars = {}) => MESSAGES[key].replace("{count}", String(vars.count))), one);
+    assert.equal(recoveryDeviceCopyCountText(2, (key, vars = {}) => MESSAGES[key].replace("{count}", String(vars.count))), two);
     const actualHint = MESSAGES.syncOldDeviceRecoveryHint.replace("{action}", MESSAGES.manageRecoveryCopies);
     assert.ok(actualHint.includes(MESSAGES.manageRecoveryCopies), `${locale}: tip must name the real button`);
     assert.ok(!actualHint.includes("{action}"));

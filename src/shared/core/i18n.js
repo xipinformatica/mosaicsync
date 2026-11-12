@@ -134,6 +134,12 @@ export function getLocalePreference() {
   return cachedLocalePreference;
 }
 
+// Neapolitan has no dedicated Intl locale in the supported browsers.
+// Italian is the nearest formatting fallback; the visible UI remains Neapolitan.
+export function getIntlFormattingLocale(locale = getEffectiveLocale()) {
+  return locale === "nap" ? "it" : locale;
+}
+
 export function getEffectiveLocale() {
   if (cachedEffectiveLocale !== null) return cachedEffectiveLocale;
   const preference = getLocalePreference();
@@ -203,6 +209,72 @@ export function t(key, replacements = null, locale = getEffectiveLocale()) {
   const catalog = locale === activeLocale ? activeMessages : (loadedMessages.get(locale) || EN_MESSAGES);
   const translated = catalog?.[key] ?? english;
   return formatPlaceholders(platformizeUiText(translated, locale, key), replacements);
+}
+
+// Errors retain their original message and code for diagnostics and control flow.
+// Only the display boundary translates them. The background's wording can
+// already have been adapted to Chrome before it reaches this function.
+const PRESENTATION_ERROR_KEYS = Object.freeze({
+  "Enter a URL.": "shortcutUrlRequired",
+  "MosaicSync supports http:// and https:// shortcuts.": "shortcutUrlHttpOnly",
+  "Choose a PNG, JPEG, WebP, GIF, or ICO image.": "imageChooseSupportedFormat",
+  "That image is empty.": "imageEmpty",
+  "Profile changed on this device during import. Please retry the import.": "profileImportChangedRetry",
+  "Firefox Account Sync permission is not enabled on this device.": "syncPermissionNotGranted",
+  "Firefox Sync storage is full. MosaicSync kept your local data unchanged.": "syncStorageFull",
+  "Firefox Sync is still delivering MosaicSync data. Retry Clear Sync copy after synchronization finishes.": "syncClearStillDelivering",
+  "Invalid custom branding logo.": "brandingLogoInvalid",
+  "PROFILE_SYNC_PUBLISH_FAILED": "couldNotPublish",
+  "BOOKMARK_MODULE_NOT_READY": "bookmarksLoadError"
+});
+
+// Error codes are more reliable than browser- or locale-specific messages.
+const PRESENTATION_ERROR_CODE_KEYS = Object.freeze({
+  STORAGE_LOCAL_QUOTA_EXCEEDED: "localStorageFullUnsaved",
+  STORAGE_LOCAL_WRITE_FAILED: "localSaveFailedUnsaved"
+});
+
+export function localizePresentationError(error, fallbackKey = "operationFailed") {
+  const message = typeof error === "string" ? error : String(error?.message || "");
+  const code = error && typeof error === "object" ? error.code : null;
+  const codeKey = code && Object.prototype.hasOwnProperty.call(PRESENTATION_ERROR_CODE_KEYS, code)
+    ? PRESENTATION_ERROR_CODE_KEYS[code] : null;
+  if (codeKey) return t(codeKey);
+
+  const locale = getEffectiveLocale();
+  if (!message) {
+    console.warn("MosaicSync: no message for presentation error", error);
+    return t(fallbackKey);
+  }
+  // Mapped errors must use the translated catalog even in English. This also
+  // prevents the retired 'Firefox Account Sync' internal text from surfacing.
+  const directKey = Object.prototype.hasOwnProperty.call(PRESENTATION_ERROR_KEYS, message)
+    ? PRESENTATION_ERROR_KEYS[message]
+    : (Object.prototype.hasOwnProperty.call(SOURCE_KEYS, message) ? SOURCE_KEYS[message] : null);
+  if (directKey) return t(directKey);
+
+  // Chrome's background adapter may already have changed 'Firefox' to 'Chrome'.
+  // Check the adapted *source* against the message, without changing the error.
+  for (const [source, key] of Object.entries(PRESENTATION_ERROR_KEYS)) {
+    if (platformizeUiText(source, locale) === message) return t(key);
+  }
+  for (const [source, key] of Object.entries(SOURCE_KEYS)) {
+    if (platformizeUiText(source, locale, key) === message) return t(key);
+  }
+
+  const limit = /^That image is too large\. Try (?:one|a file) under (\d+) MB\.$/.exec(message);
+  if (limit) return t("imageTooLarge", { maxMB: limit[1] });
+  if (/^(?:Unsupported local image\.|Remote image is too large\.|That image has invalid dimensions\.|That image is too large to process safely\.|Couldn't (?:read|decode|encode|optimize) (?:the |an? )?image|Image worker |The image worker |Worker image optimization |This Firefox build couldn't create an image canvas)/.test(message)) {
+    return t("imageProcessingFailed");
+  }
+  // Preserve messages already localized by the caller, including Chrome's
+  // platformized translation. A known translated message is not an unknown error.
+  for (const [key, value] of Object.entries(activeMessages)) {
+    if (value === message || platformizeUiText(value, locale, key) === message) return message;
+  }
+  if (locale === "en") return message; // Raw English only for truly unmatched errors.
+  console.warn("MosaicSync: unrecognized presentation error", error);
+  return t(fallbackKey);
 }
 
 export function translateText(source, replacements = null, locale = getEffectiveLocale()) {

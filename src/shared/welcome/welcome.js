@@ -20,7 +20,7 @@ import { defaultDeviceName, nextMutationTime, normalizeDeviceName, now, stableSt
 import { ERROR_CODES, isQuotaExceededError } from "../core/errors.js";
 import { ensureLocalStorage, updateLocalMeta, writeLocalState } from "../core/storage.js";
 import { cleanupLegacyWebOriginPermissions, hasTopSitesPermission, hasWebAccess, removeSyncConsent, requestSyncConsentFromGesture, requestTopSitesPermissionFromGesture, requestWebAccessFromGesture } from "../core/permissions.js";
-import { getEffectiveLocale, localizeDocument, setLocalePreference, t, translateText } from "../core/i18n.js";
+import { getIntlFormattingLocale, localizeDocument, localizePresentationError, setLocalePreference, t, translateText } from "../core/i18n.js";
 import { parseProfilePackage, readProfileImportText } from "../core/profile.js";
 import { normalizeCustomBranding } from "../core/custom-branding.js";
 import { installViewportTooltips } from "../core/viewport-tooltip.js";
@@ -120,7 +120,7 @@ async function openDonationPage() {
 function formatTime(timestamp) {
   if (!Number.isFinite(timestamp) || timestamp <= 0) return t("unknownTime");
   try {
-    return new Intl.DateTimeFormat(getEffectiveLocale(), {
+    return new Intl.DateTimeFormat(getIntlFormattingLocale(), {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -128,7 +128,7 @@ function formatTime(timestamp) {
       minute: "2-digit"
     }).format(new Date(timestamp));
   } catch {
-    return new Date(timestamp).toLocaleString();
+    return new Date(timestamp).toLocaleString(getIntlFormattingLocale());
   }
 }
 
@@ -373,7 +373,7 @@ syncContinueButton.addEventListener("click", event => {
       setStatus(syncOptedIn ? t("syncPermissionGrantedSource") : t("stayLocal"));
     } catch (error) {
       console.error(error);
-      setStatus(error.message || t("couldNotContinue"), "error");
+      setStatus(localizePresentationError(error, "couldNotContinue"), "error");
     } finally {
       syncContinueButton.disabled = false;
     }
@@ -497,7 +497,7 @@ sourceFinishButton.addEventListener("click", () => {
       await continueAfterStartingSource(source, { frequentPermissionAttempted: topSitesRequest.attempted });
     } catch (error) {
       console.error(error);
-      setStatus(error.message || t("couldNotContinue"), "error");
+      setStatus(localizePresentationError(error, "couldNotContinue"), "error");
       sourceFinishButton.disabled = false;
     }
   })();
@@ -563,7 +563,7 @@ chooseLocalButton.addEventListener("click", async () => {
       ? t("profileImportChangedRetry")
       : pendingSourceCandidate?.source === "profile" && (error?.code === ERROR_CODES.STORAGE_LOCAL_QUOTA_EXCEEDED || isQuotaExceededError(error))
         ? t("profileImportStorageFull")
-        : error.message || t("firefoxSyncError"), "error");
+        : localizePresentationError(error, "firefoxSyncError"), "error");
     chooseLocalButton.disabled = false;
     chooseCloudButton.disabled = false;
   }
@@ -590,7 +590,7 @@ chooseCloudButton.addEventListener("click", () => {
         ? t("syncedLayoutFromRestored", { time: formatTime(response.remoteUpdatedAt) })
         : t("syncRestored"), { permissionAttempted: topSitesRequest.attempted });
     } catch (error) {
-      setStatus(error.message || t("couldNotRestore"), "error");
+      setStatus(localizePresentationError(error, "couldNotRestore"), "error");
       chooseLocalButton.disabled = false;
       chooseCloudButton.disabled = false;
     }
@@ -664,7 +664,7 @@ async function initializeWelcome() {
     setStatus(t("syncPermissionAlreadyEnabled"));
   } catch (error) {
     console.error(error);
-    setStatus(error.message || t("couldNotResume"), "error");
+    setStatus(localizePresentationError(error, "couldNotResume"), "error");
   }
 }
 

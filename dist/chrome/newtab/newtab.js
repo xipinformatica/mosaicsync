@@ -100,6 +100,8 @@ import {
 } from "../core/permissions.js";
 import {
   getEffectiveLocale,
+  localizePresentationError,
+  getIntlFormattingLocale,
   getLocalePreference,
   localizeDocument,
   populateLanguageSelect,
@@ -114,6 +116,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 (() => {
   "use strict";
+
+  // Only the displayed number is localized; byte accounting stays unchanged.
+  const formatLocalizedBytes = bytes => formatBytes(bytes, getEffectiveLocale());
 
   // One low-level commit owner; live state and visible side-effects stay with callers.
   const persistenceGateway = createNewTabPersistenceGateway(writeLocalStateWithBaseline);
@@ -397,7 +402,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     void ensureBookmarksController().catch(error => {
       console.warn(`${PRODUCT_NAME}: could not initialize Bookmarks`, error);
       bookmarksButton?.addEventListener("click", activateBookmarksOnFirstUse, { once: true });
-      showToast(error?.message || t("operationFailed"));
+      showToast(localizePresentationError(error, "operationFailed"));
     });
   }
 
@@ -1713,7 +1718,7 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
       button.addEventListener("click", event => {
         event.stopPropagation();
         closeFrequentContextMenu();
-        void Promise.resolve(action()).catch(error => showToast(error?.message || t("operationFailed")));
+        void Promise.resolve(action()).catch(error => showToast(localizePresentationError(error, "operationFailed")));
       });
       menu.append(button);
     };
@@ -3602,7 +3607,7 @@ ${site.url}`;
     card.addEventListener("click", event => {
       event.stopPropagation();
       if (activeFolderId === folder.id && !folderPopover.hidden) {
-        commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
+        commitFolderTitle().catch(error => showToast(localizePresentationError(error, "operationFailed")));
         closeFolder();
         return;
       }
@@ -3697,7 +3702,7 @@ ${site.url}`;
         event.preventDefault();
         event.stopPropagation();
         slot.classList.remove("drag-over");
-        void commitBookmarkShortcutDrop({ targetId: item.id }).catch(error => showToast(error?.message || t("operationFailed")));
+        void commitBookmarkShortcutDrop({ targetId: item.id }).catch(error => showToast(localizePresentationError(error, "operationFailed")));
         return;
       }
       event.preventDefault();
@@ -3706,7 +3711,7 @@ ${site.url}`;
       if (!sourceId || sourceId === item.id) return;
       if (crossSpaceDrag?.shortcutId === sourceId && crossSpaceDrag.sourceSpaceId !== state.activeSpaceId) {
         const targetFolderId = item.type === "folder" ? item.id : "";
-        void commitCrossSpaceDrag({ position: item.position, targetFolderId }).catch(error => showToast(error.message || t("moveSpaceFailed")));
+        void commitCrossSpaceDrag({ position: item.position, targetFolderId }).catch(error => showToast(localizePresentationError(error, "moveSpaceFailed")));
         return;
       }
       showDropChoice(sourceId, item.id, slot).catch(console.error);
@@ -3755,21 +3760,21 @@ ${site.url}`;
       }
       if (typeof bookmarkDrag !== "undefined" && bookmarkDrag) {
         try { await commitBookmarkShortcutDrop({ position }); }
-        catch (error) { showToast(error?.message || t("operationFailed")); }
+        catch (error) { showToast(localizePresentationError(error, "operationFailed")); }
         return;
       }
       if (frequentDragSite) {
         const site = frequentDragSite;
         frequentDragSite = null;
         try { await addFrequentSiteToMosaicSync(site, { position }); }
-        catch (error) { showToast(error?.message || t("operationFailed")); }
+        catch (error) { showToast(localizePresentationError(error, "operationFailed")); }
         return;
       }
       const sourceId = dragId || event.dataTransfer.getData("text/plain");
       if (!sourceId) return;
       if (crossSpaceDrag?.shortcutId === sourceId && crossSpaceDrag.sourceSpaceId !== state.activeSpaceId) {
         try { await commitCrossSpaceDrag({ position }); }
-        catch (error) { showToast(error.message || t("moveSpaceFailed")); }
+        catch (error) { showToast(localizePresentationError(error, "moveSpaceFailed")); }
         return;
       }
       let moved = moveTopLevelItemToPosition(sourceId, position);
@@ -4437,9 +4442,9 @@ ${site.url}`;
       closeFolder();
     }
   });
-  folderTitleInput.addEventListener("blur", () => commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed"))));
+  folderTitleInput.addEventListener("blur", () => commitFolderTitle().catch(error => showToast(localizePresentationError(error, "operationFailed"))));
   closeFolderButton.addEventListener("click", () => {
-    commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
+    commitFolderTitle().catch(error => showToast(localizePresentationError(error, "operationFailed")));
     closeFolder();
   });
 
@@ -4945,7 +4950,7 @@ ${site.url}`;
     if (shortcutSyncImageHint) {
       const syncBytes = dataUrlByteLength(pendingShortcutSyncData);
       if (shortcutSyncImage.checked && syncBytes) {
-        shortcutSyncImageHint.textContent = t("compactSyncCopySize", { size: formatBytes(Math.ceil(syncBytes * 1.38)) });
+        shortcutSyncImageHint.textContent = t("compactSyncCopySize", { size: formatLocalizedBytes(Math.ceil(syncBytes * 1.38)) });
       } else {
         shortcutSyncImageHint.textContent = t("imageSyncHint");
       }
@@ -4970,7 +4975,7 @@ ${site.url}`;
   chooseDetectedFavicon?.addEventListener("click", () => {
     let sourceUrl = "";
     try { sourceUrl = normalizeShortcutUrl(shortcutUrl.value); }
-    catch (error) { showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : error.message || t("operationFailed")); return; }
+    catch (error) { showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : localizePresentationError(error, "operationFailed")); return; }
 
     // Permission request remains directly in the user's click. Candidate discovery
     // then runs in the background using the exact same bounded image/SVG fetch
@@ -5019,7 +5024,7 @@ ${site.url}`;
       } catch (error) {
         if (generation !== detectedFaviconGeneration) return;
         detectedFaviconChoices?.replaceChildren();
-        if (detectedFaviconStatus) detectedFaviconStatus.textContent = error.message || t("operationFailed");
+        if (detectedFaviconStatus) detectedFaviconStatus.textContent = localizePresentationError(error, "operationFailed");
       } finally {
         if (requestId && detectedFaviconRequestId === requestId) detectedFaviconRequestId = "";
         if (generation === detectedFaviconGeneration) chooseDetectedFavicon.disabled = false;
@@ -5112,7 +5117,7 @@ ${site.url}`;
       updateImagePreview();
     } catch (error) {
       if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutId.value === editorShortcutId) {
-        showToast(error.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     } finally {
       shortcutImageFile.value = "";
@@ -5213,7 +5218,7 @@ ${site.url}`;
         showToast(t("webImageCached"));
       } catch (error) {
         if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutWebImageDialog.open && shortcutId.value === editorShortcutId) {
-          showToast(error.message || t("operationFailed"));
+          showToast(localizePresentationError(error, "operationFailed"));
         }
       } finally {
         if (generation === shortcutSyncPrepareGeneration && shortcutDialog?.open && shortcutWebImageDialog.open && shortcutId.value === editorShortcutId) {
@@ -5262,7 +5267,7 @@ ${site.url}`;
         shortcutSyncImage.checked = false;
         pendingShortcutImageKind = "device";
         pendingShortcutSyncData = "";
-        showToast(error.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       } finally {
         if (generation === shortcutSyncPrepareGeneration) {
           shortcutSyncImage.disabled = false;
@@ -5476,7 +5481,7 @@ ${site.url}`;
       // maintenance pass continues to repair any other missing icons.
       if (!image && !pendingShortcutBuiltinIcon && savedShortcutId) requestMissingSiteIcons([savedShortcutId], { force: true });
     } catch (error) {
-      showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : error.message || t("operationFailed"));
+      showToast(error?.code === "SHORTCUT_URL_CREDENTIALS" ? t("shortcutUrlCredentialsNotAllowed") : localizePresentationError(error, "operationFailed"));
     } finally {
       shortcutSavePending = false;
     }
@@ -5520,7 +5525,7 @@ ${site.url}`;
     } catch (error) {
       // Keep the editor open. A second Delete must ask for confirmation again;
       // the durable record has been re-adopted (or future writes are blocked).
-      showToast(error?.message || t("operationFailed"));
+      showToast(localizePresentationError(error, "operationFailed"));
       return;
     }
     render();
@@ -5546,7 +5551,7 @@ ${site.url}`;
         await importFirefoxShortcuts(options);
       } catch (error) {
         console.error(error);
-        showToast(error.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     })();
   }
@@ -5819,7 +5824,7 @@ ${site.url}`;
 
   function openThemeWallpaperGallery(target) {
     if (target !== "light" && target !== "dark") return;
-    void openWallpaperGallery(target).catch(error => showToast(error?.message || t("operationFailed")));
+    void openWallpaperGallery(target).catch(error => showToast(localizePresentationError(error, "operationFailed")));
   }
 
   async function refreshWebAccessUi() {
@@ -6384,12 +6389,12 @@ ${site.url}`;
     clearTimeout(backgroundPersistTimer);
     backgroundPersistTimer = null;
     if (delay <= 0) {
-      void saveSettingsState().catch(error => showToast(error?.message || t("operationFailed")));
+      void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
       return;
     }
     backgroundPersistTimer = setTimeout(() => {
       backgroundPersistTimer = null;
-      void saveSettingsState().catch(error => showToast(error?.message || t("operationFailed")));
+      void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
     }, delay);
   }
 
@@ -6442,7 +6447,7 @@ ${site.url}`;
     try {
       await saveSettingsState();
     } catch (error) {
-      showToast(error.message || t("operationFailed"));
+      showToast(localizePresentationError(error, "operationFailed"));
     }
   }
 
@@ -6468,10 +6473,10 @@ ${site.url}`;
   settingsDarkWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("dark"));
   settingsLightWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("light"));
   settingsDarkWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("dark"));
-  settingsLightWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
-  settingsDarkWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(error.message || t("operationFailed"))); });
+  settingsLightWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
+  settingsDarkWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
 
-  customBrandingButton?.addEventListener("click", () => { void openCustomBrandingDialog().catch(error => showToast(error?.message || t("operationFailed"))); });
+  customBrandingButton?.addEventListener("click", () => { void openCustomBrandingDialog().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
   customBrandingDialog?.addEventListener("close", () => { customBrandingUploadGeneration += 1; customBrandingDraft = null; });
   customBrandingLogoFile?.addEventListener("change", async () => {
     const file = customBrandingLogoFile.files?.[0];
@@ -6561,7 +6566,7 @@ ${site.url}`;
       showToast(t("backgroundApplied"));
     } catch (error) {
       if (generation === backgroundUploadGeneration && state.activeSpaceId === spaceId && isSettingsOpen()) {
-        showToast(error.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     } finally {
       settingsBackgroundFile.value = "";
@@ -6575,7 +6580,7 @@ ${site.url}`;
   });
   backgroundColorHue?.addEventListener("change", () => {
     clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
   });
   backgroundColorPlane?.addEventListener("pointerdown", event => {
     colorPlaneDragging = true;
@@ -6591,7 +6596,7 @@ ${site.url}`;
     colorPlaneRect = null;
     backgroundColorPlane.releasePointerCapture?.(event.pointerId);
     clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
   });
   backgroundColorPlane?.addEventListener("pointercancel", () => { colorPlaneDragging = false; colorPlaneRect = null; });
   backgroundColorPlane?.addEventListener("lostpointercapture", () => { colorPlaneDragging = false; colorPlaneRect = null; });
@@ -6632,13 +6637,13 @@ ${site.url}`;
     });
   });
   moreWallpapersButton?.addEventListener("click", () => {
-    void openWallpaperGallery("main").catch(error => showToast(error?.message || t("operationFailed")));
+    void openWallpaperGallery("main").catch(error => showToast(localizePresentationError(error, "operationFailed")));
   });
 
   settingsBackgroundDim.addEventListener("input", () => applyBackgroundControlsLive());
   settingsBackgroundDim.addEventListener("change", () => {
     clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
   });
 
   clearBackgroundImage.addEventListener("click", () => {
@@ -6704,7 +6709,7 @@ ${site.url}`;
       }, 100);
     })().catch(error => {
       event.currentTarget.checked = state.settings.autoSiteIcons !== false;
-      showToast(error.message || t("operationFailed"));
+      showToast(localizePresentationError(error, "operationFailed"));
     });
   });
 
@@ -6727,7 +6732,7 @@ ${site.url}`;
         }
       } catch (error) {
         try { await persistWebAccessPromptDecision(false); } catch {}
-        showToast(error?.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     })();
   });
@@ -6772,7 +6777,7 @@ ${site.url}`;
         state.settings.webAccessPrompted = true;
         try { await saveState({ localCacheOnly: true }); } catch {}
         await refreshWebAccessUi().catch(() => {});
-        showToast(error.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     })();
   });
@@ -6830,7 +6835,7 @@ ${site.url}`;
       try {
         await saveSettingsState();
       } catch (error) {
-        showToast(error?.message || t("operationFailed"));
+        showToast(localizePresentationError(error, "operationFailed"));
       }
     });
   });
@@ -6850,7 +6855,7 @@ ${site.url}`;
     applySettings();
     clearTimeout(tileSizePersistTimer);
     tileSizePersistTimer = setTimeout(() => {
-      void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+      void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
     }, 180);
   });
 
@@ -6858,7 +6863,7 @@ ${site.url}`;
 
   settingsTileSize?.addEventListener("change", () => {
     clearTimeout(tileSizePersistTimer);
-    void saveSettingsState().catch(error => showToast(error.message || t("operationFailed")));
+    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
   });
 
   // ---------------------------------------------------------------------------
@@ -6868,14 +6873,14 @@ ${site.url}`;
   function formatSyncTime(timestamp) {
     if (!Number.isFinite(timestamp) || timestamp <= 0) return t("notSynchronizedYet");
     try {
-      return new Intl.DateTimeFormat(getEffectiveLocale(), {
+      return new Intl.DateTimeFormat(getIntlFormattingLocale(), {
         month: "short",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit"
       }).format(new Date(timestamp));
     } catch {
-      return new Date(timestamp).toLocaleString(getEffectiveLocale());
+      return new Date(timestamp).toLocaleString(getIntlFormattingLocale());
     }
   }
 
@@ -6916,17 +6921,17 @@ ${site.url}`;
     const completeCount = devices.reduce((sum, device) => sum + (Array.isArray(device.generations) ? device.generations.length : 0), 0);
     recoveryCopiesSummary.textContent = t("recoveryCopiesSummary", {
       count: completeCount,
-      size: formatBytes(model?.managedBytes || 0)
+      size: formatLocalizedBytes(model?.managedBytes || 0)
     });
     if ((Number(model?.unmanagedBytes) || 0) > 0) {
-      recoveryCopiesSummary.textContent += ` ${t("recoveryCopiesUnmanaged", { size: formatBytes(model.unmanagedBytes) })}`;
+      recoveryCopiesSummary.textContent += ` ${t("recoveryCopiesUnmanaged", { size: formatLocalizedBytes(model.unmanagedBytes) })}`;
     }
     if (recoverySafeCleanupTitle) recoverySafeCleanupTitle.textContent = t("recoverySafeCleanupTitle");
     if (recoverySafeCleanupDetail) recoverySafeCleanupDetail.textContent = t("recoverySafeCleanupDetail", {
       count: Number(model?.safeCleanupCount) || 0
     });
     if (recoverySafeCleanupButton) {
-      recoverySafeCleanupButton.textContent = t("recoveryFreeSafely", { size: formatBytes(model?.safeCleanupBytes || 0) });
+      recoverySafeCleanupButton.textContent = t("recoveryFreeSafely", { size: formatLocalizedBytes(model?.safeCleanupBytes || 0) });
       recoverySafeCleanupButton.dataset.recoveryAction = "superseded";
       recoverySafeCleanupButton.dataset.recoveryCount = String(Number(model?.safeCleanupCount) || 0);
       recoverySafeCleanupButton.dataset.recoveryBytes = String(Number(model?.safeCleanupBytes) || 0);
@@ -6955,7 +6960,7 @@ ${site.url}`;
       strong.textContent = recoveryDeviceDisplayName(device);
       const small = document.createElement("small");
       const generations = Array.isArray(device.generations) ? device.generations : [];
-      small.textContent = `${recoveryDeviceCopyCountText(generations.length, t)} · ${formatBytes(device.bytes || 0)}`;
+      small.textContent = `${recoveryDeviceCopyCountText(generations.length, t)} · ${formatLocalizedBytes(device.bytes || 0)}`;
       title.append(strong, small);
       heading.append(title);
 
@@ -6971,7 +6976,7 @@ ${site.url}`;
           const label = recoveryDeviceDisplayName(device);
           const confirmed = await confirmMosaic(t("recoveryConfirmDevice", {
             device: label,
-            size: formatBytes(device.bytes || 0)
+            size: formatLocalizedBytes(device.bytes || 0)
           }), { danger: true });
           if (confirmed) void performRecoveryCleanup({ mode: "device", deviceId: device.deviceId });
         });
@@ -6996,7 +7001,7 @@ ${site.url}`;
           name.append(badge);
         }
         const detail = document.createElement("small");
-        detail.textContent = `${formatSyncTime(generation.publishedAt || generation.updatedAt)} · ${formatBytes(generation.bytes || 0)}`;
+        detail.textContent = `${formatSyncTime(generation.publishedAt || generation.updatedAt)} · ${formatLocalizedBytes(generation.bytes || 0)}`;
         copy.append(name, detail);
         row.append(copy);
 
@@ -7007,7 +7012,7 @@ ${site.url}`;
           remove.dataset.recoveryAction = "generation";
           remove.textContent = t("recoveryDeletePrevious");
           remove.addEventListener("click", async () => {
-            const confirmed = await confirmMosaic(t("recoveryConfirmGeneration", { size: formatBytes(generation.bytes || 0) }), { danger: true });
+            const confirmed = await confirmMosaic(t("recoveryConfirmGeneration", { size: formatLocalizedBytes(generation.bytes || 0) }), { danger: true });
             if (confirmed) void performRecoveryCleanup({ mode: "generation", rootKey: generation.rootKey });
           });
           row.append(remove);
@@ -7031,7 +7036,7 @@ ${site.url}`;
       if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) renderRecoveryCopies(response);
     } catch (error) {
       if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open && recoveryCopiesSummary) {
-        recoveryCopiesSummary.textContent = error.message || t("operationFailed");
+        recoveryCopiesSummary.textContent = localizePresentationError(error, "operationFailed");
       }
     } finally {
       if (recoveryCopiesLoadInFlightGeneration === sessionGeneration) {
@@ -7055,12 +7060,12 @@ ${site.url}`;
         refreshCurrentSession = true;
       }
       showSyncFeedback(t("recoveryCleanupComplete", {
-        size: formatBytes(response.removedBytes || 0),
+        size: formatLocalizedBytes(response.removedBytes || 0),
         count: Number(response.removedGenerations) || 0
       }));
       await refreshSyncStatus().catch(() => {});
     } catch (error) {
-      showSyncFeedback(error.message || t("operationFailed"));
+      showSyncFeedback(localizePresentationError(error, "operationFailed"));
       if (recoveryCopiesDialog?.open) refreshCurrentSession = true;
     } finally {
       recoveryCopiesCleanupBusy = false;
@@ -7258,7 +7263,7 @@ ${site.url}`;
         syncStatusText.textContent = t(syncReadyHeadlineKey(meta, pressure));
         const details = [];
         if (pressure !== "normal") {
-          details.push(t("syncStorageFreeRemaining", { free: formatBytes(shownUsage.free) }));
+          details.push(t("syncStorageFreeRemaining", { free: formatLocalizedBytes(shownUsage.free) }));
           if (status?.recoveryOldDeviceHintAvailable) details.push(t("syncOldDeviceRecoveryHint", { action: t("manageRecoveryCopies") }));
         }
         if (warning) details.push(warning);
@@ -7286,14 +7291,14 @@ ${site.url}`;
       useThisDeviceButton.disabled = !enabled || syncing;
     }
 
-    syncQuotaText.textContent = `${formatBytes(meta.syncBytesInUse)} / ${formatBytes(SYNC_QUOTA_BYTES)}`;
+    syncQuotaText.textContent = `${formatLocalizedBytes(meta.syncBytesInUse)} / ${formatLocalizedBytes(SYNC_QUOTA_BYTES)}`;
     syncQuotaText.title = t("syncItemsUsed", { count: meta.syncItemCount || 0 });
-    if (syncUsageCore) syncUsageCore.textContent = formatBytes(shownUsage.core);
-    if (syncUsageRecovery) syncUsageRecovery.textContent = formatBytes(shownUsage.recovery);
+    if (syncUsageCore) syncUsageCore.textContent = formatLocalizedBytes(shownUsage.core);
+    if (syncUsageRecovery) syncUsageRecovery.textContent = formatLocalizedBytes(shownUsage.recovery);
     if (recoveryCopiesManageButton) recoveryCopiesManageButton.disabled = !enabled || syncing || usage.recovery <= 0;
-    if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatBytes(shownUsage.shortcutArtwork);
-    if (syncUsageOverhead) syncUsageOverhead.textContent = formatBytes(shownUsage.overhead);
-    if (syncUsageFree) syncUsageFree.textContent = formatBytes(shownUsage.free);
+    if (syncUsageShortcuts) syncUsageShortcuts.textContent = formatLocalizedBytes(shownUsage.shortcutArtwork);
+    if (syncUsageOverhead) syncUsageOverhead.textContent = formatLocalizedBytes(shownUsage.overhead);
+    if (syncUsageFree) syncUsageFree.textContent = formatLocalizedBytes(shownUsage.free);
     if (syncStorageBreakdown) syncStorageBreakdown.dataset.pressure = quotaError ? "full" : pressure;
     if (syncRevisionText) {
       syncRevisionText.hidden = false;
@@ -7309,7 +7314,7 @@ ${site.url}`;
         : remoteState === "partial"
           ? t("partial")
           : remoteReceiptAt
-            ? new Date(remoteReceiptAt).toLocaleString(getEffectiveLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
+            ? new Date(remoteReceiptAt).toLocaleString(getIntlFormattingLocale(), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
             : hasRemoteData
               ? t("complete")
               : t("notReceived");
@@ -7453,7 +7458,7 @@ ${site.url}`;
     const enabled = settingsMultipleSpaces.checked;
     void setMultipleSpacesEnabled(enabled).catch(error => {
       settingsMultipleSpaces.checked = !enabled;
-      showToast(error.message || t("spacesUpdateFailed"));
+      showToast(localizePresentationError(error, "spacesUpdateFailed"));
     });
   });
 
@@ -7461,14 +7466,14 @@ ${site.url}`;
     const fallback = t("personal");
     const next = normalizedCustomSpaceName(settingsPersonalSpaceName.value);
     const stored = next && next !== fallback ? next : "";
-    void persistWorkspaceSetting("personal", "spaceName", stored).catch(error => { refreshSpacesSettings(); showToast(error.message || t("spacesUpdateFailed")); });
+    void persistWorkspaceSetting("personal", "spaceName", stored).catch(error => { refreshSpacesSettings(); showToast(localizePresentationError(error, "spacesUpdateFailed")); });
   });
 
   settingsWorkSpaceName?.addEventListener("change", () => {
     const fallback = t("work");
     const next = normalizedCustomSpaceName(settingsWorkSpaceName.value);
     const stored = next && next !== fallback ? next : "";
-    void persistWorkspaceSetting("work", "spaceName", stored).catch(error => { refreshSpacesSettings(); showToast(error.message || t("spacesUpdateFailed")); });
+    void persistWorkspaceSetting("work", "spaceName", stored).catch(error => { refreshSpacesSettings(); showToast(localizePresentationError(error, "spacesUpdateFailed")); });
   });
 
   function closeDeviceNameEditor() {
@@ -7500,7 +7505,7 @@ ${site.url}`;
       showSyncFeedback(t("deviceNameSaved"));
       void refreshSyncStatus().catch(() => {});
     } catch (error) {
-      showSyncFeedback(error.message || t("operationFailed"));
+      showSyncFeedback(localizePresentationError(error, "operationFailed"));
     } finally {
       if (saveDeviceNameButton) saveDeviceNameButton.disabled = false;
     }
@@ -7542,7 +7547,7 @@ ${site.url}`;
     if (!count || !bytes) return;
     const confirmed = await confirmMosaic(t("recoveryConfirmSafeCleanup", {
       count,
-      size: formatBytes(bytes)
+      size: formatLocalizedBytes(bytes)
     }), { danger: true });
     if (confirmed) void performRecoveryCleanup({ mode: "superseded" });
   });
@@ -7577,7 +7582,7 @@ ${site.url}`;
         }
       } catch (error) {
         settingsSyncEnabled.checked = Boolean(meta?.syncEnabled);
-        showSyncFeedback(error.message || t("firefoxSyncError"));
+        showSyncFeedback(localizePresentationError(error, "firefoxSyncError"));
         await refreshSyncStatus().catch(() => {});
       } finally {
         settingsSyncEnabled.disabled = false;
@@ -7595,7 +7600,7 @@ ${site.url}`;
       updateSyncUi(response.meta, await sendSyncMessage("mosaicsync:get-sync-status"));
       showSyncFeedback(syncWarningDescription(response.meta) || t("computerSource"));
     } catch (error) {
-      showSyncFeedback(error.message || t("couldNotPublish"));
+      showSyncFeedback(localizePresentationError(error, "couldNotPublish"));
       await refreshSyncStatus().catch(() => {});
     }
   });
@@ -7612,7 +7617,7 @@ ${site.url}`;
         showSyncFeedback(t("syncRestored"));
       }
     } catch (error) {
-      showSyncFeedback(error.message || t("couldNotRestore"));
+      showSyncFeedback(localizePresentationError(error, "couldNotRestore"));
       await refreshSyncStatus().catch(() => {});
     }
   });
@@ -7630,7 +7635,7 @@ ${site.url}`;
       updateSyncUi(response.meta, status);
       showSyncFeedback(syncWarningDescription(response.meta) || t("changesPublishAuto"));
     } catch (error) {
-      showSyncFeedback(error.message || t("couldNotPublish"));
+      showSyncFeedback(localizePresentationError(error, "couldNotPublish"));
       await refreshSyncStatus().catch(() => {});
     } finally {
       sendToSyncButton.disabled = false;
@@ -7655,7 +7660,7 @@ ${site.url}`;
       updateSyncUi(response.meta, status);
       showSyncFeedback(status.remoteUpdatedAt ? t("syncedLayoutFromRestored", { time: formatSyncTime(status.remoteUpdatedAt) }) : t("syncRestored"));
     } catch (error) {
-      showSyncFeedback(error.message || t("couldNotRestore"));
+      showSyncFeedback(localizePresentationError(error, "couldNotRestore"));
       await refreshSyncStatus().catch(() => {});
     }
   });
@@ -7673,7 +7678,7 @@ ${t("clearSyncWarning")}`, { danger: true });
       updateSyncUi(response.meta, { hasRemoteData: false, remoteUpdatedAt: 0 });
       showSyncFeedback(t("syncDataCleared"));
     } catch (error) {
-      showSyncFeedback(error.message || t("firefoxSyncError"));
+      showSyncFeedback(localizePresentationError(error, "firefoxSyncError"));
       await refreshSyncStatus().catch(() => {});
     }
   });
@@ -7720,7 +7725,7 @@ ${t("clearSyncWarning")}`, { danger: true });
       }));
       window.location.replace(browser.runtime.getURL("welcome/welcome.html"));
     } catch (error) {
-      showToast(error.message || t("couldNotResume"));
+      showToast(localizePresentationError(error, "couldNotResume"));
     }
   });
 
@@ -7748,7 +7753,7 @@ ${t("clearSyncWarning")}`, { danger: true });
       button.classList.add("drag-space-target");
       const targetSpaceId = button.dataset.spaceId;
       crossSpaceHoverTimer = setTimeout(() => {
-        void previewSpaceDuringDrag(targetSpaceId).catch(error => showToast(error.message || t("moveSpaceFailed")));
+        void previewSpaceDuringDrag(targetSpaceId).catch(error => showToast(localizePresentationError(error, "moveSpaceFailed")));
       }, 450);
     });
     button.addEventListener("dragover", event => {
@@ -7849,7 +7854,7 @@ ${t("clearSyncWarning")}`, { danger: true });
       event.stopPropagation();
       addFirstButton.classList.remove("drag-cross-space-target");
       try { await commitBookmarkShortcutDrop({ position: 0 }); }
-      catch (error) { showToast(error?.message || t("operationFailed")); }
+      catch (error) { showToast(localizePresentationError(error, "operationFailed")); }
       return;
     }
     if (!crossSpaceDrag || crossSpaceDrag.sourceSpaceId === state.activeSpaceId) return;
@@ -7857,7 +7862,7 @@ ${t("clearSyncWarning")}`, { danger: true });
     event.stopPropagation();
     addFirstButton.classList.remove("drag-cross-space-target");
     try { await commitCrossSpaceDrag({ position: 0 }); }
-    catch (error) { showToast(error.message || t("moveSpaceFailed")); }
+    catch (error) { showToast(localizePresentationError(error, "moveSpaceFailed")); }
   });
 
   settingsFrequentlyVisited?.addEventListener("change", () => {
@@ -8153,7 +8158,7 @@ ${t("clearSyncWarning")}`, { danger: true });
     if (!folderPopover.hidden && !shortcutDialog?.open && !folderPopover.contains(event.target)) {
       const anchor = activeFolderAnchorId ? document.querySelector(`.shortcut-slot[data-id="${CSS.escape(activeFolderAnchorId)}"]`) : null;
       if (!anchor?.contains(event.target)) {
-        commitFolderTitle().catch(error => showToast(error?.message || t("operationFailed")));
+        commitFolderTitle().catch(error => showToast(localizePresentationError(error, "operationFailed")));
         closeFolder();
       }
     }

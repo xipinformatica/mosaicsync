@@ -179,6 +179,7 @@ test("1.33.0.30 invalid shortcut URL performs no website-access permission reque
     shortcutUrl: { value: "not valid" },
     shortcutTitle: { value: "" },
     showToast(value) { toast = value; },
+    localizePresentationError(error) { return error.message; },
     t() { return "operationFailed"; },
     console
   };

@@ -86,6 +86,7 @@ test("1.33.0.14 closed Recovery cleanup completion does not rebuild hidden contr
     showSyncFeedback() {},
     t(key) { return key; },
     formatBytes(value) { return String(value); },
+    formatLocalizedBytes(value) { return String(value); },
     async refreshSyncStatus() { refreshCalls += 1; },
     async loadRecoveryCopies() { throw new Error("closed cleanup must not schedule a hidden reload"); }
   });

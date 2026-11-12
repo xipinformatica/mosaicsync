@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Pribatutasuna lehenesten duen Chrome fitxa berria, karpetekin, ikusizko pertsonalizazioekin eta aukerako Chrome Sync-ekin. MosaicSync telemetriarik gabe."
+    "message": "Pribatutasuna lehenesten duen Chrome fitxa berria, karpetekin eta aukerako Chrome Sync-ekin. MosaicSync-ek ez du telemetriarik."
   },
   "actionOpenHome": {
     "message": "Ireki MosaicSync"

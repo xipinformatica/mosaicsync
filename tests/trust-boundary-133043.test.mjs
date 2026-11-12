@@ -82,7 +82,7 @@ test('.43 both immediate and debounced wallpaper saves show user-visible localiz
     backgroundPersistTimer: null,
     clearTimeout() {}, setTimeout(cb) {queued = cb; return 1;},
     saveSettingsState: async () => {throw Error('Translated unsaved warning');},
-    showToast: message => seen.push(message), t: key => key,
+    showToast: message => seen.push(message), localizePresentationError: error => error.message, t: key => key,
     console: {error() {throw Error('Unexpected console-only save failure');}}
   });
   vm.runInContext(functionBody('scheduleBackgroundPersist'), ctx);
@@ -108,7 +108,7 @@ test('.43 theme-choice save errors are caught and shown, not unhandled', async (
     state: {settings:{theme:'light'}},
     markSettingsChanged() {}, rememberPendingSettings() {}, applyThemeTransition() {},
     saveSettingsState: async () => {throw Error('Translated unsaved warning');},
-    showToast: message => seen.push(message), t: key => key,
+    showToast: message => seen.push(message), localizePresentationError: error => error.message, t: key => key,
   });
   vm.runInContext(source.slice(start,end), ctx);
   await click();
@@ -117,7 +117,7 @@ test('.43 theme-choice save errors are caught and shown, not unhandled', async (
 });
 
 test('.43 every folder-rename exit handler surfaces localized save errors', async () => {
-  const occurrences = source.match(/commitFolderTitle\(\)\.catch\(error => showToast\(error\?\.message \|\| t\("operationFailed"\)\)\)/g) || [];
+  const occurrences = source.match(/commitFolderTitle\(\)\.catch\(error => showToast\(localizePresentationError\(error, "operationFailed"\)\)\)/g) || [];
   assert.equal(occurrences.length, 4, 'all folder-rename exits must report save failure');
   const line = source.match(/folderTitleInput\.addEventListener\("blur",[^\n]+\);/);
   assert.ok(line);
@@ -126,7 +126,7 @@ test('.43 every folder-rename exit handler surfaces localized save errors', asyn
   vm.runInNewContext(line[0], {
     folderTitleInput: {addEventListener(type, cb) { if(type==='blur') blur=cb; }},
     commitFolderTitle: async () => {throw Error('Localized unsaved edit');},
-    showToast: msg => seen.push(msg), t: key => key
+    showToast: msg => seen.push(msg), localizePresentationError: error => error.message, t: key => key
   });
   blur();
   await new Promise(setImmediate);

@@ -128,7 +128,7 @@
           <h2 id="frequentSyncPermissionTitle">Frequently visited</h2>
         </div>
       </div>
-      <p id="frequentSyncPermissionText" class="hint">Firefox permission is required to show frequently visited pages. Sites come from this browser only. Show and Count preferences sync; browsing history is never synchronized.</p>
+      <p id="frequentSyncPermissionText" class="hint">Firefox permission is required to show frequently visited pages. Sites come from this browser only. “Show” and “Number shown” preferences sync; browsing history is never synchronized.</p>
       <p id="frequentSyncPermissionStatus" class="feature-permission-status" role="status" aria-live="polite"></p>
       <div class="dialog-actions">
         <button id="frequentSyncPermissionContinue" class="secondary-button" type="button">Continue</button>
@@ -278,7 +278,7 @@
     <form id="settingsForm" class="dialog-card settings-card">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">MosaicSync · 1.33.0.94</p>
+          <p class="eyebrow">MosaicSync · 1.33.0.95</p>
           <h2 id="settingsDialogTitle">Customize your MosaicSync</h2>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="settingsDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
@@ -349,16 +349,16 @@
           <label class="switch-control" for="settingsMultipleSpaces">
             <input id="settingsMultipleSpaces" type="checkbox">
             <span class="switch-track" aria-hidden="true"><span class="switch-thumb"></span></span>
-            <span class="switch-label">Multiple spaces</span>
+            <span class="switch-label">Multiple Spaces</span>
           </label>
         </div>
         <div id="settingsSpaceNames" class="space-name-settings">
           <label class="space-name-row" for="settingsPersonalSpaceName">
-            <span>Primary space</span>
+            <span>Primary Space</span>
             <input id="settingsPersonalSpaceName" type="text" maxlength="32" autocomplete="off">
           </label>
           <label id="settingsWorkSpaceNameRow" class="space-name-row" for="settingsWorkSpaceName">
-            <span>Secondary space</span>
+            <span>Secondary Space</span>
             <input id="settingsWorkSpaceName" type="text" maxlength="32" autocomplete="off">
           </label>
         </div>
@@ -500,8 +500,8 @@
       <div class="settings-section branding-settings-section">
         <div class="section-heading-row">
           <div>
-            <h3>New Tab identity</h3>
-            <p class="section-subtitle">Device-local only</p>
+            <h3>New Tab logo and text</h3>
+            <p class="section-subtitle">Only on this device</p>
           </div>
           <button id="customBrandingButton" class="secondary-button compact-branding-button" type="button" aria-haspopup="dialog" aria-controls="customBrandingDialog">Custom branding</button>
         </div>
@@ -590,7 +590,7 @@
             <summary>Technical Sync details</summary>
             <div class="sync-storage-grid">
               <span>Layout &amp; settings</span><strong id="syncUsageCore">0 KB</strong>
-              <span>Recovery safety copies</span><span class="sync-storage-value-action"><strong id="syncUsageRecovery">0 KB</strong><button id="recoveryCopiesManageButton" class="sync-storage-manage-button" type="button" aria-haspopup="dialog" aria-controls="recoveryCopiesDialog">Manage</button></span>
+              <span>Recovery copies</span><span class="sync-storage-value-action"><strong id="syncUsageRecovery">0 KB</strong><button id="recoveryCopiesManageButton" class="sync-storage-manage-button" type="button" aria-haspopup="dialog" aria-controls="recoveryCopiesDialog">Manage</button></span>
               <span>Shortcut images</span><strong id="syncUsageShortcuts">0 KB</strong>
               <span>Sync metadata / cleanup</span><strong id="syncUsageOverhead">0 KB</strong>
               <span class="sync-storage-free">Free</span><strong id="syncUsageFree" class="sync-storage-free">100 KB</strong>
@@ -613,7 +613,7 @@
             <span class="sync-direction-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M12 19V5m-5 5 5-5 5 5"/></svg>
             </span>
-            <strong>Use this device as Sync source</strong>
+            <strong>Use this device as the Sync source</strong>
           </button>
           <button id="restoreSyncButton" class="sync-direction-button" type="button" disabled title="Replace this device with the latest complete MosaicSync copy this Firefox has received.">
             <span class="sync-direction-icon" aria-hidden="true">
@@ -625,7 +625,7 @@
         <div id="syncActionStatus" class="sync-action-status" role="status" aria-live="polite" hidden></div>
 
         <div class="sync-compact-footer">
-          <span class="sync-delay-compact" title="MosaicSync checks delivered changes automatically. Account Sync transfers extension data in the background, and delivery to another computer can take several minutes.">
+          <span class="sync-delay-compact" title="MosaicSync checks delivered changes automatically. Firefox Sync transfers extension data in the background, and delivery to another computer can take several minutes.">
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
             Firefox handles changes in the background
           </span>
@@ -691,7 +691,7 @@
             <span class="donate-mascot-bubble" aria-hidden="true">Thank you!</span>
             <span>Donate to development</span>
           </button>
-          <a id="settingsTipsLink" class="secondary-button development-link-button" href="#">Send us tips!</a>
+          <a id="settingsTipsLink" class="secondary-button development-link-button" href="#">Send us suggestions!</a>
         </div>
       </div>
 
@@ -735,7 +735,7 @@
     <form id="customBrandingForm" class="dialog-card custom-branding-card" method="dialog">
       <div class="dialog-heading">
         <div>
-          <p class="eyebrow">New Tab identity</p>
+          <p class="eyebrow">New Tab logo and text</p>
           <h2 id="customBrandingTitle">Custom branding</h2>
           <p class="custom-branding-intro">Add one local logo and one line of text while keeping the MosaicSync mascot and Hello effect intact.</p>
         </div>
@@ -743,7 +743,7 @@
       </div>
 
       <div class="custom-branding-local-note">
-        <strong>Device-local only</strong>
+        <strong>Only on this device</strong>
         <span>Included in MosaicSync profile export/import, but never sent through browser Sync or Recovery.</span>
       </div>
 
@@ -792,8 +792,8 @@
       <div class="dialog-heading">
         <div>
           <p class="eyebrow">Sync storage</p>
-          <h2 id="recoveryCopiesTitle">Recovery safety copies</h2>
-          <p id="recoveryCopiesIntro" class="recovery-copies-intro">These complete safety copies help MosaicSync recover if the normal synchronized layout disappears unexpectedly.</p>
+          <h2 id="recoveryCopiesTitle">Recovery copies</h2>
+          <p id="recoveryCopiesIntro" class="recovery-copies-intro">These complete Recovery copies help MosaicSync recover if the normal synchronized layout disappears unexpectedly.</p>
         </div>
         <button class="icon-button dialog-close-button" type="button" data-close-dialog="recoveryCopiesDialog" aria-label="Close"><svg class="dialog-close-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 7 17 17M17 7 7 17"/></svg></button>
       </div>

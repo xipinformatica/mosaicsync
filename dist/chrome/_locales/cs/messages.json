@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Nová karta Chromu zaměřená na soukromí se složkami, přizpůsobením a volitelnou synchronizací Chrome Sync. Žádná telemetrie MosaicSync."
+    "message": "Nová karta pro Chrome šetrná k soukromí: složky, přizpůsobení a volitelný Chrome Sync. MosaicSync nesbírá telemetrii."
   },
   "actionOpenHome": {
     "message": "Otevřít MosaicSync"

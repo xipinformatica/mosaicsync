@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Filă nouă pentru Chrome axată pe confidențialitate, cu dosare, aspect personalizat și Chrome Sync opțional. Zero telemetrie MosaicSync."
+    "message": "Filă nouă Chrome care respectă confidențialitatea: dosare, personalizare și Chrome Sync opțional. Fără telemetrie."
   },
   "actionOpenHome": {
     "message": "Deschide MosaicSync"

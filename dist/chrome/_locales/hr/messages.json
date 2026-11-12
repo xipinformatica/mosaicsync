@@ -1,6 +1,6 @@
 {
   "extensionDescription": {
-    "message": "Nova kartica za Chrome usmjerena na privatnost, s mapama, prilagođenim izgledom i neobaveznim Chrome Syncom. Nulta telemetrija MosaicSynca."
+    "message": "Nova kartica za Chrome koja čuva privatnost, s mapama, prilagodbom i neobveznim Chrome Syncom. MosaicSync ne prikuplja telemetriju."
   },
   "actionOpenHome": {
     "message": "Otvori MosaicSync"

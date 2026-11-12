@@ -78,16 +78,21 @@ test("1.30.18.17 manifest localization has one reviewed source registry and pres
   for (const browser of ["firefox", "chrome"]) {
     const generated = (await readdir(resolve(root, `dist/${browser}/_locales`), { withFileTypes: true }))
       .filter(entry => entry.isDirectory()).map(entry => entry.name).sort();
-    assert.deepEqual(generated, localeIds, `${browser}: generated manifest locale set`);
+    const expected = browser === "chrome"
+      ? localeIds.map(locale => ({ sv_SE: "sv", nb_NO: "no" }[locale] || locale)).sort()
+      : localeIds;
+    assert.deepEqual(generated, expected, `${browser}: generated manifest locale set`);
   }
 
   for (const locale of localeIds) {
     const ff = JSON.parse(await read(`dist/firefox/_locales/${locale}/messages.json`));
-    const chrome = JSON.parse(await read(`dist/chrome/_locales/${locale}/messages.json`));
+    const chromeLocale = ({ sv_SE: "sv", nb_NO: "no" }[locale] || locale);
+    const chrome = JSON.parse(await read(`dist/chrome/_locales/${chromeLocale}/messages.json`));
     assert.equal(ff.actionOpenHome.message, registry[locale].actionOpenHome);
     assert.equal(chrome.actionOpenHome.message, registry[locale].actionOpenHome);
     assert.equal(ff.extensionDescription.message, registry[locale].firefoxDescription);
     assert.equal(chrome.extensionDescription.message, registry[locale].chromeDescription);
+    assert.ok(chrome.extensionDescription.message.length <= 132, `${locale}: Chrome description exceeds 132 characters`);
     assert.doesNotMatch(chrome.extensionDescription.message, /Firefox|Mozilla|Firefok/i, `${locale}: Chrome description leaked Firefox branding`);
   }
 });

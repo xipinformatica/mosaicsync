@@ -33,6 +33,6 @@ test("1.26.17.3 localized Sync footer reserves independent non-overlapping track
 
 test("French regression strings remain unchanged while layout handles their length", () => {
   assert.equal(FR.firefoxHandlesChangesBackground, "Firefox gère les modifications en arrière-plan");
-  assert.equal(FR.whyFirefoxSync, "Pourquoi Firefox Sync ?");
+  assert.equal(FR.whyFirefoxSync, "Pourquoi Firefox Sync\u202f?");
   assert.equal(FR.clearSyncCopy, "Effacer la copie Sync");
 });
