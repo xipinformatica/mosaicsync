@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.33.0.98
+
+- Opens new tabs with less background interface code to load. Settings, Recovery information and help tips load their extra parts only when needed.
+- Improves how Recovery dialogs respond when closed and reopened during cleanup, and ensures completed cleanup isn't incorrectly shown as failed if the view cannot load.
+- No changes to saved shortcuts, Sync or Recovery data formats, permissions, or translations.
+
+## 1.33.0.97
+
+- Fixes an issue where an invalid future timestamp in synchronized data could block later changes. MosaicSync now ignores unrealistic timestamps when deciding which change is newer.
+- Your shortcuts and Recovery copies are preserved. No new permissions or data-format changes.
+
+## 1.33.0.96
+
+- Fixes an issue where the **+ Add Shortcut** button could remain visible after closing the shortcut editor without saving. The button still appears when you hover over its position or navigate to it with a keyboard.
+- No changes to saved shortcuts, Sync, Recovery, permissions or translations.
+
 ## 1.33.0.95
 
 - Improves translations across all 34 languages, especially Recovery copy labels, counts and confirmation messages, and fixes text that could run off the screen.

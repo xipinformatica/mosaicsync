@@ -287,11 +287,9 @@ test("1.26.17.6 Frequently Visited explicit-host memo reuses only the same state
   const replacementHosts = memo(replacement, 11);
   assert.notEqual(replacementHosts, changed, "state identity replacement must invalidate even at the same generation");
   assert.equal(replacementHosts.has("four.example"), true);
-  for (const browser of ["firefox", "chrome"]) {
-    const source = await readFile(resolve(`src/shared/newtab/newtab.js`), "utf8");
-    assert.match(source, /const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo\(\);/);
-    assert.match(source, /frequentExplicitHostsForState\(state, stateMutationGeneration\)/);
-  }
+  const source = await readFile(resolve(`src/shared/newtab/newtab.js`), "utf8");
+  assert.match(source, /const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo\(\);/);
+  assert.match(source, /frequentExplicitHostsForState\(state, stateMutationGeneration\)/);
 });
 
 test("1.26.17.6 production startup diagnostics are gated behind the existing local dev-metrics flag", async () => {

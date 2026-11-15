@@ -88,8 +88,8 @@ test("1.33.0.41 deliberate cloud replacement can publish over poisoned Sync cloc
   await frozen(() => {
     const candidate = profile(20);
     const remotePoison = model.MAX_LOGICAL_TIME;
-    assert.throws(() => model.nextMutationTime(candidate.spaces.personal.updatedAt, remotePoison), RangeError,
-      "ordinary mutation/Sync remains fail-closed on exhausted authority");
+    assert.ok(model.nextMutationTime(candidate.spaces.personal.updatedAt, remotePoison) < remotePoison,
+      "ordinary mutation/Sync ignores an untrusted exhausted clock");
     const timestamp = model.nextProfileImportMutationTime(candidate.spaces.personal.updatedAt, remotePoison);
     assert.ok(timestamp < model.MAX_LOGICAL_TIME - 100_000);
     assert.doesNotThrow(() => model.nextMutationTime(timestamp), "post-import publication leaves edit headroom");

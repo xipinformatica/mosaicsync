@@ -346,7 +346,10 @@ for (const browser of ["firefox", "chrome"]) {
       updateImagePreview() {}
     };
     vm.createContext(context);
-    vm.runInContext(`${body}; this.renderDetectedFaviconChoices = renderDetectedFaviconChoices;`, context);
+    // The real chooser now delegates shared explicit-artwork state mutations;
+    // load that production function as well for the behavioral click test.
+    const artworkOwner = extractFunction(source, "selectExplicitShortcutArtwork");
+    vm.runInContext(`${artworkOwner}\n${body}; this.renderDetectedFaviconChoices = renderDetectedFaviconChoices;`, context);
     context.renderDetectedFaviconChoices([{ image: "data:image/png;base64,CHOICE", sourceUrl: "https://cdn.example/icon.png" }], "https://site.example/");
     assert.equal(choices.childElementCount, 1);
     await choices.children[0].dispatch("click");
@@ -392,9 +395,7 @@ test("1.27.3 editor keeps short-viewport overflow safety and localized favicon c
       assert.ok(module.MESSAGES[key].trim().length > 0, `${file} has empty ${key}`);
     }
   }
-  for (const browser of ["firefox", "chrome"]) {
-    const css = [fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8"), fs.readFileSync("src/shared/newtab/newtab-secondary.css", "utf8")].join("\n");
-    assert.match(css, /\.dialog-card\s*\{[\s\S]*?overflow:\s*(?:auto|[^;}]*;[\s\S]*?overflow-y:\s*auto);/, "200% zoom/short viewport fallback must remain scrollable");
-    assert.doesNotMatch(css, /#shortcutDialog\s+\.dialog-card\s*\{[^}]*overflow:\s*hidden/i, "shortcut editor must not hide localized content to suppress scrollbars");
-  }
+  const css = [fs.readFileSync("src/shared/newtab/newtab-critical.css", "utf8"), fs.readFileSync("src/shared/newtab/newtab-secondary.css", "utf8")].join("\n");
+  assert.match(css, /\.dialog-card\s*\{[\s\S]*?overflow:\s*(?:auto|[^;}]*;[\s\S]*?overflow-y:\s*auto);/, "200% zoom/short viewport fallback must remain scrollable");
+  assert.doesNotMatch(css, /#shortcutDialog\s+\.dialog-card\s*\{[^}]*overflow:\s*hidden/i, "shortcut editor must not hide localized content to suppress scrollbars");
 });

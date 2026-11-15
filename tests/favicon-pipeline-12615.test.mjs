@@ -99,7 +99,12 @@ for (const browser of ["firefox", "chrome"]) {
     const block = src.slice(start, end);
     assert.match(block, /requestWebAccessFromGesture\(\)/);
     assert.match(block, /enabled = webAccessGranted/);
-    assert.match(block, /requestMissingSiteIcons\(\[\], \{ force: true \}\)/);
+    assert.match(block, /scheduleGrantedWebsiteAccessRefresh\(\)/);
+    const followUp = extract(src, "scheduleGrantedWebsiteAccessRefresh");
+    assert.match(followUp, /await hydrateRemoteImageSources\(\)/);
+    assert.match(followUp, /await hydrateDeviceFavicons\(\)/);
+    assert.match(followUp, /requestMissingSiteIcons\(\[\], \{ force: true \}\)/);
+    assert.match(followUp, /!onlyWithAutoIcons \|\| state\.settings\.autoSiteIcons/);
   });
 
   test(`1.26.15 ${browser} stale webAccessPrompted cannot suppress the capability warning`, () => {

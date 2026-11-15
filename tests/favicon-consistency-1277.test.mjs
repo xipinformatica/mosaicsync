@@ -4,6 +4,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
+import {
+  sameBackgroundVisuals, collectWorkspaceShortcutRecords,
+  sameShortcutCoreShape, copyDeviceArtwork
+} from "../src/shared/newtab/ui-utils.js";
 
 function extractFunction(source, name) {
   let start = source.indexOf(`async function ${name}`);
@@ -46,10 +50,7 @@ for (const browser of ["firefox", "chrome"]) {
 
   test(`1.27.7 ${browser} device-artwork fast path mutates the live shortcut and requests a visible tile patch`, () => {
     const source = fs.readFileSync(`src/shared/newtab/newtab.js`, "utf8");
-    const code = [
-      "workspaceBackgroundVisualSignature", "sameBackgroundVisuals", "collectWorkspaceShortcutRecords",
-      "sameShortcutCoreShape", "copyDeviceArtwork", "tryApplyDeviceArtworkOnlyChange"
-    ].map(name => extractFunction(source, name)).join("\n");
+    const code = extractFunction(source, "tryApplyDeviceArtworkOnlyChange");
     const shortcut = {
       type: "shortcut", id: "mosaic", title: "MosaicSync", url: "https://xipinformatica.cat/mosaicsync",
       position: 0, createdAt: 1, modifiedAt: 2, image: "", localImageAssetId: "", imageSyncData: "",
@@ -63,6 +64,8 @@ for (const browser of ["firefox", "chrome"]) {
       meta: { onboardingCompleted: true },
       localStateSyncClockSignature: () => "same-clock",
       localStateSyncRawSignature: () => "same-core",
+      sameBackgroundVisuals, collectWorkspaceShortcutRecords,
+      sameShortcutCoreShape, copyDeviceArtwork,
       patchLog: [],
       manifestRefreshes: 0
     };

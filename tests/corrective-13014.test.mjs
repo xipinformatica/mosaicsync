@@ -159,9 +159,16 @@ test("1.30.14 favicon chooser records preference without forcing image-byte Sync
   const start = source.indexOf("function renderDetectedFaviconChoices");
   const end = source.indexOf("async function openShortcutEditor", start);
   const block = source.slice(start, end);
-  assert.match(block, /pendingShortcutFaviconPreference = faviconPreferenceForCandidate\(candidate\)/);
-  assert.match(block, /shortcutSyncImage\.checked = false/);
-  assert.match(block, /pendingShortcutImageKind = "device"/);
+  // Follow the common explicit-artwork state owner, rather than requiring
+  // the exact assignments to remain inline in the favicon chooser.
+  assert.match(block, /selectExplicitShortcutArtwork\(\{[\s\S]*?image: candidate\.image, sourceKind: "upload",[\s\S]*?faviconPreference: faviconPreferenceForCandidate\(candidate\)/);
+  const ownerStart = source.indexOf('function selectExplicitShortcutArtwork(');
+  const ownerEnd = source.indexOf('function ensureBuiltinShortcutIconPicker(', ownerStart);
+  assert.ok(ownerStart >= 0 && ownerEnd > ownerStart);
+  const owner = source.slice(ownerStart, ownerEnd);
+  assert.match(owner, /pendingShortcutFaviconPreference = faviconPreference/);
+  assert.match(owner, /shortcutSyncImage\.checked = false/);
+  assert.match(owner, /pendingShortcutImageKind = image \? "device" : "none"/);
 });
 
 test("1.30.14 preferred favicon hydration uses compact preference matching in both browsers", () => {

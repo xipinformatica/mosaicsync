@@ -107,7 +107,7 @@ for (const browser of ["firefox", "chrome"]) {
       [/async function showDropChoice[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?dropChoice\.hidden = false/, "drop-choice menu"],
       [/async function openFolder[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?folderPopover\.hidden = false/, "folder popover"],
       [/async function openShortcutEditor[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?shortcutDialog\.showModal\(\)/, "shortcut editor"],
-      [/async function openSettings[\s\S]*?await ensureSecondaryStyles\(\)[\s\S]*?settingsDialog\.hidden = false/, "Settings dialog"],
+      [/async function openSettings[\s\S]*?await Promise\.all\(\[ensureSecondaryStyles\(\), loadSettingsRefreshDomains\(\)\]\)[\s\S]*?settingsDialog\.hidden = false/, "Settings dialog"],
       [/function showToast[\s\S]*?ensureSecondaryStyles\(\)\.then[\s\S]*?toast\.classList\.add\("visible"\)/, "toast"]
     ];
     for (const [pattern, label] of ordered) assert.match(src, pattern, `${label} must wait for secondary CSS before becoming visible`);

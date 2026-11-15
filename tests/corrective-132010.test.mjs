@@ -231,10 +231,9 @@ test("1.32.0.10 device cleanup revalidation cancels when the current-device fall
 test("1.32.0.10 Recovery manager UI stays lazy, DOM-safe, and cannot delete Sync keys directly", () => {
   const newtab = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
   const core = fs.readFileSync("src/shared/background/background-core.js", "utf8");
-  const renderStart = newtab.indexOf("function renderRecoveryCopies(");
-  const renderEnd = newtab.indexOf("\n  async function loadRecoveryCopies", renderStart);
-  assert.ok(renderStart >= 0 && renderEnd > renderStart);
-  const renderBody = newtab.slice(renderStart, renderEnd);
+  const renderBody = fs.readFileSync("src/shared/newtab/recovery-copies-view.js", "utf8");
+  assert.match(newtab, /import\("\.\/recovery-copies-view\.js"\)/,
+    "Recovery manager renderer must load only on demand");
   assert.doesNotMatch(renderBody, /innerHTML\s*=/, "device names and Recovery metadata must not be rendered through innerHTML");
   assert.match(renderBody, /textContent/, "manager should render untrusted device metadata as text");
 
@@ -258,6 +257,6 @@ test("1.32.0.10 failed cleanup releases the busy guard before refreshing Recover
   const body = newtab.slice(start, end);
   assert.match(body, /finally \{[\s\S]*recoveryCopiesCleanupBusy = false;[\s\S]*\}/,
     "failed/revalidated cleanup must release its destructive-operation guard before any refresh");
-  assert.match(body, /if \(refreshCurrentSession && recoveryCopiesDialog\?\.open\)[\s\S]*await loadRecoveryCopies\(recoveryCopiesSessionGeneration\)/,
+  assert.match(body, /\} finally \{[\s\S]*?recoveryCopiesCleanupBusy = false;[\s\S]*?\}\s*if \([\s\S]*?recoveryCopiesDialog\?\.open\) \{\s*await loadRecoveryCopies\(recoveryCopiesSessionGeneration\)/,
     "failed/revalidated cleanup must refresh eligibility after the cleanup guard has been released");
 });

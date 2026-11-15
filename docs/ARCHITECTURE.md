@@ -94,6 +94,8 @@ Rules:
 - New user-facing text must use the locale system in every supported language.
 - Visual startup tests complement state tests because a correct final state can still have a wrong intermediate frame.
 - While Settings is open, lightweight canvas text/shadow presentation may follow the isolated Light/Dark preview immediately; full-page wallpaper/background/dim painting remains deferred to protect the Settings compositor surface.
+- `newtab/settings-refresh-domains.js` owns the pure decision about which Settings domains changed after an external state update, including the canonical Personal-Space Frequently Visited preference. It cannot read the DOM, browser APIs or mutable page state; `newtab.js` alone owns control painting, focused-control deferral and persistence. Keep both inputs explicit and preserve full-refresh behavior when the active Space changes.
+- `newtab/ui-utils.js` owns the device-artwork presentation comparison/mapping helpers: background visual equality, shortcut/folder record indexing and core-shape comparison, and copying the eight display-only artwork fields. The page controller alone checks synchronized clock/raw signatures and active Space, decides whether this cache-only fast path is authorized, and applies visible DOM/render-manifest refreshes. The extraction must not convert device-local artwork into a Sync/Recovery authority or introduce new eager modules.
 
 ## 7. Browser adapters
 
@@ -368,3 +370,16 @@ This correction does not change the persisted schema or Normal Sync/Recovery wir
 Settings owns the lifetime of child surfaces launched from it. Custom Branding performs asynchronous preparation before becoming visible, so panel visibility alone is insufficient: Settings can close and reopen while an older request is still awaiting. the Settings ownership generation is the parent-lifetime epoch. Custom Branding captures it before preparation, revalidates the epoch plus `isSettingsOpen()` after every relevant await, and keeps the branding read local until the final check succeeds. Closing Settings increments the epoch, permanently invalidating all child-open work launched by that session.
 
 This is an ownership/lifecycle rule only. It does not move Custom Branding into synchronized profile authority or change Normal Sync/Recovery behavior.
+
+
+## Private 1.33.0.97 Slice 10 — validate all Spaces before adopting device artwork
+
+The New Tab storage-change fast path must not mutate any live shortcut artwork until **every Space** passes background and shortcut-structure checks. An inherited Slice 8/9 ordering flaw copied Personal artwork before discovering a later Work mismatch, then returned `false` for normal adoption. The old in-memory state used by the grid-render equivalence check was already partly changed, so that subsequent render could be incorrectly skipped. This was a display/cache coherence problem, not a change to persisted Sync authority.
+
+`tryApplyDeviceArtworkOnlyChange` now preflights every workspace and retains its two shortcut-record maps, then performs its existing device-only artwork copying only after the last preflight succeeds. Clock/raw-signature/active-Space guards, image-field allowlists, DOM/manifest updates, fallback adoption and persisted baseline ownership are unchanged. Tests execute the actual controller function with the real utility exports and exercise later-Space wallpaper/structure failures, authority-gate rejection, successful multi-Space copying, and an idempotent storage echo. No new eager modules, async steps, schemas, permissions or Sync/Recovery engine changes.
+
+## Private 1.33.0.97 Slice 11 — defer Recovery Copies presentation
+
+The Recovery Copies manager is a secondary Settings dialog, not a First Paint dependency. Its device/generation card renderer now resides in `src/shared/newtab/recovery-copies-view.js`, a dynamic module imported only when a live dialog has received a Recovery model. The New Tab controller still owns session generations, stale-response rejection, busy/cleanup guards, message transport, confirmation authority and the existing Recovery lifecycle. The renderer has no browser storage or network access; it receives DOM elements, formatting and confirmation callbacks through an explicit presentation context.
+
+The controller awaits the on-demand renderer and checks session identity **after** module loading, so a closed/reopened dialog cannot display a previous session's model. Successful cleanup does not release its busy guard until UI processing completes. Device names and Recovery metadata remain `textContent` assignments, and deletion continues through the same in-page confirmation and background-owned cleanup commands. This defers several kilobytes of startup-parsed DOM builder code without changing the Recovery engine, deletion policy, storage format, manifests, permissions or first-paint contract.

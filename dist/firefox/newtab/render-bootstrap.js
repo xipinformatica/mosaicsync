@@ -26,6 +26,9 @@
   const grid = document.getElementById("shortcutGrid");
   const emptyState = document.getElementById("emptyState");
   const brand = document.querySelector(".brand");
+  // Always release the one-page handoff, even if the launcher DOM is absent.
+  const firstPaint = globalThis.__mosaicsyncFirstPaintManifest;
+  try { delete globalThis.__mosaicsyncFirstPaintManifest; } catch {}
   if (!grid || !emptyState) return;
 
   function validPreview(value) {
@@ -149,7 +152,9 @@
     if (!KEY || !Number.isInteger(config?.renderManifestVersion)) return;
     const raw = localStorage.getItem(KEY);
     if (!raw) return;
-    const manifest = JSON.parse(raw);
+    const manifest = firstPaint?.key === KEY && firstPaint.raw === raw
+      ? firstPaint.manifest
+      : JSON.parse(raw);
     if (!manifest || manifest.version !== config.renderManifestVersion || manifest.ready !== true) return;
 
     // Persistent synchronous grid paint remains deliberately Personal-only. If a

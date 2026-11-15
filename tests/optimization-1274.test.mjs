@@ -309,11 +309,9 @@ for (const browser of ["firefox", "chrome"]) {
 }
 
 test("1.27.4 removes the confirmed obsolete shortcut-editor CSS selectors", async () => {
-  for (const browser of ["firefox", "chrome"]) {
-    const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
-    assert.doesNotMatch(css, /\.stack-actions\b/);
-    assert.doesNotMatch(css, /\.full-button\b/);
-  }
+  const css = [(await readFile("src/shared/newtab/newtab-critical.css", "utf8")), (await readFile("src/shared/newtab/newtab-secondary.css", "utf8"))].join("\n");
+  assert.doesNotMatch(css, /\.stack-actions\b/);
+  assert.doesNotMatch(css, /\.full-button\b/);
 });
 
 test("1.27.4 package-size baseline catches accidental category growth without banning intentional features", async () => {

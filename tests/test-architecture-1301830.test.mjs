@@ -35,6 +35,31 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
+// The controller owns the first-click listener only after the deferred modules
+// resolve. Slow imports must not look like missing listeners or lost clicks.
+for (const browser of ["firefox", "chrome"]) {
+  test(`Slice 18 ${browser} smoke waits for delayed real Bookmarks and Settings modules`, async () => {
+    const temp = await fs.mkdtemp(path.join(os.tmpdir(), "mosaicsync-slice18-readiness-"));
+    try {
+      const runtime = path.join(temp, `dist/${browser}`);
+      await fs.cp(path.join(root, `dist/${browser}`), runtime, { recursive: true });
+      for (const moduleName of ["bookmarks-controller.js", "settings-refresh-domains.js"]) {
+        const file = path.join(runtime, "newtab", moduleName);
+        await fs.appendFile(file, "\nawait new Promise(resolve => setTimeout(resolve, 650));\n");
+      }
+      const { run, result } = runSmoke(temp, browser);
+      assert.equal(run.status, 0, `${browser} delayed import should still complete: \n${run.stdout}\n${run.stderr}`);
+      assert.deepEqual(result.failures, []);
+      assert.equal(result.bookmarks?.buttonClickListeners > 0, true);
+      assert.equal(result.bookmarks?.opened, true);
+      assert.equal(result.settingsOpened, true);
+      assert.equal(result.imagePreview?.coverAfterFit, false);
+    } finally {
+      await fs.rm(temp, { recursive: true, force: true });
+    }
+  });
+}
+
 test("1.30.18.30 full-startup smoke fails closed on the withdrawn 1.30.18.26 dependency-contract class", async () => {
   const temp = await fs.mkdtemp(path.join(os.tmpdir(), "mosaicsync-newtab-smoke-"));
   try {

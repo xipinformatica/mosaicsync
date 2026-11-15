@@ -50,6 +50,18 @@ test('hover, focus, drag and accessible labels remain present', () => {
   assert.match(js, /add\.addEventListener\("click"/);
 });
 
+test('pointer-dismissed Add Shortcut does not leave a focus-within ghost plus', () => {
+  // Closing a native dialog restores focus to its opener. Pointer focus must
+  // not keep an empty add tile visible after the pointer has left its slot.
+  assert.doesNotMatch(css, /\.empty-slot:focus-within\s+\.add-slot/);
+  // Hover still reveals the add tile, and keyboard navigation still reveals it
+  // via :focus-visible without changing the dialog focus-restoration logic.
+  assert.match(css, /\.empty-slot:hover\s+\.add-slot/);
+  assert.match(css, /\.add-slot:focus-visible\s*\{\s*opacity:\s*1/);
+  assert.match(js, /add\.addEventListener\("click", \(\) => openShortcutEditor\(/);
+  assert.match(js, /if \(dialog\?\.open\) dialog\.close\(\)/);
+});
+
 test('both browsers ship the identical audited markup, CSS and script', () => {
   for (const browser of ['chrome','firefox']) {
     assert.equal(read(`dist/${browser}/newtab/newtab-critical.css`), css);

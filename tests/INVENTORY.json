@@ -2,9 +2,9 @@
   "schemaVersion": 1,
   "scope": "primary-file-classification",
   "note": "One primary kind per test file. Some files contain several assertion kinds; this is NOT a code-coverage or assertion-level estimate.",
-  "totalFiles": 242,
+  "totalFiles": 259,
   "counts": {
-    "behavioral": 117,
+    "behavioral": 134,
     "integration": 43,
     "static": 81,
     "browser": 1
@@ -351,6 +351,10 @@
       "kind": "behavioral"
     },
     {
+      "file": "tests/corrective-133097-clock-poison.test.mjs",
+      "kind": "behavioral"
+    },
+    {
       "file": "tests/custom-branding-1321.test.mjs",
       "kind": "behavioral"
     },
@@ -532,6 +536,70 @@
     },
     {
       "file": "tests/model-sync.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice10-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice11-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice12-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice13-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice14-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice15-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice16-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice17-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice2-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice3-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice4-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice5-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice6-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice7-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice8-133097.test.mjs",
+      "kind": "behavioral"
+    },
+    {
+      "file": "tests/modernization-slice9-133097.test.mjs",
       "kind": "behavioral"
     },
     {

@@ -628,3 +628,62 @@ export function syncStorageDisplayUsage(usage, quotaBytes, firefoxItemCount = nu
   const overhead = Math.max(0, quota - free - core - recovery - shortcutArtwork);
   return { core, recovery, shortcutArtwork, overhead, free };
 }
+
+// Device-artwork display helpers; clock authority and DOM painting stay in newtab.js.
+export function workspaceBackgroundVisualSignature(workspace) {
+  const settings = workspace?.settings || {};
+  return [
+    settings.backgroundImage || "",
+    settings.backgroundAssetId || "",
+    settings.backgroundImageKind || "none",
+    settings.backgroundSourceKind || "none",
+    settings.backgroundSourceUrl || "",
+    settings.backgroundPreset || "",
+    settings.themeWallpapersEnabled === true,
+    settings.lightBackgroundPreset || "",
+    settings.darkBackgroundPreset || ""
+  ];
+}
+
+export function sameBackgroundVisuals(left, right) {
+  const a = workspaceBackgroundVisualSignature(left);
+  const b = workspaceBackgroundVisualSignature(right);
+  return a.every((value, index) => value === b[index]);
+}
+
+export function collectWorkspaceShortcutRecords(workspace) {
+  const records = new Map();
+  for (const item of workspace?.shortcuts || []) {
+    if (item?.type === "folder") {
+      records.set(item.id, { item, parentFolderId: "", type: "folder" });
+      for (const child of item.items || []) records.set(child.id, { item: child, parentFolderId: item.id, type: "shortcut" });
+    } else if (item?.type === "shortcut") {
+      records.set(item.id, { item, parentFolderId: "", type: "shortcut" });
+    }
+  }
+  return records;
+}
+
+export function sameShortcutCoreShape(current, incoming, currentParent, incomingParent) {
+  if (!current || !incoming || current.type !== incoming.type || currentParent !== incomingParent) return false;
+  if (current.id !== incoming.id || current.title !== incoming.title || Number(current.position) !== Number(incoming.position)) return false;
+  if (Number(current.createdAt) !== Number(incoming.createdAt) || Number(current.modifiedAt) !== Number(incoming.modifiedAt)) return false;
+  if (current.type === "folder") return (current.items?.length || 0) === (incoming.items?.length || 0);
+  return current.url === incoming.url &&
+    (current.builtinIcon || "") === (incoming.builtinIcon || "") &&
+    (current.colorTag || "") === (incoming.colorTag || "") &&
+    Number(current.spaceMoveAt || 0) === Number(incoming.spaceMoveAt || 0) &&
+    (current.imageStyle || "contain") === (incoming.imageStyle || "contain") &&
+    (current.source || "manual") === (incoming.source || "manual");
+}
+
+export function copyDeviceArtwork(current, incoming) {
+  const keys = ["image", "localImageAssetId", "imageSyncData", "imageAssetId", "imageSyncKind", "imageSourceKind", "imageSourceUrl", "imageIsFallback"];
+  let changed = false;
+  for (const key of keys) {
+    if (current[key] === incoming[key]) continue;
+    current[key] = incoming[key];
+    changed = true;
+  }
+  return changed;
+}

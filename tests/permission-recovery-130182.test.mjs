@@ -167,7 +167,8 @@ for (const browser of ["firefox", "chrome"]) {
       console
     };
     vm.createContext(ctx);
-    vm.runInContext(extract(src, "requestFrequentlyVisitedPermissionRecoveryFromGesture"), ctx);
+    vm.runInContext(`${extract(src, "refreshFrequentlyVisitedAfterPermissionGrant")}
+${extract(src, "requestFrequentlyVisitedPermissionRecoveryFromGesture")}`, ctx);
     ctx.requestFrequentlyVisitedPermissionRecoveryFromGesture(button);
     assert.equal(requestCount, 1, "permission request must start in the same user-gesture call stack");
     assert.equal(button.disabled, true);

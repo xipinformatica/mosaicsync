@@ -170,11 +170,9 @@ test("1.30.18.14 persistent manifest API has no FV side door and no semantic Fir
 });
 
 test("1.30.18.14 classic persistent bootstrap no longer loads URL safety solely for cache navigation", () => {
-  for (const browser of ["firefox", "chrome"]) {
-    const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
-    assert.match(html, /<script src="render-bootstrap\.js"><\/script>/);
-    assert.doesNotMatch(html, /<script src="\.\.\/core\/http-url-safety\.js"><\/script>/);
-  }
+  const html = fs.readFileSync("src/shared/newtab/newtab.html", "utf8");
+  assert.match(html, /<script src="render-bootstrap\.js"><\/script>/);
+  assert.doesNotMatch(html, /<script src="\.\.\/core\/http-url-safety\.js"><\/script>/);
 });
 
 test("1.30.18.14 switching to Work invalidates the Personal persistent grid synchronously", () => {

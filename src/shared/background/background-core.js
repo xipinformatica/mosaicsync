@@ -88,6 +88,8 @@ import {
   localStateSyncSignature,
   mergeRecordMaps,
   newestRecordTimestamp,
+  MAX_TRUSTED_FUTURE_SKEW_MS,
+  authoritativeLogicalTime,
   nextMutationTime,
   nextProfileImportMutationTime,
   normalizeDeviceName,
@@ -1265,8 +1267,8 @@ export function startBackground(adapter) {
           if (continuity.lossState !== "none") return;
           const pending = await readPendingLocalSyncMutation();
           if (pending) {
-            await pushLocalMutation(pending.before, pending.after, meta);
-            await clearPendingLocalSyncMutation(pending.journalId);
+            const result = await pushLocalMutation(pending.before, pending.after, meta);
+            if (!result?.pending) await clearPendingLocalSyncMutation(pending.journalId);
           } else {
             await pushLocalMutation(stateChange.oldValue, stateChange.newValue, meta);
           }
@@ -4413,6 +4415,7 @@ export function startBackground(adapter) {
     if (lossGuard) return lossGuard;
 
     if (!pendingLocalAlreadyRetried) meta = await retryPendingLocalSyncMutation(meta);
+    if (meta?.__clockBoundaryPending) return { ok: true, pending: true, reason: "clock-boundary-wait", meta };
     await repairDeliveredCoreEvidence(PERSONAL_SPACE_ID);
     await repairDeliveredCoreEvidence(WORK_SPACE_ID);
     const all = await browser.storage.sync.get(null);
@@ -5058,14 +5061,14 @@ export function startBackground(adapter) {
       liveModern,
       atomic: {
         originDeviceId: atomicProfile?.originDeviceId || "",
-        personalUpdatedAt: Number(atomicProfile?.personal?.updatedAt),
-        workUpdatedAt: Number(atomicProfile?.work?.updatedAt)
+        personalUpdatedAt: authoritativeLogicalTime(atomicProfile?.personal?.updatedAt) ?? NaN,
+        workUpdatedAt: authoritativeLogicalTime(atomicProfile?.work?.updatedAt) ?? NaN
       },
       live: {
         personalOriginDeviceId: sources.shared?.dataset?.originDeviceId || "",
         workOriginDeviceId: workSnapshot?.dataset?.originDeviceId || "",
-        personalUpdatedAt: Number(sources.shared?.dataset?.updatedAt),
-        workUpdatedAt: Number(workSnapshot?.dataset?.updatedAt)
+        personalUpdatedAt: authoritativeLogicalTime(sources.shared?.dataset?.updatedAt) ?? NaN,
+        workUpdatedAt: authoritativeLogicalTime(workSnapshot?.dataset?.updatedAt) ?? NaN
       }
     });
     const useAtomicProfile = restoreSource === "atomic";
@@ -5550,6 +5553,13 @@ export function startBackground(adapter) {
       await writePendingCrossSpaceSync(storageKey, pending);
     }
 
+    if (authoritativeLogicalTime(Number(pending.createdAt)) === null &&
+        Number(pending.createdAt) > Date.now() &&
+        Number(pending.createdAt) <= Date.now() + MAX_TRUSTED_FUTURE_SKEW_MS + 1024) {
+      const deferred = await deferProvisionalClockPublication(currentMeta);
+      return { ...deferred.meta, __clockBoundaryPending: true };
+    }
+
     const { state: currentState } = await ensureLocalStorage();
     await markSyncing(currentMeta);
 
@@ -5610,6 +5620,21 @@ export function startBackground(adapter) {
     return rebased;
   }
 
+  // A local mutation may carry a one-millisecond provisional successor to a
+  // trusted clock at the moving 402-day boundary. Keep its durable journal and
+  // wait for wall time to catch up; never publish it with a clock peers reject.
+  async function deferProvisionalClockPublication(meta) {
+    const waiting = await writeLocalMeta({
+      ...meta,
+      syncStatus: "waiting",
+      lastSyncError: "",
+      lastSyncWarning: "Waiting for a safe Sync timestamp before publishing a pending local change.",
+      syncWaitStartedAt: meta.syncWaitStartedAt || Date.now()
+    });
+    await ensureSyncWatchAlarm(waiting);
+    return { ok: true, pending: true, reason: "clock-boundary-wait", meta: waiting };
+  }
+
   async function pushPersonalMutation(oldStateInput, newStateInput, meta) {
     // Inputs already crossed normalizeState() in pushLocalMutation(). Keep the
     // names explicit so future callers do not mistake this for a raw-state API.
@@ -5627,6 +5652,13 @@ export function startBackground(adapter) {
       oldState.updatedAt, newState.updatedAt, oldState.settingsModifiedAt, newState.settingsModifiedAt,
       newestRecordTimestamp(oldRecords), newestRecordTimestamp(newRecords)
     );
+
+    if (authoritativeLogicalTime(timestamp) === null) {
+      if (!await readPendingLocalSyncMutation()) {
+        throw new Error("Cannot defer an untrusted local Sync timestamp without a durable mutation journal.");
+      }
+      return deferProvisionalClockPublication(meta);
+    }
 
     await markSyncing(meta);
 
@@ -5734,6 +5766,13 @@ export function startBackground(adapter) {
       oldState.updatedAt, newState.updatedAt, oldState.settingsModifiedAt, newState.settingsModifiedAt,
       newestRecordTimestamp(oldRecords), newestRecordTimestamp(newRecords)
     );
+
+    if (authoritativeLogicalTime(timestamp) === null) {
+      if (!await readPendingLocalSyncMutation()) {
+        throw new Error("Cannot defer an untrusted Work Sync timestamp without a durable mutation journal.");
+      }
+      return deferProvisionalClockPublication(meta);
+    }
 
     await markSyncing(meta);
     for (const [id, record] of newRecords) {
@@ -5849,18 +5888,26 @@ export function startBackground(adapter) {
       // browser crash, worker shutdown, quota failure, or network interruption is
       // recoverable from storage.local on startup/the Sync watch alarm.
       await writePendingCrossSpaceSync(transactionKey, transaction);
-      await executePendingCrossSpaceSync({ key: transactionKey, value: transaction }, meta);
-      return;
+      const result = await executePendingCrossSpaceSync({ key: transactionKey, value: transaction }, meta);
+      return result?.__clockBoundaryPending ? { ok: true, pending: true, reason: "clock-boundary-wait" } : { ok: true };
     }
 
-    if (personalChanged) await pushPersonalMutation(oldState, newState, meta);
-    if (workChanged) await pushWorkMutation(oldState, newState, personalChanged ? await readLocalMeta() : meta);
+    if (personalChanged) {
+      const result = await pushPersonalMutation(oldState, newState, meta);
+      if (result?.pending) return result;
+    }
+    if (workChanged) {
+      const result = await pushWorkMutation(oldState, newState, personalChanged ? await readLocalMeta() : meta);
+      if (result?.pending) return result;
+    }
+    return { ok: true };
   }
 
   async function retryPendingLocalSyncMutation(meta) {
     const pending = await readPendingLocalSyncMutation();
     if (!pending || !meta?.syncEnabled || !meta?.syncInitialized) return meta;
-    await pushLocalMutation(pending.before, pending.after, meta);
+    const result = await pushLocalMutation(pending.before, pending.after, meta);
+    if (result?.pending) return { ...(await readLocalMeta()), __clockBoundaryPending: true };
     await clearPendingLocalSyncMutation(pending.journalId);
     return readLocalMeta();
   }
@@ -7206,9 +7253,9 @@ export function startBackground(adapter) {
 
   function datasetUpdatedAt(records, settings, fallback = 0) {
     return Math.max(
-      Number(fallback) || 0,
+      authoritativeLogicalTime(fallback) ?? 0,
       newestRecordTimestamp(records),
-      Number(settings?.modifiedAt) || 0
+      authoritativeLogicalTime(settings?.modifiedAt) ?? 0
     );
   }
 

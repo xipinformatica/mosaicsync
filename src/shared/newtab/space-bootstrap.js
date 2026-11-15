@@ -21,6 +21,10 @@
     if (!raw) return;
     const manifest = JSON.parse(raw);
     if (!manifest || manifest.version !== config.renderManifestVersion || manifest.ready !== true) return;
+    // The grid bootstrap runs later in the same document. Allow it to reuse
+    // this disposable parsed projection if the saved bytes have not changed.
+    // It still reads localStorage independently and reparses on any mismatch.
+    globalThis.__mosaicsyncFirstPaintManifest = { key: config.renderManifestKey, raw, manifest };
     const hint = manifest.spaceSwitcher;
     if (!hint || typeof hint !== "object") return;
     if (hint.visible === false) {

@@ -303,6 +303,16 @@ local.data[constants.LOCAL_META_KEY] = {
   deviceName: "Smoke Device"
 };
 
+// Observe readiness rather than assuming fixed wall-clock delays for dynamic imports.
+// A missing listener must still fail after a bounded timeout, not be skipped.
+async function waitFor(label, ready, timeoutMs = 4_500) {
+  const deadline = performance.now() + timeoutMs;
+  while (!ready()) {
+    if (performance.now() >= deadline) throw new Error(`New Tab smoke timed out waiting for ${label}`);
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+}
+
 const failures = [];
 const consoleErrors = [];
 const originalConsoleError = console.error;
@@ -312,10 +322,14 @@ process.on("unhandledRejection", error => failures.push(error));
 
 try {
   await import(`${pathToFileURL(path.join(root, `dist/${browserName}/newtab/newtab.js`)).href}?smoke=${process.pid}`);
-  await new Promise(resolve => setTimeout(resolve, 320));
+  await waitFor("interactive startup", () => Number.isFinite(globalThis.__mosaicsyncStartupTiming?.phases?.interactionReady));
 
   byId.get("bookmarksButton")?.click();
-  await new Promise(resolve => setTimeout(resolve, 100));
+  await waitFor("Bookmarks controller", () =>
+    byId.get("bookmarksDialog")?.open === true &&
+    (byId.get("bookmarksButton")?.listeners.get("click") || []).length > 0 &&
+    (byId.get("bookmarksSearch")?.listeners.get("input") || []).length > 0 &&
+    (byId.get("bookmarksDialog")?.listeners.get("close") || []).length > 0);
   const bookmarksDialog = byId.get("bookmarksDialog");
   globalThis.__mosaicsyncSmokeBookmarks = {
     buttonClickListeners: (byId.get("bookmarksButton")?.listeners.get("click") || []).length,
@@ -329,20 +343,24 @@ try {
   }
 
   byId.get("settingsButton")?.click();
-  await new Promise(resolve => setTimeout(resolve, 40));
+  await waitFor("Settings panel", () =>
+    byId.get("settingsDialog")?.hidden === false &&
+    (byId.get("settingsFrequentlyVisited")?.listeners.get("change") || []).length > 0);
 
   const frequentToggle = byId.get("settingsFrequentlyVisited");
   if (frequentToggle) {
     frequentToggle.checked = false;
     frequentToggle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
-    await new Promise(resolve => setTimeout(resolve, 80));
+    await waitFor("Frequently Visited disabled", () =>
+      byId.get("frequentOptions")?.hidden === true && byId.get("frequentSitesSection")?.hidden === true);
     globalThis.__mosaicsyncSmokeFrequentDisabled = {
       optionsHidden: byId.get("frequentOptions")?.hidden === true,
       sectionHidden: byId.get("frequentSitesSection")?.hidden === true
     };
     frequentToggle.checked = true;
     frequentToggle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
-    await new Promise(resolve => setTimeout(resolve, 120));
+    await waitFor("Frequently Visited enabled", () =>
+      byId.get("frequentOptions")?.hidden === false && byId.get("frequentSitesSection")?.hidden === false);
     globalThis.__mosaicsyncSmokeFrequentReenabled = {
       optionsVisible: byId.get("frequentOptions")?.hidden === false,
       sectionVisible: byId.get("frequentSitesSection")?.hidden === false
@@ -352,12 +370,15 @@ try {
   const imageStyle = byId.get("shortcutImageStyle");
   const imagePreview = byId.get("imagePreview");
   if (imageStyle && imagePreview) {
+    await waitFor("image preview change handler", () => (imageStyle.listeners.get("change") || []).length > 0);
     const baseClassPresent = imagePreview.classList.contains("image-preview");
     imageStyle.value = "cover";
     imageStyle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
+    await waitFor("cover preview", () => imagePreview.classList.contains("cover"));
     const coverAfterFill = imagePreview.classList.contains("cover");
     imageStyle.value = "contain";
     imageStyle.dispatchEvent({ type: "change", preventDefault() {}, stopPropagation() {} });
+    await waitFor("contain preview", () => !imagePreview.classList.contains("cover"));
     globalThis.__mosaicsyncSmokeImagePreview = {
       baseClassPresent,
       changeListeners: (imageStyle.listeners.get("change") || []).length,

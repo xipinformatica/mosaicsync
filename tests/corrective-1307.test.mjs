@@ -52,7 +52,7 @@ test("1.30.7 trusted cross-Space fast paths are output-equivalent to defensive w
   // Keep the fixture's logical clock safely ahead of wall time so the defensive
   // and trusted calls cannot differ merely because Date.now() crosses a
   // millisecond boundary between the two otherwise-equivalent operations.
-  const logicalClock = 4_000_000_000_000;
+  const logicalClock = Date.now() + 90 * 24 * 60 * 60 * 1000;
   const before = model.normalizeState({
     activeSpaceId: "personal",
     spaces: {

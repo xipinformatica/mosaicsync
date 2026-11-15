@@ -61,9 +61,11 @@ test("1.24.14m ordinary edits within the same move generation still use modified
 });
 
 test("1.24.14m mutation clocks advance beyond observed future clocks", () => {
-  const future = 4_102_444_800_000;
+  const future = Date.now() + 400 * 24 * 60 * 60 * 1000;
   assert.ok(model.nextMutationTime(future) > future);
   assert.ok(model.nextMutationTime([1, future, 4]) > future);
+  const untrusted = 4_102_444_800_000; // year 2100
+  assert.ok(model.nextMutationTime(untrusted) < untrusted, "far-future clocks cannot pin later edits");
 });
 
 class Area {

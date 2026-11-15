@@ -184,6 +184,13 @@ function remoteHarness({permissionPromise=Promise.resolve(true),url='https://exa
     localizeDocument:()=>{}
   };
   vm.createContext(c);
+  // The real popup handler uses the shared explicit-artwork state owner.
+  // Keep the behavioral harness evaluating the production helper, rather than
+  // recreating those assignments in a stub or silently testing a missing call.
+  const helperStart=js.indexOf('  function selectExplicitShortcutArtwork(');
+  const helperEnd=js.indexOf('\n  }\n', helperStart);
+  assert.ok(helperStart>=0&&helperEnd>helperStart);
+  vm.runInContext(js.slice(helperStart, helperEnd+5),c);
   const start=js.indexOf('  openShortcutWebImage?.addEventListener("click", () => {');
   const end=js.indexOf('  shortcutSyncImage?.addEventListener("change", () => {',start);
   assert.ok(start>=0&&end>start);

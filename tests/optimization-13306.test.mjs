@@ -50,8 +50,20 @@ test("1.33.0.6 critical-path census proves Bookmarks left initial DOM and static
   assert.ok(parsed.initialDom.secondaryElementCount <= 528, `expected <=520 secondary elements, got ${parsed.initialDom.secondaryElementCount}`);
   assert.ok(parsed.eagerDomBindings.total <= 198, `expected <=196 eager bindings, got ${parsed.eagerDomBindings.total}`);
   assert.ok(parsed.eagerDomBindings.secondary <= 163, `expected <=161 secondary eager bindings, got ${parsed.eagerDomBindings.secondary}`);
-  // Neofix 4: one small statically imported persistence gateway; no extra first-frame UI or storage reads.
-  assert.ok(parsed.moduleEvaluation.staticGraph.moduleCount <= 24, `expected <=24 static modules, got ${parsed.moduleEvaluation.staticGraph.moduleCount}`);
+  // Neofix 4 introduced the small persistence gateway. Slice 15 keeps only the
+  // startup-required Frequently Visited preference reader eager, while moving
+  // Settings' pure domain comparator behind the dialog-open boundary.
+  // Keep the original module-count and raw-byte ceilings.
+  const staticGraph = parsed.moduleEvaluation.staticGraph;
+  assert.ok(staticGraph.moduleCount <= 25, `expected <=25 static modules, got ${staticGraph.moduleCount}`);
+  assert.ok(staticGraph.modules.some(module => module.path === "newtab/frequently-visited-preference.js"),
+    "initial Settings preference reader stays eager");
+  assert.ok(!staticGraph.modules.some(module => module.path === "newtab/settings-refresh-domains.js"),
+    "dialog-only Settings refresh comparison must not be eager");
+  assert.ok(staticGraph.rawBytes <= 729000,
+    `Settings extraction must keep initial static graph at <=729000 source bytes; got ${staticGraph.rawBytes}`);
+  assert.ok(!staticGraph.modules.some(module => ["newtab/bookmarks-controller.js", "newtab/bookmarks-shell.js"].includes(module.path)),
+    "the Bookmarks controller and shell must remain outside the static startup graph");
   assert.ok(parsed.deferredModules.roots.some(entry => entry.root === "newtab/bookmarks-controller.js"), "Bookmarks controller must be deferred");
   assert.ok(parsed.deferredModules.roots.some(entry => entry.root === "newtab/bookmarks-shell.js"), "Bookmarks shell must be deferred");
 });

@@ -36,16 +36,28 @@ export function now() {
   return Date.now();
 }
 
-// Logical mutation clocks are persisted as JSON numbers and participate in
-// deterministic ordering across devices. Values outside JavaScript's safe
-// integer domain cannot provide a strict monotonic +1 clock: for example,
-// 1e20 + 1 === 1e20. Accept only non-negative safe integers at model trust
-// boundaries, and fail closed at the theoretical ceiling rather than silently
-// reusing a timestamp.
+// Persisted logical clocks are untrusted ordering inputs when they arrive from
+// Sync. A safe integer alone is not enough: a far-future value would dominate
+// ordinary edits indefinitely. Keep a deliberately generous 402-day moving
+// window so a clock 400 days ahead remains usable across small peer clock skew.
+// This cannot protect a still-running older (.96) peer from republishing poison;
+// all devices must upgrade to the new trust policy for stable convergence.
 export const MAX_LOGICAL_TIME = Number.MAX_SAFE_INTEGER;
+export const MAX_TRUSTED_FUTURE_SKEW_MS = (400 + 2) * 24 * 60 * 60 * 1000;
+const MAX_REAL_CLOCK_MS = 8_640_000_000_000_000;
 
 function parseLogicalTime(value) {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
+}
+
+// Distinct from data-format normalization: rejecting an ordering clock must not
+// rewrite a tombstone's original deletedAt, or the 180-day TTL could delete
+// deletion evidence. Record bytes stay intact until a safe reconciliation wins.
+export function authoritativeLogicalTime(value) {
+  const clock = parseLogicalTime(value);
+  if (clock === null) return null;
+  const ceiling = Math.min(MAX_REAL_CLOCK_MS - 1, now() + MAX_TRUSTED_FUTURE_SKEW_MS);
+  return clock <= ceiling ? clock : null;
 }
 
 export function normalizeLogicalTime(value, fallback = 0) {
@@ -54,49 +66,29 @@ export function normalizeLogicalTime(value, fallback = 0) {
   return parseLogicalTime(fallback) ?? 0;
 }
 
-// Advance a logical mutation clock beyond both wall time and every observed
-// record/workspace clock involved in the edit. This keeps a device with a
-// temporarily skewed clock (or a profile containing a future timestamp) from
-// making a legitimate later user edit look older forever. Invalid/non-safe
-// external clocks are ignored after normalization; an actually exhausted safe
-// integer clock throws instead of pretending to advance.
+// Locally composed edits may briefly need a strict +1 clock when an accepted
+// peer clock is *exactly* at the moving trust boundary. Reserve a tiny local
+// provisional window; it is NOT accepted as remote ordering authority until
+// wall time advances. The background retains its durable local mutation journal
+// and reports WAITING rather than publishing an untrusted successor. This also
+// keeps a burst of same-millisecond local edits monotonically ordered.
+const LOCAL_PROVISIONAL_CLOCK_GRACE_MS = 1024;
 export function nextMutationTime(...values) {
+  const ceiling = Math.min(MAX_REAL_CLOCK_MS - 1, now() + MAX_TRUSTED_FUTURE_SKEW_MS);
   let next = normalizeLogicalTime(now(), 0);
   for (const value of values.flat(Infinity)) {
     const numeric = parseLogicalTime(value);
-    if (numeric === null) continue;
-    if (numeric >= MAX_LOGICAL_TIME) {
-      throw new RangeError("MosaicSync logical mutation clock exhausted");
-    }
+    if (numeric === null || numeric > ceiling + LOCAL_PROVISIONAL_CLOCK_GRACE_MS) continue;
     next = Math.max(next, numeric + 1);
-  }
-  if (!Number.isSafeInteger(next) || next > MAX_LOGICAL_TIME) {
-    throw new RangeError("MosaicSync logical mutation clock exhausted");
   }
   return next;
 }
 
-// Profile files are untrusted input. Their logical clocks preserve useful causal
-// ordering when they are plausibly close to wall time, but an imported file must
-// never be able to choose a value near Number.MAX_SAFE_INTEGER and permanently
-// exhaust later local edits. One leap-year of future skew is deliberately
-// generous for exported profiles from machines with a badly configured clock.
+// Untrusted profile-file clocks retain a distinct, tighter import policy.
 const IMPORTED_PROFILE_MAX_FUTURE_SKEW_MS = 366 * 24 * 60 * 60 * 1000;
 
-// A JavaScript Date cannot represent a millisecond timestamp beyond this
-// bound. Existing local/cloud clocks can legitimately be years ahead because
-// a real device clock was misconfigured. Unlike untrusted backup-file clocks,
-// they retain causal authority even beyond the 366-day import-file limit.
-const MAX_REAL_CLOCK_MS = 8_640_000_000_000_000;
-
-// Only an explicit user-authoritative profile replacement may disregard
-// mathematically impossible pre-existing cloud/local clocks. Routine mutation
-// and Sync merge MUST continue using nextMutationTime() without this exception.
 export function nextProfileImportMutationTime(...observed) {
-  return nextMutationTime(observed.flat(Infinity).filter(value => {
-    const clock = parseLogicalTime(value);
-    return clock !== null && clock <= MAX_REAL_CLOCK_MS;
-  }));
+  return nextMutationTime(...observed);
 }
 
 function profileLogicalTimes(normalized) {
@@ -121,7 +113,7 @@ function shortcutMoveClocks(normalized) {
   const clocks = new Map();
   const remember = item => {
     if (!item || item.type !== "shortcut" || !item.id) return;
-    clocks.set(item.id, Math.max(clocks.get(item.id) || 0, normalizeLogicalTime(item.spaceMoveAt, 0)));
+    clocks.set(item.id, Math.max(clocks.get(item.id) || 0, authoritativeLogicalTime(item.spaceMoveAt) ?? 0));
   };
   for (const spaceId of SPACE_IDS) {
     for (const item of normalized.spaces[spaceId].shortcuts || []) {
@@ -159,7 +151,7 @@ export function stampImportedProfileState(importedState, currentState = null) {
   for (const spaceId of SPACE_IDS) {
     const workspace = imported.spaces[spaceId];
     const stampShortcut = item => {
-      const importedMoveAt = normalizeLogicalTime(item.spaceMoveAt, 0);
+      const importedMoveAt = authoritativeLogicalTime(item.spaceMoveAt) ?? 0;
       const currentMoveAt = currentMoveClocks.get(item.id) || 0;
       return {
         ...item,
@@ -204,19 +196,19 @@ function compactSettingsDeviceTieId(value) {
 }
 
 function normalizeSettingsStamp(raw, fallbackTime = 0, fallbackDeviceId = "", fillMissingOwner = false) {
-  let time = normalizeLogicalTime(fallbackTime, 0);
+  let time = authoritativeLogicalTime(fallbackTime) ?? 0;
   let owner = "";
   if (Array.isArray(raw)) {
     const rawTime = Number(raw[0]);
-    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
+    if (authoritativeLogicalTime(rawTime) !== null) time = rawTime;
     if (typeof raw[1] === "string" && raw[1]) owner = compactSettingsDeviceTieId(raw[1]);
   } else if (raw && typeof raw === "object") {
     const rawTime = Number(raw.t);
-    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
+    if (authoritativeLogicalTime(rawTime) !== null) time = rawTime;
     if (typeof raw.d === "string" && raw.d) owner = compactSettingsDeviceTieId(raw.d);
   } else if (raw !== null && raw !== undefined && raw !== "") {
     const rawTime = Number(raw);
-    if (parseLogicalTime(rawTime) !== null) time = normalizeLogicalTime(rawTime, time);
+    if (authoritativeLogicalTime(rawTime) !== null) time = rawTime;
   }
   time = time > 0 ? time : 0;
   if (fillMissingOwner && time > 0 && !owner) owner = compactSettingsDeviceTieId(fallbackDeviceId);
@@ -1527,13 +1519,13 @@ export function makeSettingsRecord(state, deviceId = "") {
 
 function recordTimestamp(record) {
   if (!record || typeof record !== "object") return -1;
-  if (record.kind === "deleted") return normalizeLogicalTime(record.deletedAt, 0);
-  return normalizeLogicalTime(record.modifiedAt, 0);
+  if (record.kind === "deleted") return authoritativeLogicalTime(record.deletedAt) ?? 0;
+  return authoritativeLogicalTime(record.modifiedAt) ?? 0;
 }
 
 function recordMoveTimestamp(record) {
   if (!record || record.kind === "deleted") return 0;
-  return normalizeLogicalTime(record.spaceMoveAt, 0);
+  return authoritativeLogicalTime(record.spaceMoveAt) ?? 0;
 }
 
 // Deterministic merge / reconstruction ------------------------------------------
@@ -1644,7 +1636,7 @@ export function mergeSettingsRecords(leftRecord, rightRecord) {
   const wholeWinner = chooseNewerRecord(leftRecord, rightRecord);
   const mergedSettings = { ...(wholeWinner?.settings || {}) };
   const mergedClock = {};
-  let newest = Math.max(Number(leftRecord.modifiedAt) || 0, Number(rightRecord.modifiedAt) || 0);
+  let newest = Math.max(authoritativeLogicalTime(leftRecord.modifiedAt) ?? 0, authoritativeLogicalTime(rightRecord.modifiedAt) ?? 0);
 
   for (const groupKey of SETTINGS_SYNC_CLOCK_KEYS) {
     const { winner, loser, stamp } = compareSettingsGroup(leftRecord, rightRecord, groupKey);
@@ -1656,7 +1648,7 @@ export function mergeSettingsRecords(leftRecord, rightRecord) {
       else delete mergedSettings[field];
     }
     mergedClock[groupKey] = stamp;
-    newest = Math.max(newest, Number(stamp?.[0]) || 0);
+    newest = Math.max(newest, authoritativeLogicalTime(stamp?.[0]) ?? 0);
   }
 
   return {
@@ -1823,7 +1815,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
   }
 
   const settings = settingsFromRecord(settingsRecord, local, assets);
-  const settingsModifiedAt = normalizeLogicalTime(settingsRecord?.modifiedAt, local.settingsModifiedAt);
+  const settingsModifiedAt = authoritativeLogicalTime(settingsRecord?.modifiedAt) ?? authoritativeLogicalTime(local.settingsModifiedAt) ?? 0;
   const settingsClock = settingsRecord?.kind === "settings"
     ? normalizeSettingsClock(settingsRecord.settingsClock, settingsModifiedAt, settingsRecord.deviceId || "", true)
     : normalizeSettingsClock(local.settingsClock, local.settingsModifiedAt);
@@ -1833,7 +1825,7 @@ export function stateFromRecords(records, settingsRecord, localState = DEFAULT_S
     settings,
     settingsClock,
     settingsModifiedAt,
-    updatedAt: Math.max(local.updatedAt, newestRecordTimestamp(records), normalizeLogicalTime(settingsRecord?.modifiedAt, 0))
+    updatedAt: Math.max(authoritativeLogicalTime(local.updatedAt) ?? 0, newestRecordTimestamp(records), authoritativeLogicalTime(settingsRecord?.modifiedAt) ?? 0)
   });
 }
 

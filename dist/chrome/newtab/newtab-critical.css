@@ -360,7 +360,6 @@ select{ font: inherit; }button{ color: inherit; }.page{
   cursor: pointer;
   transition: opacity 120ms ease, background 120ms ease, border-color 120ms ease, transform 100ms ease, box-shadow 100ms ease;
 }.empty-slot:hover .add-slot,
-.empty-slot:focus-within .add-slot,
 .add-slot:focus-visible{ opacity: 1; }.add-slot:hover{ background: rgba(84,70,105,.55); border-color: rgba(255,255,255,.42); }.shortcut-slot.dragging{ opacity: .42; transform: scale(.97); }.shortcut-slot.drag-over .tile{ box-shadow: 0 0 0 3px var(--accent), 0 8px 26px rgba(0,0,0,.26); transform: scale(1.035); }.tile img,
 .folder-mosaic-cell img{ pointer-events: none; user-select: none; -moz-user-select: none; }.tile > img.artwork-layer,
 .folder-mosaic-cell > img.artwork-layer{ grid-area: 1 / 1; }.empty-state{

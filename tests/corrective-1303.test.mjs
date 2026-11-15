@@ -178,10 +178,18 @@ for (const browser of ["firefox", "chrome"]) {
   });
 
   test(`1.30.3 ${browser} final slider interactions persist immediately`, () => {
-    for (const target of ["settingsLightWallpaperDim", "settingsDarkWallpaperDim", "settingsTileSize", "backgroundColorHue"]) {
-      assert.match(sharedNewtab, new RegExp(`${target.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\?*\\.addEventListener\\(\\"change\\"[\\s\\S]{0,220}?saveSettingsState\\(\\)`), `${target} needs a final change persistence path`);
+    // Background sliders share an immediate-save callback, whereas tile size
+    // intentionally owns a separate debounce/final-change persistence path.
+    const persist = extractFunction(sharedNewtab, "persistBackgroundSettingsImmediately");
+    assert.match(persist, /clearTimeout\(backgroundPersistTimer\)/);
+    assert.match(persist, /saveSettingsState\(\)\.catch\(error => showToast\(localizePresentationError\(error, "operationFailed"\)\)\)/);
+    for (const target of ["settingsLightWallpaperDim", "settingsDarkWallpaperDim", "backgroundColorHue", "settingsBackgroundDim"]) {
+      assert.match(sharedNewtab, new RegExp(`${target}\\?*\\.addEventListener\\("change", persistBackgroundSettingsImmediately\\)`),
+        `${target} needs the shared final change persistence path`);
     }
-    assert.match(sharedNewtab, /backgroundColorPlane\?\.addEventListener\("pointerup"[\s\S]{0,320}?saveSettingsState\(\)/);
+    assert.match(sharedNewtab, /settingsTileSize\?\.addEventListener\("change"[\s\S]{0,220}?saveSettingsState\(\)/,
+      "settingsTileSize must retain its independent final change persistence path");
+    assert.match(sharedNewtab, /backgroundColorPlane\?\.addEventListener\("pointerup"[\s\S]{0,320}?persistBackgroundSettingsImmediately\(\)/);
     assert.match(sharedNewtab, /backgroundColorPlane\?\.addEventListener\("lostpointercapture"[\s\S]{0,180}?colorPlaneDragging = false;[\s\S]{0,180}?colorPlaneRect = null;/);
   });
 

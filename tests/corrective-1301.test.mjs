@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { automaticFaviconArtwork as automaticFaviconArtworkPolicy } from "../src/shared/core/artwork-policy.js";
+import { settingsRefreshDomains } from "../src/shared/newtab/settings-refresh-domains.js";
 
 function extract(src, name) {
   let start = src.indexOf(`async function ${name}`);
@@ -69,29 +70,18 @@ for (const browser of ["firefox", "chrome"]) {
   });
 }
 
-const newtab = fs.readFileSync("src/shared/newtab/newtab.js","utf8");
-const settingsContext = {
-  SPACE_IDS:["personal","work"],
-  SETTINGS_REFRESH_KEYS: {
-    grid:["columns","rows","tileSize"], theme:["theme"],
-    background:["backgroundColor","backgroundPreset","backgroundSource","backgroundImage","backgroundDim","themeWallpapersEnabled","lightBackgroundPreset","lightBackgroundDim","darkBackgroundPreset","darkBackgroundDim"],
-    autoIcons:["autoSiteIcons"]
-  }
-};
-vm.createContext(settingsContext);
-vm.runInContext(`${extract(newtab,"synchronizedFrequentlyVisitedSettings")}\n${extract(newtab,"settingsKeysChanged")}\n${extract(newtab,"spacesSettingsChanged")}\n${extract(newtab,"settingsRefreshDomains")}`,settingsContext);
 const base = () => ({settings:{columns:8,rows:4,tileSize:76,theme:"system",backgroundColor:"#fff",backgroundPreset:"default",backgroundSource:"preset",backgroundImage:"",backgroundDim:0,themeWallpapersEnabled:false,lightBackgroundPreset:"default",lightBackgroundDim:0,darkBackgroundPreset:"default",darkBackgroundDim:0,autoSiteIcons:true,frequentlyVisitedEnabled:false,frequentlyVisitedCount:5},spaces:{personal:{name:"Personal"},work:{name:"Work"}}});
 
 test("1.30.1 exact own-state echo produces zero Settings refresh domains", () => {
-  const a=base(); const b=structuredClone(a); assert.deepEqual([...settingsContext.settingsRefreshDomains(a,b)],[]);
+  const a=base(); const b=structuredClone(a); assert.deepEqual([...settingsRefreshDomains(a,b)],[]);
 });
 test("1.30.1 Frequently Visited change refreshes only Frequently Visited and never Background", () => {
   const a=base(), b=structuredClone(a); b.settings.frequentlyVisitedEnabled=true;
-  assert.deepEqual([...settingsContext.settingsRefreshDomains(a,b)],["frequent"]);
+  assert.deepEqual([...settingsRefreshDomains(a,b)],["frequent"]);
 });
 test("1.30.1 separate Light/Dark wallpaper change refreshes only Background", () => {
   const a=base(), b=structuredClone(a); b.settings.themeWallpapersEnabled=true;
-  assert.deepEqual([...settingsContext.settingsRefreshDomains(a,b)],["background"]);
+  assert.deepEqual([...settingsRefreshDomains(a,b)],["background"]);
 });
 
 test("1.30.1 permission classification isolates Top Sites from Website Access", () => {

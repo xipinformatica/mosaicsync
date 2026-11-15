@@ -117,9 +117,14 @@ test('53: shared modal is safe by default, escapes cleanly, and does not inject 
   assert.equal(await result,false);
 });
 
-test('53: no native confirm remains in New Tab and sensitive actions await the in-page decision',()=>{
+test('53: no native confirm remains in New Tab and sensitive actions await the in-page decision',async()=>{
+  const recoveryView = await readFile(resolve(root,'src/shared/newtab/recovery-copies-view.js'),'utf8');
   assert.doesNotMatch(source,/\b(?:window\.)?confirm\s*\(/);
-  assert.equal((source.match(/await confirmMosaic\(/g)||[]).length,10);
+  assert.doesNotMatch(recoveryView,/\b(?:window\.)?confirm\s*\(/);
+  assert.equal((source.match(/await confirmMosaic\(/g)||[]).length,8,
+    'New Tab retains its eight in-page confirmations');
+  assert.equal((recoveryView.match(/await confirmMosaic\(/g)||[]).length,2,
+    'deferred Recovery device/generation deletion must retain its two in-page confirmations');
   assert.match(source,/if \(shortcutSavePending\) return/);
   assert.match(source,/deleteShortcutButton\.addEventListener\("click", async \(\) => \{[^]*?if \(!await confirmMosaic\(/);
   assert.match(html,/id="mosaicConfirmDialog"/);

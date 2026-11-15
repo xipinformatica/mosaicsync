@@ -89,12 +89,10 @@ test('51: name lookup never starts on Cancel, Escape or backdrop-close gesture',
 });
 
 test('51: background result includes final URL for same-origin login-redirect filtering', async () => {
-  for (const browser of ['chrome','firefox']) {
-    const source = await readFile(`src/shared/background/background-core.js`,'utf8');
-    assert.match(source,/title, siteName, finalPageUrl: result\.finalPageUrl/);
-    const utils = await readFile('src/shared/newtab/ui-utils.js','utf8');
-    assert.match(utils,/cleanShortcutPageTitle\(result\.siteName, "", result\.finalPageUrl\)/);
-    assert.match(utils,/: title, "", result\.finalPageUrl\)/);
-    assert.match(newtab,/chooseShortcutPageName\(result, fallback, url\)/);
-  }
+  const source = await readFile(`src/shared/background/background-core.js`,'utf8');
+  assert.match(source,/title, siteName, finalPageUrl: result\.finalPageUrl/);
+  const utils = await readFile('src/shared/newtab/ui-utils.js','utf8');
+  assert.match(utils,/cleanShortcutPageTitle\(result\.siteName, "", result\.finalPageUrl\)/);
+  assert.match(utils,/: title, "", result\.finalPageUrl\)/);
+  assert.match(newtab,/chooseShortcutPageName\(result, fallback, url\)/);
 });

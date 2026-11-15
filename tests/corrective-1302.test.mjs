@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { automaticFaviconArtwork as automaticFaviconArtworkPolicy } from "../src/shared/core/artwork-policy.js";
+import { SETTINGS_REFRESH_KEYS, settingsRefreshDomains } from "../src/shared/newtab/settings-refresh-domains.js";
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
@@ -131,11 +132,9 @@ for (const browser of ["firefox", "chrome"]) {
 const newtab = fs.readFileSync("src/shared/newtab/newtab.js", "utf8");
 
 test("1.30.2 Settings refresh-domain regression uses the production key definition", () => {
-  const match = newtab.match(/const SETTINGS_REFRESH_KEYS = Object\.freeze\(\{[\s\S]*?\n  \}\);/);
-  assert.ok(match, "production SETTINGS_REFRESH_KEYS definition missing");
-  const ctx = { SPACE_IDS:["personal","work"] };
-  vm.createContext(ctx);
-  vm.runInContext(`${match[0].replace("const SETTINGS_REFRESH_KEYS", "globalThis.SETTINGS_REFRESH_KEYS")}\n${extract(newtab,"synchronizedFrequentlyVisitedSettings")}\n${extract(newtab,"settingsKeysChanged")}\n${extract(newtab,"spacesSettingsChanged")}\n${extract(newtab,"settingsRefreshDomains")}`, ctx);
+  assert.match(newtab, /import\("\.\/settings-refresh-domains\.js"\)/,
+    "page must lazy-load the independent production Settings domain model before opening Settings");
+  assert.ok(Object.isFrozen(SETTINGS_REFRESH_KEYS), "production key definition must be immutable");
   const base = () => ({
     activeSpaceId:"personal",
     settings:{
@@ -150,9 +149,9 @@ test("1.30.2 Settings refresh-domain regression uses the production key definiti
   for (const key of ["backgroundColorCustomized","backgroundSourceKind","backgroundSourceUrl"]) {
     const before=base(), after=structuredClone(before);
     after.settings[key] = key === "backgroundColorCustomized" ? true : "changed";
-    assert.deepEqual([...ctx.settingsRefreshDomains(before,after)], ["background"], `${key} must belong to Background domain`);
+    assert.deepEqual([...settingsRefreshDomains(before,after)], ["background"], `${key} must belong to Background domain`);
   }
-  assert.equal(ctx.SETTINGS_REFRESH_KEYS.background.includes("backgroundSource"), false, "obsolete fake test-only key must not return");
+  assert.equal(SETTINGS_REFRESH_KEYS.background.includes("backgroundSource"), false, "obsolete fake test-only key must not return");
 });
 
 test("1.30.2 older installations with no quality ledger reopen automatic favicons for the one-time audit", () => {

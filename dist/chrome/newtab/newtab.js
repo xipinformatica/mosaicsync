@@ -5,6 +5,7 @@
  */
 import { getNativeTopSites, PLATFORM_ID } from "../core/platform.js";
 import { createNewTabPersistenceGateway } from "./persistence-gateway.js";
+import { synchronizedFrequentlyVisitedSettings } from "./frequently-visited-preference.js";
 import {
   APPEARANCE_HINT_KEY,
   BACKGROUND_PRESETS,
@@ -109,10 +110,16 @@ import {
   t,
   translateText
 } from "../core/i18n.js";
-import { canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName, chooseShortcutPageName, manualGridRenderEquivalent, normalizeShortcutUrl, renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent, visibleTextBottom, syncStorageDisplayUsage, recoveryDeviceCopyCountText } from "./ui-utils.js";
+import {
+  canonicalSiteHost, createShortcutHostsAcrossSpacesMemo, formatBytes, friendlyShortcutName,
+  chooseShortcutPageName, manualGridRenderEquivalent, normalizeShortcutUrl,
+  renderCacheGridMatchesState, safeShortcutNavigationUrl, sortTopLevelByRecent,
+  visibleTextBottom, syncStorageDisplayUsage, recoveryDeviceCopyCountText,
+  sameBackgroundVisuals, collectWorkspaceShortcutRecords, sameShortcutCoreShape,
+  copyDeviceArtwork
+} from "./ui-utils.js";
 import { clampUnit, hexToRgb, rgbToHsv, hsvToHex, normalizeHexColor } from "./appearance-color.js";
 import { devMark, devMeasure, devMetricsEnabled } from "../core/perf.js";
-import { installViewportTooltips } from "../core/viewport-tooltip.js";
 
 (() => {
   "use strict";
@@ -206,6 +213,15 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let registrableDomainModulePromise = null;
   let boundedResponseModulePromise = null;
   let folderDiscoveryHintModulePromise = null;
+  let settingsRefreshDomainsModulePromise = null;
+  let settingsRefreshDomainsForOpenPanel = null;
+  const loadSettingsRefreshDomains = () => settingsRefreshDomainsModulePromise ||= import("./settings-refresh-domains.js")
+    .then(module => {
+      let comparator;
+      try { comparator = module.settingsRefreshDomains; } catch {}
+      if (typeof comparator !== "function") throw new TypeError(t("operationFailed"));
+      settingsRefreshDomainsForOpenPanel = comparator;
+    });
   const bootRenderManifest = globalThis.__mosaicsyncBootGrid?.manifest || null;
   const bootArtworkPreviews = new Map();
   const indexBootArtwork = item => {
@@ -265,7 +281,28 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   // are localized when opened, avoiding a full hidden-UI tree walk on every tab.
   localizeDocument(document.getElementById("page") || document);
   document.querySelector(".frequent-sites-heading.frequent-sites-heading-first-paint-pending")?.classList.remove("frequent-sites-heading-first-paint-pending");
-  installViewportTooltips(document, { wrapperSelector: ".sync-help-wrap", tooltipSelector: ".sync-help-tooltip" });
+  // Tooltip portal positioning is only needed when the help icon is used.
+  // Keep its module outside the first-paint dependency graph. The first intent
+  // is replayed if the pointer or keyboard focus remains on the help control.
+  function activateViewportTooltipsOnFirstIntent() {
+    let started = false;
+    const onIntent = event => {
+      if (started || !event.target?.closest?.(".sync-help-wrap")) return;
+      started = true;
+      document.removeEventListener("pointerover", onIntent, true);
+      document.removeEventListener("focusin", onIntent, true);
+      void import("../core/viewport-tooltip.js").then(({ installViewportTooltips }) => {
+        installViewportTooltips(document, { wrapperSelector: ".sync-help-wrap", tooltipSelector: ".sync-help-tooltip" });
+        for (const wrapper of document.querySelectorAll(".sync-help-wrap")) {
+          if (wrapper.matches(":hover")) wrapper.dispatchEvent(new Event("pointerenter"));
+          if (wrapper.contains(document.activeElement)) wrapper.dispatchEvent(new Event("focusin"));
+        }
+      }).catch(() => {}); // Optional presentation; CSS remains the fallback.
+    };
+    document.addEventListener("pointerover", onIntent, true);
+    document.addEventListener("focusin", onIntent, true);
+  }
+  activateViewportTooltipsOnFirstIntent();
   startupPhase("shellLocalized");
 
   /*
@@ -666,6 +703,9 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
   let bookmarkDragReleaseTimer = 0;
   let frequentRenderSnapshot = bootRenderManifest?.firstPaint?.frequent || null;
   let frequentLiveSites = Array.isArray(frequentRenderSnapshot?.sites) ? frequentRenderSnapshot.sites.slice() : [];
+  // A session first-paint strip may still be decoding its icons when post-paint
+  // maintenance starts. Keep its request rather than building a duplicate.
+  let lastStartupFrequentRender = null;
   const frequentExplicitHostsForState = createShortcutHostsAcrossSpacesMemo();
   let spaceSwitchGeneration = 0;
   let crossSpacePreviewGeneration = 0;
@@ -1129,6 +1169,11 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
         enabled: frequentRenderSnapshot.enabled === true,
         count: frequentRenderSnapshot.count
       });
+      lastStartupFrequentRender = {
+        snapshot: frequentRenderSnapshot,
+        count: Number(frequentRenderSnapshot.count),
+        generation: frequentRenderCommitGeneration
+      };
     }
 
     const settingsStartedAt = performance.now();
@@ -1265,19 +1310,6 @@ import { installViewportTooltips } from "../core/viewport-tooltip.js";
     } catch {
       return 5;
     }
-  }
-
-  function synchronizedFrequentlyVisitedSettings(currentState = state) {
-    // Frequently Visited is a global MosaicSync presentation preference rather
-    // than a Space-specific browser-history dataset. Personal is the canonical
-    // synchronized home for the preference; both workspaces are kept mirrored
-    // when a current client changes it so rolling-version devices converge.
-    const settings = currentState?.spaces?.personal?.settings || currentState?.settings || DEFAULT_STATE.settings;
-    const count = Number(settings?.frequentlyVisitedCount);
-    return {
-      enabled: settings?.frequentlyVisitedEnabled === true,
-      count: [3, 5, 8, 10].includes(count) ? count : 5
-    };
   }
 
   function syncFrequentlyVisitedLocalsFromState(currentState = state) {
@@ -2253,9 +2285,16 @@ ${site.url}`;
     if (settingsFrequentlyVisitedCount) settingsFrequentlyVisitedCount.value = String(frequentlyVisitedCount);
     if (!frequentlyVisitedEnabled) {
       renderFrequentlyVisited([]);
-    } else if (frequentRenderSnapshot?.enabled === true) {
+    } else if (frequentRenderSnapshot?.enabled === true && !(
+      lastStartupFrequentRender?.snapshot === frequentRenderSnapshot &&
+      lastStartupFrequentRender.count === frequentlyVisitedCount &&
+      lastStartupFrequentRender.generation === frequentRenderCommitGeneration
+    )) {
+      // A newer snapshot, different capacity or intervening render still needs
+      // a corrective pass. Otherwise the first decode/commit is already pending.
       renderFrequentlyVisited(frequentRenderSnapshot.sites || [], { authoritative: false });
     }
+    lastStartupFrequentRender = null;
     // A warm session already painted valid device-local candidates, so refresh
     // them after the normal post-paint delay. On a true cold browser start the
     // session-only candidate key is empty by design; start the live Top Sites read
@@ -3490,6 +3529,21 @@ ${site.url}`;
     return true;
   }
 
+  // Shortcut and folder edit chips share identical DOM and accessibility setup.
+  function attachEditChip(slot, label, onClick) {
+    let edit = slot.querySelector(":scope > .edit-chip");
+    if (!edit) {
+      edit = document.createElement("button");
+      edit.type = "button";
+      edit.className = "edit-chip";
+      edit.textContent = "⋯";
+      slot.append(edit);
+    }
+    edit.title = label;
+    edit.setAttribute("aria-label", label);
+    edit.addEventListener("click", onClick);
+  }
+
   function configureShortcutSlotInteractions(slot, item) {
     if (!slot || slot.dataset.interactive === "true") return Boolean(slot);
     const card = slot.querySelector(":scope > .shortcut-card");
@@ -3544,17 +3598,7 @@ ${site.url}`;
       });
     }
 
-    let edit = slot.querySelector(":scope > .edit-chip");
-    if (!edit) {
-      edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "edit-chip";
-      edit.textContent = "⋯";
-      slot.append(edit);
-    }
-    edit.title = `${t("editShortcut")}: ${item.title}`;
-    edit.setAttribute("aria-label", `${t("editShortcut")}: ${item.title}`);
-    edit.addEventListener("click", event => {
+    attachEditChip(slot, `${t("editShortcut")}: ${item.title}`, event => {
       event.stopPropagation();
       openShortcutEditor(item, null);
     });
@@ -3573,6 +3617,16 @@ ${site.url}`;
     return true;
   }
 
+  // The main grid, folder previews, and open-folder cards use the same
+  // artwork/class/color construction. Keep this ownership in one place.
+  function createShortcutArtworkTile(item, baseClass) {
+    const tile = document.createElement("span");
+    tile.className = `${baseClass} ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
+    applyShortcutColorTag(tile, item);
+    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
+    return tile;
+  }
+
   function createShortcutSlot(item) {
     const slot = document.createElement("div");
     slot.className = "shortcut-slot";
@@ -3580,10 +3634,7 @@ ${site.url}`;
 
     const card = document.createElement("a");
     card.className = "shortcut-card";
-    const tile = document.createElement("span");
-    tile.className = `tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
-    applyShortcutColorTag(tile, item);
-    appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
+    const tile = createShortcutArtworkTile(item, "tile");
     const label = document.createElement("span");
     label.className = "shortcut-label";
     label.textContent = item.title;
@@ -3614,17 +3665,7 @@ ${site.url}`;
       openFolder(folder, slot, false);
     });
 
-    let edit = slot.querySelector(":scope > .edit-chip");
-    if (!edit) {
-      edit = document.createElement("button");
-      edit.type = "button";
-      edit.className = "edit-chip";
-      edit.textContent = "⋯";
-      slot.append(edit);
-    }
-    edit.title = `${t("folder")}: ${folderName}`;
-    edit.setAttribute("aria-label", `${t("folder")}: ${folderName}`);
-    edit.addEventListener("click", event => {
+    attachEditChip(slot, `${t("folder")}: ${folderName}`, event => {
       event.stopPropagation();
       openFolder(folder, slot, true);
     });
@@ -3649,10 +3690,7 @@ ${site.url}`;
     const mosaic = document.createElement("span");
     mosaic.className = "folder-mosaic";
     for (const child of folder.items.slice(0, 4)) {
-      const cell = document.createElement("span");
-      cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
-      applyShortcutColorTag(cell, child);
-      appendImageOrFallback(cell, child.image, child.title, child.builtinIcon, child);
+      const cell = createShortcutArtworkTile(child, "folder-mosaic-cell");
       mosaic.append(cell);
     }
     tile.append(mosaic);
@@ -4301,10 +4339,7 @@ ${site.url}`;
       button.draggable = false;
       button.title = `${item.title}\n${item.url}`;
 
-      const tile = document.createElement("span");
-      tile.className = `folder-item-tile ${item.imageStyle === "cover" ? "cover" : ""}`.trim();
-      applyShortcutColorTag(tile, item);
-      appendImageOrFallback(tile, item.image, item.title, item.builtinIcon, item);
+      const tile = createShortcutArtworkTile(item, "folder-item-tile");
 
       const label = document.createElement("span");
       label.className = "folder-item-label";
@@ -4528,6 +4563,21 @@ ${site.url}`;
     }
   }
 
+  // User-chosen artwork has one state owner. The caller still owns its
+  // generation guard, contextual UI (picker/URL), and any async work.
+  function selectExplicitShortcutArtwork({ image = "", builtinIcon = "", sourceKind, sourceUrl = "", faviconPreference = "" }) {
+    pendingShortcutBuiltinIcon = builtinIcon;
+    pendingShortcutImage = image;
+    pendingShortcutSyncData = "";
+    pendingShortcutImageKind = image ? "device" : "none";
+    pendingShortcutImageSourceKind = sourceKind;
+    pendingShortcutImageSourceUrl = sourceUrl;
+    pendingShortcutFaviconPreference = faviconPreference;
+    pendingShortcutImageIsFallback = false;
+    shortcutSyncImage.checked = false;
+    shortcutArtworkEdited = true;
+  }
+
   function ensureBuiltinShortcutIconPicker() {
     if (!shortcutBuiltinIconPicker || shortcutBuiltinIconPicker.childElementCount) return;
     for (const key of BUILTIN_SHORTCUT_ICON_KEYS) {
@@ -4538,18 +4588,9 @@ ${site.url}`;
       globalThis.__mosaicsyncBuiltinIcons?.append?.(button, key);
       button.addEventListener("click", () => {
         shortcutSyncPrepareGeneration += 1;
-        pendingShortcutBuiltinIcon = key;
-        pendingShortcutImage = "";
-        pendingShortcutSyncData = "";
-        pendingShortcutImageKind = "none";
-        pendingShortcutImageSourceKind = "builtin";
-        pendingShortcutImageSourceUrl = "";
-        pendingShortcutFaviconPreference = "";
-        pendingShortcutImageIsFallback = false;
+        selectExplicitShortcutArtwork({ builtinIcon: key, sourceKind: "builtin" });
         shortcutImageStyle.value = "contain";
         shortcutImageUrl.value = "";
-        shortcutSyncImage.checked = false;
-        shortcutArtworkEdited = true;
         updateBuiltinShortcutIconSelection();
         updateImagePreview();
       });
@@ -4647,25 +4688,14 @@ ${site.url}`;
           return;
         }
         shortcutSyncPrepareGeneration += 1;
-        pendingShortcutBuiltinIcon = "";
-        pendingShortcutImage = candidate.image;
-        pendingShortcutSyncData = "";
-        pendingShortcutImageKind = "device";
-        // A manually selected detected favicon becomes explicit user artwork,
-        // not an automatic recovery result. Preserve the exact chosen pixels and
-        // let the existing optional “Sync this image” control decide whether a
-        // compact derivative should travel to other devices.
-        pendingShortcutImageSourceKind = "upload";
-        pendingShortcutImageSourceUrl = "";
-        // Sync only a compact locator for the user's explicit detected-favicon
-        // choice. The image pixels remain device-local unless the existing
-        // “Sync this image” option is explicitly enabled.
-        pendingShortcutFaviconPreference = faviconPreferenceForCandidate(candidate);
-        pendingShortcutImageIsFallback = false;
+        // Keep chosen favicon pixels device-local unless the user explicitly
+        // enables Sync; retain only its compact discovery preference.
+        selectExplicitShortcutArtwork({
+          image: candidate.image, sourceKind: "upload",
+          faviconPreference: faviconPreferenceForCandidate(candidate)
+        });
         shortcutImageStyle.value = "contain";
         shortcutImageUrl.value = "";
-        shortcutSyncImage.checked = false;
-        shortcutArtworkEdited = true;
         for (const choice of detectedFaviconChoices.querySelectorAll?.(".detected-favicon-choice") || []) {
           const selected = choice === button;
           choice.classList.toggle("selected", selected);
@@ -5103,16 +5133,7 @@ ${site.url}`;
         maxInputBytes: 20_000_000
       });
       if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || shortcutId.value !== editorShortcutId) return;
-      pendingShortcutBuiltinIcon = "";
-      pendingShortcutImage = optimized;
-      pendingShortcutSyncData = "";
-      pendingShortcutImageKind = "device";
-      pendingShortcutImageSourceKind = "upload";
-      pendingShortcutImageSourceUrl = "";
-      pendingShortcutFaviconPreference = "";
-      pendingShortcutImageIsFallback = false;
-      shortcutSyncImage.checked = false;
-      shortcutArtworkEdited = true;
+      selectExplicitShortcutArtwork({ image: optimized, sourceKind: "upload" });
       updateBuiltinShortcutIconSelection();
       updateImagePreview();
     } catch (error) {
@@ -5202,16 +5223,7 @@ ${site.url}`;
         if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
         const image = await imageBlobToDataUrl(blob, { maxInputBytes: REMOTE_IMAGE_INPUT_MAX_BYTES });
         if (generation !== shortcutSyncPrepareGeneration || !shortcutDialog?.open || !shortcutWebImageDialog.open || shortcutId.value !== editorShortcutId) return;
-        pendingShortcutBuiltinIcon = "";
-        pendingShortcutImage = image;
-        pendingShortcutSyncData = "";
-        pendingShortcutImageKind = "device";
-        pendingShortcutImageSourceKind = "remote";
-        pendingShortcutImageSourceUrl = parsed.href;
-        pendingShortcutFaviconPreference = "";
-        pendingShortcutImageIsFallback = false;
-        shortcutSyncImage.checked = false;
-        shortcutArtworkEdited = true;
+        selectExplicitShortcutArtwork({ image, sourceKind: "remote", sourceUrl: parsed.href });
         updateBuiltinShortcutIconSelection();
         updateImagePreview();
         closeWebImageDialog();
@@ -5349,24 +5361,29 @@ ${site.url}`;
       }
       if (imageSyncKind !== "sync") imageSyncData = "";
 
+      // Keep user-editable shortcut fields in one place for Add and Edit.
+      // Identity, asset continuity, timestamps and provenance remain branch-owned.
+      const shortcutFields = {
+        type: "shortcut",
+        title,
+        url,
+        builtinIcon: pendingShortcutBuiltinIcon,
+        colorTag: pendingShortcutColorTag,
+        faviconPreference: pendingShortcutFaviconPreference,
+        image,
+        imageSyncData,
+        imageSyncKind,
+        imageSourceKind: pendingShortcutImageSourceKind,
+        imageSourceUrl: pendingShortcutImageSourceUrl,
+        imageIsFallback: pendingShortcutImageIsFallback,
+        imageStyle: shortcutImageStyle.value === "cover" ? "cover" : "contain"
+      };
       if (record) {
         const mutationTimestamp = nextMutationTime(state.updatedAt, record.item.modifiedAt, record.parentFolder?.modifiedAt);
         record.array[record.index] = {
           ...record.item,
-          type: "shortcut",
-          title,
-          url,
-          builtinIcon: pendingShortcutBuiltinIcon,
-          colorTag: pendingShortcutColorTag,
-          faviconPreference: pendingShortcutFaviconPreference,
-          image,
-          imageSyncData,
-          imageSyncKind,
+          ...shortcutFields,
           imageAssetId: imageSyncKind === "sync" && !shortcutArtworkEdited ? record.item.imageAssetId : "",
-          imageSourceKind: pendingShortcutImageSourceKind,
-          imageSourceUrl: pendingShortcutImageSourceUrl,
-          imageIsFallback: pendingShortcutImageIsFallback,
-          imageStyle: shortcutImageStyle.value === "cover" ? "cover" : "contain",
           source: pendingShortcutImageSourceKind === "firefox" ? "firefox-import" : "manual",
           modifiedAt: mutationTimestamp
         };
@@ -5375,21 +5392,9 @@ ${site.url}`;
         const newTopLevelPosition = editingParentFolderId ? 0 : firstEmptyTopLevelPosition(editingPreferredPosition);
         if (!editingParentFolderId && newTopLevelPosition == null) throw new Error(t("operationFailed"));
         const newShortcut = {
-          type: "shortcut",
+          ...shortcutFields,
           id: operationId,
-          title,
-          url,
-          builtinIcon: pendingShortcutBuiltinIcon,
-          colorTag: pendingShortcutColorTag,
-          faviconPreference: pendingShortcutFaviconPreference,
-          image,
-          imageSyncData,
-          imageSyncKind,
           imageAssetId: "",
-          imageSourceKind: pendingShortcutImageSourceKind,
-          imageSourceUrl: pendingShortcutImageSourceUrl,
-          imageIsFallback: pendingShortcutImageIsFallback,
-          imageStyle: shortcutImageStyle.value === "cover" ? "cover" : "contain",
           position: newTopLevelPosition,
           createdAt: now(),
           modifiedAt: now(),
@@ -5681,12 +5686,16 @@ ${site.url}`;
     return !pendingBackgroundPreset && !pendingBackgroundImage;
   }
 
-  function selectPlainColorBackground({ closeGallery = false } = {}) {
+  function clearPendingBackgroundArtwork(presetId = "") {
     backgroundUploadGeneration += 1;
     pendingBackgroundImage = "";
     pendingBackgroundSourceKind = "none";
     pendingBackgroundSourceUrl = "";
-    pendingBackgroundPreset = "";
+    pendingBackgroundPreset = presetId;
+  }
+
+  function selectPlainColorBackground({ closeGallery = false } = {}) {
+    clearPendingBackgroundArtwork();
     if (!pendingBackgroundColorCustomized) {
       setColorPickerFromHex(effectiveBackgroundColor(state.settings));
       pendingBackgroundColorCustomized = true;
@@ -5723,11 +5732,7 @@ ${site.url}`;
         selectPlainColorBackground({ closeGallery });
         return;
       }
-      backgroundUploadGeneration += 1;
-      pendingBackgroundPreset = id;
-      pendingBackgroundImage = "";
-      pendingBackgroundSourceKind = "none";
-      pendingBackgroundSourceUrl = "";
+      clearPendingBackgroundArtwork(id);
       renderBackgroundPresets();
       if (wallpaperGalleryDialog?.open) renderWallpaperGallery();
       applyBackgroundControlsLive({ persistDelay: 0 });
@@ -6205,56 +6210,9 @@ ${site.url}`;
     return deferred;
   }
 
-  const SETTINGS_REFRESH_KEYS = Object.freeze({
-    grid: Object.freeze(["columns", "rows", "tileSize"]),
-    theme: Object.freeze(["theme"]),
-    background: Object.freeze([
-      "backgroundColor", "backgroundColorCustomized", "backgroundPreset", "backgroundSourceKind",
-      "backgroundSourceUrl", "backgroundImage", "backgroundDim", "themeWallpapersEnabled",
-      "lightBackgroundPreset", "darkBackgroundPreset", "lightBackgroundDim", "darkBackgroundDim"
-    ]),
-    autoIcons: Object.freeze(["autoSiteIcons"])
-  });
-
-  function settingsKeysChanged(previousSettings, nextSettings, keys) {
-    for (const key of keys) {
-      if (!Object.is(previousSettings?.[key], nextSettings?.[key])) return true;
-    }
-    return false;
-  }
-
-  function spacesSettingsChanged(previousState, nextState) {
-    for (const spaceId of SPACE_IDS) {
-      const before = previousState?.spaces?.[spaceId]?.settings || {};
-      const after = nextState?.spaces?.[spaceId]?.settings || {};
-      if (!Object.is(before.multipleSpacesEnabled, after.multipleSpacesEnabled) ||
-          !Object.is(before.spaceName, after.spaceName)) return true;
-    }
-    return false;
-  }
-
-  function settingsRefreshDomains(previousState, nextState = state) {
-    if (!previousState || !nextState) return new Set(["grid", "theme", "spaces", "frequent", "background", "autoIcons"]);
-    if (previousState.activeSpaceId !== nextState.activeSpaceId) {
-      return new Set(["grid", "theme", "spaces", "frequent", "background", "autoIcons"]);
-    }
-    const previousSettings = previousState.settings || {};
-    const nextSettings = nextState.settings || {};
-    const domains = new Set();
-    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.grid)) domains.add("grid");
-    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.theme)) domains.add("theme");
-    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.background)) domains.add("background");
-    if (settingsKeysChanged(previousSettings, nextSettings, SETTINGS_REFRESH_KEYS.autoIcons)) domains.add("autoIcons");
-    if (spacesSettingsChanged(previousState, nextState)) domains.add("spaces");
-    const beforeFrequent = synchronizedFrequentlyVisitedSettings(previousState);
-    const afterFrequent = synchronizedFrequentlyVisitedSettings(nextState);
-    if (beforeFrequent.enabled !== afterFrequent.enabled || beforeFrequent.count !== afterFrequent.count) domains.add("frequent");
-    return domains;
-  }
-
   function refreshSettingsControlsAfterExternalState(previousState = null) {
     if (!isSettingsOpen()) return new Set();
-    const domains = settingsRefreshDomains(previousState, state);
+    const domains = settingsRefreshDomainsForOpenPanel(previousState, state);
     // Exact own-write echoes already match the live model + pending draft. They
     // advance the persistence baseline but must perform zero Settings DOM work.
     if (!domains.size) return domains;
@@ -6283,7 +6241,9 @@ ${site.url}`;
       closeDialog(settingsDialog);
       return;
     }
-    await ensureSecondaryStyles();
+    await Promise.all([ensureSecondaryStyles(), loadSettingsRefreshDomains()]);
+    // The panel is revealed only after its synchronous external-state diff is ready.
+    if (isSettingsOpen()) return;
     localizeDocument(settingsDialog);
     deferredSettingsControlRefresh = false;
     refreshGridSettingsControls();
@@ -6303,6 +6263,9 @@ ${site.url}`;
     settingsDialog.hidden = false;
     settingsDialog.setAttribute("aria-hidden", "false");
     settingsButton?.setAttribute("aria-expanded", "true");
+    // Catch up the panel immediately using the latest local metadata; the
+    // asynchronous status/reconcile refresh will replace it with fresh authority.
+    updateSyncUi(meta, lastSyncStatus);
     reconcileAndRefreshSyncStatus().catch(error => console.warn(`${PRODUCT_NAME}: sync status unavailable`, error));
     refreshWebAccessUi().catch(error => console.warn(`${PRODUCT_NAME}: website permission status unavailable`, error));
   }
@@ -6383,6 +6346,11 @@ ${site.url}`;
       markSettingsChanged();
       rememberPendingSettings(changedKeys);
     }
+  }
+
+  function persistBackgroundSettingsImmediately() {
+    clearTimeout(backgroundPersistTimer);
+    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
   }
 
   function scheduleBackgroundPersist(delay = 140) {
@@ -6473,8 +6441,8 @@ ${site.url}`;
   settingsDarkWallpaper?.addEventListener("click", () => openThemeWallpaperGallery("dark"));
   settingsLightWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("light"));
   settingsDarkWallpaperDim?.addEventListener("input", () => applyThemeWallpaperDimLive("dark"));
-  settingsLightWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
-  settingsDarkWallpaperDim?.addEventListener("change", () => { clearTimeout(backgroundPersistTimer); void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
+  settingsLightWallpaperDim?.addEventListener("change", persistBackgroundSettingsImmediately);
+  settingsDarkWallpaperDim?.addEventListener("change", persistBackgroundSettingsImmediately);
 
   customBrandingButton?.addEventListener("click", () => { void openCustomBrandingDialog().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
   customBrandingDialog?.addEventListener("close", () => { customBrandingUploadGeneration += 1; customBrandingDraft = null; });
@@ -6578,10 +6546,7 @@ ${site.url}`;
     colorPickerHue = Number(backgroundColorHue.value) || 0;
     applyColorPickerLive();
   });
-  backgroundColorHue?.addEventListener("change", () => {
-    clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
-  });
+  backgroundColorHue?.addEventListener("change", persistBackgroundSettingsImmediately);
   backgroundColorPlane?.addEventListener("pointerdown", event => {
     colorPlaneDragging = true;
     colorPlaneRect = backgroundColorPlane.getBoundingClientRect();
@@ -6595,8 +6560,7 @@ ${site.url}`;
     colorPlaneDragging = false;
     colorPlaneRect = null;
     backgroundColorPlane.releasePointerCapture?.(event.pointerId);
-    clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
+    persistBackgroundSettingsImmediately();
   });
   backgroundColorPlane?.addEventListener("pointercancel", () => { colorPlaneDragging = false; colorPlaneRect = null; });
   backgroundColorPlane?.addEventListener("lostpointercapture", () => { colorPlaneDragging = false; colorPlaneRect = null; });
@@ -6641,34 +6605,34 @@ ${site.url}`;
   });
 
   settingsBackgroundDim.addEventListener("input", () => applyBackgroundControlsLive());
-  settingsBackgroundDim.addEventListener("change", () => {
-    clearTimeout(backgroundPersistTimer);
-    void saveSettingsState().catch(error => showToast(localizePresentationError(error, "operationFailed")));
-  });
+  settingsBackgroundDim.addEventListener("change", persistBackgroundSettingsImmediately);
 
   clearBackgroundImage.addEventListener("click", () => {
-    backgroundUploadGeneration += 1;
-    pendingBackgroundImage = "";
-    pendingBackgroundSourceKind = "none";
-    pendingBackgroundSourceUrl = "";
-    pendingBackgroundPreset = "";
+    clearPendingBackgroundArtwork();
     renderBackgroundPresets();
     applyBackgroundControlsLive({ persistDelay: 0 });
     showToast(t("backgroundCleared"));
   });
 
   resetBackground.addEventListener("click", () => {
-    backgroundUploadGeneration += 1;
-    pendingBackgroundImage = "";
-    pendingBackgroundSourceKind = "none";
-    pendingBackgroundSourceUrl = "";
-    pendingBackgroundPreset = "";
+    clearPendingBackgroundArtwork();
     pendingBackgroundColorCustomized = false;
     setColorPickerFromHex(effectiveTheme() === "light" ? DEFAULT_LIGHT_BACKGROUND_COLOR : DEFAULT_STATE.settings.backgroundColor);
     settingsBackgroundDim.value = String(DEFAULT_STATE.settings.backgroundDim);
     renderBackgroundPresets();
     applyBackgroundControlsLive({ persistDelay: 0 });
   });
+
+  // Website permission requests stay synchronous in each gesture handler.
+  // Their later device-local icon hydration is the same except that the
+  // Settings grant respects whether Automatic Site Icons is still enabled.
+  function scheduleGrantedWebsiteAccessRefresh(onlyWithAutoIcons = false) {
+    scheduleIdleWork(async () => {
+      await hydrateRemoteImageSources();
+      await hydrateDeviceFavicons();
+      if (!onlyWithAutoIcons || state.settings.autoSiteIcons) requestMissingSiteIcons([], { force: true });
+    }, 100);
+  }
 
   settingsAutoSiteIcons?.addEventListener("change", event => {
     const wantsEnabled = event.currentTarget.checked;
@@ -6702,11 +6666,7 @@ ${site.url}`;
       if (permissionPromise) await cleanupLegacyWebOriginPermissions();
       hideWebAccessPrompt();
       showToast(t("autoSiteIconsEnabled"));
-      scheduleIdleWork(async () => {
-        await hydrateRemoteImageSources();
-        await hydrateDeviceFavicons();
-        requestMissingSiteIcons([], { force: true });
-      }, 100);
+      scheduleGrantedWebsiteAccessRefresh();
     })().catch(error => {
       event.currentTarget.checked = state.settings.autoSiteIcons !== false;
       showToast(localizePresentationError(error, "operationFailed"));
@@ -6722,11 +6682,7 @@ ${site.url}`;
         if (granted) {
           await cleanupLegacyWebOriginPermissions();
           showToast(t("websiteAccessEnabled"));
-          scheduleIdleWork(async () => {
-            await hydrateRemoteImageSources();
-            await hydrateDeviceFavicons();
-            requestMissingSiteIcons([], { force: true });
-          }, 100);
+          scheduleGrantedWebsiteAccessRefresh();
         } else {
           showToast(t("websiteAccessDenied"));
         }
@@ -6765,11 +6721,7 @@ ${site.url}`;
         if (webAccessGranted) {
           await cleanupLegacyWebOriginPermissions();
           showToast(t("websiteAccessEnabled"));
-          scheduleIdleWork(async () => {
-            await hydrateRemoteImageSources();
-            await hydrateDeviceFavicons();
-            if (state.settings.autoSiteIcons) requestMissingSiteIcons([], { force: true });
-          }, 100);
+          scheduleGrantedWebsiteAccessRefresh(true);
         } else {
           showToast(t("websiteAccessDenied"));
         }
@@ -6915,115 +6867,21 @@ ${site.url}`;
     if (recoverySafeCleanupButton) recoverySafeCleanupButton.disabled = recoveryCopiesBusy;
   }
 
-  function renderRecoveryCopies(model) {
-    if (!recoveryCopiesList || !recoveryCopiesSummary) return;
-    const devices = Array.isArray(model?.devices) ? model.devices : [];
-    const completeCount = devices.reduce((sum, device) => sum + (Array.isArray(device.generations) ? device.generations.length : 0), 0);
-    recoveryCopiesSummary.textContent = t("recoveryCopiesSummary", {
-      count: completeCount,
-      size: formatLocalizedBytes(model?.managedBytes || 0)
+  // The Recovery manager's 5 KB DOM builder is loaded only after a live dialog
+  // receives its model. Retain the session guard across the dynamic import so
+  // closing/reopening cannot render a superseded response into a new dialog.
+  let recoveryCopiesRendererPromise = null;
+  async function renderRecoveryCopies(model, sessionGeneration = recoveryCopiesSessionGeneration) {
+    recoveryCopiesRendererPromise ||= import("./recovery-copies-view.js");
+    const { renderRecoveryCopiesView } = await recoveryCopiesRendererPromise;
+    if (sessionGeneration !== recoveryCopiesSessionGeneration || !recoveryCopiesDialog?.open) return;
+    renderRecoveryCopiesView(model, {
+      document, recoveryCopiesList, recoveryCopiesSummary, recoverySafeCleanupTitle,
+      recoverySafeCleanupDetail, recoverySafeCleanupButton, recoverySafeCleanup,
+      recoveryCopiesFootnote, t, formatLocalizedBytes, recoveryDeviceDisplayName,
+      recoveryDeviceCopyCountText, formatSyncTime, confirmMosaic, performRecoveryCleanup,
+      setRecoveryCopiesBusy, isRecoveryCopiesBusy: () => recoveryCopiesBusy
     });
-    if ((Number(model?.unmanagedBytes) || 0) > 0) {
-      recoveryCopiesSummary.textContent += ` ${t("recoveryCopiesUnmanaged", { size: formatLocalizedBytes(model.unmanagedBytes) })}`;
-    }
-    if (recoverySafeCleanupTitle) recoverySafeCleanupTitle.textContent = t("recoverySafeCleanupTitle");
-    if (recoverySafeCleanupDetail) recoverySafeCleanupDetail.textContent = t("recoverySafeCleanupDetail", {
-      count: Number(model?.safeCleanupCount) || 0
-    });
-    if (recoverySafeCleanupButton) {
-      recoverySafeCleanupButton.textContent = t("recoveryFreeSafely", { size: formatLocalizedBytes(model?.safeCleanupBytes || 0) });
-      recoverySafeCleanupButton.dataset.recoveryAction = "superseded";
-      recoverySafeCleanupButton.dataset.recoveryCount = String(Number(model?.safeCleanupCount) || 0);
-      recoverySafeCleanupButton.dataset.recoveryBytes = String(Number(model?.safeCleanupBytes) || 0);
-    }
-    if (recoverySafeCleanup) recoverySafeCleanup.hidden = !(Number(model?.safeCleanupCount) > 0 && Number(model?.safeCleanupBytes) > 0);
-    if (recoveryCopiesFootnote) recoveryCopiesFootnote.textContent = t("recoveryManagerFootnote");
-
-    recoveryCopiesList.replaceChildren();
-    if (!devices.length) {
-      const empty = document.createElement("div");
-      empty.className = "recovery-copies-empty";
-      empty.textContent = t("recoveryNoCompleteCopies");
-      recoveryCopiesList.append(empty);
-      return;
-    }
-
-    for (const device of devices) {
-      const card = document.createElement("section");
-      card.className = "recovery-device-card";
-
-      const heading = document.createElement("div");
-      heading.className = "recovery-device-heading";
-      const title = document.createElement("div");
-      title.className = "recovery-device-title";
-      const strong = document.createElement("strong");
-      strong.textContent = recoveryDeviceDisplayName(device);
-      const small = document.createElement("small");
-      const generations = Array.isArray(device.generations) ? device.generations : [];
-      small.textContent = `${recoveryDeviceCopyCountText(generations.length, t)} · ${formatLocalizedBytes(device.bytes || 0)}`;
-      title.append(strong, small);
-      heading.append(title);
-
-      if (device.canRemoveDevice) {
-        const actions = document.createElement("div");
-        actions.className = "recovery-device-actions";
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "danger-button";
-        remove.dataset.recoveryAction = "device";
-        remove.textContent = t("recoveryRemoveDeviceCopies");
-        remove.addEventListener("click", async () => {
-          const label = recoveryDeviceDisplayName(device);
-          const confirmed = await confirmMosaic(t("recoveryConfirmDevice", {
-            device: label,
-            size: formatLocalizedBytes(device.bytes || 0)
-          }), { danger: true });
-          if (confirmed) void performRecoveryCleanup({ mode: "device", deviceId: device.deviceId });
-        });
-        actions.append(remove);
-        heading.append(actions);
-      }
-      card.append(heading);
-
-      const list = document.createElement("div");
-      list.className = "recovery-generation-list";
-      generations.forEach((generation, index) => {
-        const row = document.createElement("div");
-        row.className = "recovery-generation-row";
-        const copy = document.createElement("div");
-        copy.className = "recovery-generation-copy";
-        const name = document.createElement("strong");
-        name.textContent = generation.latest ? t("recoveryLatestCopy") : t("recoveryPreviousCopy");
-        if (generation.latest) {
-          const badge = document.createElement("span");
-          badge.className = "recovery-generation-badge";
-          badge.textContent = t("recoveryProtected");
-          name.append(badge);
-        }
-        const detail = document.createElement("small");
-        detail.textContent = `${formatSyncTime(generation.publishedAt || generation.updatedAt)} · ${formatLocalizedBytes(generation.bytes || 0)}`;
-        copy.append(name, detail);
-        row.append(copy);
-
-        if (generation.canDelete) {
-          const remove = document.createElement("button");
-          remove.type = "button";
-          remove.className = "danger-button";
-          remove.dataset.recoveryAction = "generation";
-          remove.textContent = t("recoveryDeletePrevious");
-          remove.addEventListener("click", async () => {
-            const confirmed = await confirmMosaic(t("recoveryConfirmGeneration", { size: formatLocalizedBytes(generation.bytes || 0) }), { danger: true });
-            if (confirmed) void performRecoveryCleanup({ mode: "generation", rootKey: generation.rootKey });
-          });
-          row.append(remove);
-        }
-        // The newest badge already explains why this generation has no Delete button.
-        list.append(row);
-      });
-      card.append(list);
-      recoveryCopiesList.append(card);
-    }
-    setRecoveryCopiesBusy(recoveryCopiesBusy);
   }
 
   async function loadRecoveryCopies(sessionGeneration = recoveryCopiesSessionGeneration) {
@@ -7033,7 +6891,7 @@ ${site.url}`;
     setRecoveryCopiesBusy(true);
     try {
       const response = await sendSyncMessage("mosaicsync:get-recovery-copies");
-      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) renderRecoveryCopies(response);
+      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) await renderRecoveryCopies(response, sessionGeneration);
     } catch (error) {
       if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open && recoveryCopiesSummary) {
         recoveryCopiesSummary.textContent = localizePresentationError(error, "operationFailed");
@@ -7054,10 +6912,18 @@ ${site.url}`;
     let refreshCurrentSession = false;
     try {
       const response = await sendSyncMessage("mosaicsync:cleanup-recovery-copies", payload);
-      if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) {
-        renderRecoveryCopies(response);
-      } else if (recoveryCopiesDialog?.open) {
-        refreshCurrentSession = true;
+      // A view failure must not reclassify completed cleanup as failed.
+      try {
+        if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open) {
+          await renderRecoveryCopies(response, sessionGeneration);
+        } else if (recoveryCopiesDialog?.open) {
+          refreshCurrentSession = true;
+        }
+      } catch (viewError) {
+        if (sessionGeneration === recoveryCopiesSessionGeneration && recoveryCopiesDialog?.open && recoveryCopiesSummary) {
+          recoveryCopiesSummary.textContent = localizePresentationError(viewError, "operationFailed");
+        }
+        if (recoveryCopiesDialog?.open) refreshCurrentSession = true;
       }
       showSyncFeedback(t("recoveryCleanupComplete", {
         size: formatLocalizedBytes(response.removedBytes || 0),
@@ -7071,7 +6937,7 @@ ${site.url}`;
       recoveryCopiesCleanupBusy = false;
       setRecoveryCopiesBusy(recoveryCopiesLoadInFlightGeneration === recoveryCopiesSessionGeneration);
     }
-    if (refreshCurrentSession && recoveryCopiesDialog?.open) {
+    if ((refreshCurrentSession || sessionGeneration !== recoveryCopiesSessionGeneration) && recoveryCopiesDialog?.open) {
       await loadRecoveryCopies(recoveryCopiesSessionGeneration).catch(() => {});
     }
   }
@@ -7177,6 +7043,9 @@ ${site.url}`;
     meta = normalizeMeta(rawMeta || meta || {});
     if (status) lastSyncStatus = status;
     status = status || lastSyncStatus;
+    // All Sync status controls live inside Settings. Retain authoritative
+    // metadata while closed, but skip hidden DOM formatting and writes.
+    if (typeof settingsDialog !== "undefined" && settingsDialog?.hidden === true) return;
     const enabled = meta.syncEnabled;
     const initialized = meta.syncInitialized;
     const syncing = meta.syncStatus === "syncing";
@@ -7782,7 +7651,7 @@ ${t("clearSyncWarning")}`, { danger: true });
       updateShortcutSpaceChoice();
     });
   }
-  settingsButton.addEventListener("click", () => { void openSettings(); });
+  settingsButton.addEventListener("click", () => { void openSettings().catch(error => showToast(localizePresentationError(error, "operationFailed"))); });
   bookmarksButton?.addEventListener("click", activateBookmarksOnFirstUse, { once: true });
   settingsLanguage?.addEventListener("change", async () => {
     await setLocalePreference(settingsLanguage.value);
@@ -7865,6 +7734,16 @@ ${t("clearSyncWarning")}`, { danger: true });
     catch (error) { showToast(localizePresentationError(error, "moveSpaceFailed")); }
   });
 
+  // All granted Top Sites flows invalidate the same device-local permission
+  // notices and candidate cache; the request itself stays in each click stack.
+  function refreshFrequentlyVisitedAfterPermissionGrant() {
+    setFrequentlyVisitedPermissionActionVisible(false);
+    setFrequentlyVisitedPermissionRecoveryVisible(false);
+    frequentCandidateCacheAt = 0;
+    frequentCandidateCache = [];
+    return refreshFrequentlyVisited();
+  }
+
   settingsFrequentlyVisited?.addEventListener("change", () => {
     const wantsEnabled = settingsFrequentlyVisited.checked;
     // Firefox requires permissions.request() to be invoked synchronously from
@@ -7900,11 +7779,7 @@ ${t("clearSyncWarning")}`, { danger: true });
           setFrequentlyVisitedStatus("frequentPermissionDenied");
           return;
         }
-        setFrequentlyVisitedPermissionActionVisible(false);
-        setFrequentlyVisitedPermissionRecoveryVisible(false);
-        frequentCandidateCacheAt = 0;
-        frequentCandidateCache = [];
-        await refreshFrequentlyVisited();
+        await refreshFrequentlyVisitedAfterPermissionGrant();
       } catch (error) {
         syncFrequentlyVisitedLocalsFromState(state);
         settingsFrequentlyVisited.checked = frequentlyVisitedEnabled;
@@ -7936,11 +7811,7 @@ ${t("clearSyncWarning")}`, { danger: true });
           setFrequentlyVisitedStatus("frequentPermissionDenied");
           return;
         }
-        setFrequentlyVisitedPermissionActionVisible(false);
-        setFrequentlyVisitedPermissionRecoveryVisible(false);
-        frequentCandidateCacheAt = 0;
-        frequentCandidateCache = [];
-        await refreshFrequentlyVisited();
+        await refreshFrequentlyVisitedAfterPermissionGrant();
       } catch {
         setFrequentlyVisitedPermissionActionVisible(true);
         setFrequentlyVisitedPermissionRecoveryVisible(true);
@@ -7972,11 +7843,7 @@ ${t("clearSyncWarning")}`, { danger: true });
           return;
         }
         if (frequentSyncPermissionDialog.open) frequentSyncPermissionDialog.close();
-        setFrequentlyVisitedPermissionActionVisible(false);
-        setFrequentlyVisitedPermissionRecoveryVisible(false);
-        frequentCandidateCacheAt = 0;
-        frequentCandidateCache = [];
-        await refreshFrequentlyVisited();
+        await refreshFrequentlyVisitedAfterPermissionGrant();
       } catch {
         if (frequentSyncPermissionStatus) frequentSyncPermissionStatus.textContent = t("frequentEnableFailed");
       } finally {
@@ -8206,74 +8073,13 @@ ${t("clearSyncWarning")}`, { danger: true });
     if (!dropChoice.hidden) closeDropChoice();
   });
 
-  function workspaceBackgroundVisualSignature(workspace) {
-    const settings = workspace?.settings || {};
-    return [
-      settings.backgroundImage || "",
-      settings.backgroundAssetId || "",
-      settings.backgroundImageKind || "none",
-      settings.backgroundSourceKind || "none",
-      settings.backgroundSourceUrl || "",
-      settings.backgroundPreset || "",
-      settings.themeWallpapersEnabled === true,
-      settings.lightBackgroundPreset || "",
-      settings.darkBackgroundPreset || ""
-    ];
-  }
-
-  function sameBackgroundVisuals(left, right) {
-    const a = workspaceBackgroundVisualSignature(left);
-    const b = workspaceBackgroundVisualSignature(right);
-    return a.every((value, index) => value === b[index]);
-  }
-
-  function collectWorkspaceShortcutRecords(workspace) {
-    const records = new Map();
-    for (const item of workspace?.shortcuts || []) {
-      if (item?.type === "folder") {
-        records.set(item.id, { item, parentFolderId: "", type: "folder" });
-        for (const child of item.items || []) records.set(child.id, { item: child, parentFolderId: item.id, type: "shortcut" });
-      } else if (item?.type === "shortcut") {
-        records.set(item.id, { item, parentFolderId: "", type: "shortcut" });
-      }
-    }
-    return records;
-  }
-
-  function sameShortcutCoreShape(current, incoming, currentParent, incomingParent) {
-    if (!current || !incoming || current.type !== incoming.type || currentParent !== incomingParent) return false;
-    if (current.id !== incoming.id || current.title !== incoming.title || Number(current.position) !== Number(incoming.position)) return false;
-    if (Number(current.createdAt) !== Number(incoming.createdAt) || Number(current.modifiedAt) !== Number(incoming.modifiedAt)) return false;
-    if (current.type === "folder") return (current.items?.length || 0) === (incoming.items?.length || 0);
-    return current.url === incoming.url &&
-      (current.builtinIcon || "") === (incoming.builtinIcon || "") &&
-      (current.colorTag || "") === (incoming.colorTag || "") &&
-      Number(current.spaceMoveAt || 0) === Number(incoming.spaceMoveAt || 0) &&
-      (current.imageStyle || "contain") === (incoming.imageStyle || "contain") &&
-      (current.source || "manual") === (incoming.source || "manual");
-  }
-
-  function copyDeviceArtwork(current, incoming) {
-    const keys = ["image", "localImageAssetId", "imageSyncData", "imageAssetId", "imageSyncKind", "imageSourceKind", "imageSourceUrl", "imageIsFallback"];
-    let changed = false;
-    for (const key of keys) {
-      if (current[key] === incoming[key]) continue;
-      current[key] = incoming[key];
-      changed = true;
-    }
-    return changed;
-  }
-
   function refreshFolderMosaicArtwork(folder) {
     const slot = document.querySelector(`.shortcut-slot.folder-slot[data-id="${CSS.escape(folder.id)}"]`);
     const mosaic = slot?.querySelector(".folder-mosaic");
     if (mosaic) {
       const fragment = document.createDocumentFragment();
       for (const child of (folder.items || []).slice(0, 4)) {
-        const cell = document.createElement("span");
-        cell.className = `folder-mosaic-cell ${child.imageStyle === "cover" ? "cover" : ""}`.trim();
-        applyShortcutColorTag(cell, child);
-        appendImageOrFallback(cell, child.image, child.title, child.builtinIcon, child);
+        const cell = createShortcutArtworkTile(child, "folder-mosaic-cell");
         fragment.append(cell);
       }
       mosaic.replaceChildren(fragment);
@@ -8312,9 +8118,8 @@ ${t("clearSyncWarning")}`, { danger: true });
     // raw Sync projection above proves the change is display-cache-only, so use
     // the incoming object directly and avoid a second full image-heavy normalize.
     const incoming = rawIncoming;
-    const changedActiveShortcuts = new Set();
-    const changedActiveFolders = new Set();
-
+    // Validate all Spaces before mutating live artwork.
+    const validatedSpaces = [];
     for (const spaceId of SPACE_IDS) {
       const currentWorkspace = state.spaces?.[spaceId];
       const incomingWorkspace = incoming.spaces?.[spaceId];
@@ -8326,6 +8131,12 @@ ${t("clearSyncWarning")}`, { danger: true });
         const currentRecord = currentRecords.get(id);
         if (!currentRecord || !sameShortcutCoreShape(currentRecord.item, incomingRecord.item, currentRecord.parentFolderId, incomingRecord.parentFolderId)) return false;
       }
+      validatedSpaces.push([spaceId, currentRecords, incomingRecords]);
+    }
+
+    const changedActiveShortcuts = new Set();
+    const changedActiveFolders = new Set();
+    for (const [spaceId, currentRecords, incomingRecords] of validatedSpaces) {
       for (const [id, incomingRecord] of incomingRecords) {
         if (incomingRecord.type !== "shortcut") continue;
         const currentRecord = currentRecords.get(id);
